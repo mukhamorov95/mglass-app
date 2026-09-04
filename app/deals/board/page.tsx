@@ -14,9 +14,20 @@ type Card = {
   id: number; client_name: string; address: string; phone: string; amo_lead_id: string | null
   manager_name: string | null; stage: string; value: number; paid: number; remaining: number
   calcCount: number; hasKp: boolean; measure: Measure | null; hasContract: boolean
-  hasDrawing: boolean; ageDays: number
+  hasDrawing: boolean; ageDays: number; source: string | null; archived: boolean
 }
 type Stage = { key: string; label: string }
+// Каналы как в АМО. Список живёт здесь: меняется чаще схемы, в базе — просто текст.
+export const SOURCES: { id: string; label: string }[] = [
+  { id: 'avito',     label: 'Авито' },
+  { id: 'site',      label: 'Заявка с сайта' },
+  { id: 'call',      label: 'Звонок' },
+  { id: 'recommend', label: 'Рекомендация' },
+  { id: 'partner',   label: 'Партнёр / дизайнер' },
+  { id: 'repeat',    label: 'Повторный клиент' },
+  { id: 'other',     label: 'Другое' },
+]
+export const sourceLabel = (id?: string | null) => SOURCES.find(s => s.id === id)?.label ?? (id || '')
 type Kpis = { inWork: number; awaitingPay: number; stalled: number; receivedThisMonth: number }
 
 // Цвет этажа: точка + верхняя граница колонки. Семантика (не акцент): синий=КП,
@@ -38,7 +49,8 @@ export default function DealBoardPage() {
   const [q, setQ] = useState('')
   const [focus, setFocus] = useState<'all' | 'inWork' | 'awaiting' | 'stalled'>('all')
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ client_name: '', phone: '', address: '' })
+  const [showArchive, setShowArchive] = useState(false)
+  const [form, setForm] = useState({ client_name: '', phone: '', address: '', source: '' })
   const [creating, setCreating] = useState(false)
 
   async function createDeal() {
@@ -57,7 +69,7 @@ export default function DealBoardPage() {
     let alive = true
     ;(async () => {
       try {
-        const r = await fetch('/api/deals/board')
+        const r = await fetch(`/api/deals/board${showArchive ? '?archived=1' : ''}`)
         const j = await r.json().catch(() => ({}))
         if (!alive) return
         if (!r.ok) { setError(j.error || 'Не удалось загрузить'); return }
@@ -65,7 +77,7 @@ export default function DealBoardPage() {
       } catch { if (alive) setError('Сеть недоступна') } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
-  }, [])
+  }, [showArchive])
 
   // Телефон ищем по тем же правилам, что и список: сравниваем цифры, а не строку,
   // иначе «8926…» не находит сделку, записанную как «+7 926…».
@@ -102,7 +114,7 @@ export default function DealBoardPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="flex items-end justify-between gap-4 flex-wrap mb-4">
         <div>
-          <h1 className="text-[24px] font-bold text-[#111110]">Сделки</h1>
+          <h1 className="text-[24px] font-bold text-[#111110]">{showArchive ? 'Архив сделок' : 'Сделки'}</h1>
           <p className="text-[13px] text-[#9a9a95] mt-0.5 max-w-[62ch]">
             Каждая карточка идёт по этажам пути денег: просчёт → КП → договор → оплата. Этаж вычисляется по тому, что в сделке реально появилось — руками ничего не двигают.
           </p>
@@ -114,10 +126,16 @@ export default function DealBoardPage() {
             className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-64 outline-none focus:border-[#111110] transition-colors" />
           {/* Единственный способ завести карточку руками — клиент позвонил, расчёта
               ещё нет. Всё остальное приходит на доску само, с первым расчётом. */}
-          <button onClick={() => setAdding(v => !v)}
-            className="text-[12.5px] font-semibold px-3.5 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
-            {adding ? 'Отмена' : '+ Сделка'}
+          <button onClick={() => { setShowArchive(v => !v); setLoading(true); setFocus('all') }}
+            className={`text-[12.5px] font-medium px-3.5 py-2 rounded-xl border transition-colors ${showArchive ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
+            {showArchive ? 'Активные' : 'Архив'}
           </button>
+          {!showArchive && (
+            <button onClick={() => setAdding(v => !v)}
+              className="text-[12.5px] font-semibold px-3.5 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+              {adding ? 'Отмена' : '+ Сделка'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -131,6 +149,11 @@ export default function DealBoardPage() {
               placeholder="Телефон" inputMode="tel" className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
             <input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
               placeholder="Адрес объекта" className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            <select value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
+              className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110] bg-white">
+              <option value="">Источник не указан</option>
+              {SOURCES.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
           </div>
           <div className="flex items-center gap-3 mt-2.5">
             <button onClick={createDeal} disabled={creating || (!form.client_name.trim() && !form.phone.trim())}
@@ -257,6 +280,7 @@ function DealCard({ c }: { c: Card }) {
         {c.calcCount > 0 && <Chip>⚡ {c.calcCount > 1 ? `Расчёт ×${c.calcCount}` : 'Расчёт'}</Chip>}
         {c.hasKp && <Chip tone="info">📄 КП</Chip>}
         {c.measure && <Chip tone={measureTone(c.measure)}>📐 {measureLabel(c.measure)}</Chip>}
+        {c.source && <Chip>{sourceLabel(c.source)}</Chip>}
         {c.hasDrawing && <Chip tone="good">📎 чертёж</Chip>}
         {c.hasContract && <Chip tone="good">📝 договор</Chip>}
       </div>

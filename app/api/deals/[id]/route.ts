@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const svc = createServiceClient()
   const { data: deal, error } = await svc.from('deals')
-    .select('id, client_name, phone, phone_key, address, manager_id, amo_lead_id, created_by, created_by_name, created_at, updated_at')
+    .select('id, client_name, phone, phone_key, address, manager_id, amo_lead_id, source, archived_at, created_by, created_by_name, created_at, updated_at')
     .eq('id', dealId).maybeSingle()
   if (error || !deal) return NextResponse.json({ error: 'Сделка не найдена' }, { status: 404 })
   if (!canSeeDeal(actor, deal as { created_by: string | null; manager_id: string | null })) {
@@ -28,7 +28,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .eq('deal_id', dealId)
     .order('created_at', { ascending: true })
 
-  return NextResponse.json({ deal, calculations: calcs ?? [] }, { headers: { 'Cache-Control': 'no-store' } })
+  // Другие сделки того же клиента (тот же нормализованный телефон) — владелец:
+  // «сделки этого клиента тоже». Объект у нас отдельная сделка, поэтому у одного
+  // человека их может быть несколько, и из карточки надо видеть остальные.
+  let siblings: Record<string, unknown>[] = []
+  const pk = (deal as Record<string, unknown>).phone_key as string | null
+  if (pk) {
+    let q = svc.from('deals').select('id, client_name, address, created_at, archived_at')
+      .eq('phone_key', pk).neq('id', dealId).order('created_at', { ascending: false }).limit(20)
+    if (!actor.seeAll) q = q.or(`created_by.eq.${actor.userId},manager_id.eq.${actor.userId}`)
+    const { data } = await q
+    siblings = (data ?? []) as Record<string, unknown>[]
+  }
+
+  return NextResponse.json({ deal, calculations: calcs ?? [], siblings }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -45,7 +58,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
   }
 
-  const b = await req.json().catch(() => ({})) as { client_name?: string; phone?: string; address?: string; amo_lead_id?: string | null }
+  const b = await req.json().catch(() => ({})) as {
+    client_name?: string; phone?: string; address?: string; amo_lead_id?: string | null
+    source?: string | null; archived?: boolean
+  }
   const { phoneKey } = await import('@/lib/b2c/phoneKey')
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (b.client_name !== undefined) patch.client_name = b.client_name.trim()
@@ -53,6 +69,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (b.address !== undefined) patch.address = b.address.trim()
   // amo_lead_id менеджер привязывает вручную; из Amo только читаем.
   if (b.amo_lead_id !== undefined) patch.amo_lead_id = b.amo_lead_id?.trim() || null
+  if (b.source !== undefined) patch.source = b.source?.trim() || null
+  // Архив вместо удаления: к сделке привязаны расчёты, КП, договоры, замеры и
+  // деньги — жёсткое удаление необратимо, поэтому его нет вовсе.
+  if (b.archived !== undefined) {
+    patch.archived_at = b.archived ? new Date().toISOString() : null
+    patch.archived_by = b.archived ? actor.userId : null
+  }
 
   const { error } = await svc.from('deals').update(patch).eq('id', dealId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
