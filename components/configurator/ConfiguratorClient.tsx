@@ -259,6 +259,21 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
     }
   }
 
+  // Виджет сообщает свою высоту наружу: сайт не знает заранее, сколько места
+  // займёт сетка из девяти карточек и сколько — экран сборки. Без этого рамка
+  // фиксированной высоты режет содержимое и внутри неё появляется своя прокрутка.
+  useEffect(() => {
+    if (!embed || typeof window === 'undefined') return
+    const post = () => {
+      const h = Math.ceil(document.documentElement.scrollHeight)
+      try { window.parent?.postMessage({ type: 'mglass-embed-height', height: h }, '*') } catch { /* не во фрейме */ }
+    }
+    post()
+    const ro = new ResizeObserver(post)
+    ro.observe(document.body)
+    return () => ro.disconnect()
+  }, [embed, screen, code])
+
   function sendLead() {
     const payload = {
       type: 'mglass-shower-config' as const,
