@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 // Запросы пакетные: по одному .in('deal_id', ids) на каждую таблицу-артефакт,
 // сведение по deal_id в коде. Не per-deal Promise.all — иначе 500 сделок = тысячи запросов.
 
-const DEAL_COLS = 'id, client_name, phone, address, manager_id, amo_lead_id, source, archived_at, created_by_name, created_at, updated_at'
+const DEAL_COLS = 'id, client_name, phone, address, manager_id, amo_lead_id, source, archived_at, lost_at, lost_reason, next_contact_at, created_by_name, created_at, updated_at'
 
 
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
@@ -26,9 +26,13 @@ export async function GET(req: NextRequest) {
   // ?archived=1 — вид архива. По умолчанию доска показывает только активные:
   // архив это «убрал с глаз», а не «удалил», и он не должен мешать работе.
   const archived = req.nextUrl.searchParams.get('archived') === '1'
+  // Отказы уходят с доски своим видом: держать их в колонках — значит вечно
+  // считать проигранное «в работе» и «зависшим».
+  const lost = req.nextUrl.searchParams.get('lost') === '1'
 
   let dq = svc.from('deals').select(DEAL_COLS).order('updated_at', { ascending: false }).limit(500)
   dq = archived ? dq.not('archived_at', 'is', null) : dq.is('archived_at', null)
+  dq = lost ? dq.not('lost_at', 'is', null) : dq.is('lost_at', null)
   if (!actor.seeAll) dq = dq.or(`created_by.eq.${actor.userId},manager_id.eq.${actor.userId}`)
   const { data: dealsRaw, error } = await dq
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -36,7 +40,7 @@ export async function GET(req: NextRequest) {
   const deals = (dealsRaw ?? []) as Record<string, unknown>[]
   const ids = deals.map(d => Number(d.id))
   if (ids.length === 0) {
-    return NextResponse.json({ stages: DEAL_STAGES, cards: [], kpis: emptyKpis(), seeAll: actor.seeAll, archived },
+    return NextResponse.json({ stages: DEAL_STAGES, cards: [], kpis: emptyKpis(), seeAll: actor.seeAll, archived, lost },
       { headers: { 'Cache-Control': 'no-store' } })
   }
 
@@ -103,7 +107,8 @@ export async function GET(req: NextRequest) {
   }
 
   const nowMs = Date.now()
-  const monthPrefix = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' }).slice(0, 7) // YYYY-MM (МСК)
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' })                    // YYYY-MM-DD (МСК)
+  const monthPrefix = today.slice(0, 7)                                                                  // YYYY-MM
   const DAY = 86_400_000
 
   const cards = deals.map(d => {
@@ -125,6 +130,9 @@ export async function GET(req: NextRequest) {
       manager_name: (d.created_by_name as string) || null,
       source: (d.source as string) || null,
       archived: !!d.archived_at,
+      lost: !!d.lost_at,
+      lostReason: (d.lost_reason as string) || null,
+      nextContactAt: (d.next_contact_at as string) || null,
       stage: key,
       value, paid, remaining,
       calcCount: a?.calcCount ?? 0,
@@ -141,14 +149,16 @@ export async function GET(req: NextRequest) {
     inWork: cards.filter(c => c.stage !== 'done').length,
     awaitingPay: cards.filter(c => c.stage === 'contract' || c.stage === 'pay').reduce((s, c) => s + c.remaining, 0),
     stalled: cards.filter(c => c.stage !== 'done' && c.ageDays > 7).length,
+    // Просрочено обещание — сильнее «зависших»: менеджер сам назначил дату.
+    overdue: cards.filter(c => c.stage !== 'done' && !!c.nextContactAt && c.nextContactAt <= today).length,
     receivedThisMonth: (pays ?? []).reduce((s, p) => {
       const d = String((p as Record<string, unknown>).paid_at ?? '')
       return d.startsWith(monthPrefix) ? s + num((p as Record<string, unknown>).amount) : s
     }, 0),
   }
 
-  return NextResponse.json({ stages: DEAL_STAGES, cards, kpis, seeAll: actor.seeAll, archived },
+  return NextResponse.json({ stages: DEAL_STAGES, cards, kpis, seeAll: actor.seeAll, archived, lost },
     { headers: { 'Cache-Control': 'no-store' } })
 }
 
-function emptyKpis() { return { inWork: 0, awaitingPay: 0, stalled: 0, receivedThisMonth: 0 } }
+function emptyKpis() { return { inWork: 0, awaitingPay: 0, stalled: 0, overdue: 0, receivedThisMonth: 0 } }
