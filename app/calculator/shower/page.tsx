@@ -524,6 +524,17 @@ export default function ShowerCalculatorPage() {
     <div className="min-h-screen bg-[#f5f5f7]" style={{ fontFamily: '-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif' }}>
       <div className="max-w-[960px] mx-auto px-5 py-6">
 
+        {/* Экран вернули по просьбе менеджеров, но дефект остался: фурнитуру
+            бюджета он берёт из таблицы, заполняемой руками, и занижает.
+            Молчать об этом нельзя — по такой цене продают. */}
+        <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <p className="text-[12px] font-semibold text-amber-800">Цена фурнитуры здесь занижена</p>
+          <p className="text-[11px] text-amber-700 mt-0.5">
+            Фурнитура считается по старой ручной таблице, а не по справочнику закупки — на комплекте это даёт занижение.
+            Для продажи считайте в «Новом расчёте»: там фурнитура берётся из реального состава комплекта.
+          </p>
+        </div>
+
         {/* ── Header ────────────────────────────────────────── */}
         {editCalcId && (
           <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">

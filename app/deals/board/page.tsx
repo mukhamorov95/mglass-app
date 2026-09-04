@@ -14,9 +14,21 @@ type Card = {
   id: number; client_name: string; address: string; phone: string; amo_lead_id: string | null
   manager_name: string | null; stage: string; value: number; paid: number; remaining: number
   calcCount: number; hasKp: boolean; measure: Measure | null; hasContract: boolean
-  hasDrawing: boolean; ageDays: number
+  hasDrawing: boolean; ageDays: number; source: string | null; archived: boolean
 }
 type Stage = { key: string; label: string }
+type AmoLead = { id: number; name: string; stage: string; manager: string; createdAt: string }
+// Каналы как в АМО. Список живёт здесь: меняется чаще схемы, в базе — просто текст.
+export const SOURCES: { id: string; label: string }[] = [
+  { id: 'avito',     label: 'Авито' },
+  { id: 'site',      label: 'Заявка с сайта' },
+  { id: 'call',      label: 'Звонок' },
+  { id: 'recommend', label: 'Рекомендация' },
+  { id: 'partner',   label: 'Партнёр / дизайнер' },
+  { id: 'repeat',    label: 'Повторный клиент' },
+  { id: 'other',     label: 'Другое' },
+]
+export const sourceLabel = (id?: string | null) => SOURCES.find(s => s.id === id)?.label ?? (id || '')
 type Kpis = { inWork: number; awaitingPay: number; stalled: number; receivedThisMonth: number }
 
 // Цвет этажа: точка + верхняя граница колонки. Семантика (не акцент): синий=КП,
@@ -37,12 +49,56 @@ export default function DealBoardPage() {
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [focus, setFocus] = useState<'all' | 'inWork' | 'awaiting' | 'stalled'>('all')
+  const [adding, setAdding] = useState(false)
+  const [showArchive, setShowArchive] = useState(false)
+  const [form, setForm] = useState({ client_name: '', phone: '', address: '', source: '' })
+  const [creating, setCreating] = useState(false)
+  // Второй способ завести карточку — забрать заявку из АМО. Из CRM только читаем.
+  const [addTab, setAddTab] = useState<'manual' | 'amo'>('manual')
+  const [amo, setAmo] = useState<{ leads: AmoLead[]; needsAmoLink?: boolean } | null>(null)
+  const [amoState, setAmoState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [amoErr, setAmoErr] = useState('')
+  const [amoLink, setAmoLink] = useState('')
+
+  async function loadAmo() {
+    setAmoState('loading'); setAmoErr('')
+    try {
+      const r = await fetch('/api/deals/amo-inbox')
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setAmoErr(j.error || 'Не удалось получить заявки'); setAmoState('error'); return }
+      setAmo({ leads: j.leads ?? [], needsAmoLink: !!j.needsAmoLink }); setAmoState('idle')
+    } catch { setAmoErr('Сеть недоступна'); setAmoState('error') }
+  }
+
+  async function importAmo(lead: string | number) {
+    setCreating(true)
+    try {
+      const r = await fetch('/api/deals/amo-import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (r.ok && j.id) window.location.assign(`/deal/${j.id}`)
+      else setAmoErr(j.error || 'Не удалось импортировать')
+    } finally { setCreating(false) }
+  }
+
+  async function createDeal() {
+    if (!form.client_name.trim() && !form.phone.trim()) return
+    setCreating(true)
+    try {
+      const r = await fetch('/api/deals', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (r.ok && j.id) window.location.assign(`/deal/${j.id}`)
+    } finally { setCreating(false) }
+  }
 
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
-        const r = await fetch('/api/deals/board')
+        const r = await fetch(`/api/deals/board${showArchive ? '?archived=1' : ''}`)
         const j = await r.json().catch(() => ({}))
         if (!alive) return
         if (!r.ok) { setError(j.error || 'Не удалось загрузить'); return }
@@ -50,7 +106,7 @@ export default function DealBoardPage() {
       } catch { if (alive) setError('Сеть недоступна') } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
-  }, [])
+  }, [showArchive])
 
   // Телефон ищем по тем же правилам, что и список: сравниваем цифры, а не строку,
   // иначе «8926…» не находит сделку, записанную как «+7 926…».
@@ -87,7 +143,7 @@ export default function DealBoardPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="flex items-end justify-between gap-4 flex-wrap mb-4">
         <div>
-          <h1 className="text-[24px] font-bold text-[#111110]">Сделки</h1>
+          <h1 className="text-[24px] font-bold text-[#111110]">{showArchive ? 'Архив сделок' : 'Сделки'}</h1>
           <p className="text-[13px] text-[#9a9a95] mt-0.5 max-w-[62ch]">
             Каждая карточка идёт по этажам пути денег: просчёт → КП → договор → оплата. Этаж вычисляется по тому, что в сделке реально появилось — руками ничего не двигают.
           </p>
@@ -97,12 +153,97 @@ export default function DealBoardPage() {
             value={q} onChange={e => setQ(e.target.value)}
             placeholder="Поиск: телефон, адрес, клиент"
             className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-64 outline-none focus:border-[#111110] transition-colors" />
-          <div className="flex bg-white border border-[#e4e4e0] rounded-xl p-0.5">
-            <Link href="/deals" className="text-[12.5px] font-medium px-3 py-1.5 rounded-[10px] text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Список</Link>
-            <span className="text-[12.5px] font-medium px-3 py-1.5 rounded-[10px] bg-[#111110] text-white">Доска</span>
-          </div>
+          {/* Единственный способ завести карточку руками — клиент позвонил, расчёта
+              ещё нет. Всё остальное приходит на доску само, с первым расчётом. */}
+          <button onClick={() => { setShowArchive(v => !v); setLoading(true); setFocus('all') }}
+            className={`text-[12.5px] font-medium px-3.5 py-2 rounded-xl border transition-colors ${showArchive ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
+            {showArchive ? 'Активные' : 'Архив'}
+          </button>
+          {!showArchive && (
+            <button onClick={() => setAdding(v => !v)}
+              className="text-[12.5px] font-semibold px-3.5 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+              {adding ? 'Отмена' : '+ Сделка'}
+            </button>
+          )}
         </div>
       </div>
+
+      {adding && (
+        <div className="bg-white border border-[#111110] rounded-2xl p-4 mb-4">
+          <div className="flex items-center gap-1 mb-3">
+            {([['manual', 'Ввести вручную'], ['amo', 'Взять из AmoCRM']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => { setAddTab(k); if (k === 'amo' && !amo) loadAmo() }}
+                className={`text-[12.5px] font-medium px-3 py-1.5 rounded-lg transition-colors ${addTab === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {addTab === 'amo' ? (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <input value={amoLink} onChange={e => setAmoLink(e.target.value)}
+                  placeholder="Ссылка на заявку в АМО или её номер"
+                  className="flex-1 border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+                <button onClick={() => importAmo(amoLink)} disabled={creating || !amoLink.trim()}
+                  className="text-[13px] font-semibold px-4 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+                  Забрать
+                </button>
+              </div>
+              {amoState === 'loading' && <p className="text-[12px] text-[#9a9a95]">Смотрю заявки в АМО…</p>}
+              {amoErr && <p className="text-[12px] text-red-600 mb-2">{amoErr}</p>}
+              {amo?.needsAmoLink && (
+                <p className="text-[12px] text-amber-700">Ваш профиль не связан с пользователем AmoCRM — попросите админа проставить amo_user_id, иначе чужие заявки показывать нельзя.</p>
+              )}
+              {amo && !amo.needsAmoLink && (
+                amo.leads.length === 0 ? (
+                  <p className="text-[12px] text-[#9a9a95]">Новых заявок с сентября нет — всё уже заведено.</p>
+                ) : (
+                  <div className="max-h-[320px] overflow-y-auto divide-y divide-[#f0f0ec] border border-[#f0f0ec] rounded-xl">
+                    {amo.leads.map(l => (
+                      <div key={l.id} className="px-3 py-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[13px] text-[#111110] truncate">{l.name || `Заявка #${l.id}`}</p>
+                          <p className="text-[11px] text-[#9a9a95] truncate">{l.stage}{l.manager ? ` · ${l.manager}` : ''} · {new Date(l.createdAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
+                        </div>
+                        <button onClick={() => importAmo(l.id)} disabled={creating}
+                          className="text-[12px] font-semibold px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#111110] hover:text-white disabled:opacity-40 whitespace-nowrap">
+                          Забрать
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+              <p className="text-[11px] text-[#9a9a95] mt-2">Показаны заявки с 1 сентября, которых ещё нет в системе. В АМО ничего не меняется — только читаем.</p>
+            </div>
+          ) : (
+          <>
+          <p className="text-[12px] font-semibold text-[#111110] mb-2">Новая сделка</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input autoFocus value={form.client_name} onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
+              placeholder="Клиент" className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+              placeholder="Телефон" inputMode="tel" className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            <input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+              placeholder="Адрес объекта" className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            <select value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
+              className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110] bg-white">
+              <option value="">Источник не указан</option>
+              {SOURCES.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-3 mt-2.5">
+            <button onClick={createDeal} disabled={creating || (!form.client_name.trim() && !form.phone.trim())}
+              className="text-[13px] font-semibold px-4 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+              {creating ? 'Создаю…' : 'Завести и открыть'}
+            </button>
+            <span className="text-[11.5px] text-[#9a9a95]">Попадёт в «Новая». Дальше — расчёт.</span>
+          </div>
+          </>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-[13px] text-[#9a9a95]">Загрузка…</p>
@@ -153,6 +294,9 @@ export default function DealBoardPage() {
           </div>
 
           <div className="text-[12px] text-[#9a9a95] mt-4 leading-relaxed max-w-[80ch] space-y-1.5">
+            <p>
+              <b className="text-[#4b4b47] font-semibold">Откуда берутся карточки.</b> Сделка заводится сама на первом сохранённом расчёте, где есть телефон или адрес, — такая карточка появляется сразу в «Просчёт». В «Новая» попадают только заведённые руками кнопкой «+ Сделка»: клиент позвонил, расчёта ещё нет. Пустых карточек система не плодит.
+            </p>
             <p>
               <b className="text-[#4b4b47] font-semibold">Как работать.</b> Столбец — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по самой карточке открывает её целиком. Показатель сверху — фильтр: начните день с «Зависли».
             </p>
@@ -216,6 +360,7 @@ function DealCard({ c }: { c: Card }) {
         {c.calcCount > 0 && <Chip>⚡ {c.calcCount > 1 ? `Расчёт ×${c.calcCount}` : 'Расчёт'}</Chip>}
         {c.hasKp && <Chip tone="info">📄 КП</Chip>}
         {c.measure && <Chip tone={measureTone(c.measure)}>📐 {measureLabel(c.measure)}</Chip>}
+        {c.source && <Chip>{sourceLabel(c.source)}</Chip>}
         {c.hasDrawing && <Chip tone="good">📎 чертёж</Chip>}
         {c.hasContract && <Chip tone="good">📝 договор</Chip>}
       </div>
@@ -270,7 +415,7 @@ function DealCard({ c }: { c: Card }) {
 function nextStep(c: Card): { label: string; href: string } | null {
   const d = `/deal/${c.id}`
   switch (c.stage) {
-    case 'new':      return { label: 'Открыть · нужен расчёт', href: d }
+    case 'new':      return { label: 'Сделать расчёт', href: `/calculator/build?deal=${c.id}` }
     case 'quote':    return { label: 'Сделать КП', href: `${d}#docs` }
     case 'kp':       return c.measure ? { label: 'Договор', href: `${d}#docs` }
                                       : { label: 'Замер или договор', href: `${d}#docs` }
