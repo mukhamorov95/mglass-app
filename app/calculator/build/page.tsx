@@ -26,6 +26,10 @@ const GLASS_TYPES: GlassType[] = [
   { id: 'crystal',  label: 'Осветлённое', b2b: 'Осветлённое CrystalVision', swatch: '#dfeaf6', tint: { color: '#ffffff', attenuation: '#cfe4f2', distance: 6.0 } },
   { id: 'bronze',   label: 'Бронза',      b2b: 'Прозрачное М1',            swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
   { id: 'graphite', label: 'Графит',      b2b: 'Прозрачное М1',            swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
+  // Матовые (кислотное травление). Неосветлённое ходит в справочнике как
+  // «Сатинированное бесцветное» — то же матовое по прозрачному М1, имя не по бренду AGC.
+  { id: 'matte',    label: 'Матовое',     b2b: 'Сатинированное бесцветное', swatch: '#dfe2dd', tint: { color: '#f2f5f1', attenuation: '#d8e0d8', distance: 2.2, roughness: 0.55 } },
+  { id: 'matte-crystal', label: 'Матовое осветл.', b2b: 'CrystalVision Matelux', swatch: '#e6ecef', tint: { color: '#f6f9fa', attenuation: '#e2ecf2', distance: 3.2, roughness: 0.55 } },
 ]
 
 // Фото модели из 3D-визуализатора (public/models/<латиница>.jpg). Нет файла (М11) — схема.
@@ -36,8 +40,13 @@ const RUB = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const midV = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100
 
-type KitLine = { role: string; label: string; qty: number; unit: string; total: number }
-type Price = { glassCost: number; hardwareCost: number; sections: number; lines: KitLine[]; missing: { label: string; reason: string }[]; complete: boolean }
+type KitLine = { role: string; label: string; qty: number; unit: string; unitPrice: number; total: number; plan?: { len: number; pieces: number[] }[] }
+type GlassLine = { label: string; w: number; h: number; areaM2: number; pricePerM2: number; listTotal: number; total: number; minPriceApplied: boolean }
+type Price = {
+  glassCost: number; hardwareCost: number; sections: number; lines: KitLine[]
+  glassLines?: GlassLine[]; glassSource?: string | null; glassThickness?: number; glassDiscountPct?: number
+  missing: { label: string; reason: string }[]; complete: boolean
+}
 type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number }
 
 const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]'
@@ -66,6 +75,8 @@ export default function BuildCalcPage() {
   const [qtyChoice, setQtyChoice] = useState<Record<string, number>>({})
 
   const [price, setPrice] = useState<Price | null>(null)
+  const [specGlass, setSpecGlass] = useState(false)
+  const [specHw, setSpecHw] = useState(false)
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
   // Ключ параметров, под которые посчитана текущая цена. Пока не совпадает с текущими
   // параметрами — цена «не догнала», кнопки сохранения блокируем (иначе запишется новый
@@ -321,7 +332,7 @@ export default function BuildCalcPage() {
             <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3">
               <div>
                 <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Стекло</p>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   {GLASS_TYPES.map(g => (
                     <button key={g.id} onClick={() => setGlassId(g.id)} title={g.label}
                       className={`rounded-lg border-2 p-1 ${glassId === g.id ? 'border-[#111110]' : 'border-[#e4e4e0]'}`}>
@@ -375,8 +386,38 @@ export default function BuildCalcPage() {
             {/* Детали цены — прокручиваются; итог и кнопки закреплены ниже. */}
             <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-1.5 text-[12px]">
               <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Себестоимость и цена</p>
-              <div className="flex justify-between"><span className="text-[#6b6b66]">Себест. стекло</span><span className="font-mono">{RUB(glassCost)}</span></div>
-              <div className="flex justify-between"><span className="text-[#6b6b66]">Себест. фурнитура</span><span className="font-mono">{RUB(hwCost)}</span></div>
+              {/* Спецификация: менеджер должен видеть, из чего сложилась цифра,
+                  а не верить итогу. Свёрнута, чтобы не мешать частому сценарию. */}
+              <SpecRow label="Себест. стекло" sum={glassCost} open={specGlass} onToggle={() => setSpecGlass(v => !v)} count={price?.glassLines?.length ?? 0}>
+                {price?.glassSource && (
+                  <p className="text-[11px] text-[#9a9a95] pb-1">
+                    {price.glassSource}{price.glassThickness ? `, ${price.glassThickness} мм` : ''}, закалка · цена по прайсу
+                    {price.glassDiscountPct ? ` минус ${price.glassDiscountPct}% M GLASS` : ''}
+                  </p>
+                )}
+                {(price?.glassLines ?? []).map((g, i) => (
+                  <div key={i} className="flex justify-between gap-2 py-0.5">
+                    <span className="text-[#6b6b66] min-w-0">
+                      {g.w}×{g.h} мм · {g.areaM2.toFixed(2)} м² × {RUB(g.pricePerM2)}/м²
+                      {g.minPriceApplied && <span className="text-amber-700"> · минималка</span>}
+                      {g.listTotal !== g.total && <span className="text-[#9a9a95]"> · {RUB(g.listTotal)} −{price?.glassDiscountPct}%</span>}
+                    </span>
+                    <span className="font-mono whitespace-nowrap">{RUB(g.total)}</span>
+                  </div>
+                ))}
+              </SpecRow>
+              <SpecRow label="Себест. фурнитура" sum={hwCost} open={specHw} onToggle={() => setSpecHw(v => !v)} count={price?.lines?.length ?? 0}>
+                {(price?.lines ?? []).map((l, i) => (
+                  <div key={i} className="flex justify-between gap-2 py-0.5">
+                    <span className="text-[#6b6b66] min-w-0">
+                      {l.label} · {l.qty} {l.unit} × {RUB(l.unitPrice)}
+                      {/* Хлыст режется — показываем куски, иначе непонятно, за что целая палка. */}
+                      {l.plan?.length ? <span className="text-[#9a9a95]"> · рез {l.plan.flatMap(p => p.pieces).map(Math.round).join(', ')} мм</span> : null}
+                    </span>
+                    <span className="font-mono whitespace-nowrap">{RUB(l.total)}</span>
+                  </div>
+                ))}
+              </SpecRow>
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <div><label className={lbl}>Маржа, %</label><input type="number" className={fld} value={margin} onChange={e => setMargin(e.target.value)} /></div>
                 <div><label className={lbl}>Налог, %</label><input type="number" className={fld} value={tax} onChange={e => setTax(e.target.value)} /></div>
@@ -432,6 +473,29 @@ export default function BuildCalcPage() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Строка себестоимости с раскрывающейся спецификацией. Свёрнутая выглядит как
+// раньше — итог справа; раскрытая показывает, из чего он сложился.
+function SpecRow({ label, sum, count, open, onToggle, children }: {
+  label: string; sum: number; count: number; open: boolean; onToggle: () => void; children: React.ReactNode
+}) {
+  const can = count > 0
+  return (
+    <div>
+      <button type="button" onClick={can ? onToggle : undefined} disabled={!can}
+        className="w-full flex justify-between items-baseline gap-2 text-left disabled:cursor-default">
+        <span className="text-[#6b6b66] flex items-center gap-1">
+          {label}
+          {can && <span className="text-[10px] text-[#9a9a95]">{open ? '▾' : '▸'} {count} поз.</span>}
+        </span>
+        <span className="font-mono">{RUB(sum)}</span>
+      </button>
+      {open && can && (
+        <div className="mt-1 mb-1.5 pl-2 border-l-2 border-[#e4e4e0] text-[11.5px]">{children}</div>
+      )}
     </div>
   )
 }

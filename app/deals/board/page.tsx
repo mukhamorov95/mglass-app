@@ -36,6 +36,7 @@ export default function DealBoardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  const [focus, setFocus] = useState<'all' | 'inWork' | 'awaiting' | 'stalled'>('all')
 
   useEffect(() => {
     let alive = true
@@ -66,12 +67,21 @@ export default function DealBoardPage() {
     })
   }, [cards, q])
 
+  // Показатель сверху — это ещё и фильтр доски: нажал «Зависли» — видишь только их.
+  // Иначе цифра «зависли 6» есть, а найти эти шесть на доске нечем.
+  const focused = useMemo(() => {
+    if (focus === 'inWork') return filtered.filter(c => c.stage !== 'done')
+    if (focus === 'awaiting') return filtered.filter(c => c.stage === 'contract' || c.stage === 'pay')
+    if (focus === 'stalled') return filtered.filter(c => c.stage !== 'done' && c.ageDays > 7)
+    return filtered
+  }, [filtered, focus])
+
   const byStage = useMemo(() => {
     const m = new Map<string, Card[]>()
     for (const st of stages) m.set(st.key, [])
-    for (const c of filtered) { const arr = m.get(c.stage); if (arr) arr.push(c) }
+    for (const c of focused) { const arr = m.get(c.stage); if (arr) arr.push(c) }
     return m
-  }, [filtered, stages])
+  }, [focused, stages])
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
@@ -101,12 +111,22 @@ export default function DealBoardPage() {
       ) : (
         <>
           {kpis && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-              <Kpi label="В работе" value={`${kpis.inWork}`} unit="сделок" />
-              <Kpi label="Ждут оплаты" value={fmt(kpis.awaitingPay)} mono />
-              <Kpi label="Зависли > 7 дней" value={`${kpis.stalled}`} flag={kpis.stalled > 0} />
-              <Kpi label="Поступило за месяц" value={fmt(kpis.receivedThisMonth)} mono />
-            </div>
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
+                <Kpi label="В работе" value={`${kpis.inWork}`} unit="сделок"
+                  active={focus === 'inWork'} onClick={() => setFocus(f => f === 'inWork' ? 'all' : 'inWork')} />
+                <Kpi label="Ждут оплаты" value={fmt(kpis.awaitingPay)} mono
+                  active={focus === 'awaiting'} onClick={() => setFocus(f => f === 'awaiting' ? 'all' : 'awaiting')} />
+                <Kpi label="Зависли > 7 дней" value={`${kpis.stalled}`} flag={kpis.stalled > 0}
+                  active={focus === 'stalled'} onClick={() => setFocus(f => f === 'stalled' ? 'all' : 'stalled')} />
+                <Kpi label="Поступило за месяц" value={fmt(kpis.receivedThisMonth)} mono />
+              </div>
+              <p className="text-[11.5px] text-[#9a9a95] mb-4">
+                {focus === 'all'
+                  ? 'Нажмите на показатель — доска покажет только эти сделки.'
+                  : <>Показаны только «{FOCUS_LABEL[focus]}» — {focused.length}. <button onClick={() => setFocus('all')} className="underline hover:text-[#111110]">показать все</button></>}
+              </p>
+            </>
           )}
 
           <div className="flex gap-3.5 overflow-x-auto pb-3">
@@ -132,24 +152,38 @@ export default function DealBoardPage() {
             })}
           </div>
 
-          <p className="text-[12px] text-[#9a9a95] mt-4 leading-relaxed max-w-[80ch]">
-            <b className="text-[#4b4b47] font-semibold">Этаж = реальный артефакт.</b> Есть оплата → «Оплата», подписан договор → «Договор», отправлено КП → «КП отправлено». Замер — не этаж, а метка на карточке: янтарь — назначен, зелёный — проведён. «Без движения» считается по последнему событию в сделке: деньгам, КП, договору, замеру, чертежу. Ничего не перетаскивают руками — доска не врёт.
-            {!seeAll && <span> Показаны ваши сделки.</span>}
-          </p>
+          <div className="text-[12px] text-[#9a9a95] mt-4 leading-relaxed max-w-[80ch] space-y-1.5">
+            <p>
+              <b className="text-[#4b4b47] font-semibold">Как работать.</b> Столбец — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по самой карточке открывает её целиком. Показатель сверху — фильтр: начните день с «Зависли».
+            </p>
+            <p>
+              <b className="text-[#4b4b47] font-semibold">Столбец не перетаскивают.</b> Сделка переходит сама, когда в ней появляется артефакт: отправлено КП → «КП отправлено», подписан договор → «Договор», пришли деньги → «Оплата», оплачено полностью → «Готово». Замер — не столбец, а метка: янтарь — назначен, зелёный — проведён. «Без движения» считается по последнему событию: деньгам, КП, договору, замеру, чертежу.
+              {!seeAll && <span> Показаны ваши сделки.</span>}
+            </p>
+          </div>
         </>
       )}
     </div>
   )
 }
 
-function Kpi({ label, value, unit, mono, flag }: { label: string; value: string; unit?: string; mono?: boolean; flag?: boolean }) {
+const FOCUS_LABEL: Record<string, string> = {
+  inWork: 'В работе', awaiting: 'Ждут оплаты', stalled: 'Зависли > 7 дней',
+}
+
+function Kpi({ label, value, unit, mono, flag, active, onClick }: {
+  label: string; value: string; unit?: string; mono?: boolean; flag?: boolean
+  active?: boolean; onClick?: () => void
+}) {
+  const Tag = onClick ? 'button' : 'div'
   return (
-    <div className="bg-white border border-[#e4e4e0] rounded-2xl px-4 py-3">
+    <Tag onClick={onClick}
+      className={`text-left bg-white border rounded-2xl px-4 py-3 transition-colors ${active ? 'border-[#111110] bg-[#fbfbf9]' : 'border-[#e4e4e0]'} ${onClick ? 'hover:border-[#111110]' : ''}`}>
       <div className="text-[11px] uppercase tracking-wide text-[#9a9a95] font-semibold">{label}</div>
       <div className={`text-[22px] font-semibold mt-1 leading-none ${flag ? 'text-red-600' : 'text-[#111110]'} ${mono ? 'tabular-nums' : ''}`}>
         {value}{unit && <span className="text-[13px] text-[#9a9a95] font-medium"> {unit}</span>}
       </div>
-    </div>
+    </Tag>
   )
 }
 
@@ -164,6 +198,7 @@ function DealCard({ c }: { c: Card }) {
   const pct = c.value > 0 ? Math.min(100, Math.round((c.paid / c.value) * 100)) : 0
   const full = c.stage === 'done'
   const amoHref = c.amo_lead_id ? `https://mglass.amocrm.ru/leads/detail/${c.amo_lead_id}` : null
+  const next = nextStep(c)
   // Ссылка на карточку тянется на всю плитку слоем под содержимым: так внутри
   // помещается отдельная ссылка в АМО (вложенная <a> в <a> недопустима).
   return (
@@ -202,6 +237,15 @@ function DealCard({ c }: { c: Card }) {
         </div>
       )}
 
+      {/* Следующий шаг — главное, чего не хватало: доска показывала состояние,
+          но не говорила, что делать. Ведёт сразу на нужную вкладку карточки. */}
+      {next && (
+        <Link href={next.href}
+          className="pointer-events-auto relative z-20 mt-2.5 flex items-center justify-center gap-1 rounded-lg border border-[#111110] px-2 py-1.5 text-[11.5px] font-semibold text-[#111110] hover:bg-[#111110] hover:text-white transition-colors">
+          {next.label}
+        </Link>
+      )}
+
       <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-[#f0f0ec]">
         <span className="text-[11.5px] text-[#9a9a95]">{c.phone ? formatPhone(c.phone) : '—'}</span>
         <span className="flex items-center gap-2">
@@ -219,6 +263,21 @@ function DealCard({ c }: { c: Card }) {
       </div>
     </div>
   )
+}
+
+// Что делать со сделкой дальше. Один шаг, не список: доска отвечает на вопрос
+// «что сейчас», а не заменяет карточку. Ссылка ведёт на вкладку, где этот шаг делается.
+function nextStep(c: Card): { label: string; href: string } | null {
+  const d = `/deal/${c.id}`
+  switch (c.stage) {
+    case 'new':      return { label: 'Открыть · нужен расчёт', href: d }
+    case 'quote':    return { label: 'Сделать КП', href: `${d}#docs` }
+    case 'kp':       return c.measure ? { label: 'Договор', href: `${d}#docs` }
+                                      : { label: 'Замер или договор', href: `${d}#docs` }
+    case 'contract': return { label: 'Отметить оплату', href: `${d}#money` }
+    case 'pay':      return { label: c.remaining > 0 ? `Внести остаток ${fmt(c.remaining)}` : 'Деньги', href: `${d}#money` }
+    default:         return null
+  }
 }
 
 // Замер: заявка отправлена ≠ замер проведён. Зелёный только на «проведён»,

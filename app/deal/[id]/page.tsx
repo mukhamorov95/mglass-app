@@ -87,6 +87,14 @@ export default function DealPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (id) load() }, [id])
 
+  // С доски приходят на конкретный шаг: #docs — документы, #money — деньги.
+  // Иначе «Отметить оплату» открывало карточку на расчётах и деньги надо было искать.
+  useEffect(() => {
+    const h = window.location.hash.replace('#', '')
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (h === 'docs' || h === 'money') setTab(h)
+  }, [])
+
   async function save() {
     setSaving(true)
     try {
