@@ -8,9 +8,10 @@ import { calculateLoft, type LoftInputs } from './loftCalculator'
 import type { Material, Service, FinancialSettings } from './types'
 import { getMatrixPrice, getWastePct, type GlassMatrixRow } from './glassMatrix'
 import {
-  resolveShowerGlassCostPerM2, resolveShowerExpensesPercent, resolveBudgetHardwareCost,
-  DEFAULT_SHOWER_GLASS, type GlassMatrixMap, type BudgetManualPrice, type HwColorRow,
+  resolveShowerGlassCostPerM2, resolveShowerExpensesPercent,
+  DEFAULT_SHOWER_GLASS, type GlassMatrixMap,
 } from './pricing/showerInputs'
+import { hardwareCostFromVisualizer } from './configurator/hardwareCost'
 
 // Raw row from public.mirror_lighting_components (server-side read)
 type LightingRow = {
@@ -127,11 +128,9 @@ type ShowerModelRow = {
 // Данные душевой из БД — те же источники, что и UI-калькулятор (детерминизм цены).
 async function loadShowerExtra() {
   const supabase = db()
-  const [{ data: os }, { data: sm }, { data: bmp }, { data: hc }] = await Promise.all([
+  const [{ data: os }, { data: sm }] = await Promise.all([
     supabase.from('owner_strategy').select('key,value'),
     supabase.from('shower_models').select('*').eq('active', true).order('sort_order'),
-    supabase.from('shower_budget_manual_prices').select('model_id,color_id,price'),
-    supabase.from('shower_hw_colors').select('id,name').eq('active', true).order('id'),
   ])
   const strat = (os ?? []) as { key: string; value: string }[]
   const num = (k: string, def: number) => {
@@ -148,8 +147,6 @@ async function loadShowerExtra() {
     targetMargin: num('target_margin', 40),
     minMargin:    num('min_margin', 25),
     showerModels: models,
-    budgetManualPrices: (bmp ?? []) as BudgetManualPrice[],
-    hwColors: (hc ?? []) as HwColorRow[],
   }
 }
 
@@ -336,9 +333,18 @@ export async function quickCalc(
     const glassMatrixMap = buildGlassMatrixMap(glassMatrix)
     const glassCostPerM2 = resolveShowerGlassCostPerM2(glassMatrixMap, glassType, thickness, materials)
     const expensesPercent = resolveShowerExpensesPercent(settings, tier)
-    const customHardwareCost = tier === 'budget'
-      ? resolveBudgetHardwareCost(shower.budgetManualPrices, shower.hwColors, model.id, colorValue)
-      : undefined
+    // Себестоимость фурнитуры — только из прайса визуализатора по составу комплекта.
+    // Флэт hardware_base × коэффициент занижал до вдвое (М11 +99%, М1 +87%), поэтому
+    // модель без комплекта не считаем вовсе: отсутствие цены честнее заниженной.
+    const hw = await hardwareCostFromVisualizer({
+      modelId: model.id, width, width2: options.width2 ?? width, height, thickness,
+      hardwareColor: colorValue,
+    })
+    if (!hw) return null
+    const hwWarnings = hw.complete ? [] : [
+      `Фурнитура ${hw.modelCode}: в прайсе визуализатора нет цены — ${hw.missing.join('; ')}`,
+    ]
+    const customHardwareCost = hw.cost
 
     const inputs: ShowerInputs = {
       tier,
@@ -364,7 +370,11 @@ export async function quickCalc(
       standardMargin: shower.targetMargin,
     }
     const result = calculateShower(inputs, services)
-    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText, margin: result.margin, serviceLines: result.serviceLines }
+    return {
+      price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText,
+      margin: result.margin, serviceLines: result.serviceLines,
+      warnings: hwWarnings.length > 0 ? hwWarnings : undefined,
+    }
   }
 
   if (type === 'loft') {

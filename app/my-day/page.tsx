@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { OrphanCalcs } from './OrphanCalcs'
 import { createClient } from '@/lib/supabase-server'
 import { getSessionUser, getRole } from '@/lib/getRole'
 import { mskDate, mskDayKey } from '@/lib/time'
@@ -83,6 +84,8 @@ export default async function MyDay() {
           <h1 className="text-[20px] font-bold text-[#111110]">Мой день</h1>
           <p className="text-[13px] text-[#9a9a95] mt-0.5">Что требует действия сегодня. Остальное — в «Сделках».</p>
         </div>
+
+        <OrphanCalcs />
 
         {empty && (
           <div className="rounded-xl border border-[#e4e4e0] bg-white p-6 text-center">
