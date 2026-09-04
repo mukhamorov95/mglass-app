@@ -170,12 +170,15 @@ export function calcMirrorQuote(
       if (!ctl) missing.push({ role: types[0], label: input.control === 'sensor' ? 'Сенсор' : 'Кнопка', reason: 'нет позиции' })
       else add(types[0], ctl.name, 1, 'шт', ctl.cost_price)
     }
+    // Провод и коннекторы — НЕ обязательны: в счетах Eleganz их нет отдельными
+    // строками (идут с блоком и сенсором). Требовать их значило бы блокировать
+    // расчёт из-за позиции, которую мы не покупаем. Есть в справочнике — считаем.
     const wire = first(comps, ['wire', 'провод'])
     if (wire) {
       const p = packs(Math.max(2, lightingM), wire.pack_length_m)
       add('wire', wire.name, p.qty, p.byPack ? 'бухта' : 'м',
         p.byPack ? wire.cost_price * (wire.pack_length_m as number) : wire.cost_price)
-    } else missing.push({ role: 'wire', label: 'Провод', reason: 'нет позиции' })
+    }
     const conn = first(comps, ['connector', 'коннектор'])
     if (conn) add('connector', conn.name, 2, 'шт', conn.cost_price)
   }

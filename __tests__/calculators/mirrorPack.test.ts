@@ -43,3 +43,13 @@ describe('профиль палками по 2 м', () => {
     expect(q.lines.find(l => l.role === 'diffuser')!.qty).toBe(2)
   })
 })
+
+describe('провод не обязателен', () => {
+  it('без позиции «провод» расчёт всё равно считается', () => {
+    const q = calcMirrorQuote({ width: 800, height: 600, shape: 'rect', lighting: true,
+      sides: { top: true, bottom: false, left: false, right: false }, voltage: 12,
+      control: 'none', frame: 'none', glassCost: 0 }, comps, {})
+    expect(q.complete).toBe(true)
+    expect(q.missing.map(m => m.role)).not.toContain('wire')
+  })
+})
