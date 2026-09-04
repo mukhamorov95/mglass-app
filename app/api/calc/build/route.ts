@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { getModel, M_MODELS } from '@/lib/configurator/arrangement'
 import { computeKitQuantities, computeKitPrice, type RoleId } from '@/lib/configurator/kit'
 import { buildWithVariant } from '@/lib/configurator/quoteContract'
+import type { MVariant } from '@/components/configurator/scene/assembly'
 import { resolveTierData } from '@/lib/configurator/priceVersion'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { calcItem, effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
     model?: string; dims?: { width: number; height: number; width2?: number; doorWidth?: number }
     thickness?: number; finishId?: string; glassType?: string; withDelivery?: boolean; floors?: number
     zoneId?: string; km?: number; installFactors?: string[]; choice?: Record<string, string>; qtyChoice?: Record<string, number>
+    variant?: MVariant
   } | null
   if (!body?.model || !body.dims || !M_MODELS.some(m => m.code === body.model)) {
     return NextResponse.json({ full: false, error: 'model + dims обязательны' }, { status: 400 })
@@ -60,7 +62,9 @@ export async function POST(req: NextRequest) {
   const mgDiscount = Number(mgClient?.discount_percent) || 0
 
   // Панели стекла из геометрии — те же размеры, что уходят в раскрой и на сайт.
-  const assembly = buildWithVariant(model, body.dims, thickness)
+  // Вариант приходит с экрана: у М1 он говорит, что введена ширина САМОЙ панели,
+  // и какое крепление трубы. Без него геометрия для цены расходилась бы с 3D.
+  const assembly = buildWithVariant(model, body.dims, thickness, body.variant)
   const glassMissing: string[] = []
   let glassCost = 0
   // Спецификация стекла: по одной строке на панель — размер, площадь, ₽/м² по прайсу,
