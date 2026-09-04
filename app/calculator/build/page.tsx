@@ -103,10 +103,13 @@ export default function BuildCalcPage() {
 
   const model = getModel(code)
   const isCorner = model.constraints.needsWidth2
+  const isWalkin = model.shape === 'walkin'   // М1: вводится размер панели, не проёма
   const finish = FINISHES.find(f => f.id === finishId) ?? FINISHES[0]
   const glass = GLASS_TYPES.find(g => g.id === glassId) ?? GLASS_TYPES[0]
-  const mVariant = useMemo<MVariant>(() => (code === 'М1' ? { mount: 'perp90', profileFrame: 'partial' } : {}), [code])
-  const paramsKey = useMemo(() => JSON.stringify({ code, dims, finishId, g: glass.b2b, choice, qtyChoice }), [code, dims, finishId, glass.b2b, choice, qtyChoice])
+  // glassSpan: 'panel' — в просчёте вводят размер САМОЙ панели. На сайте у walk-in
+  // вводят проём и стекло закрывает его часть; менеджер заказывает стекло, не проём.
+  const mVariant = useMemo<MVariant>(() => (code === 'М1' ? { mount: 'perp90', profileFrame: 'partial', glassSpan: 'panel' } : {}), [code])
+  const paramsKey = useMemo(() => JSON.stringify({ code, dims, finishId, g: glass.b2b, choice, qtyChoice, mVariant }), [code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant])
   const priceDirty = pricedKey !== paramsKey   // цена ещё не догнала параметры
 
   function pickModel(c: string) {
@@ -179,7 +182,7 @@ export default function BuildCalcPage() {
       setState('loading')
       fetch('/api/calc/build', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-        body: JSON.stringify({ model: code, thickness: THICKNESS, finishId, glassType: glass.b2b, dims, choice, qtyChoice }),
+        body: JSON.stringify({ model: code, thickness: THICKNESS, finishId, glassType: glass.b2b, dims, choice, qtyChoice, variant: mVariant }),
       }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((res: { full?: boolean; price?: Price }) => {
           // Только последний запрос доживает (остальные оборваны abort), значит key актуален.
@@ -188,7 +191,7 @@ export default function BuildCalcPage() {
         }).catch((e: unknown) => { if ((e as Error)?.name !== 'AbortError') { setPrice(null); setState('error') } })
     }, 400)
     return () => { clearTimeout(t); ctrl.abort() }
-  }, [screen, code, dims, finishId, glass.b2b, choice, qtyChoice, paramsKey])
+  }, [screen, code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant, paramsKey])
 
   const glassCost = price?.glassCost ?? 0
   const hwCost = price?.hardwareCost ?? 0
@@ -317,7 +320,9 @@ export default function BuildCalcPage() {
           <div className="space-y-3 overflow-y-auto pr-1 flex-1 min-h-0">
             {/* Габариты */}
             <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Габариты проёма, мм</p>
+              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">
+                {isWalkin ? 'Размер стекла, мм' : 'Габариты проёма, мм'}
+              </p>
               <div className={`grid gap-2 ${isCorner ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <div><label className={lbl}>{isCorner ? 'Ширина 1' : 'Ширина'}</label>
                   <input type="number" className={fld} value={dims.width} min={c.width[0]} max={c.width[1]} onChange={e => setD('width', Number(e.target.value) || 0)} /></div>

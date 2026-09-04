@@ -1,0 +1,86 @@
+- generic [active] [ref=f55e1]:
+  - generic [ref=f55e2]:
+    - complementary [ref=f55e3]:
+      - generic [ref=f55e4]:
+        - link "MG MGlass" [ref=f55e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f55e6]: MG
+          - generic [ref=f55e8]: MGlass
+        - generic [ref=f55e9]:
+          - generic [ref=f55e10]:
+            - button "СЕО" [ref=f55e11]
+            - button "CFO" [ref=f55e12]
+            - button "Админ" [ref=f55e13]
+          - generic [ref=f55e14]:
+            - button "Менеджер" [ref=f55e15]
+            - button "Произв." [ref=f55e16]
+            - button "Замерщик" [ref=f55e17]
+      - navigation [ref=f55e18]:
+        - link "🔒 Влад" [ref=f55e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f55e21]: 🔒
+          - generic [ref=f55e22]: Влад
+        - button "MGlass" [ref=f55e24]
+        - button "B2B" [ref=f55e32]
+      - generic [ref=f55e38]:
+        - generic [ref=f55e39]:
+          - generic [ref=f55e40]: A
+          - paragraph [ref=f55e42]: admin@mglass.ru
+        - button "Выйти" [ref=f55e43]
+    - main [ref=f55e44]:
+      - generic [ref=f55e45]:
+        - generic [ref=f55e46]:
+          - heading "AI Video Factory" [level=1] [ref=f55e47]
+          - paragraph [ref=f55e48]: "AI генерирует 12 элементов контента: хук, сценарий, структуру, диктора, кадры, B-roll, CTA, описание, обложку, монтаж, субтитры, B2B версию"
+        - generic [ref=f55e49]:
+          - button "Генератор" [ref=f55e50]
+          - button "Библиотека" [ref=f55e51]
+          - button "Аналитика" [ref=f55e52]
+        - generic [ref=f55e54]:
+          - heading "Настройки контента" [level=2] [ref=f55e55]
+          - generic [ref=f55e56]:
+            - generic [ref=f55e57]:
+              - generic [ref=f55e58]: Формат
+              - combobox [ref=f55e59]:
+                - option "Reels (60 сек)" [selected]
+                - option "YouTube Shorts (60 сек)"
+                - option "YouTube видео (5–10 мин)"
+                - option "Stories (15 сек × 3)"
+                - option "Telegram пост"
+                - option "WhatsApp статус"
+            - generic [ref=f55e60]:
+              - generic [ref=f55e61]: Тема
+              - combobox [ref=f55e62]:
+                - option "Душевые перегородки" [selected]
+                - option "Зеркала"
+                - option "Зеркала с подсветкой"
+                - option "Лофт-перегородки"
+                - option "Офисные перегородки"
+                - option "Производство"
+                - option "Монтаж"
+                - option "Ошибки клиентов"
+                - option "Premium объекты"
+                - option "Для дизайнеров"
+                - option "B2B контент"
+                - option "Кейсы"
+                - option "До/после"
+                - option "Обучающий"
+                - option "Сравнение материалов"
+            - generic [ref=f55e63]:
+              - generic [ref=f55e64]: Цель
+              - combobox [ref=f55e65]:
+                - option "Лиды" [selected]
+                - option "Продажи"
+                - option "Доверие"
+                - option "Бренд"
+                - option "Экспертность"
+                - option "Дожим"
+                - option "Партнёры"
+                - option "B2B"
+                - option "Дизайнеры"
+                - option "Вовлечение"
+          - generic [ref=f55e66]:
+            - generic [ref=f55e67]: Дополнительный контекст (необязательно)
+            - textbox "Конкретный проект, пожелания, особые акценты..." [ref=f55e68]
+          - button "Сгенерировать контент" [ref=f55e69]
+  - alert [ref=f55e70]
