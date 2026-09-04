@@ -54,6 +54,7 @@ export default function DealBoardPage() {
   const [showArchive, setShowArchive] = useState(false)
   const [showLost, setShowLost] = useState(false)
   const [manager, setManager] = useState('')     // фильтр владельца: чьи сделки смотрим
+  const [help, setHelp] = useState(false)        // справка — по кнопке, а не полотном под доской
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', source: '' })
   const [creating, setCreating] = useState(false)
   // Второй способ завести карточку — забрать заявку из АМО. Из CRM только читаем.
@@ -153,9 +154,6 @@ export default function DealBoardPage() {
       <div className="flex items-end justify-between gap-4 flex-wrap mb-4">
         <div>
           <h1 className="text-[24px] font-bold text-[#111110]">{showArchive ? 'Архив сделок' : showLost ? 'Отказы' : 'Сделки'}</h1>
-          <p className="text-[13px] text-[#9a9a95] mt-0.5 max-w-[62ch]">
-            Каждая карточка идёт по этажам пути денег: просчёт → КП → договор → оплата. Этаж вычисляется по тому, что в сделке реально появилось — руками ничего не двигают.
-          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -181,6 +179,10 @@ export default function DealBoardPage() {
             className={`text-[12.5px] font-medium px-3.5 py-2 rounded-xl border transition-colors ${showArchive ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
             {showArchive ? 'Активные' : 'Архив'}
           </button>
+          <button onClick={() => setHelp(v => !v)} title="Как работать с доской"
+            className={`text-[13px] font-semibold w-9 h-9 rounded-xl border transition-colors ${help ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
+            ?
+          </button>
           {!showArchive && !showLost && (
             <button onClick={() => setAdding(v => !v)}
               className="text-[12.5px] font-semibold px-3.5 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
@@ -189,6 +191,20 @@ export default function DealBoardPage() {
           )}
         </div>
       </div>
+
+      {help && (
+        <div className="bg-white border border-[#111110] rounded-2xl p-4 mb-4 text-[12.5px] text-[#4b4b47] leading-relaxed space-y-2 max-w-[80ch]">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[13px] font-semibold text-[#111110]">Как работать с доской</p>
+            <button onClick={() => setHelp(false)} className="text-[12px] text-[#9a9a95] hover:text-[#111110]">закрыть</button>
+          </div>
+          <p><b className="text-[#111110]">Столбец</b> — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по карточке открывает её целиком, по телефону — звонок, по «WA» — WhatsApp.</p>
+          <p><b className="text-[#111110]">Столбцы не перетаскивают.</b> Сделка переходит сама, когда в ней появляется артефакт: отправлено КП → «КП отправлено», подписан договор → «Договор», пришли деньги → «Оплата», оплачено полностью → «Готово».</p>
+          <p><b className="text-[#111110]">Откуда карточки.</b> Сделка заводится сама на первом расчёте с телефоном или адресом — сразу в «Просчёт». В «Новая» попадают только заведённые кнопкой «+ Сделка» или взятые из АМО.</p>
+          <p><b className="text-[#111110]">С чего начать день.</b> Нажмите показатель «Просрочен контакт» — доска оставит только тех, кому вы обещали перезвонить. Дату обещания ставят в сделке, блок «Что дальше». Клиент отказался — кнопка «Отказ» с причиной, такие уходят в отдельный вид и не мешают.</p>
+          {!seeAll && <p className="text-[#9a9a95]">Показаны ваши сделки.</p>}
+        </div>
+      )}
 
       {adding && (
         <div className="bg-white border border-[#111110] rounded-2xl p-4 mb-4">
@@ -288,7 +304,7 @@ export default function DealBoardPage() {
               </div>
               <p className="text-[11.5px] text-[#9a9a95] mb-4">
                 {focus === 'all'
-                  ? 'Нажмите на показатель — доска покажет только эти сделки.'
+                  ? <span className="hidden sm:inline">Нажмите на показатель — доска покажет только эти сделки.</span>
                   : <>Показаны только «{FOCUS_LABEL[focus]}» — {focused.length}. <button onClick={() => setFocus('all')} className="underline hover:text-[#111110]">показать все</button></>}
               </p>
             </>
@@ -345,22 +361,6 @@ export default function DealBoardPage() {
             {focused.length === 0 && <p className="text-[13px] text-[#9a9a95]">Ничего не найдено.</p>}
           </div>
 
-          {/* Инструкция нужна, но на телефоне занимала пол-экрана — свернул. */}
-          <details className="mt-4 max-w-[80ch]">
-            <summary className="text-[12px] text-[#6b6b66] cursor-pointer select-none">Как это работает</summary>
-          <div className="text-[12px] text-[#9a9a95] mt-2 leading-relaxed space-y-1.5">
-            <p>
-              <b className="text-[#4b4b47] font-semibold">Откуда берутся карточки.</b> Сделка заводится сама на первом сохранённом расчёте, где есть телефон или адрес, — такая карточка появляется сразу в «Просчёт». В «Новая» попадают только заведённые руками кнопкой «+ Сделка»: клиент позвонил, расчёта ещё нет. Пустых карточек система не плодит.
-            </p>
-            <p>
-              <b className="text-[#4b4b47] font-semibold">Как работать.</b> Столбец — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по самой карточке открывает её целиком. Показатель сверху — фильтр: начните день с «Просрочен контакт».
-            </p>
-            <p>
-              <b className="text-[#4b4b47] font-semibold">Столбец не перетаскивают.</b> Сделка переходит сама, когда в ней появляется артефакт: отправлено КП → «КП отправлено», подписан договор → «Договор», пришли деньги → «Оплата», оплачено полностью → «Готово». Замер — не столбец, а метка: янтарь — назначен, зелёный — проведён. «Без движения» считается по последнему событию: деньгам, КП, договору, замеру, чертежу. Если в сделке назначена дата следующего контакта, карточка показывает её, а не возраст: обещание точнее тишины. Клиент отказался — кнопка «Отказ» в сделке с причиной; такие уходят с доски в отдельный вид «Отказы» и не считаются ни «в работе», ни «зависшими».
-              {!seeAll && <span> Показаны ваши сделки.</span>}
-            </p>
-          </div>
-          </details>
         </>
       )}
     </div>
