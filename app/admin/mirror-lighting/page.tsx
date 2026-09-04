@@ -37,12 +37,10 @@ const BASE_TABS: { value: string; label: string }[] = [
 // «есть» = включена и с ненулевой ценой: выключенная заготовка не считается.
 const REQUIRED: { value: string; label: string; note: string }[] = [
   { value: 'led_strip',    label: 'Лента',      note: 'бухта 5 м, Вт/м' },
-  { value: 'diffuser',     label: 'Профиль',    note: 'хлыст 6 м' },
+  { value: 'diffuser',     label: 'Профиль',    note: 'палка 2 м' },
   { value: 'power_supply', label: 'Блок питания', note: 'запас 30%' },
   { value: 'button',       label: 'Кнопка',     note: 'если с выключателем' },
   { value: 'sensor',       label: 'Сенсор',     note: 'если с сенсором' },
-  { value: 'wire',         label: 'Провод',     note: '' },
-  { value: 'connector',    label: 'Коннекторы', note: '' },
 ]
 const BASE_VALUES = BASE_TABS.map(t => t.value)
 
