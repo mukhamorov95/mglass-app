@@ -17,21 +17,25 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 // /api/calc/build). Внизу «Добавить ещё изделие» и «Сохранить» → КП.
 
 const THICKNESS = 8
-const BUDGET_FINISHES = new Set(['chrome', 'black', 'white'])
+// Владелец: в бюджете пока только хром и чёрный матовый. Белый убран.
+const BUDGET_FINISHES = new Set(['chrome', 'black'])
 const finishOptions = FINISHES.filter(f => BUDGET_FINISHES.has(f.id))
 
 type GlassType = { id: string; label: string; b2b: string; swatch: string; tint: GlassTint }
+// Порядок раскладки владельца (сетка 3 в ряд):
+//   прозрачное · осветлённое · графит
+//   матовое    · матовое осв. · бронза
+// Бронза и графит — одна позиция справочника «Тонированное (бронза/графит)»:
+// цвет на цену не влияет, толщина влияет; различается только вид в 3D.
+// Матовые — кислотное травление; неосветлённое ходит в справочнике как
+// «Сатинированное бесцветное» (имя не по бренду AGC).
 const GLASS_TYPES: GlassType[] = [
   { id: 'clear',    label: 'Прозрачное',  b2b: 'Прозрачное М1',            swatch: '#cfe3d3', tint: { color: '#ffffff', attenuation: '#b8d8c4', distance: 3.5 } },
   { id: 'crystal',  label: 'Осветлённое', b2b: 'Осветлённое CrystalVision', swatch: '#dfeaf6', tint: { color: '#ffffff', attenuation: '#cfe4f2', distance: 6.0 } },
-  // Бронза и графит — одна позиция справочника «Тонированное (бронза/графит)»:
-  // цвет на цену не влияет, толщина влияет. Различается только вид в 3D.
-  { id: 'bronze',   label: 'Бронза',      b2b: 'Тонированное (бронза/графит)', swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
   { id: 'graphite', label: 'Графит',      b2b: 'Тонированное (бронза/графит)', swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
-  // Матовые (кислотное травление). Неосветлённое ходит в справочнике как
-  // «Сатинированное бесцветное» — то же матовое по прозрачному М1, имя не по бренду AGC.
   { id: 'matte',    label: 'Матовое',     b2b: 'Сатинированное бесцветное', swatch: '#dfe2dd', tint: { color: '#f2f5f1', attenuation: '#d8e0d8', distance: 2.2, roughness: 0.55 } },
   { id: 'matte-crystal', label: 'Матовое осветл.', b2b: 'CrystalVision Matelux', swatch: '#e6ecef', tint: { color: '#f6f9fa', attenuation: '#e2ecf2', distance: 3.2, roughness: 0.55 } },
+  { id: 'bronze',   label: 'Бронза',      b2b: 'Тонированное (бронза/графит)', swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
 ]
 
 // Фото модели из 3D-визуализатора (public/models/<латиница>.jpg). Нет файла (М11) — схема.
@@ -100,6 +104,9 @@ export default function BuildCalcPage() {
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const lastSavedSigRef = useRef('')
+  // М1: обвязка профилем — «пол + стена» (по умолчанию) или по всему периметру.
+  // Меняет BOM: периметр добавляет верхний профиль и свободную вертикаль.
+  const [profileFrame, setProfileFrame] = useState<'partial' | 'perimeter'>('partial')
 
   const model = getModel(code)
   const isCorner = model.constraints.needsWidth2
@@ -108,13 +115,16 @@ export default function BuildCalcPage() {
   const glass = GLASS_TYPES.find(g => g.id === glassId) ?? GLASS_TYPES[0]
   // glassSpan: 'panel' — в просчёте вводят размер САМОЙ панели. На сайте у walk-in
   // вводят проём и стекло закрывает его часть; менеджер заказывает стекло, не проём.
-  const mVariant = useMemo<MVariant>(() => (code === 'М1' ? { mount: 'perp90', profileFrame: 'partial', glassSpan: 'panel' } : {}), [code])
+  const mVariant = useMemo<MVariant>(
+    () => (code === 'М1' ? { mount: 'perp90', profileFrame, glassSpan: 'panel' } : {}),
+    [code, profileFrame])
   const paramsKey = useMemo(() => JSON.stringify({ code, dims, finishId, g: glass.b2b, choice, qtyChoice, mVariant }), [code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant])
   const priceDirty = pricedKey !== paramsKey   // цена ещё не догнала параметры
 
   function pickModel(c: string) {
     setCode(c); setDims(defaultsFor(c)); setChoice({}); setQtyChoice({}); setKitChoices(null); setPrice(null)
     setMargin('40'); setTax('12'); setPerSection('6500'); setDelivery('5000'); setLift(''); setDiscount('0')
+    setProfileFrame('partial')
     setScreen('detail')
   }
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
@@ -132,8 +142,11 @@ export default function BuildCalcPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (p.code) setCode(String(p.code))
       if (p.dims && typeof p.dims === 'object') setDims(p.dims as MDims)
-      if (p.finishId) setFinishId(p.finishId as FinishId)
+      // Белый убран из бюджета: старый сохранённый расчёт на нём не должен воскрешать
+      // цвет, которого больше нет в выборе.
+      if (p.finishId && BUDGET_FINISHES.has(String(p.finishId))) setFinishId(p.finishId as FinishId)
       if (p.glassId) setGlassId(String(p.glassId))
+      if (p.profileFrame === 'partial' || p.profileFrame === 'perimeter') setProfileFrame(p.profileFrame)
       if (p.choice && typeof p.choice === 'object') setChoice(p.choice as Record<string, string>)
       if (p.qtyChoice && typeof p.qtyChoice === 'object') setQtyChoice(p.qtyChoice as Record<string, number>)
       s('margin', setMargin); s('tax', setTax); s('perSection', setPerSection); s('delivery', setDelivery); s('lift', setLift); s('discount', setDiscount)
@@ -220,7 +233,7 @@ export default function BuildCalcPage() {
     const list = [...cart]
     if (usable && grand > 0) list.push(currentItem())
     if (!list.length) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500); return }
-    const snapshot = { code, dims, finishId, glassId, choice, qtyChoice, margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
+    const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
     const total = list.reduce((s, i) => s + i.total, 0)
     const sig = JSON.stringify(snapshot) + '|' + total
     if (sig === lastSavedSigRef.current) { setSaveMsg('Уже сохранено ✓'); setTimeout(() => setSaveMsg(null), 2500); return }
@@ -333,6 +346,24 @@ export default function BuildCalcPage() {
                 <div><label className={lbl}>Высота</label>
                   <input type="number" className={fld} value={dims.height} min={c.height[0]} max={c.height[1]} onChange={e => setD('height', Number(e.target.value) || 0)} /></div>
               </div>
+              {/* М1: обвязка профилем. Не косметика — периметр добавляет в BOM
+                  верхний профиль и свободную вертикаль, цена меняется. */}
+              {isWalkin && (
+                <div className="mt-3">
+                  <label className={lbl}>Обвязка профилем</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {([
+                      { id: 'partial' as const, label: 'Пол и стена' },
+                      { id: 'perimeter' as const, label: 'По периметру' },
+                    ]).map(o => (
+                      <button key={o.id} onClick={() => setProfileFrame(o.id)}
+                        className={`text-[12px] px-2 py-1.5 rounded-lg border-2 transition-colors ${profileFrame === o.id ? 'border-[#111110] text-[#111110] font-semibold' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#c4c4be]'}`}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Стекло и цвет фурнитуры */}
