@@ -499,11 +499,17 @@ export default function DealPage() {
                     </div>
                   </div>
                 ))}
+                {/* Счёт — не отдельная запись, а вторая вкладка печати договора.
+                    Без явной ссылки менеджер ищет его в документах и не находит. */}
                 {docs.contracts.map(d => (
-                  <div key={`c${d.id}`} className="px-5 py-3 flex items-center justify-between gap-3">
+                  <div key={`c${d.id}`} className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
                     <div><span className="text-[13px] text-[#111110]">📝 Договор №{d.number}</span>
                       <p className="text-[11px] text-[#9a9a95]">{date(d.created_at)} · {DOC_STATUS[d.status] ?? d.status}{d.kp_id ? ` · из КП` : ''}</p></div>
-                    <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
+                    <span className="flex items-center gap-3">
+                      <Link href={`/contracts/${d.id}/print`} className="text-[12px] text-blue-600 hover:underline">Договор</Link>
+                      <Link href={`/contracts/${d.id}/print?doc=invoice`} className="text-[12px] text-blue-600 hover:underline">Счёт</Link>
+                      <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
+                    </span>
                   </div>
                 ))}
               </>

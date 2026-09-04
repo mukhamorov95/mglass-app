@@ -61,7 +61,11 @@ export default function ContractPrintPage() {
   const [c, setC] = useState<ContractContent | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [tab, setTab] = useState<'contract' | 'invoice'>('contract')
+  // Счёт открывается ссылкой из карточки сделки: ?doc=invoice. Отдельного
+  // документа «счёт» в рознице нет — это вторая вкладка договора.
+  const [tab, setTab] = useState<'contract' | 'invoice'>(
+    () => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('doc') === 'invoice')
+      ? 'invoice' : 'contract')
   const [qr, setQr] = useState('')
   const [busy, setBusy] = useState(false)
   const [withSeal, setWithSeal] = useState(true)
