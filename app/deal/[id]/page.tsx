@@ -12,8 +12,25 @@ import { dealStage } from '@/lib/b2c/dealStatus'
 type Deal = {
   id: number; client_name: string; phone: string; address: string
   manager_id: string | null; amo_lead_id: string | null; created_by_name: string | null
+  source: string | null; archived_at: string | null
   created_at: string; updated_at: string
 }
+type Sibling = { id: number; client_name: string | null; address: string | null; created_at: string; archived_at: string | null }
+type KpCandidate = {
+  id: number; number: string; client_name: string | null; client_phone: string | null
+  client_address: string | null; total: number; status: string; created_at: string; manager_name: string | null
+}
+// Каналы как в АМО. Список в коде: меняется чаще схемы, в базе — просто текст.
+const SOURCES: { id: string; label: string }[] = [
+  { id: 'avito',     label: 'Авито' },
+  { id: 'site',      label: 'Заявка с сайта' },
+  { id: 'call',      label: 'Звонок' },
+  { id: 'recommend', label: 'Рекомендация' },
+  { id: 'partner',   label: 'Партнёр / дизайнер' },
+  { id: 'repeat',    label: 'Повторный клиент' },
+  { id: 'other',     label: 'Другое' },
+]
+const sourceLabel = (id?: string | null) => SOURCES.find(s => s.id === id)?.label ?? (id || '')
 type Calc = {
   id: number; product_type: string; final_price: number; margin: number
   status: string; created_at: string; client_name: string | null; client_phone: string | null; parent_calc_id: number | null
@@ -60,7 +77,11 @@ export default function DealPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [edit, setEdit] = useState(false)
-  const [form, setForm] = useState({ client_name: '', phone: '', address: '', amo_lead_id: '' })
+  const [form, setForm] = useState({ client_name: '', phone: '', address: '', amo_lead_id: '', source: '' })
+  const [siblings, setSiblings] = useState<Sibling[]>([])
+  const [kpPick, setKpPick] = useState<KpCandidate[] | null>(null)
+  const [kpBusy, setKpBusy] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'calcs' | 'docs' | 'money'>('calcs')
   const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: Invoice[]; measures: Measure[] } | null>(null)
@@ -76,8 +97,8 @@ export default function DealPage() {
       const r = await fetch(`/api/deals/${id}`)
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { setError(r.status === 403 ? 'Нет доступа к этой сделке' : 'Сделка не найдена'); return }
-      setDeal(j.deal); setCalcs(j.calculations ?? [])
-      setForm({ client_name: j.deal.client_name ?? '', phone: j.deal.phone ?? '', address: j.deal.address ?? '', amo_lead_id: j.deal.amo_lead_id ?? '' })
+      setDeal(j.deal); setCalcs(j.calculations ?? []); setSiblings(j.siblings ?? [])
+      setForm({ client_name: j.deal.client_name ?? '', phone: j.deal.phone ?? '', address: j.deal.address ?? '', amo_lead_id: j.deal.amo_lead_id ?? '', source: j.deal.source ?? '' })
       setError(null)
       loadDocs()      // документы и замер грузим сразу — блок замера виден без открытия вкладки
       loadPayments()  // оплаты — для вкладки «Деньги»
@@ -117,6 +138,37 @@ export default function DealPage() {
   async function detach(calcId: number) {
     await fetch(`/api/deals/${id}/attach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: calcId, detach: true }) })
     await load()
+  }
+
+  // Архив вместо удаления: к сделке привязаны расчёты, КП, договоры, замеры и
+  // деньги — стереть их необратимо, поэтому карточка только прячется.
+  async function toggleArchive() {
+    if (!deal) return
+    const toArchive = !deal.archived_at
+    if (toArchive && !window.confirm('Убрать сделку в архив? Она пропадёт с доски, но останется вместе с расчётами и документами — вернуть можно в любой момент.')) return
+    setArchiving(true)
+    try {
+      const r = await fetch(`/api/deals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived: toArchive }) })
+      if (r.ok) { if (toArchive) window.location.assign('/deals/board'); else await load() }
+    } finally { setArchiving(false) }
+  }
+
+  // Подтянуть КП, сделанное до появления сделки. Список кандидатов — по телефону
+  // и имени; выбирает человек, молча ничего не приклеиваем.
+  async function loadKpCandidates() {
+    setKpBusy(true)
+    try {
+      const r = await fetch(`/api/deals/${id}/kp-candidates`)
+      const j = await r.json().catch(() => ({}))
+      if (r.ok) setKpPick(j.candidates ?? [])
+    } finally { setKpBusy(false) }
+  }
+  async function attachKp(kpId: number) {
+    setKpBusy(true)
+    try {
+      const r = await fetch(`/api/deals/${id}/kp-candidates`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kp_id: kpId }) })
+      if (r.ok) { setKpPick(null); await loadDocs() }
+    } finally { setKpBusy(false) }
   }
 
   async function loadDocs() {
@@ -235,6 +287,8 @@ export default function DealPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-[20px] font-bold text-[#111110]">{deal.client_name || 'Без имени'}</h1>
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TONE[stage.tone]}`}>{stage.label}</span>
+              {deal.source && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">{sourceLabel(deal.source)}</span>}
+              {deal.archived_at && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">В архиве</span>}
             </div>
             <p className="text-[13px] text-[#6b6b66] mt-0.5">
               {deal.phone ? formatPhone(deal.phone) : 'телефон не указан'}{deal.address ? ` · ${deal.address}` : ''}
@@ -262,6 +316,11 @@ export default function DealPage() {
               className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
             <input value={form.amo_lead_id} onChange={e => setForm(f => ({ ...f, amo_lead_id: e.target.value }))} placeholder="ID сделки в AmoCRM (привязать вручную)"
               className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+            <select value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
+              className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110] bg-white">
+              <option value="">Источник не указан</option>
+              {SOURCES.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
             <div className="sm:col-span-2">
               <button onClick={save} disabled={saving}
                 className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
@@ -285,7 +344,61 @@ export default function DealPage() {
           className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
           {measuring ? 'Отправляю…' : '📐 Отправить на замер'}
         </button>
+        <button onClick={loadKpCandidates} disabled={kpBusy}
+          className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
+          🔗 Подтянуть КП
+        </button>
+        <button onClick={toggleArchive} disabled={archiving}
+          className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#9a9a95] hover:text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 ml-auto">
+          {deal.archived_at ? '↩︎ Вернуть из архива' : '🗄 В архив'}
+        </button>
       </div>
+
+      {/* Выбор свободного КП. Сначала совпавшие по телефону/имени, иначе последние. */}
+      {kpPick && (
+        <div className="bg-white border border-[#111110] rounded-2xl px-5 py-4">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className="text-[13px] font-semibold text-[#111110]">Какое КП привязать к сделке</p>
+            <button onClick={() => setKpPick(null)} className="text-[12px] text-[#9a9a95] hover:text-[#111110]">Закрыть</button>
+          </div>
+          {kpPick.length === 0 ? (
+            <p className="text-[12px] text-[#9a9a95]">Свободных КП нет — все уже привязаны к сделкам.</p>
+          ) : (
+            <div className="divide-y divide-[#f0f0ec]">
+              {kpPick.map(k => (
+                <div key={k.id} className="py-2 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-[13px] text-[#111110] truncate">
+                      {k.number} · {k.client_name || 'без имени'}{k.client_phone ? ` · ${formatPhone(k.client_phone)}` : ''}
+                    </p>
+                    <p className="text-[11px] text-[#9a9a95]">{date(k.created_at)} · {fmt(Number(k.total) || 0)}{k.manager_name ? ` · ${k.manager_name}` : ''}</p>
+                  </div>
+                  <button onClick={() => attachKp(k.id)} disabled={kpBusy}
+                    className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+                    Привязать
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Другие сделки этого клиента: у одного человека может быть несколько объектов. */}
+      {siblings.length > 0 && (
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl px-5 py-3">
+          <p className="text-[11px] uppercase tracking-wide text-[#9a9a95] font-semibold mb-1.5">Другие сделки клиента — {siblings.length}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {siblings.map(sb => (
+              <Link key={sb.id} href={`/deal/${sb.id}`}
+                className="text-[12px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#111110] hover:border-[#111110] transition-colors">
+                {sb.address || sb.client_name || `сделка #${sb.id}`}
+                <span className="text-[#9a9a95]"> · {date(sb.created_at)}{sb.archived_at ? ' · архив' : ''}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Замер — состояние возвращается сюда через deal_id; файл прикладывается тут же. */}
       {docs && docs.measures.length > 0 && (
