@@ -26,6 +26,10 @@ const GLASS_TYPES: GlassType[] = [
   { id: 'crystal',  label: 'Осветлённое', b2b: 'Осветлённое CrystalVision', swatch: '#dfeaf6', tint: { color: '#ffffff', attenuation: '#cfe4f2', distance: 6.0 } },
   { id: 'bronze',   label: 'Бронза',      b2b: 'Прозрачное М1',            swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
   { id: 'graphite', label: 'Графит',      b2b: 'Прозрачное М1',            swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
+  // Матовые (кислотное травление). Неосветлённое ходит в справочнике как
+  // «Сатинированное бесцветное» — то же матовое по прозрачному М1, имя не по бренду AGC.
+  { id: 'matte',    label: 'Матовое',     b2b: 'Сатинированное бесцветное', swatch: '#dfe2dd', tint: { color: '#f2f5f1', attenuation: '#d8e0d8', distance: 2.2, roughness: 0.55 } },
+  { id: 'matte-crystal', label: 'Матовое осветл.', b2b: 'CrystalVision Matelux', swatch: '#e6ecef', tint: { color: '#f6f9fa', attenuation: '#e2ecf2', distance: 3.2, roughness: 0.55 } },
 ]
 
 // Фото модели из 3D-визуализатора (public/models/<латиница>.jpg). Нет файла (М11) — схема.
@@ -328,7 +332,7 @@ export default function BuildCalcPage() {
             <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3">
               <div>
                 <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Стекло</p>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   {GLASS_TYPES.map(g => (
                     <button key={g.id} onClick={() => setGlassId(g.id)} title={g.label}
                       className={`rounded-lg border-2 p-1 ${glassId === g.id ? 'border-[#111110]' : 'border-[#e4e4e0]'}`}>

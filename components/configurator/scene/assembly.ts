@@ -185,7 +185,8 @@ export const HANDLE_CENTER_MM = 950   // от низа стекла до цен�
 export const M1_TRAY_DEPTH_DEFAULT = 1000   // стандарт глубины поддона (мм) для perp90, если клиент не ввёл
 
 // Тон стекла (тип/цвет): прозрачное / осветлённое / тонированное бронза/графит.
-export type GlassTint = { color: string; attenuation: string; distance: number }
+// roughness — матовость поверхности (кислотное травление): не задан → полированное.
+export type GlassTint = { color: string; attenuation: string; distance: number; roughness?: number }
 
 const DOOR_OPEN_DEG = 32       // распашная приоткрыта заметнее (визуальное разведение со стационаром)
 const SLIDE_OPEN = 0.28        // раздвижная приоткрыта: доля длины створки, сдвинутой вдоль штанги
