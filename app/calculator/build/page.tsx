@@ -24,8 +24,10 @@ type GlassType = { id: string; label: string; b2b: string; swatch: string; tint:
 const GLASS_TYPES: GlassType[] = [
   { id: 'clear',    label: 'Прозрачное',  b2b: 'Прозрачное М1',            swatch: '#cfe3d3', tint: { color: '#ffffff', attenuation: '#b8d8c4', distance: 3.5 } },
   { id: 'crystal',  label: 'Осветлённое', b2b: 'Осветлённое CrystalVision', swatch: '#dfeaf6', tint: { color: '#ffffff', attenuation: '#cfe4f2', distance: 6.0 } },
-  { id: 'bronze',   label: 'Бронза',      b2b: 'Прозрачное М1',            swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
-  { id: 'graphite', label: 'Графит',      b2b: 'Прозрачное М1',            swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
+  // Бронза и графит — одна позиция справочника «Тонированное (бронза/графит)»:
+  // цвет на цену не влияет, толщина влияет. Различается только вид в 3D.
+  { id: 'bronze',   label: 'Бронза',      b2b: 'Тонированное (бронза/графит)', swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
+  { id: 'graphite', label: 'Графит',      b2b: 'Тонированное (бронза/графит)', swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
   // Матовые (кислотное травление). Неосветлённое ходит в справочнике как
   // «Сатинированное бесцветное» — то же матовое по прозрачному М1, имя не по бренду AGC.
   { id: 'matte',    label: 'Матовое',     b2b: 'Сатинированное бесцветное', swatch: '#dfe2dd', tint: { color: '#f2f5f1', attenuation: '#d8e0d8', distance: 2.2, roughness: 0.55 } },
@@ -341,9 +343,12 @@ export default function BuildCalcPage() {
                     </button>
                   ))}
                 </div>
-                {/* Тонированные материалы в справочнике пока не заведены — цена от прозрачного. */}
-                {glass.id !== 'clear' && glass.b2b === 'Прозрачное М1' && (
-                  <p className="text-[10px] text-[#c2410c] mt-1">Цена как за прозрачное (тонированное в справочнике пока не заведено)</p>
+                {/* Роут молча падает на прозрачное, если позиции нет в справочнике на эту
+                    толщину. Молчать нельзя — цена уедет вдвое. Сверяем, что посчитано именно то. */}
+                {!priceDirty && price?.glassSource && price.glassSource !== glass.b2b && (
+                  <p className="text-[10px] text-[#c2410c] mt-1">
+                    Цена посчитана по «{price.glassSource}»: «{glass.b2b}» на {THICKNESS} мм в справочнике нет.
+                  </p>
                 )}
               </div>
               <div>
