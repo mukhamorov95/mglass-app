@@ -54,6 +54,10 @@ export type HardwareChoice = { hinge?: string; handle?: string }
 export type MVariant = {
   mount?: 'perp90' | 'diag45' | 'stabilizer' | 'ceiling'
   profileFrame?: 'partial' | 'perimeter'
+  // Что означает введённая ширина у М1 (walk-in). На сайте клиент задаёт ПРОЁМ, и
+  // стекло закрывает его часть (part). В менеджерском просчёте вводят размер САМОЙ
+  // панели — там 'panel', иначе заказанные 620 превращались в стекло 384 и цену за 384.
+  glassSpan?: 'opening' | 'panel'
 }
 
 // Облицованная ниша вокруг кабины (Фаза 1): стёкла закрывают открытые стороны,
@@ -440,7 +444,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
 
   // ── M1 «Стационарная»: стекло + обвязка профилем + крепление штанги по варианту ──
   if (isM1) {
-    const Lg = W * (front?.part ?? 0.62)               // длина стеклянной панели (у стены x=0 → +x)
+    const Lg = variant.glassSpan === 'panel' ? W : W * (front?.part ?? 0.62)   // длина стеклянной панели (у стены x=0 → +x)
     addGlass('w0', [0, 0], [Lg, 0], 'fixed')
     const PW = 0.02                                    // видимая ширина П-профиля, м
     const topProfile = profileFrame === 'perimeter' || mount === 'ceiling'
