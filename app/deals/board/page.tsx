@@ -311,7 +311,7 @@ function DealCard({ c }: { c: Card }) {
 function nextStep(c: Card): { label: string; href: string } | null {
   const d = `/deal/${c.id}`
   switch (c.stage) {
-    case 'new':      return { label: 'Открыть · нужен расчёт', href: d }
+    case 'new':      return { label: 'Сделать расчёт', href: `/calculator/build?deal=${c.id}` }
     case 'quote':    return { label: 'Сделать КП', href: `${d}#docs` }
     case 'kp':       return c.measure ? { label: 'Договор', href: `${d}#docs` }
                                       : { label: 'Замер или договор', href: `${d}#docs` }

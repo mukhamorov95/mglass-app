@@ -107,6 +107,10 @@ export default function BuildCalcPage() {
   // М1: обвязка профилем — «пол + стена» (по умолчанию) или по всему периметру.
   // Меняет BOM: периметр добавляет верхний профиль и свободную вертикаль.
   const [profileFrame, setProfileFrame] = useState<'partial' | 'perimeter'>('partial')
+  // Пришли из карточки сделки (/calculator/build?deal=12) — расчёт кладём именно
+  // в неё, а не оставляем на усмотрение авто-привязки по телефону.
+  const [dealId, setDealId] = useState<number | null>(null)
+  const [dealTitle, setDealTitle] = useState<string>('')
 
   const model = getModel(code)
   const isCorner = model.constraints.needsWidth2
@@ -128,6 +132,25 @@ export default function BuildCalcPage() {
     setScreen('detail')
   }
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
+
+  // Расчёт «в сделку»: id из адреса, поля клиента — из самой сделки, чтобы КП и
+  // привязка шли по её данным, а не переписывались руками.
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get('deal')
+    const id = Number(raw)
+    if (!Number.isFinite(id) || id <= 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDealId(id)
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/deals/${id}`)
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok || !j.deal) return
+        setClientName(j.deal.client_name ?? ''); setClientPhone(j.deal.phone ?? ''); setObjectAddress(j.deal.address ?? '')
+        setDealTitle([j.deal.client_name, j.deal.address].filter(Boolean).join(' · ') || `сделка #${id}`)
+      } catch { /* ignore */ }
+    })()
+  }, [])
 
   // Восстановление сохранённого расчёта (история «Открыть» → mglass_build_reopen): владелец
   // просил «расчёт можно открыть и пересчитать». Возвращаем модель, габариты, стекло/цвет,
@@ -255,7 +278,11 @@ export default function BuildCalcPage() {
       if (!ok) { setSaveMsg(res && 'error' in res ? res.error! : 'Не удалось сохранить'); return }
       lastSavedSigRef.current = sig
       const newId = (res as { id: number }).id
-      if (clientPhone.trim() || objectAddress.trim()) {
+      // Пришли из сделки → кладём расчёт прямо в неё. Иначе — общее правило:
+      // новый телефон заводит сделку сам, совпавший оставляет решение человеку.
+      if (dealId) {
+        try { await fetch(`/api/deals/${dealId}/attach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId }) }) } catch { /* ignore */ }
+      } else if (clientPhone.trim() || objectAddress.trim()) {
         try { await fetch('/api/deals/ensure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }) }) } catch { /* ignore */ }
       }
       // КП из этого расчёта: позиции корзины → префилл /kp.
@@ -271,6 +298,11 @@ export default function BuildCalcPage() {
     return (
       <div className="min-h-screen bg-[#f5f5f3] p-6">
         <div className="max-w-4xl mx-auto">
+          {dealId && (
+            <p className="mb-3 text-[12px] text-[#4b4b47] bg-[#eef3ee] border border-[#cfe0d3] rounded-xl px-3 py-2">
+              Расчёт пойдёт в сделку <b className="font-semibold">{dealTitle || `#${dealId}`}</b> — после сохранения он появится в её карточке.
+            </p>
+          )}
           <div className="mb-5 flex items-end justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-[18px] font-semibold text-[#111110]">Расчёт{cart.length ? ` · в корзине ${cart.length}` : ''}</h1>
@@ -311,7 +343,12 @@ export default function BuildCalcPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-4">
       <div className="max-w-[1400px] mx-auto">
-        <div className="mb-3 flex items-center gap-3">
+        {dealId && (
+            <p className="mb-3 text-[12px] text-[#4b4b47] bg-[#eef3ee] border border-[#cfe0d3] rounded-xl px-3 py-2">
+              Расчёт пойдёт в сделку <b className="font-semibold">{dealTitle || `#${dealId}`}</b> — после сохранения он появится в её карточке.
+            </p>
+          )}
+          <div className="mb-3 flex items-center gap-3">
           <button onClick={() => setScreen('models')} className="text-[13px] text-[#6b6b66] hover:text-[#111110]">← Модели</button>
           <h1 className="text-[16px] font-semibold text-[#111110]">{model.code} · {model.name}</h1>
         </div>
