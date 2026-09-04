@@ -126,12 +126,22 @@ export default function MirrorPricingPage() {
                     {list.length ? '✓' : '•'} {r.label}
                     <span className="text-[11.5px] font-normal text-[#9a9a95]"> {r.hint}</span>
                   </p>
-                  {list.length === 0 && <p className="text-[12px] text-amber-800 mt-0.5">позиция не выбрана — расчёт зеркала её попросит</p>}
+                  {list.length === 0 && (
+                    <p className="text-[12px] text-amber-800 mt-0.5">
+                      позиция не заведена — расчёт зеркала её попросит{r.match.length === 0 ? '; в прайсе Eleganz её нет' : ''}
+                    </p>
+                  )}
                 </div>
-                <button onClick={() => { setPickFor(r); setQ('') }}
-                  className="text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#111110] hover:text-white transition-colors whitespace-nowrap">
-                  Выбрать из прайса
-                </button>
+                {/* Роль без категорий в прайсе поставщика — позиция заводится
+                    вручную на экране «Компоненты подсветки». */}
+                {r.match.length > 0 ? (
+                  <button onClick={() => { setPickFor(r); setQ('') }}
+                    className="text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#111110] hover:text-white transition-colors whitespace-nowrap">
+                    Выбрать из прайса
+                  </button>
+                ) : (
+                  <span className="text-[11.5px] text-[#9a9a95] whitespace-nowrap">заводится вручную</span>
+                )}
               </div>
 
               {list.length > 0 && (

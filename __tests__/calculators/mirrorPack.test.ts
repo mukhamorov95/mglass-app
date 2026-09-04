@@ -7,6 +7,23 @@ const comps: MirrorComponent[] = [
   { id: 3, component_type: 'power_supply', name: 'БП 100', voltage: 12, power_per_meter: null, max_power: 100, cost_price: 439, unit: 'шт', pack_length_m: null, sort_order: 12 },
 ]
 
+const frame = (pack: number | null): MirrorComponent => ({
+  id: 9, component_type: 'frame', name: 'Бокс 20×20 АД31Т1', voltage: null,
+  power_per_meter: null, max_power: null, cost_price: 82, unit: 'м.п.', pack_length_m: pack, sort_order: 10,
+})
+
+describe('рамка Ветро хлыстами по 6 м', () => {
+  it('периметр 3,2 м → один хлыст 6 м, а не 3,2 погонных метра', () => {
+    const q = calcMirrorQuote({ width: 1000, height: 600, shape: 'rect', lighting: false,
+      sides: { top: false, bottom: false, left: false, right: false }, voltage: 12,
+      control: 'none', frame: 'vetro', glassCost: 0 }, [...comps, frame(6)], {})
+    const f = q.lines.find(l => l.role === 'frame')!
+    expect(q.perimeterM).toBe(3.2)
+    expect(f.qty).toBe(1)
+    expect(f.total).toBe(492)        // 6 м × 82 ₽
+  })
+})
+
 describe('профиль палками по 2 м', () => {
   it('свет сверху и снизу зеркала 800×600 = 1,6 м → одна палка', () => {
     const q = calcMirrorQuote({ width: 800, height: 600, shape: 'rect', lighting: true,
