@@ -274,6 +274,12 @@ export default function DealPage() {
 
       {/* Действия по сделке — документы и замер делаются отсюда, клиент уже подставлен. */}
       <div className="flex flex-wrap gap-2">
+        {/* Расчёт В ЭТУ сделку: калькулятор получает её id, сохранённый расчёт
+            привязывается сюда, а не разбирается авто-правилом по телефону. */}
+        <Link href={`/calculator/build?deal=${id}`}
+          className="text-[13px] font-semibold px-4 py-2 rounded-lg border-2 border-[#111110] text-[#111110] hover:bg-[#f0f0ec]">
+          ⚡ Новый расчёт
+        </Link>
         <button onClick={makeKp} disabled={calcs.length === 0}
           className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
           📄 Сделать КП
