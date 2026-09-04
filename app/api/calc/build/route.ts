@@ -48,10 +48,14 @@ export async function POST(req: NextRequest) {
   ])
   const priced = prepPricedMaterials((mats ?? []) as B2BMaterial[], (matrix ?? []) as Array<Record<string, unknown>>)
   const glassName = body.glassType?.trim() || DEFAULT_GLASS
+  // Зеркало исключаем и при поиске по имени: «Тонированное (бронза/графит)» заведено
+  // дважды — как стекло и как зеркало, и на 4/6 мм зеркальная строка перебивала бы
+  // стекло по цене вчетверо. В душевой зеркала не бывает.
+  const isGlass = (m: B2BMaterial) => m.category !== 'зеркало'
   const glassMat =
-    priced.find(m => m.name === glassName && Math.round(m.thickness) === thickness) ??
-    priced.find(m => m.name === DEFAULT_GLASS && Math.round(m.thickness) === thickness) ??
-    priced.find(m => Math.round(m.thickness) === thickness && m.category !== 'зеркало')
+    priced.find(m => m.name === glassName && Math.round(m.thickness) === thickness && isGlass(m)) ??
+    priced.find(m => m.name === DEFAULT_GLASS && Math.round(m.thickness) === thickness && isGlass(m)) ??
+    priced.find(m => Math.round(m.thickness) === thickness && isGlass(m))
   // Скидка M GLASS (производство → M-Glass): та же, что в «Расчёте B2B».
   const mgDiscount = Number(mgClient?.discount_percent) || 0
 
