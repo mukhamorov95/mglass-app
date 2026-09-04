@@ -17,6 +17,7 @@ type Card = {
   hasDrawing: boolean; ageDays: number; source: string | null; archived: boolean
 }
 type Stage = { key: string; label: string }
+type AmoLead = { id: number; name: string; stage: string; manager: string; createdAt: string }
 // Каналы как в АМО. Список живёт здесь: меняется чаще схемы, в базе — просто текст.
 export const SOURCES: { id: string; label: string }[] = [
   { id: 'avito',     label: 'Авито' },
@@ -52,6 +53,34 @@ export default function DealBoardPage() {
   const [showArchive, setShowArchive] = useState(false)
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', source: '' })
   const [creating, setCreating] = useState(false)
+  // Второй способ завести карточку — забрать заявку из АМО. Из CRM только читаем.
+  const [addTab, setAddTab] = useState<'manual' | 'amo'>('manual')
+  const [amo, setAmo] = useState<{ leads: AmoLead[]; needsAmoLink?: boolean } | null>(null)
+  const [amoState, setAmoState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [amoErr, setAmoErr] = useState('')
+  const [amoLink, setAmoLink] = useState('')
+
+  async function loadAmo() {
+    setAmoState('loading'); setAmoErr('')
+    try {
+      const r = await fetch('/api/deals/amo-inbox')
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setAmoErr(j.error || 'Не удалось получить заявки'); setAmoState('error'); return }
+      setAmo({ leads: j.leads ?? [], needsAmoLink: !!j.needsAmoLink }); setAmoState('idle')
+    } catch { setAmoErr('Сеть недоступна'); setAmoState('error') }
+  }
+
+  async function importAmo(lead: string | number) {
+    setCreating(true)
+    try {
+      const r = await fetch('/api/deals/amo-import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (r.ok && j.id) window.location.assign(`/deal/${j.id}`)
+      else setAmoErr(j.error || 'Не удалось импортировать')
+    } finally { setCreating(false) }
+  }
 
   async function createDeal() {
     if (!form.client_name.trim() && !form.phone.trim()) return
@@ -141,6 +170,55 @@ export default function DealBoardPage() {
 
       {adding && (
         <div className="bg-white border border-[#111110] rounded-2xl p-4 mb-4">
+          <div className="flex items-center gap-1 mb-3">
+            {([['manual', 'Ввести вручную'], ['amo', 'Взять из AmoCRM']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => { setAddTab(k); if (k === 'amo' && !amo) loadAmo() }}
+                className={`text-[12.5px] font-medium px-3 py-1.5 rounded-lg transition-colors ${addTab === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {addTab === 'amo' ? (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <input value={amoLink} onChange={e => setAmoLink(e.target.value)}
+                  placeholder="Ссылка на заявку в АМО или её номер"
+                  className="flex-1 border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+                <button onClick={() => importAmo(amoLink)} disabled={creating || !amoLink.trim()}
+                  className="text-[13px] font-semibold px-4 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+                  Забрать
+                </button>
+              </div>
+              {amoState === 'loading' && <p className="text-[12px] text-[#9a9a95]">Смотрю заявки в АМО…</p>}
+              {amoErr && <p className="text-[12px] text-red-600 mb-2">{amoErr}</p>}
+              {amo?.needsAmoLink && (
+                <p className="text-[12px] text-amber-700">Ваш профиль не связан с пользователем AmoCRM — попросите админа проставить amo_user_id, иначе чужие заявки показывать нельзя.</p>
+              )}
+              {amo && !amo.needsAmoLink && (
+                amo.leads.length === 0 ? (
+                  <p className="text-[12px] text-[#9a9a95]">Новых заявок с сентября нет — всё уже заведено.</p>
+                ) : (
+                  <div className="max-h-[320px] overflow-y-auto divide-y divide-[#f0f0ec] border border-[#f0f0ec] rounded-xl">
+                    {amo.leads.map(l => (
+                      <div key={l.id} className="px-3 py-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[13px] text-[#111110] truncate">{l.name || `Заявка #${l.id}`}</p>
+                          <p className="text-[11px] text-[#9a9a95] truncate">{l.stage}{l.manager ? ` · ${l.manager}` : ''} · {new Date(l.createdAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
+                        </div>
+                        <button onClick={() => importAmo(l.id)} disabled={creating}
+                          className="text-[12px] font-semibold px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#111110] hover:text-white disabled:opacity-40 whitespace-nowrap">
+                          Забрать
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+              <p className="text-[11px] text-[#9a9a95] mt-2">Показаны заявки с 1 сентября, которых ещё нет в системе. В АМО ничего не меняется — только читаем.</p>
+            </div>
+          ) : (
+          <>
           <p className="text-[12px] font-semibold text-[#111110] mb-2">Новая сделка</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <input autoFocus value={form.client_name} onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
@@ -162,6 +240,8 @@ export default function DealBoardPage() {
             </button>
             <span className="text-[11.5px] text-[#9a9a95]">Попадёт в «Новая». Дальше — расчёт.</span>
           </div>
+          </>
+          )}
         </div>
       )}
 
