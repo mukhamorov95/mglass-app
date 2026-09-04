@@ -178,6 +178,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [mgSections, setMgSections] = useState('1')
   const [mgDelivery, setMgDelivery] = useState('5000')
   const [mgLift, setMgLift]         = useState('')
+  // Корзина розничных изделий M-Glass: посчитал производство → накинул наценку →
+  // «В КП». Так одно КП собирается из нескольких изделий, как в B2C-«Расчёте».
+  const [mgCart, setMgCart] = useState<{ title: string; cost: number; price: number; extras: number; total: number }[]>([])
+  const [mgClient, setMgClient] = useState({ name: '', phone: '', address: '' })
   const [isAdmin, setIsAdmin]           = useState(false)
   const [maxDiscount, setMaxDiscount]   = useState<number>(100)
   const { strategy } = useOwnerStrategy()
@@ -1524,7 +1528,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           {/* ══ ЛЕВАЯ КОЛОНКА ══ */}
           <div className="ac-card p-6 space-y-4 lg:sticky lg:top-6">
 
-            {/* Клиент */}
+            {/* Клиент. Во внутреннем контуре M-Glass клиент всегда M GLASS —
+                строку не показываем: выбора нет, а место занимает. */}
+            {!mglassOnly && (
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-[13px] font-medium text-[#6e6e73]">Клиент</label>
@@ -1536,27 +1542,22 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   </button>
                 )}
               </div>
-              {mglassOnly ? (
-                <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] font-semibold flex items-center justify-between">
-                  <span>{selectedClient?.name ?? 'M GLASS'}</span>
-                  <span className="text-[12px] text-[#86868b]">фиксировано</span>
-                </div>
-              ) : (
-                <select
+              <select
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
                   value={clientId ?? ''}
                   onChange={e => setClientId(e.target.value ? Number(e.target.value) : null)}>
                   <option value="">— Выберите клиента —</option>
-                  {clients.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}{c.discount_percent > 0 ? ` (−${c.discount_percent}%)` : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.discount_percent > 0 ? ` (−${c.discount_percent}%)` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
+            )}
 
-            {/* Номера заказа */}
+            {/* Номера заказа — внутри M-Glass не спрашиваем: номер присваивается сам. */}
+            {!mglassOnly && (
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
@@ -1581,6 +1582,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 />
               </div>
             </div>
+            )}
 
             {/* Дней производства — во внутреннем контуре M-Glass не спрашиваем. */}
             {variant !== 'mglass' && (
@@ -1594,7 +1596,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             </div>
             )}
 
-            <div className="h-px bg-[#f0f0ec]" />
+            {!mglassOnly && <div className="h-px bg-[#f0f0ec]" />}
 
             {/* Тип позиции: сырьё (стекло/зеркало) или готовое изделие производства */}
             <div>
@@ -2706,65 +2708,51 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               const deliveryN = Number(mgDelivery) || 0, liftN = Number(mgLift) || 0
               const grand = Math.round(productPrice + install + deliveryN + liftN)
               const blocked = denom <= 0
-              const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all'
+              const fldS = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all'
               const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
+              // Название изделия для КП — из позиций расчёта производства.
+              const mgTitle = items.length === 0 ? 'Изделие'
+                : items.map(i => `${i.materialName} ${i.thickness} мм ${i.width}×${i.height}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`).join(' + ')
               return (
-                <div className="ac-card p-6 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[15px] font-semibold text-[#111110]">Быстрый расчёт</h3>
-                    <span className="text-[11px] text-[#9a9a95]">маржа/налог на новом просчёте → 40/12</span>
+                <div className="ac-card p-4 space-y-2.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-[14px] font-semibold text-[#111110]">Быстрый расчёт</h3>
+                    <span className="text-[11px] text-[#9a9a95]">наценка M-Glass поверх производства</span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="text-[#6b6b66]">Себестоимость изделия <span className="text-[#9a9a95]">(из расчёта B2B, с НДС — почём для M-Glass)</span></span>
+                  <div className="flex items-baseline justify-between text-[12.5px]">
+                    <span className="text-[#6b6b66]">Себестоимость <span className="text-[#9a9a95]">— почём для M-Glass</span></span>
                     <span className="font-mono font-semibold text-[#111110]">{fmt(b2bTotal)}</span>
                   </div>
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="text-[#6b6b66]">Фурнитура</span>
-                    <span className="font-mono text-[#9a9a95]" title="Входит в себестоимость B2B (зеркало — под ключ). Считается только монтаж за секцию.">—</span>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* Все числа — одной сеткой, узкими полями: маржа/налог трёхзначные,
+                      остальное рядом. Иначе карточка растягивалась на два экрана. */}
+                  <div className="grid grid-cols-3 gap-2">
                     <div><label className={lbl}>Маржа, %</label>
-                      <input type="number" className={fld} value={mgMargin} onChange={e => setMgMargin(e.target.value)} /></div>
+                      <input type="number" className={fldS} value={mgMargin} onChange={e => setMgMargin(e.target.value)} /></div>
                     <div><label className={lbl}>Налог, %</label>
-                      <input type="number" className={fld} value={mgTax} onChange={e => setMgTax(e.target.value)} /></div>
+                      <input type="number" className={fldS} value={mgTax} onChange={e => setMgTax(e.target.value)} /></div>
+                    <div><label className={lbl}>Секций</label>
+                      <input type="number" className={fldS} value={mgSections} onChange={e => setMgSections(e.target.value)} /></div>
+                    <div><label className={lbl}>Монтаж/секц</label>
+                      <input type="number" className={fldS} value={mgPerSection} onChange={e => setMgPerSection(e.target.value)} placeholder="0" /></div>
+                    <div><label className={lbl}>Доставка</label>
+                      <input type="number" className={fldS} value={mgDelivery} onChange={e => setMgDelivery(e.target.value)} placeholder="0" /></div>
+                    <div><label className={lbl}>Подъём</label>
+                      <input type="number" className={fldS} value={mgLift} onChange={e => setMgLift(e.target.value)} placeholder="0" /></div>
                   </div>
 
                   {blocked ? (
                     <p className="text-[12px] text-red-600">Маржа + налог ≥ 100% — цена не считается.</p>
                   ) : (
-                    <div className="flex items-center justify-between text-[13px] pt-1">
-                      <span className="text-[#6b6b66]">Цена изделия <span className="text-[#9a9a95]">= себест ÷ (1 − {m}% − {tx}%)</span></span>
-                      <span className="font-mono font-semibold text-[#111110]">{fmt(productPrice)}</span>
-                    </div>
-                  )}
-
-                  <div className="h-px bg-[#f0f0ec]" />
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className={lbl}>Монтаж за секцию, ₽</label>
-                      <input type="number" className={fld} value={mgPerSection} onChange={e => setMgPerSection(e.target.value)} placeholder="0" /></div>
-                    <div><label className={lbl}>Секций</label>
-                      <input type="number" className={fld} value={mgSections} onChange={e => setMgSections(e.target.value)} /></div>
-                    <div><label className={lbl}>Доставка, ₽</label>
-                      <input type="number" className={fld} value={mgDelivery} onChange={e => setMgDelivery(e.target.value)} placeholder="0" /></div>
-                    <div><label className={lbl}>Подъём, ₽</label>
-                      <input type="number" className={fld} value={mgLift} onChange={e => setMgLift(e.target.value)} placeholder="0" /></div>
-                  </div>
-                  {/* Каждое слагаемое итога — видимой строкой (иначе «не сходится» на глаз). */}
-                  {install > 0 && (
-                    <div className="flex items-center justify-between text-[12px] text-[#6b6b66]">
-                      <span>Монтаж</span><span className="font-mono">{fmt(install)}</span>
-                    </div>
-                  )}
-                  {deliveryN > 0 && (
-                    <div className="flex items-center justify-between text-[12px] text-[#6b6b66]">
-                      <span>Доставка</span><span className="font-mono">{fmt(deliveryN)}</span>
-                    </div>
-                  )}
-                  {liftN > 0 && (
-                    <div className="flex items-center justify-between text-[12px] text-[#6b6b66]">
-                      <span>Подъём</span><span className="font-mono">{fmt(liftN)}</span>
+                    <div className="text-[12px] text-[#6b6b66] space-y-0.5 pt-0.5">
+                      <div className="flex justify-between">
+                        <span>Цена изделия <span className="text-[#9a9a95]">= себест ÷ (1 − {m}% − {tx}%)</span></span>
+                        <span className="font-mono font-semibold text-[#111110]">{fmt(productPrice)}</span>
+                      </div>
+                      {install > 0 && <div className="flex justify-between"><span>Монтаж {mgSections}×{fmt(Number(mgPerSection) || 0)}</span><span className="font-mono">{fmt(install)}</span></div>}
+                      {deliveryN > 0 && <div className="flex justify-between"><span>Доставка</span><span className="font-mono">{fmt(deliveryN)}</span></div>}
+                      {liftN > 0 && <div className="flex justify-between"><span>Подъём</span><span className="font-mono">{fmt(liftN)}</span></div>}
                     </div>
                   )}
 
@@ -2773,9 +2761,64 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                     <span className="text-[14px] font-semibold text-[#111110]">К оплате</span>
                     <span className="text-[22px] font-bold font-mono text-[#111110]">{fmt(grand)}</span>
                   </div>
+
+                  {/* Изделие уходит в список готовых к продаже; из списка собирается КП. */}
+                  <button onClick={() => { if (!blocked && grand > 0) setMgCart(c => [...c, { title: mgTitle, cost: b2bTotal, price: productPrice, extras: install + deliveryN + liftN, total: grand }]) }}
+                    disabled={blocked || grand <= 0}
+                    className="w-full py-2 rounded-lg border-2 border-[#111110] text-[13px] font-semibold text-[#111110] hover:bg-[#111110] hover:text-white transition-colors disabled:opacity-40">
+                    + В КП
+                  </button>
                 </div>
               )
             })()}
+
+            {/* Готовые к продаже изделия M-Glass: накопили — собрали КП. */}
+            {variant === 'mglass' && mgCart.length > 0 && (
+              <div className="ac-card p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[14px] font-semibold text-[#111110]">Изделия в КП — {mgCart.length}</h3>
+                  <button onClick={() => setMgCart([])} className="text-[11px] text-[#9a9a95] hover:text-[#111110]">очистить</button>
+                </div>
+                <div className="divide-y divide-[#f0f0ec]">
+                  {mgCart.map((it, i) => (
+                    <div key={i} className="py-1.5 flex items-start justify-between gap-2">
+                      <span className="text-[12px] text-[#4b4b47] min-w-0">{it.title}</span>
+                      <span className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="text-[12.5px] font-mono font-semibold text-[#111110]">{fmt(it.total)}</span>
+                        <button onClick={() => setMgCart(c => c.filter((_, j) => j !== i))} className="text-[12px] text-[#c4c4be] hover:text-red-600">✕</button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-[#f0f0ec]">
+                  <span className="text-[13px] font-semibold text-[#111110]">Итого клиенту</span>
+                  <span className="text-[18px] font-bold font-mono text-[#111110]">{fmt(mgCart.reduce((s2, i) => s2 + i.total, 0))}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  <input value={mgClient.name} onChange={e => setMgClient(c => ({ ...c, name: e.target.value }))} placeholder="Клиент"
+                    className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12.5px] outline-none focus:border-[#111110]" />
+                  <input value={mgClient.phone} onChange={e => setMgClient(c => ({ ...c, phone: e.target.value }))} placeholder="Телефон" inputMode="tel"
+                    className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12.5px] outline-none focus:border-[#111110]" />
+                  <input value={mgClient.address} onChange={e => setMgClient(c => ({ ...c, address: e.target.value }))} placeholder="Адрес"
+                    className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12.5px] outline-none focus:border-[#111110]" />
+                </div>
+                {/* Тот же путь, что в B2C-«Расчёте»: префилл → /kp → сделка по телефону. */}
+                <button onClick={() => {
+                  const total = mgCart.reduce((s2, i) => s2 + i.total, 0)
+                  const content = {
+                    title: (mgClient.name || 'Коммерческое предложение').toUpperCase(),
+                    items: mgCart.map(i => ({ name: i.title, qty: 1, price: i.total, sum: i.total })),
+                    subtotal: total, total,
+                    client_name: mgClient.name, client_phone: mgClient.phone, client_address: mgClient.address,
+                  }
+                  try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch { /* ignore */ }
+                  router.push('/kp')
+                }}
+                  className="w-full py-2 rounded-lg bg-[#111110] text-white text-[13px] font-semibold hover:bg-[#2a2a28]">
+                  Сохранить → КП
+                </button>
+              </div>
+            )}
 
             {/* Итоговый блок + кнопка сохранить */}
             {totals && (
