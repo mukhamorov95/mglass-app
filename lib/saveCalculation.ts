@@ -47,29 +47,26 @@ type SavePayload = {
 
 export type SaveResult = { id: number; error?: never } | { id?: never; error: string } | null
 
+// Пишем через сервер, а не напрямую в базу: инварианты (клиент у продающего
+// расчёта, вменяемая маржа, автор из сессии) должны действовать одинаково для
+// всех вкладок, включая открытые до выката. См. lib/calcInvariants.ts.
+async function post(path: string, method: 'POST' | 'PATCH', body: unknown): Promise<SaveResult> {
+  try {
+    const r = await fetch(path, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    const j = await r.json().catch(() => null) as { id?: number; error?: string } | null
+    if (!r.ok) return { error: j?.error ?? `Ошибка сохранения (${r.status})` }
+    if (!j?.id) return { error: 'Сервер не вернул номер расчёта' }
+    return { id: j.id }
+  } catch {
+    return { error: 'Нет связи с сервером — расчёт не сохранён' }
+  }
+}
+
 export async function saveCalculation(payload: SavePayload): Promise<SaveResult> {
   assertPayloadIntegrity(payload)
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user) {
-    return { error: 'Нет активной сессии. Войдите в аккаунт.' }
-  }
-
-  const { data, error } = await supabase
-    .from('calculations')
-    .insert({
-      ...payload,
-      created_by: session.user.id,
-      status: 'draft',
-      ...(payload.parent_calc_id ? { parent_calc_id: payload.parent_calc_id } : {}),
-    })
-    .select('id')
-    .single()
-
-  if (error) {
-    return { error: `DB: ${error.message} (code: ${error.code})` }
-  }
-  return { id: data.id }
+  return post('/api/calculations/save', 'POST', payload)
 }
 
 export async function updateCalculation(
@@ -78,30 +75,7 @@ export async function updateCalculation(
     client_name?: string; client_phone?: string
   },
 ): Promise<SaveResult> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user) return { error: 'Нет активной сессии.' }
-
-  const { error } = await supabase
-    .from('calculations')
-    .update({
-      input_data:           payload.input_data,
-      cost_breakdown:       payload.cost_breakdown,
-      financial_breakdown:  payload.financial_breakdown,
-      base_price:           payload.base_price,
-      discount:             payload.discount,
-      partner_percent:      payload.partner_percent,
-      final_price:          payload.final_price,
-      margin:               payload.margin,
-      profit:               payload.profit,
-      client_text:          payload.client_text,
-      ...(payload.client_name  !== undefined ? { client_name:  payload.client_name  } : {}),
-      ...(payload.client_phone !== undefined ? { client_phone: payload.client_phone } : {}),
-    })
-    .eq('id', id)
-
-  if (error) return { error: `DB: ${error.message} (code: ${error.code})` }
-  return { id }
+  return post('/api/calculations/save', 'PATCH', { ...payload, id })
 }
 
 export async function checkAuth(): Promise<boolean> {
