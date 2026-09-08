@@ -29,6 +29,9 @@ export const ROLE_SOURCES: { role: string; label: string; match: string[]; hint:
   // виден, а не всплывал «не заведено» в момент расчёта у менеджера.
   { role: 'frame',        label: 'Рамка · алюминиевый профиль', match: ['Профили'], hint: 'хлыст 6 м' },
   { role: 'frame_ushape', label: 'Рамка · П-профиль (душевой)', match: [],          hint: 'только зеркало 6 мм' },
+  // Своё производство и труд — в прайсе поставщика их нет, заводятся вручную.
+  { role: 'sandblast',    label: 'Пескоструйная полоса (фронт)', match: [],         hint: 'своя работа, за пог.м' },
+  { role: 'assembly',     label: 'Сборка подсветки',             match: [],         hint: 'наклейка, пайка, выключатель' },
 ]
 
 async function rateRub(req: NextRequest): Promise<number> {
