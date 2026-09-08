@@ -41,6 +41,8 @@ const REQUIRED: { value: string; label: string; note: string }[] = [
   { value: 'power_supply', label: 'Блок питания', note: 'запас 30%' },
   { value: 'button',       label: 'Кнопка',     note: 'если с выключателем' },
   { value: 'sensor',       label: 'Сенсор',     note: 'если с сенсором' },
+  { value: 'sandblast',    label: 'Пескоструй', note: 'для фронтальной' },
+  { value: 'assembly',     label: 'Сборка',     note: 'наклейка, пайка' },
 ]
 const BASE_VALUES = BASE_TABS.map(t => t.value)
 

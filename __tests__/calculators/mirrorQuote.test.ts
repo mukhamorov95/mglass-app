@@ -43,7 +43,7 @@ describe('зеркало: спецификация', () => {
   const comps = [strip(), psu(48, 157), psu(72, 237)]
   it('лента бухтой, сумма сходится со строками', () => {
     const q = calcMirrorQuote({
-      width: 800, height: 600, shape: 'rect', lighting: true,
+      width: 800, height: 600, shape: 'rect', lightMode: 'aura',
       sides: { top: true, bottom: false, left: false, right: false },
       voltage: 24, control: 'none', frame: 'none', glassCost: 1000,
     }, comps, {})
@@ -56,7 +56,7 @@ describe('зеркало: спецификация', () => {
   })
   it('пустой справочник не обнуляет цену молча', () => {
     const q = calcMirrorQuote({
-      width: 800, height: 600, shape: 'rect', lighting: true,
+      width: 800, height: 600, shape: 'rect', lightMode: 'aura',
       sides: { top: true, bottom: false, left: false, right: false },
       voltage: 24, control: 'sensor', frame: 'none', glassCost: 0,
     }, comps, {})
@@ -73,7 +73,7 @@ describe('зеркало: что берём по умолчанию', () => {
       psu(100, 439, 12),
     ]
     const q = calcMirrorQuote({
-      width: 800, height: 600, shape: 'rect', lighting: true,
+      width: 800, height: 600, shape: 'rect', lightMode: 'aura',
       sides: { top: true, bottom: false, left: false, right: false },
       voltage: 12, control: 'none', frame: 'none', glassCost: 0,
     }, comps, {})

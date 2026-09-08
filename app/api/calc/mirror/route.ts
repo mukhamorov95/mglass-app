@@ -4,7 +4,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { calcItem, effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { MGLASS_CLIENT_IDS } from '@/lib/b2bScope'
-import { calcMirrorQuote, type MirrorComponent, type MirrorQuoteInput } from '@/lib/mirror/mirrorQuote'
+import { calcMirrorQuote, normalizeLightMode, type MirrorComponent, type MirrorQuoteInput } from '@/lib/mirror/mirrorQuote'
 import type { B2BMaterial } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ full: false, error: 'unauthorized' }, { status: 401 })
 
   const b = await req.json().catch(() => null) as (Partial<MirrorQuoteInput> & {
-    thickness?: number; materialName?: string; quantity?: number
+    thickness?: number; materialName?: string; quantity?: number; lighting?: boolean
   }) | null
   if (!b?.width || !b?.height) return NextResponse.json({ full: false, error: 'нужны размеры' }, { status: 400 })
 
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
   const quote = calcMirrorQuote({
     width: b.width, height: b.height,
     shape: b.shape ?? 'rect',
-    lighting: !!b.lighting,
+    lightMode: normalizeLightMode(b),
     sides: b.sides ?? { top: true, bottom: false, left: false, right: false },
     voltage: b.voltage === 24 ? 24 : 12,
     control: b.control ?? 'none',

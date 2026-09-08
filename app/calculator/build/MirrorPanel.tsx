@@ -20,7 +20,7 @@ export type MirrorCartItem = {
   delivery: number; lift: number; total: number
 }
 
-type Line = { role: string; label: string; qty: number; unit: string; unitPrice: number; total: number; note?: string }
+type Line = { role: string; label: string; qty: number; unit: string; unitPrice: number; total: number; note?: string; contour?: 'aura' | 'front' }
 type Quote = {
   areaM2: number; perimeterM: number; lightingM: number
   lines: Line[]; hardwareCost: number; glassCost: number; directCost: number
@@ -60,6 +60,9 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
   // может не быть, и хранимое значение осталось бы невозможным.
   const thickness = mms.includes(pickedMm) ? pickedMm : (mms[0] ?? 4)
   const setThickness = setPickedMm
+  // Тип подсветки — ядро изделия: аура (на стену), фронт (на лицо через песочку),
+  // обе сразу. По умолчанию у модели «с подсветкой» — аура, у обычной — none.
+  const [lightMode, setLightMode] = useState<'none' | 'aura' | 'front' | 'both'>(model.has_lighting ? 'aura' : 'none')
   const [sides, setSides] = useState({ top: true, bottom: false, left: false, right: false })
   const [voltage, setVoltage] = useState<12 | 24>(24)
   const [control, setControl] = useState<'none' | 'button' | 'sensor'>('none')
@@ -80,8 +83,8 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
   const params = useMemo(() => ({
     width: numOr(width), height: numOr(height), quantity: numOr(qty) || 1,
     shape: model.shape, thickness, materialName,
-    lighting: model.has_lighting, sides, voltage, control, frame,
-  }), [width, height, qty, model.shape, model.has_lighting, thickness, materialName, sides, voltage, control, frame])
+    lightMode, sides, voltage, control, frame,
+  }), [width, height, qty, model.shape, thickness, materialName, lightMode, sides, voltage, control, frame])
 
   const paramsKey = JSON.stringify(params)
   const [pricedKey, setPricedKey] = useState('')
@@ -116,8 +119,17 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
   const beforeDisc = (usable ? productPrice : 0) + installN + deliveryN + liftN
   const grand = Math.round(beforeDisc * (1 - discPct / 100))
 
-  const title = () =>
-    `${model.name} · ${materialName} ${thickness} мм · ${numOr(width)}×${numOr(height)} мм${numOr(qty) > 1 ? ` ×${numOr(qty)}` : ''}`
+  const LIGHT_LABEL: Record<string, string> = { aura: 'аура', front: 'фронт', both: 'аура + фронт', none: '' }
+  const title = () => {
+    const light = LIGHT_LABEL[lightMode]
+    const frameName = frame !== 'none' ? FRAMES.find(f => f.id === frame)?.label : ''
+    return [
+      `${model.name} · ${materialName} ${thickness} мм · ${numOr(width)}×${numOr(height)} мм`,
+      light && `подсветка: ${light}`,
+      frameName,
+      numOr(qty) > 1 ? `×${numOr(qty)}` : '',
+    ].filter(Boolean).join(' · ')
+  }
 
   const add = () => {
     if (!usable || grand <= 0) return
@@ -151,13 +163,13 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
         {view === '3d' ? (
           <div className="h-[52vh] min-h-[320px] rounded-xl overflow-hidden bg-[#f1efec]">
             <Mirror3DView width={numOr(width)} height={numOr(height)} shape={model.shape}
-              lit={model.has_lighting} sides={sides} frame={frame} />
+              lit={lightMode !== 'none'} sides={sides} frame={frame} />
           </div>
         ) : (
-          <MirrorScheme w={numOr(width)} h={numOr(height)} shape={model.shape} lit={model.has_lighting} sides={sides} frame={frame} />
+          <MirrorScheme w={numOr(width)} h={numOr(height)} shape={model.shape} lit={lightMode !== 'none'} sides={sides} frame={frame} />
         )}
         <p className="text-[11.5px] text-[#9a9a95] mt-3">
-          {quote && <>{quote.areaM2.toFixed(2)} м² · периметр {quote.perimeterM.toFixed(2)} м{model.has_lighting ? ` · подсветка ${quote.lightingM.toFixed(2)} м` : ''} · </>}
+          {quote && <>{quote.areaM2.toFixed(2)} м² · периметр {quote.perimeterM.toFixed(2)} м{lightMode !== 'none' ? ` · подсветка ${quote.lightingM.toFixed(2)} м` : ''} · </>}
           {/* Почему исчезла раковина — объясняем, иначе выглядит как сбой сцены. */}
           {numOr(height) > SINK_MAX_MIRROR_H ? 'зеркало в рост — раковину под него не ставим' : 'над раковиной'}
         </p>
@@ -165,6 +177,26 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
 
       {/* Справа — параметры и цена. */}
       <div className="space-y-3">
+        {model.has_lighting && (
+          <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4">
+            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Тип подсветки</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {([
+                ['aura',  'Аура', 'свечение на стену'],
+                ['front', 'Фронтальная', 'на лицо, через песочку'],
+                ['both',  'Аура + фронт', 'две ленты'],
+                ['none',  'Без подсветки', ''],
+              ] as const).map(([m, label, hint]) => (
+                <button key={m} onClick={() => setLightMode(m)}
+                  className={`text-left px-2.5 py-1.5 rounded-lg border-2 transition-colors ${lightMode === m ? 'border-[#111110]' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <span className={`block text-[12.5px] ${lightMode === m ? 'text-[#111110] font-semibold' : 'text-[#4b4b47]'}`}>{label}</span>
+                  {hint && <span className="block text-[10px] text-[#9a9a95] leading-tight">{hint}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4">
           <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Размер зеркала, мм</p>
           <div className="grid grid-cols-3 gap-2">
@@ -186,9 +218,11 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
           </div>
         </div>
 
-        {model.has_lighting && (
+        {model.has_lighting && lightMode !== 'none' && (
           <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4">
-            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Подсветка</p>
+            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">
+              {lightMode === 'both' ? 'Подсветка · две ленты' : lightMode === 'front' ? 'Подсветка · фронт через песочку' : 'Подсветка · аура'}
+            </p>
             <label className={lbl}>Стороны</label>
             <div className="grid grid-cols-4 gap-1.5">
               {sideBtn('top', 'Верх')}{sideBtn('bottom', 'Низ')}{sideBtn('left', 'Лево')}{sideBtn('right', 'Право')}
@@ -242,6 +276,7 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
                   <div key={i} className="flex justify-between gap-2 py-0.5">
                     <span className="text-[#6b6b66] min-w-0">
                       {l.label} · {l.qty} {l.unit} × {RUB(l.unitPrice)}
+                      {l.contour && <span className="text-[10px] font-semibold px-1 py-0.5 rounded ml-1 bg-[#f0efe9] text-[#8a6d3b]">{l.contour === 'aura' ? 'аура' : 'фронт'}</span>}
                       {l.note && <span className="text-[#9a9a95]"> · {l.note}</span>}
                     </span>
                     <span className="font-mono whitespace-nowrap">{RUB(l.total)}</span>
