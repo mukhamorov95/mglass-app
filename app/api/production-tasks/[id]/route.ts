@@ -68,7 +68,8 @@ export async function PATCH(
   // 1а) каскад: закрытый этап означает, что все предыдущие этапы детали пройдены.
   // Исполнителя каскадным задачам НЕ ставим — их физически никто не отмечал (см. productionCascade).
   const cascaded = action === 'done'
-    ? await cascadePriorStages(svc, task.order_id, task.item_index, task.sequence_order, now)
+    ? await cascadePriorStages(svc, task.order_id, task.item_index, task.sequence_order, now,
+        { id: actor.id, name: actor.name, stage: task.stage_key })
     : []
 
   // 2) notes.detail_stages (зеркалим для прогресса на уровне заказа).

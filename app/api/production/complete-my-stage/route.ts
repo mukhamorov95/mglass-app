@@ -62,7 +62,8 @@ export async function POST(req: NextRequest) {
     closed++
 
     // Каскад закрывает всё, что до моего этапа: этап не бывает сделан раньше предыдущих.
-    const keys = await cascadePriorStages(svc, orderId, t.item_index, t.sequence_order, now)
+    const keys = await cascadePriorStages(svc, orderId, t.item_index, t.sequence_order, now,
+      { id: user.id, name: actor.name, stage: t.stage_key })
     cascaded += keys.length
 
     const item = String(t.item_index)

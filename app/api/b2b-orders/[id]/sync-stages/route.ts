@@ -107,7 +107,8 @@ export async function POST(
     // Каскад: закрытый этап означает, что все предыдущие этапы детали пройдены.
     const seq = (data?.[0] as { sequence_order?: number } | undefined)?.sequence_order
     if (u.action === 'done' && typeof seq === 'number') {
-      const keys = await cascadePriorStages(svc, orderId, u.item_index, seq, now)
+      const keys = await cascadePriorStages(svc, orderId, u.item_index, seq, now,
+        { id: actor2?.userId, name: actor2?.name, stage: u.stage_key })
       for (const k of keys) cascaded.push({ item_index: u.item_index, stage_key: k })
 
       // Склад: сама отметка (если это резка) и каскадные этапы.

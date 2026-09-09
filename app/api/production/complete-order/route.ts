@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
       .update(buildTaskUpdate('done', actor, snapshot, now))
       .eq('id', f.id)
     if (error) continue
-    const keys = await cascadePriorStages(svc, orderId, f.item_index, f.sequence_order, now)
+    const keys = await cascadePriorStages(svc, orderId, f.item_index, f.sequence_order, now,
+      { id: user.id, name: actor.name, stage: snapshot.stage_key })
     cascaded += keys.length
 
     // Зеркало прогресса на уровне заказа: отмеченный этап пишем как живую отметку,
