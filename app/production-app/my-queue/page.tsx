@@ -122,7 +122,11 @@ export default function MyQueuePage() {
   // Заказ, найденный по номеру, но БЕЗ моих задач: менеджер не отметил признак,
   // и маршрут через мою станцию не построился. Рабочий видит пустоту и идёт к
   // владельцу — так 01.09 пришёл Адилет с четырьмя заказами сразу.
-  const [foreignOrder, setForeignOrder] = useState<{ id: number; number: string; client: string } | null>(null)
+  // mineHere — задачи МОЕЙ станции в найденном заказе. Их наличие меняет смысл
+  // сообщения на противоположный: не «менеджер не отметил», а «ещё не дошло до меня».
+  const [foreignOrder, setForeignOrder] = useState<
+    { id: number; number: string; client: string; mineHere: { stage: string; status: string }[]; waitingFor: string[] } | null
+  >(null)
   const [addingStage, setAddingStage] = useState(false)
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
@@ -494,16 +498,38 @@ export default function MyQueuePage() {
     if (!lookForeign) return
     let cancelled = false
     const digits = qTrim.replace(/\D/g, '')
-    sb.from('b2b_orders')
-      .select('id,custom_number,client_name')
-      .or(`custom_number.ilike.%${qTrim}%${digits ? `,id.eq.${Number(digits)}` : ''}`)
-      .gte('created_at', PROD_SINCE).limit(1)
-      .then(({ data }) => {
-        const o = (data ?? [])[0] as { id: number; custom_number: string | null; client_name: string | null } | undefined
-        if (!cancelled) setForeignOrder(o ? { id: o.id, number: o.custom_number?.trim() || `00${o.id}`, client: o.client_name ?? '—' } : null)
+    const stations = myStations
+    ;(async () => {
+      const { data } = await sb.from('b2b_orders')
+        .select('id,custom_number,client_name')
+        .or(`custom_number.ilike.%${qTrim}%${digits ? `,id.eq.${Number(digits)}` : ''}`)
+        .gte('created_at', PROD_SINCE).limit(1)
+      const o = (data ?? [])[0] as { id: number; custom_number: string | null; client_name: string | null } | undefined
+      if (!o) { if (!cancelled) setForeignOrder(null); return }
+
+      // Есть ли в заказе задачи моей станции и что держит их в очереди. Без этой
+      // проверки экран объявлял «при просчёте не отметили» даже там, где задачи
+      // стоят с первого дня и просто ждут предыдущих этапов (заказ 05385, 09.09).
+      const { data: all } = await sb.from('production_tasks')
+        .select('stage_key,station,status,sequence_order').eq('order_id', o.id)
+      const rows = (all ?? []) as { stage_key: string; station: string | null; status: string; sequence_order: number }[]
+      const mineHere = rows
+        .filter(r => stations.includes(r.station ?? r.stage_key))
+        .map(r => ({ stage: r.station ?? r.stage_key, status: r.status }))
+      const myFirst = Math.min(...rows
+        .filter(r => stations.includes(r.station ?? r.stage_key))
+        .map(r => r.sequence_order))
+      const waitingFor = mineHere.length === 0 ? [] : [...new Set(rows
+        .filter(r => r.status !== 'done' && r.sequence_order < myFirst)
+        .map(r => r.stage_key))]
+
+      if (!cancelled) setForeignOrder({
+        id: o.id, number: o.custom_number?.trim() || `00${o.id}`, client: o.client_name ?? '—',
+        mineHere, waitingFor,
       })
+    })()
     return () => { cancelled = true }
-  }, [lookForeign, qTrim, sb])
+  }, [lookForeign, qTrim, sb, myStations])
 
   async function addMyStage(orderId: number, stage: string) {
     setAddingStage(true)
@@ -635,21 +661,42 @@ export default function MyQueuePage() {
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
             <p className="text-[14px] font-bold font-mono text-[#111110]">{foreignOrder.number}</p>
             <p className="text-[13px] text-[#6b6b66]">{foreignOrder.client}</p>
-            <p className="text-[12px] text-amber-800 mt-1.5">
-              Заказ есть, но задач вашей станции в нём нет — при просчёте не отметили
-              {myStations.includes('drilling') ? ' отверстия или вырезы' : ' эту обработку'}.
-            </p>
-            <div className="flex flex-wrap gap-2 mt-2.5">
-              {myStations.map(st => (
-                <button key={st} onClick={() => addMyStage(foreignOrder.id, st)} disabled={addingStage}
-                  className="px-3.5 py-2.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-40">
-                  {addingStage ? '…' : `Добавить: ${stageLabel(st)}`}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-amber-700 mt-2">
-              Добавится по всем изделиям заказа. Скажите менеджеру — в следующий раз отметит при просчёте.
-            </p>
+
+            {foreignOrder.mineHere.length > 0 ? (
+              // Задачи есть — значит просчёт ни при чём. Говорим, чего ждём, и
+              // НЕ предлагаем добавить этап: он уже стоит в очереди.
+              <>
+                <p className="text-[12px] text-amber-800 mt-1.5">
+                  Ваши задачи в заказе есть ({foreignOrder.mineHere.length} шт.), но очередь до вас ещё не дошла.
+                </p>
+                {foreignOrder.waitingFor.length > 0 && (
+                  <p className="text-[12px] text-amber-800 mt-1">
+                    Ждём: {foreignOrder.waitingFor.map(stageLabel).join(', ')}.
+                  </p>
+                )}
+                <p className="text-[11px] text-amber-700 mt-2">
+                  Заказ появится у вас сам, когда предыдущие этапы отметят. Добавлять ничего не нужно.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[12px] text-amber-800 mt-1.5">
+                  Заказ есть, но задач вашей станции в нём нет — при просчёте не отметили
+                  {myStations.includes('drilling') ? ' отверстия или вырезы' : ' эту обработку'}.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2.5">
+                  {myStations.map(st => (
+                    <button key={st} onClick={() => addMyStage(foreignOrder.id, st)} disabled={addingStage}
+                      className="px-3.5 py-2.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-40">
+                      {addingStage ? '…' : `Добавить: ${stageLabel(st)}`}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-amber-700 mt-2">
+                  Добавится по всем изделиям заказа. Скажите менеджеру — в следующий раз отметит при просчёте.
+                </p>
+              </>
+            )}
           </div>
         )}
 
