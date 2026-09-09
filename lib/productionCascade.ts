@@ -7,6 +7,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // мастера отмечают по ходу, а где всё «догоняется» в конце.
 // completed_by каскадным задачам НЕ ставим сознательно (П1): их физически никто
 // не отмечал, и приписать их одному человеку — исказить выработку (П16).
+//
+// Но след того, ЧЬЯ отметка вызвала каскад, пишем отдельными колонками
+// (auto_closed_by / auto_closed_from). Это не выработка — это учёт: цех должен
+// видеть, сколько изделий закрылось без живых отметок и по чьей отметке.
+// Без него нельзя ответить на вопрос владельца «сколько Никита закрыл за других».
 
 export type CascadedStage = { item_index: number; stage_key: string }
 
@@ -67,12 +72,15 @@ export async function reverseCascade(
   return rows.map(r => r.stage_key)
 }
 
+export type CascadeActor = { id?: string; name?: string | null; stage?: string }
+
 export async function cascadePriorStages(
   svc: SupabaseClient,
   orderId: number,
   itemIndex: number,
   sequenceOrder: number,
   now: string,
+  actor?: CascadeActor,
 ): Promise<string[]> {
   const { data } = await svc
     .from('production_tasks')
@@ -86,9 +94,19 @@ export async function cascadePriorStages(
 
   const ids = prior.map(p => p.id)
   const base = { status: 'done', completed_at: now, problem_resolved_at: now }
-  const { error } = await svc.from('production_tasks').update({ ...base, auto_closed: true }).in('id', ids)
-  // Колонка могла ещё не попасть в кэш схемы PostgREST — этапы всё равно закрываем.
-  if (error) await svc.from('production_tasks').update(base).in('id', ids)
+  const trace = {
+    auto_closed: true,
+    ...(actor?.id ? { auto_closed_by: actor.id } : {}),
+    ...(actor?.name ? { auto_closed_by_name: actor.name } : {}),
+    ...(actor?.stage ? { auto_closed_from: actor.stage } : {}),
+  }
+  const { error } = await svc.from('production_tasks').update({ ...base, ...trace }).in('id', ids)
+  // Колонки могли ещё не попасть в кэш схемы PostgREST — этапы всё равно закрываем,
+  // но сначала пробуем без следа, потом совсем голым апдейтом.
+  if (error) {
+    const { error: e2 } = await svc.from('production_tasks').update({ ...base, auto_closed: true }).in('id', ids)
+    if (e2) await svc.from('production_tasks').update(base).in('id', ids)
+  }
 
   return prior.map(p => p.stage_key)
 }

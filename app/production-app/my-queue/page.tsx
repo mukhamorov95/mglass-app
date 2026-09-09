@@ -663,20 +663,26 @@ export default function MyQueuePage() {
             <p className="text-[13px] text-[#6b6b66]">{foreignOrder.client}</p>
 
             {foreignOrder.mineHere.length > 0 ? (
-              // Задачи есть — значит просчёт ни при чём. Говорим, чего ждём, и
-              // НЕ предлагаем добавить этап: он уже стоит в очереди.
+              // Задачи есть — значит просчёт ни при чём. Про очередь НЕ утверждаем:
+              // деталь может уже лежать готовая у мастера, просто предыдущие станции
+              // не отметились. Говорим факт и даём отметить свою работу.
               <>
                 <p className="text-[12px] text-amber-800 mt-1.5">
-                  Ваши задачи в заказе есть ({foreignOrder.mineHere.length} шт.), но очередь до вас ещё не дошла.
+                  Ваши задачи в заказе есть — {foreignOrder.mineHere.length} шт.
+                  {foreignOrder.waitingFor.length > 0
+                    ? ` Не отмечены этапы до вас: ${foreignOrder.waitingFor.map(stageLabel).join(', ')}.`
+                    : ''}
                 </p>
-                {foreignOrder.waitingFor.length > 0 && (
-                  <p className="text-[12px] text-amber-800 mt-1">
-                    Ждём: {foreignOrder.waitingFor.map(stageLabel).join(', ')}.
-                  </p>
-                )}
                 <p className="text-[11px] text-amber-700 mt-2">
-                  Заказ появится у вас сам, когда предыдущие этапы отметят. Добавлять ничего не нужно.
+                  Если изделие уже у вас и готово — отметьте свой этап. Предыдущие закроются
+                  автоматически, и это попадёт в «Без отметок».
                 </p>
+                <div className="flex flex-wrap gap-2 mt-2.5">
+                  <a href={`/production-app/orders/${foreignOrder.id}`}
+                    className="px-3.5 py-2.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-black">
+                    Открыть заказ
+                  </a>
+                </div>
               </>
             ) : (
               <>

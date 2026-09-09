@@ -13,6 +13,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/activity', label: '👥 Кто что делал', match: p => p.startsWith('/production-app/activity') },
   { href: '/production-app/orders',   label: '📋 Заказы',      match: p => p === '/production-app/orders' },
   { href: '/production-app/metrics',  label: '📈 Метрики',     match: p => p.startsWith('/production-app/metrics') },
+  { href: '/production-app/no-marks', label: '🕳 Без отметок',  match: p => p.startsWith('/production-app/no-marks') },
   { href: '/production-app/material', label: 'Материал',       match: p => p.startsWith('/production-app/material') },
   { href: '/production-app/shipping', label: '📦 Отгрузка',    match: p => p.startsWith('/production-app/shipping') },
   { href: '/production-app/voronezh', label: '🚚 Воронеж',     match: p => p.startsWith('/production-app/voronezh') },
