@@ -98,6 +98,26 @@ const HORIZONS: { key: Horizon; label: string; cls: string }[] = [
   { key: 'later',    label: 'Позже / без срока',           cls: 'text-[#9a9a95]' },
 ]
 
+// PostgREST отдаёт ограниченное число строк за запрос, и молча: ответ выглядит
+// нормальным, просто короче. Поэтому читаем страницами, пока приходит полная.
+const PAGE = 1000
+async function fetchAllTasks(sb: ReturnType<typeof createClient>, orFilter: string) {
+  const cols = 'id,order_id,item_index,stage_key,sequence_order,station,status,blocked_by_task_id,production_day,layer_note,rework_count'
+  const out: TaskRow[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from('production_tasks')
+      .select(cols).or(orFilter)
+      .in('status', ['queued', 'in_progress', 'problem'])
+      .order('sequence_order', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error) return { data: out.length ? out : null }
+    const page = (data ?? []) as TaskRow[]
+    out.push(...page)
+    if (page.length < PAGE) break
+  }
+  return { data: out }
+}
+
 export default function MyQueuePage() {
   const sb = createClient()
   const [loading, setLoading] = useState(true)
@@ -184,11 +204,14 @@ export default function MyQueuePage() {
     const [{ data: taskRows }, { data: doneRows }] = await Promise.all([
       // Берём и закрытые задачи: в обычном списке они не показываются, но
       // нужны поиску — иначе отмеченный заказ пропадает и его не найти.
-      sb.from('production_tasks')
-        .select('id,order_id,item_index,stage_key,sequence_order,station,status,blocked_by_task_id,production_day,layer_note,rework_count')
-        .or(orFilter)
-        .in('status', ['queued', 'in_progress', 'done', 'problem'])
-        .order('sequence_order', { ascending: true }),
+      // Только незакрытые: рабочая очередь. Закрытые задачи (их столько же, сколько
+      // открытых) переполняли ответ, и упаковка — последняя по sequence_order —
+      // обрезалась первой: заказ переставал выпадать у мастера, хотя задачи в нём
+      // были. Поиск по уже отмеченным заказам делает отдельный запрос ниже.
+      //
+      // Страницами: у Никиты одних незакрытых больше тысячи, а PostgREST отдаёт
+      // не больше страницы за раз. Одним запросом часть очереди молча терялась.
+      fetchAllTasks(sb, orFilter),
       stations.length
         ? sb.from('production_tasks').select('order_id,item_index,completed_at')
             .eq('status', 'done').in('station', stations).gte('completed_at', monday.toISOString())
@@ -662,10 +685,16 @@ export default function MyQueuePage() {
             <p className="text-[14px] font-bold font-mono text-[#111110]">{foreignOrder.number}</p>
             <p className="text-[13px] text-[#6b6b66]">{foreignOrder.client}</p>
 
-            {foreignOrder.mineHere.length > 0 ? (
-              // Задачи есть — значит просчёт ни при чём. Про очередь НЕ утверждаем:
-              // деталь может уже лежать готовая у мастера, просто предыдущие станции
-              // не отметились. Говорим факт и даём отметить свою работу.
+            {foreignOrder.mineHere.length > 0 && foreignOrder.mineHere.every(m => m.status === 'done') ? (
+              // Уже отмечено. Раньше закрытые задачи держали в общем списке ради
+              // этого случая — из-за них выборка упиралась в лимит и заказы пропадали.
+              <p className="text-[12px] text-emerald-700 mt-1.5">
+                Вы уже отметили этот заказ — {foreignOrder.mineHere.length} шт. Ничего делать не нужно.
+              </p>
+            ) : foreignOrder.mineHere.length > 0 ? (
+              // Задачи станции в заказе есть — значит просчёт ни при чём, и мастеру
+              // нужно не объяснение, а действие. Раньше он вводил номер и сразу жал
+              // «Всё готово»; вернули это, не заставляя открывать заказ.
               <>
                 <p className="text-[12px] text-amber-800 mt-1.5">
                   Ваши задачи в заказе есть — {foreignOrder.mineHere.length} шт.
@@ -673,16 +702,25 @@ export default function MyQueuePage() {
                     ? ` Не отмечены этапы до вас: ${foreignOrder.waitingFor.map(stageLabel).join(', ')}.`
                     : ''}
                 </p>
-                <p className="text-[11px] text-amber-700 mt-2">
-                  Если изделие уже у вас и готово — отметьте свой этап. Предыдущие закроются
-                  автоматически, и это попадёт в «Без отметок».
-                </p>
                 <div className="flex flex-wrap gap-2 mt-2.5">
+                  <button
+                    onClick={() => confirmDone === foreignOrder.id
+                      ? completeOrder(foreignOrder.id)
+                      : setConfirmDone(foreignOrder.id)}
+                    className={`px-3.5 py-2.5 rounded-lg text-[12px] font-semibold ${
+                      confirmDone === foreignOrder.id
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'bg-[#111110] text-white hover:bg-black'}`}>
+                    {confirmDone === foreignOrder.id ? 'Точно всё? Нажмите ещё раз' : 'Всё готово'}
+                  </button>
                   <a href={`/production-app/orders/${foreignOrder.id}`}
-                    className="px-3.5 py-2.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-black">
-                    Открыть заказ
+                    className="px-3.5 py-2.5 rounded-lg border border-[#111110] text-[#111110] text-[12px] font-semibold hover:bg-[#f0f0ec]">
+                    Открыть по деталям
                   </a>
                 </div>
+                <p className="text-[11px] text-amber-700 mt-2">
+                  «Всё готово» закроет заказ целиком: упаковано — значит все предыдущие станции пройдены.
+                </p>
               </>
             ) : (
               <>
