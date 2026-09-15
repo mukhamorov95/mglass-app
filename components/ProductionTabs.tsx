@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation'
 // порядок, что в левом меню Sidebar). «Обзор» и «Станции» убраны (14.07):
 // их закрывают «Мои задачи» (режим по материалу и толщине) и «Заказы».
 const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
+  { href: '/production-app',          label: '🏠 Сегодня',     match: p => p === '/production-app' },
   { href: '/production-app/my-queue', label: '✅ Мои задачи',   match: p => p.startsWith('/production-app/my-queue') },
   { href: '/production-app/load',     label: '📊 Загрузка',    match: p => p.startsWith('/production-app/load') },
   { href: '/production-app/activity', label: '👥 Кто что делал', match: p => p.startsWith('/production-app/activity') },
