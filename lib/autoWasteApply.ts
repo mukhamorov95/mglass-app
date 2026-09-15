@@ -8,13 +8,14 @@
 
 import type { B2BOrderItem } from './b2bCalculator'
 import { applyAutoWaste } from './b2bCalculator'
-import { autoWasteByMaterial, type UsageItem } from './materialUsage'
+import { autoWasteByMaterial, type UsageItem, DEFAULT_REUSE_RATE } from './materialUsage'
 
 // Доля крупного остатка, возвращаемого на стеллаж. 0.85 проверено на 500+
 // позициях июля: суммарный материал ≈ ручной (−1.4%, без шока по марже), но
 // перераспределён по геометрии — неудобные одиночные детали дорожают, плотно
 // раскладывающиеся дешевеют. Ровно то, что просил владелец.
-export const CALC_REUSE_RATE = 0.85
+// Значение живёт в materialUsage — один коэффициент на всю систему.
+export const CALC_REUSE_RATE = DEFAULT_REUSE_RATE
 
 type MatLike = {
   name: string

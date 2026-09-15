@@ -55,6 +55,8 @@ export type RailingParams = {
 
 export type Slope = { tan: number; angleDeg: number; factor: number }
 
+
+export const RAILING_REUSE_RATE = 0.7
 export function slopeOf(step: StepGeometry): Slope {
   const tan = step.riser / step.tread
   return {
@@ -181,7 +183,10 @@ export function computeRailing(segments: RailingSegment[], p: RailingParams): Ra
     }
   }
 
-  const usage = computeMaterialUsage(items, p.reuseRate, p.cutting ?? DEFAULT_CUTTING_SETTINGS)
+  // Ограждения считают возврат остатка по 0.7 — так было до 15.09.2026, когда общий
+  // коэффициент системы стал 0.85. Цены ограждений не меняем молча: переход на общий
+  // коэффициент — решение владельца (docs/UNIT_ECONOMICS_ROUTE.md, открытые вопросы).
+  const usage = computeMaterialUsage(items, p.reuseRate ?? RAILING_REUSE_RATE, p.cutting ?? DEFAULT_CUTTING_SETTINGS)
   const totals = sumUsage(usage)
   const sheetsNeeded = usage.reduce((s, u) => s + u.sheets, 0)
 
