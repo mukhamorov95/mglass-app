@@ -75,7 +75,7 @@ export default async function ProductionHome() {
         <div className="grid gap-3 md:grid-cols-2">
           <Block title="Срочные и просроченные" href="/production-app/load" tone="red"
             stat={`${h.urgent.overdue + h.urgent.today}`}
-            sub={`просрочено ${h.urgent.overdue} · срок сегодня ${h.urgent.today}${h.urgent.flagged ? ` · помечено срочным ${h.urgent.flagged}` : ''}`}
+            sub={`просрочено ${h.urgent.overdue} · срок сегодня ${h.urgent.today}${h.urgent.flagged ? ` · помечено срочным ${h.urgent.flagged}` : ''} · сроки с 01.09, когда вернулась отметка отгрузки`}
             rows={h.urgent.rows} empty="Ничего не горит" />
           <Block title="Отгрузка сегодня" href="/production-app/shipping" tone="emerald"
             stat={`${h.shipping.ready}`}

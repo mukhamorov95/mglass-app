@@ -1,4 +1,4 @@
-import { isShipped, orderDeadline, type TodayOrder } from '../b2b/todayPriorities'
+import { isShipped, orderDeadline, SHIP_MARKS_SINCE, type TodayOrder } from '../b2b/todayPriorities'
 import { isUrgent, materialStatus, parseNotes } from '../orderFlags'
 import { stageDayKey } from './dayLists'
 import { mskDayKey } from '../time'
@@ -47,6 +47,9 @@ export function shopHome(input: {
   const now = input.now ?? Date.now()
   const todayKey = mskDayKey(now)
   const todayStart = Date.parse(`${todayKey}T00:00:00+03:00`)
+  // Отметка «Отгружен» вернулась 01.09: заказ со сроком или упаковкой раньше без отметки —
+  // скорее уехал без неё, чем лежит. В «срочные» и «к отгрузке» такие не попадают.
+  const marksSince = Date.parse(SHIP_MARKS_SINCE)
 
   // 1. Мои задачи — станции работника или назначенные ему; у кого станций нет — весь цех
   const stations = me.stations?.filter(Boolean) ?? []
@@ -86,10 +89,11 @@ export function shopHome(input: {
     if (t.open > 0) {
       inWork.push({ ...base, note: `открыто задач: ${t.open} из ${t.total}`, days: daysLeft, dl })
       const isFlag = isUrgent(o.notes)
-      if (dl < todayStart) overdue++
+      const markable = dl >= marksSince
+      if (markable && dl < todayStart) overdue++
       else if (daysLeft === 0) dueToday++
       if (isFlag) flagged++
-      if (dl < todayStart + DAY || isFlag) {
+      if ((markable && dl < todayStart + DAY) || isFlag) {
         urgent.push({ ...base, note: dl < todayStart ? `просрочен на ${-daysLeft} дн.` : daysLeft === 0 ? 'срок сегодня' : 'помечен срочным', days: daysLeft, dl })
       }
     }
@@ -101,8 +105,9 @@ export function shopHome(input: {
 
     const packedKey = stageDayKey(stages.packaged)
     const packed = packedKey != null || stages.packaged === true
-    if (packed || (t.total > 0 && t.open === 0)) {
-      const packedAt = packedKey ? Date.parse(`${packedKey}T00:00:00+03:00`) : NaN
+    const packedAt = packedKey ? Date.parse(`${packedKey}T00:00:00+03:00`) : NaN
+    const markableShip = Number.isFinite(packedAt) ? packedAt >= marksSince : dl >= marksSince
+    if (markableShip && (packed || (t.total > 0 && t.open === 0))) {
       const waiting = Number.isFinite(packedAt) ? Math.max(0, Math.floor((todayStart - packedAt) / DAY)) : null
       ready.push({ ...base, note: packed ? (waiting ? `упакован ${waiting} дн. назад` : 'упакован') : 'все этапы закрыты', days: waiting, packed: Number.isFinite(packedAt) ? packedAt : Infinity })
     }

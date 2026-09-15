@@ -68,6 +68,16 @@ describe('главная цеха', () => {
     expect(h.shipping.rows[0]).toMatchObject({ id: 1, note: 'упакован 3 дн. назад' })
   })
 
+  it('до возврата отметки отгрузки (01.09) — не срочные и не «к отгрузке»', () => {
+    const h = run([task(1, 'queued'), task(2, 'done')], [
+      order(1, { deadline_date: '2026-07-20' }, { launched_at: '2026-07-01T09:00:00Z' }),
+      order(2, { stages: { packaged: '2026-07-21' } }, { launched_at: '2026-07-01T09:00:00Z' }),
+    ])
+    expect(h.urgent).toMatchObject({ overdue: 0, rows: [] })
+    expect(h.shipping.ready).toBe(0)
+    expect(h.inWork.count).toBe(1)
+  })
+
   it('люди — закрыто сегодня по Москве и в работе сейчас', () => {
     const h = run([
       task(1, 'done', { completed_at: '2026-09-15T06:00:00Z', completed_by_name: 'Никита' }),
