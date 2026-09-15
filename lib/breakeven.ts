@@ -244,7 +244,8 @@ export function allocationCheck(units: { title: string; fixed: FixedRow[] }[], s
     for (const f of u.fixed ?? []) {
       const key = costKey(f.name)
       if (!key) continue
-      const r = rows.get(key) ?? { key, name: f.name.replace(/\s*\([^)]*\)/g, '').trim(), byUnit: {}, allocated: 0, total: null, totalSuggested: false, companyLevel: 0, status: 'unknown' as const }
+      const label = f.name.replace(/\s*\([^)]*\)/g, ' ').replace(UNIT_WORDS, ' ').replace(/\s+/g, ' ').trim()
+      const r = rows.get(key) ?? { key, name: label, byUnit: {}, allocated: 0, total: null, totalSuggested: false, companyLevel: 0, status: 'unknown' as const }
       r.byUnit[u.title] = (r.byUnit[u.title] ?? 0) + (f.amount || 0)
       r.allocated += f.amount || 0
       const fromName = totalFromName(f.name)

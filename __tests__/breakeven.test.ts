@@ -172,7 +172,7 @@ describe('распределение общих расходов (Ф3)', () => {
     const rent = rows.find(r => r.key === 'аренда помещения')!
     expect(rent).toMatchObject({ allocated: 700_000, total: 750_000, totalSuggested: true, companyLevel: 50_000, status: 'company' })
     const salary = rows.find(r => r.key === 'зп оклады')!
-    expect(salary).toMatchObject({ allocated: 1_400_000, total: 1_420_000, companyLevel: 20_000, status: 'company' })
+    expect(salary).toMatchObject({ name: 'ЗП оклады', allocated: 1_400_000, total: 1_420_000, companyLevel: 20_000, status: 'company' })
     const bank = rows.find(r => r.key === 'банковская комиссия')!
     expect(bank).toMatchObject({ allocated: 70_000, total: null, status: 'unknown' })
     expect(rows.find(r => r.key.startsWith('лизинг'))).toBeUndefined()
