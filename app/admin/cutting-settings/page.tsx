@@ -8,6 +8,8 @@ type Settings = {
   edge_margin: number
   allow_rotation: boolean
   respect_pattern: boolean
+  min_remnant_short: number
+  min_remnant_long: number
 }
 
 const DEFAULTS: Settings = {
@@ -15,6 +17,8 @@ const DEFAULTS: Settings = {
   edge_margin: 2,
   allow_rotation: true,
   respect_pattern: true,
+  min_remnant_short: 400,
+  min_remnant_long: 800,
 }
 
 export default function CuttingSettingsPage() {
@@ -30,7 +34,7 @@ export default function CuttingSettingsPage() {
   async function load() {
     setLoading(true)
     const { data } = await createClient().from('cutting_settings').select('*').eq('id', 1).single()
-    if (data) setForm({ gap_between_pieces: data.gap_between_pieces ?? 2, edge_margin: data.edge_margin ?? 2, allow_rotation: data.allow_rotation ?? true, respect_pattern: data.respect_pattern ?? true })
+    if (data) setForm({ gap_between_pieces: data.gap_between_pieces ?? 2, edge_margin: data.edge_margin ?? 2, allow_rotation: data.allow_rotation ?? true, respect_pattern: data.respect_pattern ?? true, min_remnant_short: data.min_remnant_short ?? 400, min_remnant_long: data.min_remnant_long ?? 800 })
     setLoading(false)
   }
 
@@ -103,10 +107,18 @@ export default function CuttingSettingsPage() {
 
         <div className="bg-white rounded-xl border border-[#e4e4e0] px-5">
           <div className="py-2 border-b border-[#f0f0ec] mb-1">
+            <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Остаток листа</span>
+          </div>
+          {field('Короткая сторона от', 'Кусок меньше — полоса, в отход. Решение 15.09: 400 мм (влезает каждая шестая деталь)', 'мм', 'min_remnant_short', 'number')}
+          {field('Длинная сторона от', 'Порог для записи остатка на стеллаж и для остатков на карте раскроя', 'мм', 'min_remnant_long', 'number')}
+        </div>
+
+        <div className="bg-white rounded-xl border border-[#e4e4e0] px-5">
+          <div className="py-2 border-b border-[#f0f0ec] mb-1">
             <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Алгоритм раскроя</span>
           </div>
           {field('Разрешить поворот деталей', 'Алгоритм может поворачивать детали на 90° для лучшей упаковки', '', 'allow_rotation', 'boolean')}
-          {field('Учитывать направление рисунка', 'Для рифлёного и узорного стекла — запрещает поворот деталей', '', 'respect_pattern', 'boolean')}
+          {field('Учитывать направление рисунка', 'Для рифлёного стекла (МОРУ, Эстриадо, Flutelite): высота детали — вдоль полосы листа, без поворота', '', 'respect_pattern', 'boolean')}
         </div>
 
         {/* Info box */}
