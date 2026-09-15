@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   analyzeBreakeven, computeBreakeven, combineUnits, withoutDebt, revenueToCover, isDebtRow,
-  splitFixed, suggestKind, kindOf,
+  splitFixed, suggestKind, kindOf, costKey, totalFromName, allocationCheck, companyLevelCosts, companyFixed,
   BREAKEVEN_LABELS, type BreakevenModel,
 } from '@/lib/breakeven'
 import { computeBe } from '@/lib/cfo/factModel'
@@ -151,4 +151,53 @@ describe('P&L, денежные обязательства и распредел
     ] }
     expect(withoutDebt(m).fixed.map(f => f.name)).toEqual(['Кредитный брокер (услуги)'])
   })
+})
+
+describe('распределение общих расходов (Ф3)', () => {
+  const units = [{ title: 'Производство', fixed: production.fixed }, { title: 'M-Glass', fixed: mglass.fixed }]
+
+  it('ключ статьи без скобок и названия юнита', () => {
+    expect(costKey('ЗП оклады M-Glass (офис, продажи, замерщик)')).toBe(costKey('ЗП оклады производства (остаток ФОТ: 1 420к − 390к)'))
+    expect(costKey('Аренда помещения (доля от 750 000)')).toBe('аренда помещения')
+  })
+
+  it('сумма по компании из названия', () => {
+    expect(totalFromName('Аренда помещения (доля от 750 000)')).toBe(750_000)
+    expect(totalFromName('ЗП оклады производства (остаток ФОТ: 1 420к − 390к)')).toBe(1_420_000)
+    expect(totalFromName('Связь, интернет')).toBeNull()
+  })
+
+  it('на данных базы: аренда — 50 000 не распределены, оклады — 20 000, парные статьи без суммы', () => {
+    const rows = allocationCheck(units)
+    const rent = rows.find(r => r.key === 'аренда помещения')!
+    expect(rent).toMatchObject({ allocated: 700_000, total: 750_000, totalSuggested: true, companyLevel: 50_000, status: 'company' })
+    const salary = rows.find(r => r.key === 'зп оклады')!
+    expect(salary).toMatchObject({ allocated: 1_400_000, total: 1_420_000, companyLevel: 20_000, status: 'company' })
+    const bank = rows.find(r => r.key === 'банковская комиссия')!
+    expect(bank).toMatchObject({ allocated: 70_000, total: null, status: 'unknown' })
+    expect(rows.find(r => r.key.startsWith('лизинг'))).toBeUndefined()
+  })
+
+  it('сохранённая сумма важнее названия; перераспределение — «over»', () => {
+    const rows = allocationCheck(units, [{ name: 'Аренда помещения', total: 700_000 }, { name: 'Банковская комиссия', total: 50_000 }])
+    expect(rows.find(r => r.key === 'аренда помещения')).toMatchObject({ total: 700_000, totalSuggested: false, status: 'ok' })
+    expect(rows.find(r => r.key === 'банковская комиссия')).toMatchObject({ status: 'over', companyLevel: 0 })
+  })
+
+  it('расходы уровня компании — только по сохранённым суммам', () => {
+    expect(companyLevelCosts(allocationCheck(units))).toEqual([])
+    const saved = allocationCheck(units, [{ name: 'Аренда помещения', total: 750_000 }])
+    expect(companyLevelCosts(saved)).toEqual([{ name: 'Аренда помещения — на уровне компании', amount: 50_000, kind: 'fixed' }])
+  })
+})
+
+it('companyFixed: остаток общих статей — только по сохранённой сумме', () => {
+  const rows = [
+    { unit: 'production', data: production }, { unit: 'mglass', data: mglass },
+    { unit: 'total', data: { cashBalance: 1, shared: [{ name: 'Аренда помещения', total: 750_000 }] } },
+  ]
+  const c = companyFixed(rows)
+  expect(c.units.map(u => u.title)).toEqual(['Производство', 'M-Glass'])
+  expect(c.extra).toEqual([{ name: 'Аренда помещения — на уровне компании', amount: 50_000, kind: 'fixed' }])
+  expect(companyFixed(rows.slice(0, 2)).extra).toEqual([])
 })

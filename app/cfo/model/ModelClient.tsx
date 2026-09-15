@@ -278,7 +278,7 @@ function FactTab({ pnl, incomes, fixed, factByUnit, daysElapsed, monthLabel }: {
       </div>
 
       <Card title="Постоянные расходы — детально" hint="проверяемо, по юнитам">
-        {units.map((u) => {
+        {Array.from(new Set(fixed.map((f) => f.unit))).map((u) => {
           const rows = fixed.filter((f) => f.unit === u)
           const sum = rows.reduce((s, f) => s + f.amount, 0)
           return (
