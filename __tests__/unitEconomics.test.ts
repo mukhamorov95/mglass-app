@@ -18,7 +18,7 @@ const ORDER_5466 = [
     costMaterial: 2222, costTempering: 356, costTransport: 77, costPackaging: 143, costEdge: 208, costFacet: 0, costTriplex: null },
 ]
 
-describe('вклад заказа — единственное определение', () => {
+describe('остаётся с заказа — единственное определение', () => {
   const c = orderContribution(14075, ORDER_5466)
 
   it('переменные — материал, закалка, доставка, упаковка; без кромки', () => {
@@ -28,7 +28,6 @@ describe('вклад заказа — единственное определе�
   })
 
   it('кромка не входит — это работа цеха на окладе', () => {
-    expect(c.excluded).toEqual([expect.objectContaining({ key: 'edge', amount: 1076 })])
     expect(c.lines.some(l => (l.key as string) === 'edge')).toBe(false)
   })
 

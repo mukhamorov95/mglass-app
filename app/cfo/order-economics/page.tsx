@@ -2,10 +2,10 @@ import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { orderContribution, sumContributions, contributionColor, rub, pct, type OrderContribution } from '@/lib/unitEconomics'
 
-// Экономика B2B-заказов за месяц — только /cfo. Себестоимость и вклад каждого
-// заказа — из lib/unitEconomics, тем же расчётом, что на карточке заказа и в списке
-// просчётов. Сумма вкладов сравнивается с постоянными расходами производства из
-// финмодели (finplan_models) — единственного источника постоянных.
+// Экономика B2B-заказов за месяц — только /cfo. Себестоимость и «остаётся с заказа»
+// (маржинальный доход) — из lib/unitEconomics, тем же расчётом, что на карточке заказа
+// и в списке просчётов. Сумма остатков сравнивается с постоянными расходами производства
+// из финмодели (finplan_models) — единственного источника постоянных.
 
 export const dynamic = 'force-dynamic'
 
@@ -72,7 +72,7 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
           <div>
             <h1 className="text-sm font-semibold text-[#111110]">Экономика заказов — B2B-цех</h1>
             <p className="text-[10px] text-[#9a9a95] mt-0.5">
-              Выручка минус переменные расходы и НДС к уплате — вклад в покрытие постоянных · {monthLabel}
+              Выручка минус переменные расходы и НДС — остаётся на оклады, аренду и прибыль · {monthLabel}
             </p>
           </div>
           <div className="flex gap-2 items-center">
@@ -93,11 +93,11 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
           <Kpi label={`Выручка · ${p.count} зак.`} value={`${fmtM(p.revenue)} ₽`} sub="с НДС" />
           <Kpi label="Переменные" value={`− ${fmtM(p.variable)} ₽`} sub="материал, закалка, доставка, упаковка" />
           <Kpi label="НДС к уплате" value={`${p.vatToPay >= 0 ? '− ' : '+ '}${fmtM(Math.abs(p.vatToPay))} ₽`} sub="исходящий − входящий" />
-          <Kpi label="Вклад" value={`${fmtM(p.contribution)} ₽`} cls={COLOR[contributionColor(p.contributionPct)]}
+          <Kpi label="Остаётся с заказов" value={`${fmtM(p.contribution)} ₽`} cls={COLOR[contributionColor(p.contributionPct)]}
                sub={`${pct(p.contributionPct)}% от выручки без НДС`} bold />
         </div>
 
-        {/* Покрытие постоянных — ради этой цифры и считается вклад */}
+        {/* Покрытие постоянных — ради этой цифры и считается остаток с заказов */}
         {fixed > 0 && (
           <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
             <div className="flex items-baseline justify-between flex-wrap gap-2">
@@ -109,7 +109,7 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
             </div>
             <div className="mt-2 flex items-baseline justify-between flex-wrap gap-2 text-xs">
               <span className="text-[#111110]">
-                Вклад покрывает <span className="font-mono font-bold">{coverage}%</span>
+                Остаток с заказов покрывает <span className="font-mono font-bold">{coverage}%</span>
                 {gap > 0
                   ? <> · не хватает <span className="font-mono font-bold text-amber-700">{fmt(gap)} ₽</span></>
                   : <> · сверх постоянных <span className="font-mono font-bold text-emerald-700">{fmt(-gap)} ₽</span></>}
@@ -121,13 +121,13 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
 
         <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
           <div className="px-4 py-2.5 border-b border-[#e4e4e0]">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказы — от меньшего вклада</p>
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказы — от меньшего остатка</p>
           </div>
           <div className="overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead>
               <tr className="border-b border-[#f5f5f3] text-[10px] text-[#9a9a95]">
-                {['#', 'Клиент', 'Выручка', 'Переменные', 'НДС к уплате', 'Вклад', 'Вклад %'].map(h => (
+                {['#', 'Клиент', 'Выручка', 'Переменные', 'НДС к уплате', 'Остаётся', 'Остаётся %'].map(h => (
                   <th key={h} className={`px-3 py-2 font-medium ${h === '#' || h === 'Клиент' ? 'text-left' : 'text-right'}`}>{h}</th>
                 ))}
               </tr>
@@ -147,12 +147,12 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
             </tbody>
           </table>
           </div>
-          {rows.length > 80 && <p className="px-4 py-2 text-[10px] text-[#9a9a95]">Показаны 80 из {rows.length} заказов — с наименьшим вкладом.</p>}
+          {rows.length > 80 && <p className="px-4 py-2 text-[10px] text-[#9a9a95]">Показаны 80 из {rows.length} заказов — с наименьшим остатком.</p>}
         </div>
 
         <p className="text-[10px] text-[#9a9a95] leading-relaxed">
-          Вклад = выручка − переменные − НДС к уплате. Переменные: материал по раскрою, закалка, доставка на закалку, упаковка, подрядные услуги.
-          Оклады цеха, аренда, лизинг и кредит — постоянные расходы, в себестоимость заказа не входят и покрываются суммой вкладов.
+          Остаётся с заказа = выручка − переменные − НДС к уплате. Переменные: материал по раскрою, закалка, доставка на закалку, упаковка, подрядные услуги.
+          Оклады цеха, аренда, лизинг и кредит — постоянные расходы, в себестоимость заказа не входят и оплачиваются из суммы остатков.
         </p>
         </>
         )}

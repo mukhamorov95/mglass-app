@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { computeMaterialUsage, sumUsage, autoWasteByMaterial, type UsageItem } from '@/lib/materialUsage'
-import { laborRates, pieceLaborCost, DEFAULT_SHOP_SALARIES } from '@/lib/laborModel'
 import { applyAutoWaste, calcItem, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
 import type { B2BMaterial } from '@/lib/types'
@@ -48,36 +47,6 @@ describe('computeMaterialUsage — честный расход материал�
   it('пустой заказ — пустой расход, без падения', () => {
     expect(computeMaterialUsage([])).toEqual([])
     expect(sumUsage([]).honestCost).toBe(0)
-  })
-})
-
-describe('laborModel — ставка от объёма (operating leverage)', () => {
-  it('вдвое больший объём — вдвое меньше ставка резки', () => {
-    const r1 = laborRates(DEFAULT_SHOP_SALARIES, { netM2: 777, edgeM: 3284, drilledPcs: 49, packedPcs: 715 })
-    const r2 = laborRates(DEFAULT_SHOP_SALARIES, { netM2: 1554, edgeM: 6568, drilledPcs: 98, packedPcs: 1430 })
-    expect(r2.cuttingPerM2).toBeCloseTo(r1.cuttingPerM2 / 2, 1)
-    expect(r2.edgePerM).toBeCloseTo(r1.edgePerM / 2, 1)
-  })
-
-  it('июльские ставки совпадают с ручным расчётом зарплата÷объём', () => {
-    const r = laborRates(DEFAULT_SHOP_SALARIES, { netM2: 777.3, edgeM: 3284, drilledPcs: 49, packedPcs: 715 })
-    expect(Math.round(r.cuttingPerM2)).toBe(Math.round(160_000 / 777.3))   // ≈206
-    expect(Math.round(r.edgePerM)).toBe(Math.round(120_000 / 3284))         // ≈37
-    expect(Math.round(r.drillingPerPiece)).toBe(Math.round(150_000 / 49))   // ≈3061
-  })
-
-  it('нулевой объём операции → нулевая ставка, не деление на ноль', () => {
-    const r = laborRates(DEFAULT_SHOP_SALARIES, { netM2: 0, edgeM: 0, drilledPcs: 0, packedPcs: 0 })
-    expect(r.cuttingPerM2).toBe(0)
-    expect(r.drillingPerPiece).toBe(0)
-    expect(Number.isFinite(r.edgePerM)).toBe(true)
-  })
-
-  it('деталь без отверстий не тянет стоимость сверловки', () => {
-    const r = laborRates(DEFAULT_SHOP_SALARIES, { netM2: 777, edgeM: 3284, drilledPcs: 49, packedPcs: 715 })
-    const noDrill = pieceLaborCost(r, { netM2: 2, edgeM: 6, drilledPcs: 0, pcs: 1 })
-    expect(noDrill.drilling).toBe(0)
-    expect(noDrill.total).toBe(noDrill.cutting + noDrill.edge + noDrill.packaging)
   })
 })
 

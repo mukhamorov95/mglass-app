@@ -808,7 +808,7 @@ export default function B2BQuotesPage() {
     return list
   }, [quotes, tab, search])
 
-  // Вклад по просчётам — тем же расчётом, что на экране экономики заказа
+  // «Остаётся с заказа» по просчётам — тем же расчётом, что на экране экономики заказа
   // (lib/unitEconomics): выручка − переменные − НДС к уплате. Одна цифра на всю систему.
   const isOwner = userRole === 'admin' || userRole === 'ceo'
   const contributionByQuote = useMemo(() => {
@@ -1047,16 +1047,16 @@ export default function B2BQuotesPage() {
 
                   <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:flex-shrink-0">
 
-                    {/* Вклад заказа — до запуска в работу. Себестоимость внутренняя: только владельцу. */}
+                    {/* Сколько остаётся с заказа — до запуска в работу. Себестоимость внутренняя: только владельцу. */}
                     {isOwner && contributionByQuote.has(quote.id) && (() => {
                       const { amount, pct: pctValue } = contributionByQuote.get(quote.id)!
                       const tone = contributionColor(pctValue)
                       const cls = tone === 'red' ? 'bg-red-50 text-red-600' : tone === 'amber' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
                       return (
                         <Link href={`/cfo/order-economics/${quote.id}`}
-                          title={`Вклад ${rub(amount)} ₽ — выручка минус переменные и НДС к уплате. Клик — как посчитано.`}
+                          title={`Остаётся с заказа ${rub(amount)} ₽ — выручка минус материал, закалка, доставка, упаковка и НДС. Клик — как посчитано.`}
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cls} hover:ring-1 hover:ring-current`}>
-                          вклад {pct(pctValue)}%
+                          остаётся {pct(pctValue)}%
                         </Link>
                       )
                     })()}
