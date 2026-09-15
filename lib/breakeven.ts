@@ -202,3 +202,93 @@ export function combineUnits(units: BreakevenModel[]): BreakevenModel {
 export function withoutDebt(m: BreakevenModel): BreakevenModel {
   return { ...m, fixed: (m.fixed ?? []).filter(f => kindOf(f).kind !== 'obligation') }
 }
+
+// ── Распределение общих расходов (ТЗ 1.5, этап Ф3) ─────────────────────────────
+// Общий расход компании = на M-Glass + на Производство + на уровне компании.
+// Сумма по компании хранится в строке total (shared) — только после сохранения
+// владельцем. До этого она предлагается из названия статьи («доля от 750 000»).
+
+export type SharedCost = { name: string; total: number }
+
+export type AllocationRow = {
+  key: string
+  name: string
+  byUnit: Record<string, number>
+  allocated: number
+  total: number | null
+  totalSuggested: boolean
+  companyLevel: number          // total − allocated; при отсутствии суммы — 0
+  status: 'ok' | 'company' | 'over' | 'unknown'
+}
+
+// \b в JS не видит кириллицу — границы слова через буквенные классы
+const UNIT_WORDS = /(?<![\p{L}-])(m-?glass|мгласс|производства|производство|цеха|цех)(?![\p{L}])/giu
+
+// Ключ статьи без скобок и слов юнита: «ЗП оклады M-Glass (офис…)» и «ЗП оклады производства (…)» — одна статья.
+export function costKey(name: string): string {
+  return name.toLowerCase().replace(/\([^)]*\)/g, ' ').replace(UNIT_WORDS, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// Сумма по компании, если она записана в названии: «доля от 750 000», «ФОТ: 1 420к».
+export function totalFromName(name: string): number | null {
+  const share = name.match(/доля от\s*([\d\s]+\d)/i)
+  if (share) return Number(share[1].replace(/\s/g, '')) || null
+  const fot = name.match(/фот:?\s*([\d\s]*\d)\s*к/i)
+  if (fot) return (Number(fot[1].replace(/\s/g, '')) || 0) * 1000 || null
+  return null
+}
+
+export function allocationCheck(units: { title: string; fixed: FixedRow[] }[], shared: SharedCost[] = []): AllocationRow[] {
+  const rows = new Map<string, AllocationRow>()
+  for (const u of units) {
+    for (const f of u.fixed ?? []) {
+      const key = costKey(f.name)
+      if (!key) continue
+      const r = rows.get(key) ?? { key, name: f.name.replace(/\s*\([^)]*\)/g, '').trim(), byUnit: {}, allocated: 0, total: null, totalSuggested: false, companyLevel: 0, status: 'unknown' as const }
+      r.byUnit[u.title] = (r.byUnit[u.title] ?? 0) + (f.amount || 0)
+      r.allocated += f.amount || 0
+      const fromName = totalFromName(f.name)
+      if (fromName != null && r.total == null) { r.total = fromName; r.totalSuggested = true }
+      rows.set(key, r)
+    }
+  }
+  const savedByKey = new Map(shared.map(s => [costKey(s.name), s.total]))
+  const out: AllocationRow[] = []
+  for (const r of rows.values()) {
+    const saved = savedByKey.get(r.key)
+    if (saved != null) { r.total = saved; r.totalSuggested = false }
+    // Статья одного юнита без суммы по компании — не общая, в сверку не идёт
+    if (Object.keys(r.byUnit).length < 2 && r.total == null) continue
+    if (r.total == null) r.status = 'unknown'
+    else {
+      const diff = r.total - r.allocated
+      r.companyLevel = Math.max(0, diff)
+      r.status = diff < -1 ? 'over' : diff > 1 ? 'company' : 'ok'
+    }
+    out.push(r)
+  }
+  const order = { over: 0, company: 1, unknown: 2, ok: 3 }
+  return out.sort((a, b) => order[a.status] - order[b.status] || b.allocated - a.allocated)
+}
+
+// Расходы уровня компании — только по сохранённым суммам: предложение из названия цифры не двигает.
+export function companyLevelCosts(rows: AllocationRow[]): FixedRow[] {
+  return rows
+    .filter(r => !r.totalSuggested && r.companyLevel > 0)
+    .map(r => ({ name: `${r.name} — на уровне компании`, amount: r.companyLevel, kind: 'fixed' as const }))
+}
+
+// Постоянные компании из строк finplan_models: юниты + нераспределённый остаток общих статей.
+// Одна функция для всех, кто складывает постоянные «по компании» (/cfo/breakeven, /cfo/model,
+// /ceo, ДДС, утренний брифинг) — иначе сохранённый остаток был бы виден на одном экране.
+export function companyFixed(rows: { unit: string; data: unknown }[]): { units: { title: string; unit: string; fixed: FixedRow[] }[]; extra: FixedRow[] } {
+  const TITLES: Record<string, string> = { production: 'Производство', mglass: 'M-Glass' }
+  const units: { title: string; unit: string; fixed: FixedRow[] }[] = []
+  let shared: SharedCost[] = []
+  for (const r of rows ?? []) {
+    const d = (r.data ?? {}) as { fixed?: FixedRow[]; shared?: SharedCost[] }
+    if (r.unit === 'total') { if (Array.isArray(d.shared)) shared = d.shared; continue }
+    if (TITLES[r.unit]) units.push({ title: TITLES[r.unit], unit: r.unit, fixed: Array.isArray(d.fixed) ? d.fixed : [] })
+  }
+  return { units, extra: companyLevelCosts(allocationCheck(units, shared)) }
+}

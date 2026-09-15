@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { liveOrders, orderAmount } from '@/lib/liveOrders'
+import { companyFixed } from '@/lib/breakeven'
 
 // ДДС / платёжный календарь: прогноз остатка денег по неделям.
 // Приходы: неоплаченные счета B2B (дебиторка; ожидание = дата счёта + 14 дней,
@@ -85,6 +86,7 @@ export default function CashflowPage() {
         fixed += fx.reduce((s, f) => s + (Number(f.amount) || 0), 0)
       }
     }
+    fixed += companyFixed((fp ?? []) as { unit: string; data: unknown }[]).extra.reduce((s, f) => s + f.amount, 0)
     setFixedMonthly(fixed)
     // дебиторка → ожидаемые приходы
     const today = new Date(); today.setHours(0, 0, 0, 0)

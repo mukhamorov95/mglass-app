@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import {
-  analyzeBreakeven, combineUnits, withoutDebt, kindOf,
+  analyzeBreakeven, combineUnits, withoutDebt, kindOf, allocationCheck, companyLevelCosts,
   BREAKEVEN_LABELS, BREAKEVEN_HINTS, DISTRIBUTION_NOTE, FIXED_KIND_LABELS,
-  type BreakevenModel, type FixedRow, type FixedKind,
+  type BreakevenModel, type FixedRow, type FixedKind, type SharedCost,
 } from '@/lib/breakeven'
 
 // Финансовое планирование (модель Хаббарда) — точки безубыточности.
@@ -119,6 +119,11 @@ export default function BreakevenPage() {
   const [ovCfg, setOvCfg] = useState({ bonusPct: 20, debtBalance: 0 })
   const [ovSaving, setOvSaving] = useState(false)
   const [ovSaved, setOvSaved] = useState(false)
+  // Суммы общих статей по компании (строка total, поле shared) и черновик ввода
+  const [shared, setShared] = useState<SharedCost[]>([])
+  const [sharedDraft, setSharedDraft] = useState<Record<string, string>>({})
+  const [shSaving, setShSaving] = useState(false)
+  const [shSaved, setShSaved] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -136,6 +141,7 @@ export default function BreakevenPage() {
             if (row.data?.overflowBonusPct != null || row.data?.debtBalance != null) {
               setOvCfg({ bonusPct: Number(row.data.overflowBonusPct) || 0, debtBalance: Number(row.data.debtBalance) || 0 })
             }
+            if (Array.isArray(row.data?.shared)) setShared(row.data.shared as SharedCost[])
             continue
           }
           const u = row.unit as EditUnit
@@ -150,8 +156,20 @@ export default function BreakevenPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
-  // «Компания» = сумма юнитов; «Компания 1» — она же без кредитов и лизинга
-  const totalModel = useMemo(() => combineUnits([models.production, models.mglass]) as Model, [models])
+  // Сверка общих расходов: сколько распределено по юнитам против суммы по компании
+  const allocRows = useMemo(() => allocationCheck([
+    { title: 'Производство', fixed: models.production.fixed },
+    { title: 'M-Glass', fixed: models.mglass.fixed },
+  ], shared), [models, shared])
+  const companyExtra = useMemo(() => companyLevelCosts(allocRows), [allocRows])
+  const allocIssues = allocRows.filter(r => r.status !== 'ok').length
+
+  // «Компания» = сумма юнитов + нераспределённые остатки общих статей (только сохранённые суммы);
+  // «Компания 1» — она же без кредитов и лизинга
+  const totalModel = useMemo(() => {
+    const t = combineUnits([models.production, models.mglass]) as Model
+    return { ...t, fixed: [...t.fixed, ...companyExtra] }
+  }, [models, companyExtra])
   const total1Model = useMemo(() => withoutDebt(totalModel) as Model, [totalModel])
 
   const ro = unit === 'total' || unit === 'total1' // read-only: сводки, правки — в юнитах
@@ -184,6 +202,25 @@ export default function BreakevenPage() {
     } finally { setOvSaving(false) }
   }
 
+  async function saveShared() {
+    setShSaving(true)
+    try {
+      const next: SharedCost[] = allocRows
+        .map(r => {
+          const raw = sharedDraft[r.key] ?? (r.totalSuggested || r.total == null ? '' : String(r.total))
+          return { name: r.name, total: Number(raw) }
+        })
+        .filter(x => Number.isFinite(x.total) && x.total > 0)
+      const { data: cur } = await sb.from('finplan_models').select('data').eq('unit', 'total').maybeSingle()
+      await sb.from('finplan_models').upsert({
+        unit: 'total', data: { ...(cur?.data ?? {}), shared: next },
+        updated_by: meName || null, updated_at: new Date().toISOString(),
+      })
+      setShared(next); setSharedDraft({})
+      setShSaved(true); setTimeout(() => setShSaved(false), 2000)
+    } finally { setShSaving(false) }
+  }
+
   // Плановые ежемесячные платежи по обязательствам юнитов
   const debtMonthly = [...models.production.fixed, ...models.mglass.fixed]
     .filter(f => kindOf(f).kind === 'obligation').reduce((s, f) => s + (f.amount || 0), 0)
@@ -202,6 +239,7 @@ export default function BreakevenPage() {
   const lines: Line[] = ro
     ? ([['Производство', models.production], ['M-Glass', models.mglass]] as [string, Model][])
         .flatMap(([title, um]) => (unit === 'total1' ? withoutDebt(um) : um).fixed.map(f => ({ f, fi: -1, unitTitle: title })))
+        .concat(companyExtra.map(f => ({ f, fi: -1, unitTitle: 'Компания' })))
     : m.fixed.map((f, fi) => ({ f, fi }))
   const opexLines = lines.filter(l => kindOf(l.f).kind !== 'obligation')
   const debtLines = lines.filter(l => kindOf(l.f).kind === 'obligation')
@@ -232,6 +270,11 @@ export default function BreakevenPage() {
           ))}
           {ro && <span className="text-[11px] text-[#9a9a95] ml-1">Σ автоматическая сумма вкладок M-Glass и Производство{unit === 'total1' ? ' БЕЗ кредитов и лизинга' : ''} — правки вносите там</span>}
         </div>
+        {unit === 'total' && allocIssues > 0 && (
+          <p className="mt-2 text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 inline-block">
+            Общие расходы не сходятся с распределением по юнитам: {allocIssues} стат. — см. «Распределение общих расходов» ниже.
+          </p>
+        )}
       </div>
 
       <div className="px-5 pt-4 grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4 max-w-[1280px]">
@@ -341,6 +384,60 @@ export default function BreakevenPage() {
                 <span className="font-mono">{fmt(calc.split.pnl)}</span></div>
             </div>
           </div>
+
+          {/* Распределение общих расходов (ТЗ 1.5) */}
+          {unit === 'total' && allocRows.length > 0 && (
+            <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
+              <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Распределение общих расходов, ₽/мес</p>
+                <button onClick={saveShared} disabled={shSaving}
+                  className="text-[11px] font-semibold border border-[#e4e4e0] rounded-lg px-2 py-1 hover:bg-[#f5f5f3] disabled:opacity-40">
+                  {shSaving ? '…' : shSaved ? '✓ Сохранено' : '💾 Сохранить суммы по компании'}
+                </button>
+              </div>
+              <p className="text-[11px] text-[#9a9a95] mb-2">
+                Общий расход = на M-Glass + на Производство + на уровне компании. Сумма серым — взята из названия статьи и не сохранена.
+                Нераспределённый остаток попадает в «Компанию» только после сохранения.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[12px] whitespace-nowrap">
+                  <thead>
+                    <tr className="text-[10px] text-[#9a9a95] border-b border-[#f0f0ec]">
+                      <th className="text-left font-medium py-1 pr-2">Статья</th>
+                      <th className="text-right font-medium py-1 px-2">Производство</th>
+                      <th className="text-right font-medium py-1 px-2">M-Glass</th>
+                      <th className="text-right font-medium py-1 px-2">Всего по компании</th>
+                      <th className="text-right font-medium py-1 px-2">На уровне компании</th>
+                      <th className="text-left font-medium py-1 pl-2">Сверка</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allocRows.map(r => (
+                      <tr key={r.key} className="border-b border-[#f5f5f3] last:border-0">
+                        <td className="py-1 pr-2 text-[#111110] max-w-[220px] truncate">{r.name}</td>
+                        <td className="py-1 px-2 text-right font-mono text-[#6b6b66]">{r.byUnit['Производство'] != null ? fmt(r.byUnit['Производство']) : '—'}</td>
+                        <td className="py-1 px-2 text-right font-mono text-[#6b6b66]">{r.byUnit['M-Glass'] != null ? fmt(r.byUnit['M-Glass']) : '—'}</td>
+                        <td className="py-1 px-2 text-right">
+                          <input type="number" inputMode="numeric"
+                            value={sharedDraft[r.key] ?? (r.totalSuggested || r.total == null ? '' : String(r.total))}
+                            placeholder={r.totalSuggested && r.total != null ? String(r.total) : '—'}
+                            onChange={e => setSharedDraft(d => ({ ...d, [r.key]: e.target.value }))}
+                            className={inputBlue + ' w-28 text-right placeholder:text-[#b8b8b2]'} />
+                        </td>
+                        <td className="py-1 px-2 text-right font-mono">{r.total != null ? fmt(Math.max(0, r.total - r.allocated)) : '—'}</td>
+                        <td className={`py-1 pl-2 ${r.status === 'over' ? 'text-red-600' : r.status === 'ok' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {r.status === 'ok' ? 'сходится'
+                            : r.status === 'over' ? `распределено на ${fmt(r.allocated - (r.total ?? 0))} больше`
+                            : r.status === 'company' ? `не распределено ${fmt((r.total ?? 0) - r.allocated)}${r.totalSuggested ? ' (по названию)' : ''}`
+                            : 'в двух юнитах — общая статья или две разные?'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* 2. Денежные обязательства */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">

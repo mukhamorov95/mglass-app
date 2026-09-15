@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
 import { liveOrders, orderAmount } from '@/lib/liveOrders'
+import { companyFixed } from '@/lib/breakeven'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -82,6 +83,7 @@ export async function GET(req: Request) {
           .reduce((s, f) => s + (Number(f.amount) || 0), 0)
       }
     }
+    fixedMonthly += companyFixed((fp ?? []) as { unit: string; data: unknown }[]).extra.reduce((s, f) => s + f.amount, 0)
     // приходы: счета, ожидаемые в окне (дата счёта + 14 дн; просроченные — считаем в окне)
     let inflow7 = 0
     for (const o of orders) {

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase-service'
 import ModelClient from './ModelClient'
 import { type IncomeLine, type FixedLine } from '@/lib/cfo/factModel'
-import { kindOf, type FixedRow } from '@/lib/breakeven'
+import { kindOf, companyFixed, type FixedRow } from '@/lib/breakeven'
 import { collectSourceDiagnostics, factForUnit, type SourceDiag } from '@/lib/cfo/sourceDiagnostics'
 
 // Источник правды — «Точка безубыточности» (finplan_models): юниты 'mglass' и
@@ -32,8 +32,10 @@ export default async function CfoModelPage() {
 
   const byUnit: Record<string, BeData> = {}
   let updatedAt: string | null = null
+  let companyExtra: FixedRow[] = []
   try {
     const { data } = await supabase.from('finplan_models').select('unit, data, updated_at')
+    companyExtra = companyFixed((data ?? []) as { unit: string; data: unknown }[]).extra
     for (const row of (data ?? [])) {
       if (row.unit === 'mglass' || row.unit === 'production') {
         byUnit[row.unit] = (row.data ?? {}) as BeData
@@ -67,6 +69,9 @@ export default async function CfoModelPage() {
     fundsRubByUnit[u.label] = Math.round(unitMargin * fundsPctOf(d.funds))
     ownerByUnit[u.label] = { pctRub: Math.round(unitMargin * (d.ownerPct || 0) / 100), fixedRub: d.ownerRub || 0 }
   }
+
+  // Нераспределённый остаток общих статей — отдельным юнитом «Компания»
+  companyExtra.forEach((f, i) => fixed.push({ key: `company_f${i}`, label: f.name, unit: 'Компания', amount: f.amount, isDebt: false }))
 
   const hasData = incomes.length > 0
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { liveOrders, orderAmount } from '@/lib/liveOrders'
-import { revenueToCover, splitFixed, type FixedRow } from '@/lib/breakeven'
+import { revenueToCover, splitFixed, companyFixed, type FixedRow } from '@/lib/breakeven'
 
 // «Обзор за 60 секунд»: деньги и алерты владельца поверх менеджерской сводки.
 // Дебиторка и касса — та же логика, что /cfo/receivables и /cfo/cashflow;
@@ -95,6 +95,10 @@ export default function MoneyPulse() {
             margin += marginOf(row.data)
           }
         }
+        // нераспределённый остаток общих статей (если владелец сохранил суммы по компании)
+        const extra = companyFixed((fp ?? []) as { unit: string; data: unknown }[]).extra.reduce((s, f) => s + f.amount, 0)
+        fixedMonthly += extra
+        fixedPnl += extra
         let outflow7 = 0
         const firstNext = new Date(today.getFullYear(), today.getMonth() + (today.getDate() === 1 ? 0 : 1), 1)
         if (firstNext < in7d) outflow7 += fixedMonthly
