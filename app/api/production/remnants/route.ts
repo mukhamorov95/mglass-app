@@ -10,7 +10,7 @@ export const runtime = 'nodejs'
 // сервисным клиентом ПОСЛЕ проверки роли (lib/inventory/auth: смотрят склад — все, кто видит
 // склад; пишут — владелец, снабжение, производство).
 
-type MaterialRow = { id: number; name: string; thickness: number; sheet_width: number | null; sheet_height: number | null; category: string | null; pattern_direction: string | null; passthrough: boolean | null }
+type MaterialRow = { id: number; name: string; thickness: number; sheet_width: number | null; sheet_height: number | null; category: string | null; pattern_direction: string | null }
 
 export async function GET(req: NextRequest) {
   const actor = await requireInventoryRead()
@@ -23,19 +23,20 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false }).limit(1000)
   if (!all) q = q.eq('status', 'in_stock')
 
-  const [{ data: remnants, error }, { data: mats }, { data: cfg }, { data: cuts }] = await Promise.all([
+  const [{ data: remnants, error }, { data: mats, error: matErr }, { data: cfg }, { data: cuts }] = await Promise.all([
     q,
-    svc.from('b2b_materials').select('id, name, thickness, sheet_width, sheet_height, category, pattern_direction, passthrough').eq('active', true).order('name'),
+    svc.from('b2b_materials').select('id, name, thickness, sheet_width, sheet_height, category, pattern_direction').eq('active', true).order('name'),
     svc.from('cutting_settings').select('min_remnant_short, min_remnant_long').eq('id', 1).maybeSingle(),
     svc.from('sheet_cuts').select('id, material_name, thickness, source, sheet_w, sheet_h, created_by_name, created_at').order('created_at', { ascending: false }).limit(30),
   ])
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Ошибку справочника не глотаем: пустой список стёкол выглядел бы как «нечего записывать»
+  if (error || matErr) return NextResponse.json({ error: (error ?? matErr)!.message }, { status: 500 })
 
   const locations = [...new Set(((remnants ?? []) as { location: string | null }[]).map(r => r.location).filter(Boolean))]
   return NextResponse.json({
     remnants: remnants ?? [],
     cuts: cuts ?? [],
-    materials: ((mats ?? []) as MaterialRow[]).filter(m => isSheetMaterial(m.category) && !m.passthrough),
+    materials: ((mats ?? []) as MaterialRow[]).filter(m => isSheetMaterial(m.category)),
     thresholds: cfg ?? { min_remnant_short: 400, min_remnant_long: 800 },
     locations,
     canWrite: ['admin', 'ceo', 'buyer', 'production'].includes(actor.role),
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
   const svc = createServiceClient()
 
   const { data: mat } = await svc.from('b2b_materials')
-    .select('id, name, thickness, sheet_width, sheet_height, category, passthrough').eq('id', Number(body.materialId)).maybeSingle()
+    .select('id, name, thickness, sheet_width, sheet_height, category').eq('id', Number(body.materialId)).maybeSingle()
   if (!mat) return NextResponse.json({ error: 'Выберите материал' }, { status: 400 })
   const m = mat as MaterialRow
 
