@@ -8,7 +8,7 @@ import AssignInstallationButton from '@/components/AssignInstallationButton'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
-import { orderContribution, contributionColor } from '@/lib/unitEconomics'
+import { orderContribution, contributionColor, rub, pct } from '@/lib/unitEconomics'
 import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
 import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
@@ -1049,14 +1049,14 @@ export default function B2BQuotesPage() {
 
                     {/* Вклад заказа — до запуска в работу. Себестоимость внутренняя: только владельцу. */}
                     {isOwner && contributionByQuote.has(quote.id) && (() => {
-                      const { amount, pct } = contributionByQuote.get(quote.id)!
-                      const tone = contributionColor(pct)
+                      const { amount, pct: pctValue } = contributionByQuote.get(quote.id)!
+                      const tone = contributionColor(pctValue)
                       const cls = tone === 'red' ? 'bg-red-50 text-red-600' : tone === 'amber' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
                       return (
                         <Link href={`/cfo/order-economics/${quote.id}`}
-                          title={`Вклад ${amount.toLocaleString('ru-RU')} ₽ — выручка минус переменные и НДС к уплате. Клик — как посчитано.`}
+                          title={`Вклад ${rub(amount)} ₽ — выручка минус переменные и НДС к уплате. Клик — как посчитано.`}
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cls} hover:ring-1 hover:ring-current`}>
-                          вклад {pct.toLocaleString('ru-RU')}%
+                          вклад {pct(pctValue)}%
                         </Link>
                       )
                     })()}

@@ -85,3 +85,14 @@ describe('сводка и цвет', () => {
     expect(contributionColor(35)).toBe('green')
   })
 })
+
+describe('формат чисел', () => {
+  it('минус типографский, дробные с запятой', async () => {
+    const { rub, pct, m2 } = await import('@/lib/unitEconomics')
+    expect(rub(-467)).toBe('−467')
+    expect(rub(3687)).toBe('3 687')
+    expect(pct(-16.2)).toBe('−16,2')
+    expect(pct(32)).toBe('32')
+    expect(m2(4.2)).toBe('4,2')
+  })
+})
