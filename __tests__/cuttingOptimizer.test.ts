@@ -73,9 +73,33 @@ describe('cuttingOptimizer — направление рисунка (факту
     expect(r[0].unplacedCount).toBe(0)
   })
 
-  it('фактурное (вдоль длины): поворот запрещён — деталь НЕ влезает без вращения', () => {
+  // Правило владельца 15.09: МОРУ и Эстриадо режутся только вдоль длины листа, полоса на
+  // изделии — по высоте детали. Раньше тест ждал «не влезает»: раскрой клал высоту детали
+  // поперёк длины листа, и на 7 из 12 заказов с МОРУ детали терялись.
+  it('фактурное (вдоль длины): высота детали идёт вдоль длины листа — деталь раскроена', () => {
     const r = runCuttingOptimizer(oneGroup({ ...sheet, pieces: portrait(), patternDirection: 'along_length' }), DEFAULT_CUTTING_SETTINGS)
+    expect(r[0].unplacedCount).toBe(0)
+    const placed = r[0].sheets[0].pieces[0]
+    expect(placed).toMatchObject({ w: 2000, h: 900, rotated: true })
+  })
+
+  it('фактурное (вдоль длины): широкую деталь развернуть нельзя — полоса ушла бы поперёк', () => {
+    // 2000×900: высота 900 должна лечь вдоль длины 2100, тогда ширина 2000 — поперёк 1100. Не влезает.
+    const r = runCuttingOptimizer(oneGroup({ ...sheet, pieces: [piece('b', 2000, 900)], patternDirection: 'along_length' }), DEFAULT_CUTTING_SETTINGS)
     expect(r[0].unplacedCount).toBe(1)
+    expect(r[0].unplacedPieces[0]).toMatchObject({ width: 2000, height: 900 })
+  })
+
+  it('фактурное (вдоль ширины): высота детали — поперёк длины, портрет не влезает', () => {
+    const r = runCuttingOptimizer(oneGroup({ ...sheet, pieces: portrait(), patternDirection: 'along_width' }), DEFAULT_CUTTING_SETTINGS)
+    expect(r[0].unplacedCount).toBe(1)
+  })
+
+  it('лист 3210×2250, МОРУ: дверь 700×2300 раскроена вдоль длины', () => {
+    const r = runCuttingOptimizer(oneGroup({ pieces: [piece('d', 700, 2300), piece('e', 700, 2300)], patternDirection: 'along_length' }), DEFAULT_CUTTING_SETTINGS)
+    expect(r[0].unplacedCount).toBe(0)
+    expect(r[0].sheetsNeeded).toBe(1)
+    expect(r[0].sheets[0].pieces.every(pl => pl.w === 2300 && pl.h === 700)).toBe(true)
   })
 
   it('respect_pattern=false: поворот разрешён даже для фактурного', () => {
