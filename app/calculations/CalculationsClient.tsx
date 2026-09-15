@@ -383,7 +383,7 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h1 className="text-[18px] font-bold text-[#111110]">История расчётов</h1>
+            <h1 className="text-[18px] font-bold text-[#111110]">Расчёты</h1>
             <p className="text-[12px] text-[#9a9a95] mt-0.5">{calcs.length} расчётов</p>
           </div>
           <div className="flex gap-1.5">
