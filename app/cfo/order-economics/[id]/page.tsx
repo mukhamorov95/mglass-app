@@ -229,7 +229,9 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
               </tbody>
             </table>
             <p className="text-[11px] text-[#6b6b66] mt-2 leading-relaxed">
-              Вклад заказа покрывает <span className={`font-mono font-semibold ${coveragePct >= 100 ? 'text-emerald-600' : 'text-amber-600'}`}>{coveragePct}%</span> этой доли.
+              {c.contribution > 0
+                ? <>Вклад заказа покрывает <span className={`font-mono font-semibold ${coveragePct >= 100 ? 'text-emerald-600' : 'text-amber-600'}`}>{coveragePct}%</span> этой доли.</>
+                : <span className="text-red-600">Вклад отрицательный — заказ не покрывает даже свои переменные расходы, на оклады не остаётся ничего.</span>}
             </p>
             <p className="text-[10px] text-[#9a9a95] mt-1 leading-relaxed">
               Ставка = оклад ÷ выпуск за {SHOP_LOAD_WINDOW_DAYS} дней ({fmt(thNet)} м², {fmt(thDrilled)} дет. со сверловкой). Больше загрузка — меньше доля на каждый заказ.
