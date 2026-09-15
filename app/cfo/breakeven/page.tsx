@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import {
-  analyzeBreakeven, combineUnits, withoutDebt, isDebtRow,
-  BREAKEVEN_LABELS, BREAKEVEN_HINTS, DISTRIBUTION_NOTE, type BreakevenModel,
+  analyzeBreakeven, combineUnits, withoutDebt, kindOf,
+  BREAKEVEN_LABELS, BREAKEVEN_HINTS, DISTRIBUTION_NOTE, FIXED_KIND_LABELS,
+  type BreakevenModel, type FixedRow, type FixedKind,
 } from '@/lib/breakeven'
 
 // Финансовое планирование (модель Хаббарда) — точки безубыточности.
@@ -16,7 +17,6 @@ import {
 
 type VarRow  = { name: string; pct: number }
 type Income  = { name: string; plan: number; vars: VarRow[] }
-type FixedRow = { name: string; amount: number }
 type Funds   = { invest: number; training: number; reserve: number; prodBonus: number }
 type Model   = BreakevenModel & { incomes: Income[]; funds: Funds; fixed: FixedRow[] }
 
@@ -184,9 +184,9 @@ export default function BreakevenPage() {
     } finally { setOvSaving(false) }
   }
 
-  // Плановые ежемесячные платежи по обязательствам (строки кредитов/лизинга юнитов)
+  // Плановые ежемесячные платежи по обязательствам юнитов
   const debtMonthly = [...models.production.fixed, ...models.mglass.fixed]
-    .filter(f => isDebtRow(f.name)).reduce((s, f) => s + (f.amount || 0), 0)
+    .filter(f => kindOf(f).kind === 'obligation').reduce((s, f) => s + (f.amount || 0), 0)
 
   // ── Расчёт ──────────────────────────────────────────────────────────────────
   const calc = useMemo(() => {
@@ -196,12 +196,17 @@ export default function BreakevenPage() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
-  // Постоянные на сводках рендерим группами по юнитам; на «Компании 1» — без кредитов/лизинга
-  const groupRows = (rows: FixedRow[]) => unit === 'total1' ? rows.filter(f => !isDebtRow(f.name)) : rows
-  const fixedGroups = ro ? [
-    { title: 'Производство', rows: groupRows(models.production.fixed) },
-    { title: 'M-Glass', rows: groupRows(models.mglass.fixed) },
-  ].map(gr => ({ ...gr, sum: gr.rows.reduce((s, f) => s + (f.amount || 0), 0) })) : null
+  // Строки постоянных с индексом в модели юнита (для правки) или с юнитом-источником (сводки).
+  // На «Компании 1» обязательств нет — withoutDebt уже убрал их из модели.
+  type Line = { f: FixedRow; fi: number; unitTitle?: string }
+  const lines: Line[] = ro
+    ? ([['Производство', models.production], ['M-Glass', models.mglass]] as [string, Model][])
+        .flatMap(([title, um]) => (unit === 'total1' ? withoutDebt(um) : um).fixed.map(f => ({ f, fi: -1, unitTitle: title })))
+    : m.fixed.map((f, fi) => ({ f, fi }))
+  const opexLines = lines.filter(l => kindOf(l.f).kind !== 'obligation')
+  const debtLines = lines.filter(l => kindOf(l.f).kind === 'obligation')
+  const suggestedCount = ro ? 0 : m.fixed.filter(f => !f.kind).length
+  const setKind = (fi: number, kind: FixedKind) => patch(x => { x.fixed[fi].kind = kind; return x })
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
@@ -209,7 +214,7 @@ export default function BreakevenPage() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Финмодель · Точка безубыточности</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">Доходы → переменные (% от дохода) → маржа → фонды от маржи → постоянные. Синие поля — редактируемые.</p>
+            <p className="text-[12px] text-[#9a9a95] mt-0.5">Доходы → переменные → маржа → расходы P&amp;L → денежные обязательства → распределение прибыли. Синие поля — редактируемые.</p>
           </div>
           {!ro && (
             <button onClick={save} disabled={saving}
@@ -293,11 +298,113 @@ export default function BreakevenPage() {
             </div>
           )}
 
-          {/* Фонды от маржи */}
+          {/* 1. Операционные расходы P&L */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
-              Фонды от маржи, %{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · одноимённые фонды юнитов суммируются, % — от общей маржи</span>}
+            <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">
+                Операционные расходы P&amp;L, ₽/мес{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · производство + M-Glass</span>}
+              </p>
+              {suggestedCount > 0 && (
+                <button onClick={() => patch(x => { x.fixed.forEach(f => { if (!f.kind) f.kind = kindOf(f).kind }); return x })}
+                  className="text-[11px] text-amber-700 border border-amber-300 rounded-md px-2 py-0.5 hover:bg-amber-50">
+                  Принять предложенные типы ({suggestedCount}) — затем «Сохранить»
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-[#9a9a95] mb-2">Входят в операционную точку безубыточности. Тип статьи с пунктирной рамкой предложен по названию и не сохранён.</p>
+            {opexLines.map((l, i) => (
+              <div key={`${l.unitTitle ?? ''}${l.fi}-${i}`} className="flex items-center gap-2 mb-1">
+                {l.unitTitle && <span className="w-20 shrink-0 text-[10px] text-[#9a9a95] truncate">{l.unitTitle}</span>}
+                <input value={l.f.name} disabled={ro} onChange={e => patch(x => { x.fixed[l.fi].name = e.target.value; return x })}
+                  className={inputCls + ' flex-1'} />
+                <KindSelect f={l.f} disabled={ro} onChange={k => setKind(l.fi, k)} />
+                <input type="number" value={l.f.amount || ''} disabled={ro} onChange={e => patch(x => { x.fixed[l.fi].amount = Number(e.target.value) || 0; return x })}
+                  className={inputBlue + ' w-28 shrink-0 text-right'} />
+                {!ro && <button onClick={() => patch(x => { x.fixed.splice(l.fi, 1); return x })}
+                  className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
+              </div>
+            ))}
+            {!ro && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0, kind: 'fixed' }); return x })}
+              className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>}
+            <div className="border-t border-[#f0f0ec] pt-2 mt-2 space-y-1 text-[12px]">
+              <div className="flex justify-between"><span className="text-[#6b6b66]">Постоянные без обязательств</span>
+                <span className="font-mono">{fmt(calc.split.opex)}</span></div>
+              {calc.split.interest > 0 && (
+                <div className="flex justify-between"><span className="text-[#6b6b66]">+ проценты по обязательствам{calc.split.unsplit.length > 0 ? ' (вместе с телом — не разделены)' : ''}</span>
+                  <span className="font-mono">{fmt(calc.split.interest)}</span></div>
+              )}
+              {calc.split.amortization > 0 && (
+                <div className="flex justify-between"><span className="text-[#6b6b66]">+ амортизация лизинга (без движения денег)</span>
+                  <span className="font-mono">{fmt(calc.split.amortization)}</span></div>
+              )}
+              <div className="flex justify-between text-[13px] font-bold"><span>Итого расходы P&amp;L</span>
+                <span className="font-mono">{fmt(calc.split.pnl)}</span></div>
+            </div>
+          </div>
+
+          {/* 2. Денежные обязательства */}
+          <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-1">Денежные обязательства, ₽/мес</p>
+            <p className="text-[11px] text-[#9a9a95] mb-2">
+              Платёж по кредиту или лизингу = проценты + тело. Проценты — финансовый расход P&amp;L, тело — возврат долга: в операционную точку не входит, но деньги на него нужны.
             </p>
+            {unit === 'total1' ? (
+              <p className="text-[12px] text-[#9a9a95]">На этой вкладке кредиты и лизинг исключены.</p>
+            ) : debtLines.length === 0 ? (
+              <p className="text-[12px] text-[#9a9a95]">Обязательств нет.</p>
+            ) : debtLines.map((l, i) => {
+              const split = l.f.body != null || l.f.amortization != null
+              const body = Math.min(Math.max(l.f.body || 0, 0), l.f.amount || 0)
+              return (
+                <div key={`${l.unitTitle ?? ''}${l.fi}-${i}`} className="mb-2 pb-2 border-b border-[#f5f5f3] last:border-0">
+                  <div className="flex items-center gap-2">
+                    {l.unitTitle && <span className="w-20 shrink-0 text-[10px] text-[#9a9a95] truncate">{l.unitTitle}</span>}
+                    <input value={l.f.name} disabled={ro} onChange={e => patch(x => { x.fixed[l.fi].name = e.target.value; return x })}
+                      className={inputCls + ' flex-1'} />
+                    <KindSelect f={l.f} disabled={ro} onChange={k => setKind(l.fi, k)} />
+                    <input type="number" value={l.f.amount || ''} disabled={ro} title="Платёж в месяц"
+                      onChange={e => patch(x => { x.fixed[l.fi].amount = Number(e.target.value) || 0; return x })}
+                      className={inputBlue + ' w-28 shrink-0 text-right'} />
+                    {!ro && <button onClick={() => patch(x => { x.fixed.splice(l.fi, 1); return x })}
+                      className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 flex-wrap text-[11px] text-[#6b6b66]">
+                    <label className="flex items-center gap-1">тело
+                      <input type="number" value={l.f.body ?? ''} disabled={ro} placeholder="—"
+                        onChange={e => patch(x => { x.fixed[l.fi].body = e.target.value === '' ? undefined : Number(e.target.value) || 0; return x })}
+                        className={inputBlue + ' w-24 text-right'} /></label>
+                    <label className="flex items-center gap-1">амортизация
+                      <input type="number" value={l.f.amortization ?? ''} disabled={ro} placeholder="—"
+                        onChange={e => patch(x => { x.fixed[l.fi].amortization = e.target.value === '' ? undefined : Number(e.target.value) || 0; return x })}
+                        className={inputBlue + ' w-24 text-right'} /></label>
+                    <span>проценты = платёж − тело: <span className="font-mono text-[#111110]">{fmt((l.f.amount || 0) - body)}</span></span>
+                  </div>
+                  {!split && (
+                    <p className="text-[11px] text-amber-700 mt-1">
+                      Тело и проценты не разделены — вся сумма стоит в расходах P&amp;L, операционная точка завышена на тело долга.
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+            {!ro && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0, kind: 'obligation' }); return x })}
+              className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ обязательство</button>}
+            {unit !== 'total1' && debtLines.length > 0 && (
+              <div className="border-t border-[#f0f0ec] pt-2 mt-2 space-y-1 text-[12px]">
+                <div className="flex justify-between"><span className="text-[#6b6b66]">Платежи всего</span>
+                  <span className="font-mono">{fmt(calc.split.interest + calc.split.body)}</span></div>
+                <div className="flex justify-between font-semibold"><span>из них тело долга</span>
+                  <span className="font-mono">{fmt(calc.split.body)}</span></div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Распределение прибыли и фонды */}
+          <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-1">
+              Распределение прибыли и фонды{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · одноимённые фонды юнитов суммируются, % — от общей маржи</span>}
+            </p>
+            <p className="text-[11px] text-[#9a9a95] mb-2">{DISTRIBUTION_NOTE}</p>
             {FUND_KEYS.map(([k, label]) => (
               <div key={k} className="flex items-center gap-2 mb-1">
                 <span className="flex-1 text-[12px] text-[#111110]">{label}</span>
@@ -313,49 +420,9 @@ export default function BreakevenPage() {
             <div className="border-t border-[#f0f0ec] pt-2 mt-2 space-y-1 text-[12px]">
               <div className="flex justify-between"><span className="text-[#6b6b66]">Итого фонды из маржи</span>
                 <span className="font-mono">{(calc.fundsShare * 100).toFixed(1)}% · {fmt(calc.fundsRub)}</span></div>
-              <div className="flex justify-between font-semibold"><span>Сумма на распределение</span>
-                <span className="font-mono">{fmt(calc.distributable)}</span></div>
             </div>
-          </div>
 
-          {/* Постоянные */}
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
-              Постоянные расходы, ₽/мес{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · производство + M-Glass{unit === 'total1' ? ' · без кредитов и лизинга' : ''}</span>}
-            </p>
-            {fixedGroups ? fixedGroups.map(gr => (
-              <div key={gr.title} className="mb-3">
-                <p className="text-[11px] font-semibold text-[#6b6b66] mb-1">{gr.title}</p>
-                {gr.rows.map((f, fi) => (
-                  <div key={fi} className="flex items-center gap-2 mb-1">
-                    <input value={f.name} disabled className={inputCls + ' flex-1'} />
-                    <input type="number" value={f.amount || ''} disabled className={inputBlue + ' w-32 shrink-0 text-right'} />
-                  </div>
-                ))}
-                <div className="flex justify-between text-[12px] text-[#6b6b66] pt-1">
-                  <span>Итого {gr.title}</span><span className="font-mono">{fmt(gr.sum)}</span>
-                </div>
-              </div>
-            )) : m.fixed.map((f, fi) => (
-              <div key={fi} className="flex items-center gap-2 mb-1">
-                <input value={f.name} onChange={e => patch(x => { x.fixed[fi].name = e.target.value; return x })}
-                  className={inputCls + ' flex-1'} />
-                <input type="number" value={f.amount || ''} onChange={e => patch(x => { x.fixed[fi].amount = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' w-32 shrink-0 text-right'} />
-                <button onClick={() => patch(x => { x.fixed.splice(fi, 1); return x })}
-                  className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>
-              </div>
-            ))}
-            {!ro && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0 }); return x })}
-              className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>}
-            <div className="flex justify-between text-[13px] font-bold border-t border-[#f0f0ec] pt-2 mt-2">
-              <span>Итого постоянных</span><span className="font-mono">{fmt(calc.fixed)}</span>
-            </div>
-          </div>
-
-          {/* Цель собственника */}
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">Доход собственника (для целевой выручки)</p>
+            <p className="text-[11px] font-semibold text-[#6b6b66] mt-3 mb-1">Доход собственника</p>
             {ro ? (
               <p className="text-[12px] text-[#6b6b66]">Σ по юнитам при плановой выручке: <span className="font-mono font-semibold text-[#111110]">{fmt(calc.ownerRub)}</span> /мес — задаётся во вкладках M-Glass и Производство.</p>
             ) : (
@@ -368,7 +435,7 @@ export default function BreakevenPage() {
                     <input type="number" value={m.ownerRub || ''} onChange={e => patch(x => { x.ownerRub = Number(e.target.value) || 0; return x })}
                       className={inputBlue + ' w-full mt-1 text-right'} /></label>
                 </div>
-                <p className="text-[11px] text-[#9a9a95] mt-2">Процент и фикс складываются. {DISTRIBUTION_NOTE}</p>
+                <p className="text-[11px] text-[#9a9a95] mt-2">Процент и фикс складываются.</p>
               </>
             )}
           </div>
@@ -380,14 +447,25 @@ export default function BreakevenPage() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#8a8a85]">Итоги при плановой выручке {fmt(calc.revenue)}</p>
             <div className="flex justify-between text-[13px]"><span className="text-[#c4c4be]">Маржа</span>
               <span className="font-mono">{fmt(calc.margin)} · {(calc.marginPct * 100).toFixed(1)}%</span></div>
+            <div className="flex justify-between text-[13px]"><span className="text-[#c4c4be]">Постоянные без обязательств</span>
+              <span className="font-mono">−{fmt(calc.split.opex)}</span></div>
+            {calc.split.interest + calc.split.body > 0 && (calc.split.unsplit.length > 0 ? (
+              <div className="flex justify-between text-[13px]"><span className="text-[#c4c4be]">Платежи по долгу (не разделены)</span>
+                <span className="font-mono">−{fmt(calc.split.interest + calc.split.body)}</span></div>
+            ) : (
+              <>
+                <div className="flex justify-between text-[13px]"><span className="text-[#c4c4be]">Проценты по долгу</span>
+                  <span className="font-mono">−{fmt(calc.split.interest)}</span></div>
+                <div className="flex justify-between text-[13px]"><span className="text-[#c4c4be]">Тело долга</span>
+                  <span className="font-mono">−{fmt(calc.split.body)}</span></div>
+              </>
+            ))}
             <div className="flex justify-between text-[13px]"><span className="text-[#c4c4be]">Фонды из маржи</span>
               <span className="font-mono">−{fmt(calc.fundsRub)}</span></div>
             {calc.ownerRub > 0 && (
               <div className="flex justify-between text-[13px]"><span className="text-[#c4c4be]">Доход собственника</span>
                 <span className="font-mono">−{fmt(calc.ownerRub)}</span></div>
             )}
-            <div className="flex justify-between text-[13px]"><span className="text-[#c4c4be]">Постоянные</span>
-              <span className="font-mono">−{fmt(calc.fixed)}</span></div>
             <div className={`flex justify-between text-[15px] font-bold border-t border-white/15 pt-2 ${calc.remainder >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               <span>Остаток</span><span className="font-mono">{calc.remainder >= 0 ? '+' : ''}{fmt(calc.remainder)}</span>
             </div>
@@ -413,6 +491,14 @@ export default function BreakevenPage() {
                 </div>
               )}
               <p className="text-[10px] text-[#c4c4be] mt-1.5">{hint}</p>
+              {title === BREAKEVEN_LABELS.tb0 && calc.split.unsplit.length > 0 && (
+                <p className="text-[11px] text-amber-700 mt-1.5">
+                  Завышена: в ней тело долга — не разделены {calc.split.unsplit.join(', ')}.
+                </p>
+              )}
+              {title === BREAKEVEN_LABELS.tb0 && calc.split.unsplit.length === 0 && calc.split.body > 0 && calc.tbCash != null && (
+                <p className="text-[11px] text-[#6b6b66] mt-1.5">С платежами по телу долга: <span className="font-mono">{fmt(calc.tbCash)}</span></p>
+              )}
             </div>
           ))}
           <p className="text-[11px] text-[#9a9a95] px-1 leading-relaxed">{DISTRIBUTION_NOTE}</p>
@@ -466,5 +552,18 @@ export default function BreakevenPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function KindSelect({ f, disabled, onChange }: { f: FixedRow; disabled: boolean; onChange: (k: FixedKind) => void }) {
+  const { kind, suggested } = kindOf(f)
+  return (
+    <select value={kind} disabled={disabled} onChange={e => onChange(e.target.value as FixedKind)}
+      title={suggested ? 'Предложено по названию — не сохранено' : undefined}
+      className={`w-44 shrink-0 text-[11px] rounded-lg px-1.5 py-1 border outline-none disabled:opacity-80 ${suggested ? 'border-dashed border-amber-300 text-amber-800 bg-amber-50/60' : 'border-[#e4e4e0] text-[#4b4b47] bg-white'}`}>
+      {(Object.keys(FIXED_KIND_LABELS) as FixedKind[]).map(k => (
+        <option key={k} value={k}>{FIXED_KIND_LABELS[k]}</option>
+      ))}
+    </select>
   )
 }

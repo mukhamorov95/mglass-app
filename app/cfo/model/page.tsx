@@ -2,7 +2,8 @@ import { getRole } from '@/lib/getRole'
 import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase-service'
 import ModelClient from './ModelClient'
-import { isDebtRow, type IncomeLine, type FixedLine } from '@/lib/cfo/factModel'
+import { type IncomeLine, type FixedLine } from '@/lib/cfo/factModel'
+import { kindOf, type FixedRow } from '@/lib/breakeven'
 import { collectSourceDiagnostics, factForUnit, type SourceDiag } from '@/lib/cfo/sourceDiagnostics'
 
 // Источник правды — «Точка безубыточности» (finplan_models): юниты 'mglass' и
@@ -10,7 +11,7 @@ import { collectSourceDiagnostics, factForUnit, type SourceDiag } from '@/lib/cf
 
 type BeVar = { name: string; pct: number }
 type BeIncome = { name: string; plan: number; vars: BeVar[] }
-type BeFixed = { name: string; amount: number }
+type BeFixed = FixedRow
 type BeFunds = { invest?: number; training?: number; reserve?: number; prodBonus?: number }
 type BeData = { incomes?: BeIncome[]; fixed?: BeFixed[]; funds?: BeFunds; ownerPct?: number; ownerRub?: number }
 
@@ -58,7 +59,10 @@ export default async function CfoModelPage() {
       unitMargin += (inc.plan || 0) * (1 - vcPct / 100)
     })
     ;(d.fixed ?? []).forEach((f, i) => {
-      fixed.push({ key: `${u.key}_f${i}`, label: f.name, unit: u.label, amount: f.amount || 0, isDebt: isDebtRow(f.name) })
+      fixed.push({
+        key: `${u.key}_f${i}`, label: f.name, unit: u.label, amount: f.amount || 0,
+        isDebt: kindOf(f).kind === 'obligation', body: f.body, amortization: f.amortization,
+      })
     })
     fundsRubByUnit[u.label] = Math.round(unitMargin * fundsPctOf(d.funds))
     ownerByUnit[u.label] = { pctRub: Math.round(unitMargin * (d.ownerPct || 0) / 100), fixedRub: d.ownerRub || 0 }

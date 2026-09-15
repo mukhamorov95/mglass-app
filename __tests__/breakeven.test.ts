@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   analyzeBreakeven, computeBreakeven, combineUnits, withoutDebt, revenueToCover, isDebtRow,
+  splitFixed, suggestKind, kindOf,
   BREAKEVEN_LABELS, type BreakevenModel,
 } from '@/lib/breakeven'
 import { computeBe } from '@/lib/cfo/factModel'
@@ -91,5 +92,63 @@ it('названия из ТЗ', () => {
     tb0: 'Операционная точка безубыточности',
     tb1: 'Целевая выручка с фондами',
     tbTarget: 'Целевая выручка с доходом собственника',
+  })
+})
+
+describe('P&L, денежные обязательства и распределение (Ф2)', () => {
+  const withLeasing = (patch: object): BreakevenModel => ({
+    ...production,
+    fixed: production.fixed.map(f => /лизинг/i.test(f.name) ? { ...f, ...patch } : f),
+  })
+
+  it('типы по названию — только предложение', () => {
+    expect(suggestKind('Лизинг (относится к производству)')).toBe('obligation')
+    expect(suggestKind('Кредит и проценты (кредит MGlass)')).toBe('obligation')
+    expect(suggestKind('ЗП оклады производства')).toBe('step')
+    expect(suggestKind('Банковская комиссия')).toBe('variable')
+    expect(suggestKind('Аренда помещения')).toBe('fixed')
+    expect(kindOf({ name: 'Аренда', amount: 1 })).toEqual({ kind: 'fixed', suggested: true })
+    expect(kindOf({ name: 'Аренда', amount: 1, kind: 'step' })).toEqual({ kind: 'step', suggested: false })
+  })
+
+  it('сохранённый тип важнее названия: переименованный лизинг остаётся обязательством', () => {
+    const s = splitFixed([{ name: 'Оборудование', amount: 400_000, kind: 'obligation', body: 300_000 }])
+    expect(s).toMatchObject({ cash: 400_000, body: 300_000, interest: 100_000, pnl: 100_000 })
+  })
+
+  it('пока тело не отделено — цифры как в Ф1 и список неразделённых', () => {
+    const a = analyzeBreakeven(production)
+    expect(a.split.unsplit).toEqual(['Лизинг (относится к производству)'])
+    expect(a.split.pnl).toBe(a.split.cash)
+    expect(a.tb0).toBe(3_616_678)
+    expect(a.tbCash).toBe(3_616_678)
+  })
+
+  it('тело долга не входит в операционную ТБ, но остаётся в денежных целях', () => {
+    const a = analyzeBreakeven(withLeasing({ body: 300_000 }))
+    expect(a.split).toMatchObject({ cash: 2_170_007, body: 300_000, interest: 100_000, pnl: 1_870_007, unsplit: [] })
+    expect(a.tb0).toBe(Math.round(1_870_007 / 0.6))
+    expect(a.tbCash).toBe(3_616_678)
+    expect(a.tb1).toBe(3_807_030)
+    expect(a.remainder).toBeCloseTo(analyzeBreakeven(production).remainder, 6)
+  })
+
+  it('амортизация лизинга — расход P&L без денег: в операционную ТБ входит, в денежные цели нет', () => {
+    const a = analyzeBreakeven(withLeasing({ body: 300_000, amortization: 50_000 }))
+    expect(a.split.pnl).toBe(1_920_007)
+    expect(a.split.cash).toBe(2_170_007)
+    expect(a.tb1).toBe(3_807_030)
+  })
+
+  it('тело больше платежа не делает расход отрицательным', () => {
+    expect(splitFixed([{ name: 'Кредит', amount: 100, body: 500 }])).toMatchObject({ body: 100, interest: 0, pnl: 0 })
+  })
+
+  it('«без кредитов и лизинга» — по типу, а не по названию', () => {
+    const m: BreakevenModel = { ...production, fixed: [
+      { name: 'Оборудование в рассрочку', amount: 100, kind: 'obligation' },
+      { name: 'Кредитный брокер (услуги)', amount: 50, kind: 'fixed' },
+    ] }
+    expect(withoutDebt(m).fixed.map(f => f.name)).toEqual(['Кредитный брокер (услуги)'])
   })
 })

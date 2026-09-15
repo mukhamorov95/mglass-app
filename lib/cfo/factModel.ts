@@ -24,7 +24,9 @@ export type FixedLine = {
   label: string
   unit: string
   amount: number      // ₽/мес
-  isDebt: boolean     // кредит/лизинг — обслуживание долга
+  isDebt: boolean     // денежное обязательство (кредит, лизинг) — по типу статьи
+  body?: number       // тело долга в платеже — в операционную ТБ не входит
+  amortization?: number
 }
 
 export type BeInput = {
@@ -66,10 +68,15 @@ export function computeBe(input: BeInput, excludedFixedKeys: string[] = []): BeP
 
   let fixedNoDebt = 0
   let debtTotal = 0
+  let debtBody = 0
+  let amortization = 0
   for (const f of input.fixed) {
     if (excluded.has(f.key)) continue
-    if (f.isDebt) debtTotal += f.amount
-    else fixedNoDebt += f.amount
+    if (f.isDebt) {
+      debtTotal += f.amount
+      debtBody += Math.min(Math.max(f.body || 0, 0), f.amount)
+      amortization += Math.max(f.amortization || 0, 0)
+    } else fixedNoDebt += f.amount
   }
   const fixedTotal = fixedNoDebt + debtTotal
 
@@ -81,7 +88,8 @@ export function computeBe(input: BeInput, excludedFixedKeys: string[] = []): BeP
 
   const fundsShare = margin > 0 ? fundsRub / margin : 0
   const ownerShare = margin > 0 ? (input.ownerPctRub ?? 0) / margin : 0
-  const tb0 = revenueToCover(fixedTotal, marginPct)
+  // Операционная ТБ — по расходам P&L: без тела долга, с амортизацией (ТЗ 1.3)
+  const tb0 = revenueToCover(fixedTotal - debtBody + amortization, marginPct)
   const tb1 = revenueToCover(fixedTotal, marginPct, fundsShare)
   const tbTarget = revenueToCover(fixedTotal, marginPct, fundsShare + ownerShare, input.ownerFixedRub ?? 0)
 

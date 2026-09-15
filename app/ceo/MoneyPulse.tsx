@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { liveOrders, orderAmount } from '@/lib/liveOrders'
-import { revenueToCover } from '@/lib/breakeven'
+import { revenueToCover, splitFixed, type FixedRow } from '@/lib/breakeven'
 
 // «Обзор за 60 секунд»: деньги и алерты владельца поверх менеджерской сводки.
 // Дебиторка и касса — та же логика, что /cfo/receivables и /cfo/cashflow;
@@ -85,11 +85,12 @@ export default function MoneyPulse() {
           if (expect <= in7d) inflow7 += debt
         }
         // касса
-        let cash = 0, fixedMonthly = 0, planRevenue = 0, margin = 0
+        let cash = 0, fixedMonthly = 0, fixedPnl = 0, planRevenue = 0, margin = 0
         for (const row of fp ?? []) {
           if (row.unit === 'total' && row.data?.cashBalance != null) cash = Number(row.data.cashBalance) || 0
           if (row.unit === 'mglass' || row.unit === 'production') {
             fixedMonthly += fixedOf(row.data)
+            fixedPnl += splitFixed((row.data?.fixed ?? []) as FixedRow[]).pnl
             planRevenue += revenueOf(row.data)
             margin += marginOf(row.data)
           }
@@ -105,7 +106,7 @@ export default function MoneyPulse() {
         }
         const cash7 = cash + inflow7 - outflow7
         // Операционная точка безубыточности компании — без фондов
-        const tb0 = revenueToCover(fixedMonthly, planRevenue > 0 ? margin / planRevenue : 0)
+        const tb0 = revenueToCover(fixedPnl, planRevenue > 0 ? margin / planRevenue : 0)
         // цех
         const shopActive = (tasks ?? []).filter(t => t.status === 'in_progress').length
         const shopQueued = (tasks ?? []).filter(t => t.status === 'queued').length
