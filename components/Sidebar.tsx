@@ -8,82 +8,21 @@ import type { Role } from '@/lib/getRole'
 import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 import { hasB2BSalesScope, isAllClientsScope } from '@/lib/b2bScope'
+import {
+  MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, isGroup, isSection,
+  type NavItem, type NavEntry, type NavSection,
+} from '@/lib/nav/managerMenu'
 
 type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions; canViewMoney?: boolean; referralRate?: number | null }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
 type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo' | 'production' | 'measurer'
 
-type NavItem  = { href: string; label: string; icon: string; indent?: boolean }
-type NavGroup = { groupLabel: string }
-// Свёрнутая подменюшка: заголовок + свои пункты. Нужна там, где список длинный,
-// а каждый день пользуются пятью пунктами (меню менеджера).
-type NavSection = { sectionLabel: string; icon: string; items: NavItem[] }
-type NavEntry = NavItem | NavGroup | NavSection
-
-function isGroup(e: NavEntry): e is NavGroup { return 'groupLabel' in e }
-function isSection(e: NavEntry): e is NavSection { return 'sectionLabel' in e }
-
-// ─── Manager: AmoCRM Dashboard ────────────────────────────────────────────────
-
-const MANAGER_AMO: NavItem[] = [
-  { href: '/manager', label: 'Мои сделки (AmoCRM)', icon: '🎯' },
-]
-
-// ─── Manager: MGlass (B2C) ────────────────────────────────────────────────────
-
-const MANAGER_MGLASS: NavEntry[] = [
-  // Калькуляторы — сразу под «MGlass»: пока «Новый расчёт» не закрыл все случаи,
-  // менеджеры ходят сюда каждый день и искать их в конце списка неудобно.
-  { sectionLabel: 'Калькуляторы', icon: '🧮', items: [
-    { href: '/calculator/shower', label: 'Душевая',        icon: '🚿' },
-    { href: '/calculator/mirror', label: 'Зеркало',        icon: '🪞' },
-    { href: '/calculator/loft',   label: 'Лофт',           icon: '🏗️' },
-    { href: '/configurator',      label: 'Визуализатор 3D', icon: '🧊' },
-  ] },
-  // Первый уровень — дневная работа менеджера, ровно по порядку владельца:
-  // день → сделки → посчитать → документы → деньги. Остальное сложено в
-  // свёрнутые подменюшки ниже: ничего не удалено, но список экранов больше
-  // не заслоняет то, чем пользуются каждый день.
-  { href: '/my-day',            label: 'Мой день',         icon: '☀️' },
-  { href: '/deals',             label: 'Сделки',           icon: '🤝' },
-  { href: '/calculator/build',  label: 'Новый расчёт',     icon: '🚿' },
-  { href: '/calculator/quick',  label: 'Быстрый расчёт',   icon: '⚡' },
-  { href: '/calculator/b2b-mglass', label: 'Расчёт B2B',   icon: '🧾' },
-  { href: '/calculations',      label: 'История расчётов', icon: '📋' },
-  { href: '/kp',                label: 'КП',               icon: '📄' },
-  { href: '/contracts',         label: 'Договор/Счёт',     icon: '📃' },
-  { href: '/my-earnings',       label: 'Мои деньги',       icon: '💰' },
-
-  { sectionLabel: 'Клиенты и продажи', icon: '👥', items: [
-    { href: '/clients',           label: 'Клиенты',        icon: '👤' },
-    { href: '/crm',               label: 'CRM · Продажи',  icon: '📊' },
-    { href: '/sales',             label: 'Отдел продаж',   icon: '💰' },
-    { href: '/orders',            label: 'Заказы',         icon: '📦' },
-  ] },
-  { sectionLabel: 'Замеры и монтаж', icon: '📐', items: [
-    { href: '/measure-requests',  label: 'Заявки на замер',   icon: '📐' },
-    { href: '/measure-calendar',  label: 'Календарь замеров', icon: '🗓️' },
-    { href: '/measurer',          label: 'Форма замера',      icon: '📋' },
-    { href: '/installations',     label: 'Монтажи',           icon: '🔧' },
-    { href: '/calendar',          label: 'Календарь',         icon: '📅' },
-  ] },
-  { sectionLabel: 'Склад', icon: '🏬', items: [
-    { href: '/inventory',         label: 'Склад (остатки)',   icon: '🏬' },
-  ] },
-]
-
-// ─── Manager: B2B ─────────────────────────────────────────────────────────────
-
-const MANAGER_B2B: NavItem[] = [
-  { href: '/b2b-today',      label: 'Мой день · B2B',  icon: '☀️' },
-  { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮' },
-  { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝' },
-  { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦' },
-  { href: '/b2b-invoices',   label: 'Счета B2B',       icon: '📒' },
-  { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
-  { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️' },
-  { href: '/production-app', label: 'Production App',  icon: '📱' },
-]
+// Подпись роли под логотипом. Раньше всё, кроме пяти ролей, подписывалось «CEO».
+const ROLE_CAPTION: Partial<Record<Role, string>> = {
+  manager: 'Менеджер', production: 'Производство', seo: 'SEO', cfo: 'CFO', commercial: 'Коммерческий',
+  ceo: 'CEO', buyer: 'Закупки', measurer: 'Замерщик', accountant: 'Бухгалтерия',
+  office: 'Офис', logist: 'Логистика', partner: 'Партнёр',
+}
 
 // ─── Buyer role ───────────────────────────────────────────────────────────────
 
@@ -176,6 +115,7 @@ const CFO_ITEMS: NavItem[] = [
   { href: '/cfo/sales-ledger', label: 'Продажи и маржа', icon: '🧮' },
   { href: '/cfo/margins',  label: 'Маржинальность',    icon: '📈' },
   { href: '/cfo/unit',     label: 'Unit-экономика',    icon: '🔍' },
+  { href: '/cfo/order-economics', label: 'Экономика заказов', icon: '🧾' },
   { href: '/cfo/breakeven', label: 'Точка безубыточности', icon: '🎯' },
   { href: '/admin/cfo',    label: 'Финмодели / ДДС',   icon: '💰' },
   { href: '/admin/settings', label: 'Фин. настройки', icon: '⚙️' },
@@ -318,10 +258,12 @@ const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app/orders',   label: 'Заказы',           icon: '📋' },
   { href: '/production-app/problems', label: 'Проблемы',         icon: '⚠️' },
   { href: '/production-app/board',    label: 'Обзор цеха',       icon: '🔧' },
+  { href: '/production-app/load',     label: 'Загрузка',         icon: '📊' },
   { href: '/production-app/shipping', label: 'Отгрузка',            icon: '📦' },
   { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
   { href: '/production-app/scan',     label: 'Скан',             icon: '📷' },
   { href: '/production-app/activity', label: 'Кто что делал',    icon: '👥' },
+  { href: '/production-app/no-marks', label: 'Без отметок',      icon: '🕳' },
   { href: '/production-app/metrics',  label: 'Метрики цеха',     icon: '📈' },
 ]
 
@@ -430,22 +372,28 @@ const MARKETING_CENTER: NavItem[] = [
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
-const MGLASS_PATHS = [
-  '/calculations', '/orders', '/clients', '/calendar', '/measurer', '/measure-requests', '/measure-calendar', '/my-earnings',
-]
-const B2B_PATHS = [
-  '/manager-dashboard', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-crm',
-  '/b2b-pipeline', '/b2b-production', '/b2b-cutting', '/b2b-analytics',
-]
+const hrefsOf = (entries: NavEntry[]): string[] =>
+  entries.flatMap(e => isGroup(e) ? [] : isSection(e) ? e.items.map(i => i.href) : [e.href])
+// Аккордеон раскрывается на любом адресе своего меню, плюс карточки сделок
+const MGLASS_PATHS = [...hrefsOf(MANAGER_MGLASS), '/deal']
+const B2B_PATHS = [...hrefsOf(MANAGER_B2B), '/b2b-deal', '/manager-dashboard']
 
 function inSection(pathname: string, paths: string[]): boolean {
   return paths.some(p => pathname === p || pathname.startsWith(p + '/'))
 }
 
+// Подменю, в котором лежит текущий адрес, раскрыто сразу — пункт, переехавший в
+// подменю, не должен теряться.
+function activeSections(pathname: string, entries: NavEntry[]): string[] {
+  return entries.filter(isSection)
+    .filter(sec => inSection(pathname, sec.items.map(i => i.href)))
+    .map(sec => `sec:${sec.sectionLabel}`)
+}
+
 function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   const open: string[] = []
   if (mode === 'manager') {
-    if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
+    if (inSection(pathname, MGLASS_PATHS)) open.push('mglass', ...activeSections(pathname, MANAGER_MGLASS))
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (mode === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
@@ -490,7 +438,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     return open
   }
   if (role === 'manager') {
-    if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
+    if (inSection(pathname, MGLASS_PATHS)) open.push('mglass', ...activeSections(pathname, MANAGER_MGLASS))
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (role === 'seo') {
     if (inSection(pathname, ['/b2b-analytics', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
@@ -772,13 +720,15 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
       : i.href === '/calendar'  ? permissions.see_calendar
       : i.href === '/my-earnings' ? permissions.see_earnings
       : true
-    return MANAGER_MGLASS
+    const kept = MANAGER_MGLASS
       .map(e => (isSection(e) ? { ...e, items: e.items.filter(allowed) } : e))
       .filter(e => {
         if (isGroup(e)) return true
         if (isSection(e)) return e.items.length > 0
         return allowed(e)
       })
+    // Заголовок группы без пунктов под ним (например «Личное» без «Моих денег») не показываем
+    return kept.filter((e, i) => !isGroup(e) || (i + 1 < kept.length && !isGroup(kept[i + 1])))
   }
 
   function buildB2bNav(): NavItem[] {
@@ -1062,7 +1012,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
               <span className="text-[14px] font-bold text-[#111110] tracking-[-0.02em]">MGlass</span>
               {!isAdmin && role && (
                 <div className="text-[10px] text-[#b0b0aa] leading-tight">
-                  {role === 'manager' ? 'Менеджер' : role === 'production' ? 'Производство' : role === 'seo' ? 'SEO' : role === 'cfo' ? 'CFO' : role === 'commercial' ? 'Коммерческий' : 'CEO'}
+                  {ROLE_CAPTION[role] ?? role}
                 </div>
               )}
             </div>
