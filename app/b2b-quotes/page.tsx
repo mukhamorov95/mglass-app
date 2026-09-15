@@ -8,16 +8,13 @@ import AssignInstallationButton from '@/components/AssignInstallationButton'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
-import { computeOrderEconomics, type EcoOrder, type EcoItem } from '@/lib/orderEconomics'
-import { DEFAULT_SHOP_SALARIES, type ShopThroughput } from '@/lib/laborModel'
-import { DEFAULT_REUSE_RATE } from '@/lib/materialUsage'
+import { orderContribution, contributionColor } from '@/lib/unitEconomics'
 import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
 import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { checkSavedItems } from '@/lib/b2b/bomCheck'
 
-const HONEST_THIN = 25   // ниже — «тонко»
 
 const PAGE_SIZE = 50
 
@@ -272,7 +269,6 @@ export default function B2BQuotesPage() {
   const [quotes, setQuotes]           = useState<Quote[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [materials, setMaterials]     = useState<MatLight[]>([])
-  const [throughput, setThroughput]   = useState<ShopThroughput | null>(null)
   const [loading, setLoading]         = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [expanded, setExpanded]       = useState<number | null>(null)
@@ -621,28 +617,16 @@ export default function B2BQuotesPage() {
         }
       }
 
-      // Пропускная способность цеха за 30 дней — знаменатель ставок труда для честной маржи.
-      const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
-      const [{ data: orders }, { data: attaches }, { data: mats }, { data: thruRows }] = await Promise.all([
+      const [{ data: orders }, { data: attaches }, { data: mats }] = await Promise.all([
         ordersQuery,
         sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
         sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
-        sb.from('b2b_orders').select('items').is('archived_at', null).gte('launched_at', since30),
       ])
       setQuotes((orders ?? []).map(q => ({
         ...q, items: Array.isArray(q.items) ? (q.items as OrderItem[]) : [],
       })))
       setAttachments(attaches ?? [])
       setMaterials((mats ?? []) as MatLight[])
-      let tN = 0, tE = 0, tD = 0
-      for (const o of (thruRows ?? []) as { items: unknown }[]) {
-        for (const it of (Array.isArray(o.items) ? o.items as Record<string, number | boolean>[] : [])) {
-          const w = Number(it.width) || 0, h = Number(it.height) || 0, q = Number(it.quantity) || 0
-          tN += w * h / 1e6 * q; tE += (Number(it.perimeterM) || 2 * (w + h) / 1000) * q
-          if (it.hasHoles) tD += q
-        }
-      }
-      setThroughput({ netM2: tN, edgeM: tE, drilledPcs: tD, packedPcs: 0 })
     } catch (err) {
       console.error('[b2b-quotes] load error:', err)
       setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить данные')
@@ -824,33 +808,17 @@ export default function B2BQuotesPage() {
     return list
   }, [quotes, tab, search])
 
-  // Честная маржа по просчётам (быстрый режим: без раскроя — материал уже с
-  // авторасходом в сохранённых позициях, честная разница = недостающий труд).
+  // Вклад по просчётам — тем же расчётом, что на экране экономики заказа
+  // (lib/unitEconomics): выручка − переменные − НДС к уплате. Одна цифра на всю систему.
   const isOwner = userRole === 'admin' || userRole === 'ceo'
-  const honestByQuote = useMemo(() => {
-    const m = new Map<number, { honest: number; system: number }>()
-    if (!throughput) return m
+  const contributionByQuote = useMemo(() => {
+    const m = new Map<number, { amount: number; pct: number }>()
     for (const q of visible) {
-      const items: EcoItem[] = (q.items as unknown as Record<string, unknown>[]).map(it => {
-        const billed = Number(it.totalAreaBilled) || 0
-        const svc = Array.isArray(it.services) ? it.services as Record<string, unknown>[] : []
-        const n = (x: unknown) => Number(x) || 0
-        return {
-          materialName: String(it.materialName ?? ''), thickness: Number(it.thickness) || 0, category: String(it.category ?? ''),
-          width: Number(it.width) || 0, height: Number(it.height) || 0, quantity: Number(it.quantity) || 0,
-          wastePercent: Number(it.wastePercent) || 0,
-          costPerM2: billed > 0 ? (Number(it.costMaterial) || 0) / billed : 0,
-          hasTempering: !!it.hasTempering, hasHoles: !!it.hasHoles, perimeterM: Number(it.perimeterM) || 0,
-          servicesCostPrice: svc.reduce((a, x) => a + n(x.costPrice), 0) + n(it.costFacet) + n(it.costTriplex),
-          servicesSale: svc.reduce((a, x) => a + n(x.cost), 0) + n(it.saleFacet) + n(it.saleTriplex),
-        }
-      })
-      const order: EcoOrder = { id: q.id, clientName: q.client_name, revenue: q.total_after_discount || q.total_sale_inc_vat || 0, items }
-      const eco = computeOrderEconomics(order, DEFAULT_SHOP_SALARIES, throughput, DEFAULT_REUSE_RATE, { skipNesting: true })
-      m.set(q.id, { honest: eco.honestMargin, system: eco.systemMargin })
+      const c = orderContribution(q.total_after_discount || q.total_sale_inc_vat || 0, q.items as unknown as Record<string, unknown>[])
+      if (c.revenue > 0) m.set(q.id, { amount: c.contribution, pct: c.contributionPct })
     }
     return m
-  }, [visible, throughput])
+  }, [visible])
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0, templates: 0, price_approval: 0 }
@@ -1079,15 +1047,16 @@ export default function B2BQuotesPage() {
 
                   <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:flex-shrink-0">
 
-                    {/* Честная маржа (по раскрою + труд) — до запуска в работу */}
-                    {isOwner && honestByQuote.has(quote.id) && (() => {
-                      const hm = honestByQuote.get(quote.id)!.honest
-                      const cls = hm < HONEST_THIN ? 'bg-red-50 text-red-600' : hm < 35 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+                    {/* Вклад заказа — до запуска в работу. Себестоимость внутренняя: только владельцу. */}
+                    {isOwner && contributionByQuote.has(quote.id) && (() => {
+                      const { amount, pct } = contributionByQuote.get(quote.id)!
+                      const tone = contributionColor(pct)
+                      const cls = tone === 'red' ? 'bg-red-50 text-red-600' : tone === 'amber' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
                       return (
                         <Link href={`/cfo/order-economics/${quote.id}`}
-                          title={`Честная маржа ${hm}% (раскрой + труд). Клик — детали. Система показывает ${honestByQuote.get(quote.id)!.system}%`}
+                          title={`Вклад ${amount.toLocaleString('ru-RU')} ₽ — выручка минус переменные и НДС к уплате. Клик — как посчитано.`}
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cls} hover:ring-1 hover:ring-current`}>
-                          честн. {hm}%{hm < HONEST_THIN ? ' · тонко' : ''} ₽
+                          вклад {pct.toLocaleString('ru-RU')}%
                         </Link>
                       )
                     })()}
