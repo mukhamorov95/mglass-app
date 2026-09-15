@@ -136,11 +136,11 @@ function buildInsights(p: {
   const mktPct   = actualRev > 0 ? marketing / actualRev * 100 : 0
 
   if (ebitda < 0)
-    out.push({ level: 'crit', text: `Операционный убыток ${fmt(Math.abs(ebitda))} — выручка ниже ТБ0` })
+    out.push({ level: 'crit', text: `Операционный убыток ${fmt(Math.abs(ebitda))} — выручка ниже операционной ТБ` })
   else if (actualRev < tb1 && actualRev >= tb0)
-    out.push({ level: 'warn', text: `Выше ТБ0, но до ТБ1 не хватает ${fmt(tb1 - actualRev)}` })
+    out.push({ level: 'warn', text: `Выше операционной ТБ, но до целевой выручки с фондами не хватает ${fmt(tb1 - actualRev)}` })
   else if (actualRev >= tb1 && actualRev > 0)
-    out.push({ level: 'ok', text: `Выручка выше ТБ1 — бизнес генерирует прибыль сверх фондов` })
+    out.push({ level: 'ok', text: `Выручка выше целевой с фондами — прибыль сверх фондов` })
 
   if (revExec > 0 && revExec < 60)
     out.push({ level: 'crit', text: `Выполнение плана ${revExec.toFixed(0)}% — высокий риск кассового разрыва` })
@@ -203,14 +203,14 @@ function RevenueChart({ months, tb0, tb1 }: { months: MonthRevenue[]; tb0: numbe
         <g>
           <line x1={pL} y1={pT + sc(tb0)} x2={pL + cW} y2={pT + sc(tb0)}
             stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
-          <text x={pL + cW - 2} y={pT + sc(tb0) - 3} textAnchor="end" fontSize="8" fill="#f59e0b">ТБ0</text>
+          <text x={pL + cW - 2} y={pT + sc(tb0) - 3} textAnchor="end" fontSize="8" fill="#f59e0b">опер. ТБ</text>
         </g>
       )}
       {isFinite(tb1) && tb1 < maxV * 1.1 && (
         <g>
           <line x1={pL} y1={pT + sc(tb1)} x2={pL + cW} y2={pT + sc(tb1)}
             stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4 3" />
-          <text x={pL + cW - 2} y={pT + sc(tb1) - 3} textAnchor="end" fontSize="8" fill="#ef4444">ТБ1</text>
+          <text x={pL + cW - 2} y={pT + sc(tb1) - 3} textAnchor="end" fontSize="8" fill="#ef4444">с фондами</text>
         </g>
       )}
     </svg>
@@ -800,8 +800,8 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                 <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">
                   Точки безубыточности
                 </p>
-                <TBWidget label="ТБ0 — работаем в ноль" target={tb0} actual={totalActualRev} color="amber" />
-                <TBWidget label="ТБ1 — с выводом прибыли" target={tb1} actual={totalActualRev} color="red" />
+                <TBWidget label="Операционная точка безубыточности" target={tb0} actual={totalActualRev} color="amber" />
+                <TBWidget label="Целевая выручка с фондами" target={tb1} actual={totalActualRev} color="red" />
                 <div className="pt-2 border-t border-[#f0f0ec] space-y-1">
                   <div className="flex justify-between text-[10px]">
                     <span className="text-[#9a9a95]">VC% (план)</span>
@@ -892,10 +892,10 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                       <div className="flex items-center justify-between">
                         <p className={`text-xs font-bold ${sc.color}`}>{sc.label}</p>
                         {sc.rev >= tb1_old
-                          ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">ТБ1 ✓</span>
+                          ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">с фондами ✓</span>
                           : sc.rev >= tb0_old
-                          ? <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">ТБ0 ✓</span>
-                          : <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">ниже ТБ0</span>
+                          ? <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">опер. ТБ ✓</span>
+                          : <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">ниже опер. ТБ</span>
                         }
                       </div>
                       {[
@@ -994,19 +994,19 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Выручка — последние 12 мес.</p>
               <div className="flex gap-3">
                 <span className="flex items-center gap-1 text-[10px] text-amber-600">
-                  <span className="inline-block w-4 border-t-2 border-dashed border-amber-500" />ТБ0
+                  <span className="inline-block w-4 border-t-2 border-dashed border-amber-500" />Операционная ТБ
                 </span>
                 <span className="flex items-center gap-1 text-[10px] text-red-600">
-                  <span className="inline-block w-4 border-t-2 border-dashed border-red-500" />ТБ1
+                  <span className="inline-block w-4 border-t-2 border-dashed border-red-500" />С фондами
                 </span>
               </div>
             </div>
             <RevenueChart months={months} tb0={tb0} tb1={tb1} />
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#f5f5f3]">
               {[
-                { label: 'Покрыт ТБ0', ok: currentMonthRev >= tb0,
+                { label: 'Покрыта операционная ТБ', ok: currentMonthRev >= tb0,
                   detail: currentMonthRev >= tb0 ? `+${fmt(currentMonthRev-tb0)}` : `-${fmt(tb0-currentMonthRev)}` },
-                { label: 'Покрыт ТБ1', ok: currentMonthRev >= tb1,
+                { label: 'Покрыта выручка с фондами', ok: currentMonthRev >= tb1,
                   detail: currentMonthRev >= tb1 ? `+${fmt(currentMonthRev-tb1)}` : `-${fmt(tb1-currentMonthRev)}` },
                 { label: 'vs Прогноз', ok: currentMonthRev >= forecastRev * 0.9,
                   detail: forecastRev > 0 ? `${Math.round(currentMonthRev/forecastRev*100)}%` : '—' },

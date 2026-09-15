@@ -12,7 +12,7 @@ type BeVar = { name: string; pct: number }
 type BeIncome = { name: string; plan: number; vars: BeVar[] }
 type BeFixed = { name: string; amount: number }
 type BeFunds = { invest?: number; training?: number; reserve?: number; prodBonus?: number }
-type BeData = { incomes?: BeIncome[]; fixed?: BeFixed[]; funds?: BeFunds }
+type BeData = { incomes?: BeIncome[]; fixed?: BeFixed[]; funds?: BeFunds; ownerPct?: number; ownerRub?: number }
 
 const UNITS: { key: string; label: string }[] = [
   { key: 'mglass', label: 'M-Glass' },
@@ -46,6 +46,7 @@ export default async function CfoModelPage() {
   const incomes: IncomeLine[] = []
   const fixed: FixedLine[] = []
   const fundsRubByUnit: Record<string, number> = {}
+  const ownerByUnit: Record<string, { pctRub: number; fixedRub: number }> = {}
 
   for (const u of UNITS) {
     const d = byUnit[u.key]
@@ -60,6 +61,7 @@ export default async function CfoModelPage() {
       fixed.push({ key: `${u.key}_f${i}`, label: f.name, unit: u.label, amount: f.amount || 0, isDebt: isDebtRow(f.name) })
     })
     fundsRubByUnit[u.label] = Math.round(unitMargin * fundsPctOf(d.funds))
+    ownerByUnit[u.label] = { pctRub: Math.round(unitMargin * (d.ownerPct || 0) / 100), fixedRub: d.ownerRub || 0 }
   }
 
   const hasData = incomes.length > 0
@@ -91,6 +93,7 @@ export default async function CfoModelPage() {
       incomes={incomes}
       fixed={fixed}
       fundsRubByUnit={fundsRubByUnit}
+      ownerByUnit={ownerByUnit}
       factByUnit={factByUnit}
       diagnostics={diagnostics}
       daysElapsed={daysElapsed}

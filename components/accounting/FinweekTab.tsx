@@ -126,11 +126,11 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
                 </div>
                 {tbTargets.length > 0 && (
                   <div className="mt-2">
-                    <p className="text-[11px] text-[#9a9a95] mb-1">Подставить из точки безубыточности:</p>
+                    <p className="text-[11px] text-[#9a9a95] mb-1">Подставить целевую выручку из финмодели:</p>
                     <div className="flex flex-wrap gap-1.5">
                       {tbTargets.flatMap(t => ([
-                        t.tb1 != null && { key: `${t.unit}-tb1`, label: `${t.label} · ТБ-1`, val: t.tb1 },
-                        t.tbTarget != null && { key: `${t.unit}-tbt`, label: `${t.label} · ТБ-цель`, val: t.tbTarget },
+                        t.tb1 != null && { key: `${t.unit}-tb1`, label: `${t.label} · с фондами`, val: t.tb1 },
+                        t.tbTarget != null && { key: `${t.unit}-tbt`, label: `${t.label} · с доходом собственника`, val: t.tbTarget },
                       ].filter(Boolean) as { key: string; label: string; val: number }[])).map(o => (
                         <button key={o.key} onClick={() => setPlanDraft(String(Math.round(o.val)))}
                           className="text-[11px] px-2 py-1 rounded-md border border-[#e4e4e0] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">

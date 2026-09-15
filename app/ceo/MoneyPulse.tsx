@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { liveOrders, orderAmount } from '@/lib/liveOrders'
+import { revenueToCover } from '@/lib/breakeven'
 
 // «Обзор за 60 секунд»: деньги и алерты владельца поверх менеджерской сводки.
 // Дебиторка и касса — та же логика, что /cfo/receivables и /cfo/cashflow;
-// план vs ТБ — из finplan_models (юниты mglass+production).
+// план vs операционная ТБ — из finplan_models (юниты mglass+production).
 
 type DebtRow = {
   id: number
@@ -21,7 +22,7 @@ type DebtRow = {
 type Pulse = {
   debtSum: number; debtCount: number; topDebtor: string; topDebtorDays: number; over30: number
   cash: number; cash7: number
-  planRevenue: number; tb1: number | null
+  planRevenue: number; tb0: number | null
   shopActive: number; shopQueued: number; shopProblems: number
   alerts: { text: string; href: string }[]
 }
@@ -103,9 +104,8 @@ export default function MoneyPulse() {
           }
         }
         const cash7 = cash + inflow7 - outflow7
-        // ТБ-1 компании (фонды юнитов игнорируем для простоты — без фондов = ТБ-0..ТБ-1 нижняя граница)
-        const wPct = planRevenue > 0 ? margin / planRevenue : 0
-        const tb1 = wPct > 0 ? fixedMonthly / wPct : null
+        // Операционная точка безубыточности компании — без фондов
+        const tb0 = revenueToCover(fixedMonthly, planRevenue > 0 ? margin / planRevenue : 0)
         // цех
         const shopActive = (tasks ?? []).filter(t => t.status === 'in_progress').length
         const shopQueued = (tasks ?? []).filter(t => t.status === 'queued').length
@@ -114,9 +114,9 @@ export default function MoneyPulse() {
         const alerts: Pulse['alerts'] = []
         if (over30 > 0) alerts.push({ text: `Счета 30+ дней без оплаты: ${over30}`, href: '/cfo/receivables' })
         if (cash7 < 0) alerts.push({ text: `Кассовый разрыв в ближайшие 7 дней: ${fmt(cash7)}`, href: '/cfo/cashflow' })
-        if (tb1 != null && planRevenue < tb1) alerts.push({ text: `План ${fmt(planRevenue)} ниже точки безубыточности ${fmt(tb1)}`, href: '/cfo/breakeven' })
+        if (tb0 != null && planRevenue < tb0) alerts.push({ text: `План ${fmt(planRevenue)} ниже операционной точки безубыточности ${fmt(tb0)}`, href: '/cfo/breakeven' })
         if (shopProblems > 0) alerts.push({ text: `Проблемы в цехе: ${shopProblems} задач(и)`, href: '/production-app/today' })
-        setP({ debtSum, debtCount, topDebtor, topDebtorDays, over30, cash, cash7, planRevenue, tb1, shopActive, shopQueued, shopProblems, alerts })
+        setP({ debtSum, debtCount, topDebtor, topDebtorDays, over30, cash, cash7, planRevenue, tb0, shopActive, shopQueued, shopProblems, alerts })
       } catch { /* блок не критичен для страницы */ }
     })()
   }, [])
@@ -126,7 +126,7 @@ export default function MoneyPulse() {
   const cards = [
     { href: '/cfo/receivables', label: '💸 Дебиторка', value: fmt(p.debtSum), sub: p.debtCount ? `${p.debtCount} счёт(ов) · топ: ${p.topDebtor} (${p.topDebtorDays} дн)` : 'долгов нет', warn: p.over30 > 0 },
     { href: '/cfo/cashflow', label: '💰 Касса → 7 дней', value: `${fmt(p.cash)} → ${fmt(p.cash7)}`, sub: p.cash7 < 0 ? 'прогноз уходит в минус' : 'разрыва нет', warn: p.cash7 < 0 },
-    { href: '/cfo/breakeven', label: '🎯 План vs ТБ', value: p.tb1 != null ? `${Math.round(p.planRevenue / p.tb1 * 100)}% от точки` : '—', sub: p.tb1 != null ? `план ${fmt(p.planRevenue)} · ТБ ${fmt(p.tb1)}` : 'заполни финмодель', warn: p.tb1 != null && p.planRevenue < p.tb1 },
+    { href: '/cfo/breakeven', label: '🎯 План vs операционная ТБ', value: p.tb0 != null ? `${Math.round(p.planRevenue / p.tb0 * 100)}% от точки` : '—', sub: p.tb0 != null ? `план ${fmt(p.planRevenue)} · точка ${fmt(p.tb0)}` : 'заполни финмодель', warn: p.tb0 != null && p.planRevenue < p.tb0 },
     { href: '/production-app/today', label: '🏭 Цех', value: `${p.shopActive} в работе`, sub: `${p.shopQueued} в очереди${p.shopProblems ? ` · ⚠️ ${p.shopProblems} проблем` : ''}`, warn: p.shopProblems > 0 },
   ]
 

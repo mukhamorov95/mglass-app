@@ -1,12 +1,13 @@
 'use client'
 
 // «Деньги» цеха — read-only витрина финансов производства (санкция владельца):
-// финмодель и ТБ-лесенка из CFO, сборка помесячно с 2026, план достижения ТБ-1.
+// финмодель и уровни безубыточности из CFO, сборка помесячно с 2026, план до бонусного фонда.
 // Доступ выдаёт владелец в /admin/users (галка «Деньги»); менять данные нельзя —
 // правки только в /cfo/breakeven.
 
 import { useEffect, useState, Fragment } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
+import { BREAKEVEN_LABELS } from '@/lib/breakeven'
 
 type Money = {
   model: {
@@ -85,7 +86,7 @@ export default function MoneyPage() {
   const totalOrders = months.reduce((s, r) => s + r.orders, 0)
   const totalAmount = months.reduce((s, r) => s + r.amount, 0)
   // Бонусный фонд месяца = маржа% × доля фонда (5%) от выручки — только если месяц
-  // прошёл ТБ-1 (иначе маржа не покрывает постоянку, фонда нет).
+  // прошёл порог фонда (иначе маржа не покрывает постоянку, фонда нет).
   const bonusRate = m ? (m.marginPct / 100) * (m.funds.prodBonus / 100) : 0
   const monthBonus = (amount: number) =>
     (m?.tb1 != null && bonusRate > 0 && amount >= m.tb1) ? Math.round(amount * bonusRate) : null
@@ -119,12 +120,12 @@ export default function MoneyPage() {
         {!loading && !denied && data && (
           <>
             <div className="flex flex-wrap gap-1.5">
-              {pill('model', '🎯 Финмодель и ТБ')}
+              {pill('model', '🎯 Финмодель и безубыточность')}
               {pill('monthly', '📦 Сборка помесячно')}
-              {pill('plan', '🚀 План к ТБ-1')}
+              {pill('plan', '🚀 План к бонусному фонду')}
             </div>
 
-            {/* ── Финмодель и ТБ ── */}
+            {/* ── Финмодель и безубыточность ── */}
             {view === 'model' && (m ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -144,24 +145,24 @@ export default function MoneyPage() {
                 {m.tb1 != null && pctTb1 != null && (
                   <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-4">
                     <div className="flex items-baseline justify-between flex-wrap gap-2">
-                      <span className="text-[14px] font-semibold text-[#111110]">Путь месяца к ТБ-1 (бонусный фонд)</span>
+                      <span className="text-[14px] font-semibold text-[#111110]">Путь месяца к бонусному фонду цеха</span>
                       <span className="text-[13px] font-mono text-[#4b4b47]">
-                        {toTb1 != null && toTb1 > 0 ? `осталось ${RUB(toTb1)}` : `ТБ-1 пройдена, сверх: ${RUB(fact - m.tb1)}`}
+                        {toTb1 != null && toTb1 > 0 ? `осталось ${RUB(toTb1)}` : `порог фонда пройден, сверх: ${RUB(fact - m.tb1)}`}
                       </span>
                     </div>
                     <div className="mt-2 h-3 rounded-full bg-[#f0f0ee] overflow-hidden">
                       <div className={`h-full rounded-full ${pctTb1 >= 100 ? 'bg-emerald-500' : pctTb1 >= 70 ? 'bg-amber-400' : 'bg-[#111110]'}`}
                         style={{ width: `${pctTb1}%` }} />
                     </div>
-                    <div className="mt-1 text-[12px] text-[#9a9a95]">{pctTb1}% от ТБ-1 · выручка считается по заказам производства этого месяца</div>
+                    <div className="mt-1 text-[12px] text-[#9a9a95]">{pctTb1}% от порога фонда · выручка считается по заказам производства этого месяца</div>
                   </div>
                 )}
 
                 <div className="space-y-2">
                   <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Уровни безубыточности</h2>
-                  <TbRow level="ТБ-0 · в ноль" sum={RUB(m.tb0)}
-                    desc="Выручка, при которой покрыты все переменные и постоянные расходы. Ниже — работаем в минус." tone="bg-white border-[#e4e4e0] text-[#111110]" />
-                  <TbRow level={`ТБ-1 · + фонд бонусов производства (${m.funds.prodBonus}% от маржи)`} sum={RUB(m.tb1)}
+                  <TbRow level={BREAKEVEN_LABELS.tb0} sum={RUB(m.tb0)}
+                    desc="Выручка, при которой маржа покрывает все постоянные расходы — работаем в ноль. Ниже — в минус." tone="bg-white border-[#e4e4e0] text-[#111110]" />
+                  <TbRow level={`Целевая выручка с бонусным фондом цеха (${m.funds.prodBonus}% от маржи)`} sum={RUB(m.tb1)}
                     desc={`Та самая «пенка»: сверх этого уровня копится фонд бонусов цеха ≈ ${RUB(m.fundsRub.prodBonus)}/мес при плане — делится между сотрудниками со стажем от 2 лет.`} tone="bg-emerald-50 border-emerald-200 text-emerald-900" />
                 </div>
                 {data.bonusTeam.length > 0 && (
@@ -216,7 +217,7 @@ export default function MoneyPage() {
                         <td className="px-4 py-2.5 text-right font-mono">
                           {bonus != null
                             ? <span className="text-emerald-700 font-semibold">{RUB(bonus)}</span>
-                            : <span className="text-[#c4c4be]">— ниже ТБ-1</span>}
+                            : <span className="text-[#c4c4be]">— ниже порога фонда</span>}
                         </td>
                         {showReal && (() => {
                           if (!real || r.amount <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">—</td>
@@ -284,12 +285,12 @@ export default function MoneyPage() {
               </div>
             )}
 
-            {/* ── План к ТБ-1 ── */}
+            {/* ── План к бонусному фонду ── */}
             {view === 'plan' && (
               <div className="space-y-4">
                 <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-4">
-                  <h2 className="text-[16px] font-bold text-[#111110]">Как дойти до ТБ-1 и выше</h2>
-                  <p className="text-[13px] text-[#9a9a95] mt-0.5">ТБ-0 — выживаем. ТБ-1 — появляется бонусный фонд цеха. Дальше — фонды развития и цель.</p>
+                  <h2 className="text-[16px] font-bold text-[#111110]">Как дойти до бонусного фонда и выше</h2>
+                  <p className="text-[13px] text-[#9a9a95] mt-0.5">Операционная точка безубыточности — выживаем. Выше порога — копится бонусный фонд цеха. Дальше — фонды развития и цель.</p>
                   <ol className="mt-3 space-y-3">
                     <li className="flex gap-3">
                       <span className="w-7 h-7 rounded-lg bg-[#16181a] text-white font-extrabold text-[14px] flex items-center justify-center shrink-0">1</span>
@@ -318,10 +319,10 @@ export default function MoneyPage() {
                 <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-4">
                   <h2 className="text-[14px] font-bold text-[#111110]">Что включается на каждом уровне</h2>
                   <div className="mt-2 space-y-1.5 text-[14px] text-[#4b4b47]">
-                    <div>🏁 <b>ТБ-0</b> — расходы покрыты, работаем в ноль.</div>
-                    <div>🏭 <b>ТБ-1</b> — наполняется <b>фонд бонусов производства</b>: «пенка», которая делится между сотрудниками со стажем от 2 лет.</div>
+                    <div>🏁 <b>Операционная точка безубыточности</b> — расходы покрыты, работаем в ноль.</div>
+                    <div>🏭 <b>Целевая выручка с бонусным фондом</b> — наполняется <b>фонд бонусов производства</b>: «пенка», которая делится между сотрудниками со стажем от 2 лет.</div>
                   </div>
-                  <p className="text-[12px] text-[#9a9a95] mt-2">Конкретные суммы уровней — во вкладке «Финмодель и ТБ», они пересчитываются из модели CFO автоматически.</p>
+                  <p className="text-[12px] text-[#9a9a95] mt-2">Конкретные суммы уровней — во вкладке «Финмодель и безубыточность», они пересчитываются из модели CFO автоматически.</p>
                 </div>
               </div>
             )}
