@@ -473,6 +473,36 @@ function effectiveSettings(group: PieceGroup, settings: CuttingSettings): { sett
   return { settings: { ...settings, allow_rotation: noRotate ? false : settings.allow_rotation }, pieces }
 }
 
+// Рисунок (МОРУ, Эстриадо): полоса на изделии идёт по ВЫСОТЕ детали, на листе — вдоль
+// направления рисунка. Запретить поворот мало: без разворота высота детали ложится по оси Y
+// листа, то есть поперёк длины 3210 — высокая деталь «не влезает» в 2250, а раскрой
+// теряет её (проверено 15.09 на 12 заказах с МОРУ: 7 ломались). Поэтому деталь заранее
+// кладём высотой вдоль полосы и поворот запрещаем.
+export function patternSwap(dir: PieceGroup['patternDirection'], sheetW: number, sheetH: number): boolean {
+  if (dir === 'none') return false
+  const lengthAlongX = sheetW >= sheetH
+  return (dir === 'along_length') === lengthAlongX
+}
+
+function orientPieces(pieces: CuttingPiece[], swap: boolean): CuttingPiece[] {
+  return swap ? pieces.map(p => ({ ...p, width: p.height, height: p.width })) : pieces
+}
+
+// Результат — в исходных размерах деталей: развёрнутые помечаются rotated, нераскроенные
+// возвращаются как были заданы.
+function restoreOrientation(
+  res: { sheets: CuttingSheet[]; unplaced: CuttingPiece[] },
+  original: CuttingPiece[],
+  swap: boolean,
+): { sheets: CuttingSheet[]; unplaced: CuttingPiece[] } {
+  if (!swap) return res
+  const byId = new Map(original.map(p => [p.id, p]))
+  return {
+    sheets: res.sheets.map(sh => ({ ...sh, pieces: sh.pieces.map(pl => ({ ...pl, rotated: !pl.rotated })) })),
+    unplaced: res.unplaced.map(p => byId.get(p.id) ?? p),
+  }
+}
+
 /** Fast optimizer: tries guillotine (area-desc) + strip (height-desc), picks better. */
 export function runCuttingOptimizer(
   groups: Map<string, PieceGroup>,
@@ -482,9 +512,11 @@ export function runCuttingOptimizer(
 
   for (const [materialKey, group] of groups) {
     const { settings: eff, pieces } = effectiveSettings(group, settings)
-    const byArea   = [...pieces].sort((a, b) => b.width * b.height - a.width * a.height)
-    const byHeight = [...pieces].sort((a, b) => b.height - a.height)
     const trials: FormatTrial[] = candidateFormats(group).map(f => {
+      const swap = eff.respect_pattern && patternSwap(group.patternDirection, f.width, f.height)
+      const oriented = orientPieces(pieces, swap)
+      const byArea   = [...oriented].sort((a, b) => b.width * b.height - a.width * a.height)
+      const byHeight = [...oriented].sort((a, b) => b.height - a.height)
       const guillotine  = packWithOrder(byArea, f.width, f.height, eff)
       const stripNormal = packStrip(byHeight, f.width, f.height, eff, false)
       const stripShort  = packStrip(byHeight, f.width, f.height, eff, true)
@@ -492,7 +524,8 @@ export function runCuttingOptimizer(
         (b, s) => isBetter(s.sheets, b.sheets) ? s : b,
         guillotine,
       )
-      return { width: f.width, height: f.height, sheets: best.sheets, unplaced: best.unplaced }
+      const restored = restoreOrientation(best, pieces, swap)
+      return { width: f.width, height: f.height, sheets: restored.sheets, unplaced: restored.unplaced }
     })
     const chosen = pickBestFormat(trials)
     results.push(buildResult(materialKey, group, chosen.width, chosen.height, chosen.sheets, chosen.unplaced))
@@ -513,8 +546,10 @@ export function runCuttingOptimizerOptimized(
     const { settings: eff, pieces } = effectiveSettings(group, settings)
     const formats = candidateFormats(group)
     const trials = formats.map(f => {
-      const { sheets, unplaced, strategiesChecked } = optimizePack(pieces, f.width, f.height, eff, timeLimitPerGroupMs)
-      return { width: f.width, height: f.height, sheets, unplaced, strategiesChecked }
+      const swap = eff.respect_pattern && patternSwap(group.patternDirection, f.width, f.height)
+      const { sheets, unplaced, strategiesChecked } = optimizePack(orientPieces(pieces, swap), f.width, f.height, eff, timeLimitPerGroupMs)
+      const restored = restoreOrientation({ sheets, unplaced }, pieces, swap)
+      return { width: f.width, height: f.height, sheets: restored.sheets, unplaced: restored.unplaced, strategiesChecked }
     })
     const chosen = pickBestFormat(trials)
     const checked = trials.reduce((s, t) => s + (t.strategiesChecked ?? 0), 0)
