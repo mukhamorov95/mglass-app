@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase-server'
-import { revenueToCover } from '@/lib/breakeven'
+import { revenueToCover, splitFixed, type FixedRow } from '@/lib/breakeven'
 
 // Read-only витрина финансов производства для цеха (санкция владельца на
 // дублирование CFO-данных). Доступ: owner-роли или users.can_view_money.
@@ -9,7 +9,6 @@ import { revenueToCover } from '@/lib/breakeven'
 
 type VarRow = { name: string; pct: number }
 type Income = { name: string; plan: number; vars: VarRow[] }
-type FixedRow = { name: string; amount: number }
 type Funds = { invest: number; training: number; reserve: number; prodBonus: number }
 type Model = { incomes: Income[]; funds: Funds; ownerPct: number; ownerRub: number; fixed: FixedRow[] }
 
@@ -40,7 +39,8 @@ export async function GET() {
       return s + (i.plan || 0) * (1 - varPct)
     }, 0)
     const marginPct = revenuePlan > 0 ? margin / revenuePlan : 0
-    const fixed = m.fixed.reduce((s, f) => s + (f.amount || 0), 0)
+    const split = splitFixed(m.fixed ?? [])
+    const fixed = split.cash
     const f = m.funds
     // Цеху показываем два уровня (решение владельца): операционную ТБ и целевую
     // выручку с бонусным фондом цеха. Фонды развития и доход собственника остаются в CFO.
@@ -50,7 +50,7 @@ export async function GET() {
       fixed,
       funds: { prodBonus: f.prodBonus || 0 },
       fundsRub: { prodBonus: Math.round(margin * (f.prodBonus || 0) / 100) },
-      tb0: revenueToCover(fixed, marginPct),
+      tb0: revenueToCover(split.pnl, marginPct),
       tb1: revenueToCover(fixed, marginPct, (f.prodBonus || 0) / 100),
     }
   }

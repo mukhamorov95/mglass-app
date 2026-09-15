@@ -1,6 +1,6 @@
 // Точки безубыточности финмодели (finplan_models.data) — единственный расчёт.
 // Им пользуются /cfo/breakeven, /cfo/model, финнеделя, цех (/production-app/money)
-// и /ceo. Маршрут: docs/FINMODEL_MANAGER_ROUTE.md, этап Ф1.
+// и /ceo. Маршрут: docs/FINMODEL_MANAGER_ROUTE.md, этапы Ф1–Ф2.
 //
 // Фонды и доход собственника задаются долей маржи: это распределение уже созданной
 // маржи, а не операционные расходы. Доля — в знаменателе, фиксированная сумма
@@ -12,7 +12,27 @@ export type BreakevenModel = {
   ownerPct: number
   ownerRub: number
   overflowBonusPct: number
-  fixed: { name: string; amount: number }[]
+  fixed: FixedRow[]
+}
+
+// Тип статьи постоянных (ТЗ 1.4). Хранится в finplan_models только после «Сохранить»
+// владельца; до этого экран показывает предложение по названию (suggestKind).
+export type FixedKind = 'fixed' | 'step' | 'variable' | 'obligation'
+
+export type FixedRow = {
+  name: string
+  amount: number          // платёж в месяц, ₽ — как уходят деньги
+  kind?: FixedKind
+  // Только для денежных обязательств (кредит, лизинг). Проценты = платёж − тело.
+  body?: number           // погашение тела долга в платеже, ₽/мес
+  amortization?: number   // амортизация предмета лизинга, ₽/мес — расход P&L без движения денег
+}
+
+export const FIXED_KIND_LABELS: Record<FixedKind, string> = {
+  fixed: 'постоянный',
+  step: 'ступенчато-постоянный',
+  variable: 'по сути переменный',
+  obligation: 'денежное обязательство',
 }
 
 export type BreakevenTargets = {
@@ -38,9 +58,51 @@ export const BREAKEVEN_HINTS = {
 export const DISTRIBUTION_NOTE =
   'Фонды и доход собственника — не операционные расходы, а правила распределения денег после того, как маржа создана.'
 
-// Статья долга по названию. Запасной вариант, пока у статьи нет признака типа (этап Ф2):
-// переименованная статья перестаёт считаться долгом.
+// Статья долга по названию — только для предложения типа. Сохранённый kind важнее:
+// иначе переименованная статья тихо перестала бы считаться долгом.
 export const isDebtRow = (name: string) => /кредит|лизинг/i.test(name)
+
+// Предложение типа по названию — не решение: владелец подтверждает сохранением.
+export function suggestKind(name: string): FixedKind {
+  if (isDebtRow(name)) return 'obligation'
+  if (/оклад|зп|зарплат/i.test(name)) return 'step'
+  if (/банковск|эквайринг|транспорт|логистик|доставк/i.test(name)) return 'variable'
+  return 'fixed'
+}
+
+export function kindOf(f: FixedRow): { kind: FixedKind; suggested: boolean } {
+  return f.kind ? { kind: f.kind, suggested: false } : { kind: suggestKind(f.name), suggested: true }
+}
+
+export type FixedSplit = {
+  cash: number            // все платежи в месяц — сколько денег уходит
+  pnl: number             // расходы P&L: без тела долга, с амортизацией
+  opex: number            // постоянные без обязательств
+  interest: number        // проценты по обязательствам (платёж − тело)
+  body: number            // тело долга
+  amortization: number
+  unsplit: string[]       // обязательства, у которых тело не отделено — вся сумма в P&L
+}
+
+// Тело долга — не расход, а возврат денег: в операционную ТБ не входит (ТЗ 1.3).
+// Пока тело не отделено, платёж целиком остаётся в P&L — цифры как раньше, но с предупреждением.
+export function splitFixed(fixed: FixedRow[]): FixedSplit {
+  const r: FixedSplit = { cash: 0, pnl: 0, opex: 0, interest: 0, body: 0, amortization: 0, unsplit: [] }
+  for (const f of fixed ?? []) {
+    const amount = f.amount || 0
+    r.cash += amount
+    if (kindOf(f).kind !== 'obligation') { r.opex += amount; r.pnl += amount; continue }
+    const split = f.body != null || f.amortization != null
+    if (!split) r.unsplit.push(f.name)
+    const body = Math.min(Math.max(f.body || 0, 0), amount)
+    const amort = Math.max(f.amortization || 0, 0)
+    r.body += body
+    r.interest += amount - body
+    r.amortization += amort
+    r.pnl += amount - body + amort
+  }
+  return r
+}
 
 // Выручка, при которой маржа покрывает постоянные, заданную долю маржи и фиксированную сумму.
 // marginPct и marginShare — доли (0..1).
@@ -61,11 +123,13 @@ export type BreakevenAnalysis = {
   fundsRub: number
   ownerRub: number         // доход собственника при плановой выручке: % от маржи + фикс
   distributable: number    // маржа − фонды
-  fixed: number
+  fixed: number            // все платежи в месяц
+  split: FixedSplit
   remainder: number        // маржа − фонды − собственник − постоянные
   overflow: number
   overflowBonus: number
-  tb0: number | null
+  tb0: number | null      // операционная: расходы P&L без тела долга
+  tbCash: number | null   // та же, но с платежами по телу долга
   tb1: number | null
   tbTarget: number | null
 }
@@ -84,16 +148,19 @@ export function analyzeBreakeven(m: BreakevenModel): BreakevenAnalysis {
   const fundsRub = margin * fundsShare
   const ownerShare = (m.ownerPct || 0) / 100
   const ownerRub = margin * ownerShare + (m.ownerRub || 0)
-  const fixed = (m.fixed ?? []).reduce((s, x) => s + (x.amount || 0), 0)
+  const split = splitFixed(m.fixed ?? [])
+  const fixed = split.cash
   const remainder = margin - fundsRub - ownerRub - fixed
   const overflow = Math.max(0, remainder)
 
   return {
     revenue, perIncome, margin, marginPct, fundsShare, fundsRub, ownerRub,
     distributable: margin - fundsRub,
-    fixed, remainder, overflow,
+    fixed, split, remainder, overflow,
     overflowBonus: overflow * (m.overflowBonusPct || 0) / 100,
-    tb0: revenueToCover(fixed, marginPct),
+    // Целевые выручки — денежные: фонды и собственник получают то, что осталось после всех платежей
+    tb0: revenueToCover(split.pnl, marginPct),
+    tbCash: revenueToCover(split.cash, marginPct),
     tb1: revenueToCover(fixed, marginPct, fundsShare),
     tbTarget: revenueToCover(fixed, marginPct, fundsShare + ownerShare, m.ownerRub || 0),
   }
@@ -133,5 +200,5 @@ export function combineUnits(units: BreakevenModel[]): BreakevenModel {
 }
 
 export function withoutDebt(m: BreakevenModel): BreakevenModel {
-  return { ...m, fixed: (m.fixed ?? []).filter(f => !isDebtRow(f.name)) }
+  return { ...m, fixed: (m.fixed ?? []).filter(f => kindOf(f).kind !== 'obligation') }
 }
