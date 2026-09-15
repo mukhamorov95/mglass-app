@@ -1,14 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import { orderContribution, contributionColor, SHOP_LOAD_WINDOW_DAYS, shopLoadWindowStart, rub, pct, m2 } from '@/lib/unitEconomics'
+import { orderContribution, contributionColor, rub, pct, m2 } from '@/lib/unitEconomics'
 import { computeMaterialUsage, isSheetMaterial, type UsageItem } from '@/lib/materialUsage'
 import { CALC_REUSE_RATE } from '@/lib/autoWasteApply'
-import { DEFAULT_SHOP_SALARIES, laborRates, pieceLaborCost, type ShopThroughput } from '@/lib/laborModel'
 import { VAT } from '@/lib/b2bCalculator'
 
-// Экономика ОДНОГО заказа — только владелец, под /cfo. Все цифры себестоимости и
-// вклада — из lib/unitEconomics (одно определение на всю систему). Оклады цеха
-// в себестоимость не входят: ниже они показаны справочно, как доля нагрузки.
+// Экономика ОДНОГО заказа — только владелец, под /cfo. Все цифры — из lib/unitEconomics
+// (одно определение на всю систему). Цех на окладе: работу цеха на заказ не делим и
+// ставок «за м², деталь, погонный метр» не показываем — решение владельца 15.09.
 
 export const dynamic = 'force-dynamic'
 
@@ -30,10 +29,8 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
     return <div className="bg-[#f5f5f3] min-h-screen p-8 text-center text-sm text-[#9a9a95]">Заказ не найден. <Link href="/cfo/order-economics" className="text-blue-600">← К списку</Link></div>
   }
 
-  const since = shopLoadWindowStart()
-  const [{ data: mats }, { data: windowRaw }, { data: variants }] = await Promise.all([
+  const [{ data: mats }, { data: variants }] = await Promise.all([
     svc.from('b2b_materials').select('id, name, thickness, sheet_width, sheet_height, pattern_direction'),
-    svc.from('b2b_orders').select('items').is('archived_at', null).gte('launched_at', since),
     svc.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
   ])
 
@@ -79,27 +76,6 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
   const scrapRisk = usage.reduce((s, u) => s + Math.max(0, u.fullSheetsCost - (storedByMaterial.get(u.materialKey) ?? 0)), 0)
   const contributionIfScrap = c.contribution - Math.round(scrapRisk - scrapRisk * VAT / (100 + VAT))
 
-  // ── Нагрузка цеха (справочно). Оклады — постоянный расход, в себестоимость не
-  // входят. Показываем, какую долю окладов занял заказ при загрузке последних 30 дней. ──
-  let thNet = 0, thEdge = 0, thDrilled = 0
-  for (const w of (windowRaw ?? []) as Record<string, unknown>[]) {
-    for (const it of (Array.isArray(w.items) ? w.items as RawItem[] : [])) {
-      const q = num(it.quantity)
-      thNet += num(it.width) * num(it.height) / 1e6 * q
-      thEdge += (num(it.perimeterM) || 2 * (num(it.width) + num(it.height)) / 1000) * q
-      if (it.hasHoles) thDrilled += q
-    }
-  }
-  const throughput: ShopThroughput = { netM2: thNet, edgeM: thEdge, drilledPcs: thDrilled, packedPcs: 0 }
-  const rates = laborRates(DEFAULT_SHOP_SALARIES, throughput)
-  let ordEdge = 0, ordDrilled = 0
-  for (const it of rawItems) {
-    ordEdge += (num(it.perimeterM) || 2 * (num(it.width) + num(it.height)) / 1000) * num(it.quantity)
-    if (it.hasHoles) ordDrilled += num(it.quantity)
-  }
-  const load = pieceLaborCost(rates, { netM2: c.netM2, edgeM: ordEdge, drilledPcs: ordDrilled, pcs: c.pieces })
-  const coveragePct = load.total > 0 ? Math.round(c.contribution / load.total * 100) : 0
-
   const numLabel = o.custom_number ?? `#${o.id}`
   const discount = num(o.discount_percent)
 
@@ -119,15 +95,22 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
           </div>
         </div>
 
-        {/* Итог в одну строку: выручка − переменные − НДС = вклад */}
+        {/* Итог в одну строку: выручка − переменные − НДС = остаётся с заказа */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Kpi label="Выручка" value={`${fmt(c.revenue)} ₽`} sub="с НДС, после скидки" />
           <Kpi label="Переменные" value={`− ${fmt(c.variable)} ₽`} sub="материал, закалка, доставка, упаковка" />
           {c.vatToPay >= 0
             ? <Kpi label="НДС к уплате" value={`− ${fmt(c.vatToPay)} ₽`} sub="исходящий − входящий" />
             : <Kpi label="НДС к возмещению" value={`+ ${fmt(-c.vatToPay)} ₽`} sub="входящий больше исходящего" />}
-          <Kpi label="Вклад" value={`${fmt(c.contribution)} ₽`} cls={cls} sub={`${pct(c.contributionPct)}% от выручки без НДС`} bold />
+          <Kpi label="Остаётся с заказа" value={`${fmt(c.contribution)} ₽`} cls={cls} sub={`${pct(c.contributionPct)}% от выручки без НДС`} bold />
         </div>
+
+        {/* Что значит последняя цифра — простыми словами, на цифрах этого заказа */}
+        <p className={`text-xs leading-relaxed rounded-lg px-3 py-2 border ${c.contribution > 0 ? 'bg-white border-[#e4e4e0] text-[#4b4b47]' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {c.contribution > 0
+            ? <>Это не вложение, а то, что заказ приносит. Клиент заплатил {fmt(c.revenue)} ₽, из них {fmt(c.variable)} ₽ ушло на материал, закалку, доставку и упаковку, {fmt(Math.max(0, c.vatToPay))} ₽ — НДС в бюджет. <b>Остаётся {fmt(c.contribution)} ₽</b> — из таких остатков по всем заказам месяца платятся оклады, аренда, лизинг и кредит, а что сверху — прибыль.</>
+            : <>Заказ в минусе на {fmt(-c.contribution)} ₽: материал, закалка, доставка, упаковка и НДС стоят больше, чем заплатил клиент. На оклады и аренду с этого заказа не остаётся ничего — их доплачивают другие заказы.</>}
+        </p>
 
         {/* Себестоимость: что посчитано и как */}
         <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
@@ -168,18 +151,12 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
             <Row label="− НДС к вычету" value={`${fmt(c.vatIn)} ₽`} />
             <Row label="− Переменные без НДС" value={`${fmt(c.variable - c.vatIn)} ₽`} />
             <Row label={c.vatToPay >= 0 ? '= НДС к уплате' : '= НДС к возмещению'} value={`${fmt(Math.abs(c.vatToPay))} ₽`} bold />
-            <Row label="= Вклад" value={`${fmt(c.contribution)} ₽`} bold valueClass={cls} />
+            <Row label="= Остаётся с заказа" value={`${fmt(c.contribution)} ₽`} bold valueClass={cls} />
           </div>
 
-          {c.excluded.length > 0 && (
-            <div className="px-4 py-2.5 border-t border-[#f0f0ec] text-[11px] text-[#6b6b66]">
-              <span className="font-medium text-[#111110]">Не входит в себестоимость: </span>
-              {c.excluded.map(x => `${x.label} ${fmt(x.amount)} ₽ — ${x.why}`).join('; ')}.
-            </div>
-          )}
         </div>
 
-        <div className="grid md:grid-cols-2 gap-3">
+        <div>
           {/* Материал: откуда отход */}
           <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
             <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Материал: откуда отход</p>
@@ -201,42 +178,13 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
                 {scrapRisk > 0 && (
                   <p className="text-[11px] text-[#6b6b66] leading-relaxed">
                     <span className="font-medium text-amber-700">Риск остатков: </span>
-                    если остаток не уйдёт в другие заказы, материал дороже на {fmt(scrapRisk)} ₽ и вклад станет <span className={`font-mono font-semibold ${COLOR[contributionColor(c.revenueExVat > 0 ? contributionIfScrap / c.revenueExVat * 100 : 0)]}`}>{fmt(contributionIfScrap)} ₽</span>.
+                    если остаток не уйдёт в другие заказы, материал дороже на {fmt(scrapRisk)} ₽ и с заказа останется <span className={`font-mono font-semibold ${COLOR[contributionColor(c.revenueExVat > 0 ? contributionIfScrap / c.revenueExVat * 100 : 0)]}`}>{fmt(contributionIfScrap)} ₽</span>.
                   </p>
                 )}
               </div>
             )}
           </div>
 
-          {/* Нагрузка цеха — справочно */}
-          <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Оклады цеха — доля заказа</p>
-            <p className="text-[10px] text-[#9a9a95] mb-3">Справочно. Постоянный расход, в себестоимость не входит.</p>
-            <table className="w-full text-xs">
-              <tbody>
-                {([['Резка', load.cutting, `${fmt(rates.cuttingPerM2)} ₽/м²`], ['Сверловка', load.drilling, `${fmt(rates.drillingPerPiece)} ₽/дет.`],
-                   ['Кромка', load.edge, `${fmt(rates.edgePerM)} ₽/пог.м`], ['Упаковщик', load.packaging, `${fmt(rates.packagingPerM2)} ₽/м²`]] as [string, number, string][])
-                  .map(([l, v, rate]) => (
-                  <tr key={l} className="border-b border-[#f7f7f5] last:border-0">
-                    <td className="py-1 text-[#6b6b66]">{l} <span className="text-[10px] text-[#c4c4be]">{rate}</span></td>
-                    <td className="py-1 text-right font-mono">{fmt(v)} ₽</td>
-                  </tr>
-                ))}
-                <tr className="border-t border-[#e4e4e0]">
-                  <td className="py-1.5 font-semibold text-[#111110]">Доля окладов</td>
-                  <td className="py-1.5 text-right font-mono font-bold">{fmt(load.total)} ₽</td>
-                </tr>
-              </tbody>
-            </table>
-            <p className="text-[11px] text-[#6b6b66] mt-2 leading-relaxed">
-              {c.contribution > 0
-                ? <>Вклад заказа покрывает <span className={`font-mono font-semibold ${coveragePct >= 100 ? 'text-emerald-600' : 'text-amber-600'}`}>{coveragePct}%</span> этой доли.</>
-                : <span className="text-red-600">Вклад отрицательный — заказ не покрывает даже свои переменные расходы, на оклады не остаётся ничего.</span>}
-            </p>
-            <p className="text-[10px] text-[#9a9a95] mt-1 leading-relaxed">
-              Ставка = оклад ÷ выпуск за {SHOP_LOAD_WINDOW_DAYS} дней ({fmt(thNet)} м², {fmt(thDrilled)} дет. со сверловкой). Больше загрузка — меньше доля на каждый заказ.
-            </p>
-          </div>
         </div>
 
         {/* Позиции */}

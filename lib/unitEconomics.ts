@@ -21,8 +21,6 @@ export type ContributionLine = {
   vatIn: number        // ₽ НДС к вычету по этой статье
 }
 
-export type ExcludedLine = { key: string; label: string; amount: number; why: string }
-
 export type OrderContribution = {
   revenue: number          // выручка с НДС (после скидки)
   vatOut: number           // НДС исходящий
@@ -33,7 +31,6 @@ export type OrderContribution = {
   vatToPay: number         // исходящий − входящий
   contribution: number     // выручка − переменные − НДС к уплате
   contributionPct: number  // % от выручки без НДС
-  excluded: ExcludedLine[] // что калькулятор кладёт в себестоимость, а мы — нет
   pieces: number
   netM2: number
   billedM2: number         // площадь по закупке: нетто + отход по раскрою
@@ -47,7 +44,7 @@ const r = (x: number) => Math.round(x)
 const ru = (x: number, d = 2) => x.toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d })
 
 export function orderContribution(revenueIncVat: number, items: ContributionItem[], vatRate = VAT): OrderContribution {
-  let material = 0, tempering = 0, services = 0, transport = 0, packaging = 0, edge = 0
+  let material = 0, tempering = 0, services = 0, transport = 0, packaging = 0
   let pieces = 0, temperedPieces = 0, netM2 = 0, billedM2 = 0, temperedM2 = 0
   const temperThk = new Set<number>()
 
@@ -61,7 +58,6 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
     tempering += n(it.costTempering)
     transport += n(it.costTransport)
     packaging += n(it.costPackaging)
-    edge += n(it.costEdge)
     const svc = Array.isArray(it.services) ? it.services as Record<string, unknown>[] : []
     services += svc.reduce((a, s) => a + n(s.costPrice), 0) + n(it.costFacet) + n(it.costTriplex)
     if (it.hasTempering) {
@@ -103,18 +99,12 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
   const contribution = revenue - variable - vatToPay
   const revenueExVat = revenue - vatOut
 
-  const excluded: ExcludedLine[] = edge > 0
-    ? [{ key: 'edge', label: 'Кромка', amount: r(edge),
-         why: 'в калькуляторе 40 ₽/пог.м — это работа цеха на окладе, постоянный расход' }]
-    : []
-
   return {
     revenue, vatOut, revenueExVat,
     lines: rounded,
     variable, vatIn, vatToPay,
     contribution,
     contributionPct: revenueExVat > 0 ? Math.round(contribution / revenueExVat * 1000) / 10 : 0,
-    excluded,
     pieces, netM2: Math.round(netM2 * 100) / 100, billedM2: Math.round(billedM2 * 100) / 100,
   }
 }
@@ -155,12 +145,4 @@ export function m2(x: number, digits = 1): string {
 // Цвет вклада — пороги проекта: < 25% красный, 25–35% жёлтый, ≥ 35% зелёный.
 export function contributionColor(pct: number): 'red' | 'amber' | 'green' {
   return pct < 25 ? 'red' : pct < 35 ? 'amber' : 'green'
-}
-
-// Окно для нагрузки цеха — скользящие 30 дней. Календарный месяц в знаменателе
-// удваивает ставки в первой половине месяца: полный оклад делится на половину выпуска.
-export const SHOP_LOAD_WINDOW_DAYS = 30
-
-export function shopLoadWindowStart(now = Date.now()): string {
-  return new Date(now - SHOP_LOAD_WINDOW_DAYS * 86_400_000).toISOString()
 }
