@@ -278,8 +278,8 @@ export default function BreakevenPage() {
       </div>
 
       <div className="px-5 pt-4 grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4 max-w-[1280px]">
-        {/* ЛЕВАЯ КОЛОНКА — модель */}
-        <div className="space-y-4">
+        {/* ЛЕВАЯ КОЛОНКА — модель. min-w-0: без него широкая таблица распирает колонку сетки */}
+        <div className="space-y-4 min-w-0">
           {/* Доходы */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
