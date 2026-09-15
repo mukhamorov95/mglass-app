@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import { orderContribution, contributionColor, SHOP_LOAD_WINDOW_DAYS, shopLoadWindowStart } from '@/lib/unitEconomics'
+import { orderContribution, contributionColor, SHOP_LOAD_WINDOW_DAYS, shopLoadWindowStart, rub, pct, m2 } from '@/lib/unitEconomics'
 import { computeMaterialUsage, isSheetMaterial, type UsageItem } from '@/lib/materialUsage'
 import { CALC_REUSE_RATE } from '@/lib/autoWasteApply'
 import { DEFAULT_SHOP_SALARIES, laborRates, pieceLaborCost, type ShopThroughput } from '@/lib/laborModel'
@@ -13,7 +13,7 @@ import { VAT } from '@/lib/b2bCalculator'
 export const dynamic = 'force-dynamic'
 
 const num = (x: unknown) => Number(x) || 0
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU')
+const fmt = rub
 const COLOR = { red: 'text-red-600', amber: 'text-amber-600', green: 'text-emerald-600' } as const
 
 type RawItem = Record<string, unknown>
@@ -110,7 +110,7 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
           <div>
             <h1 className="text-sm font-semibold text-[#111110]">Экономика заказа {numLabel} · {String(o.client_name ?? '—')}</h1>
             <p className="text-[10px] text-[#9a9a95] mt-0.5">
-              Запущен {o.launched_at ? String(o.launched_at).slice(0, 10) : '—'} · {c.pieces} дет. · {c.netM2.toLocaleString('ru-RU')} м² нетто{discount > 0 ? ` · скидка ${discount}%` : ''}
+              Запущен {o.launched_at ? String(o.launched_at).slice(0, 10) : '—'} · {c.pieces} дет. · {m2(c.netM2)} м² нетто{discount > 0 ? ` · скидка ${discount}%` : ''}
             </p>
           </div>
           <div className="flex gap-2">
@@ -123,8 +123,10 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Kpi label="Выручка" value={`${fmt(c.revenue)} ₽`} sub="с НДС, после скидки" />
           <Kpi label="Переменные" value={`− ${fmt(c.variable)} ₽`} sub="материал, закалка, доставка, упаковка" />
-          <Kpi label="НДС к уплате" value={`− ${fmt(c.vatToPay)} ₽`} sub="исходящий − входящий" />
-          <Kpi label="Вклад" value={`${fmt(c.contribution)} ₽`} cls={cls} sub={`${c.contributionPct.toLocaleString('ru-RU')}% от выручки без НДС`} bold />
+          {c.vatToPay >= 0
+            ? <Kpi label="НДС к уплате" value={`− ${fmt(c.vatToPay)} ₽`} sub="исходящий − входящий" />
+            : <Kpi label="НДС к возмещению" value={`+ ${fmt(-c.vatToPay)} ₽`} sub="входящий больше исходящего" />}
+          <Kpi label="Вклад" value={`${fmt(c.contribution)} ₽`} cls={cls} sub={`${pct(c.contributionPct)}% от выручки без НДС`} bold />
         </div>
 
         {/* Себестоимость: что посчитано и как */}
@@ -165,7 +167,7 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
             <Row label="Выручка без НДС" value={`${fmt(c.revenueExVat)} ₽`} />
             <Row label="− НДС к вычету" value={`${fmt(c.vatIn)} ₽`} />
             <Row label="− Переменные без НДС" value={`${fmt(c.variable - c.vatIn)} ₽`} />
-            <Row label="= НДС к уплате" value={`${fmt(c.vatToPay)} ₽`} bold />
+            <Row label={c.vatToPay >= 0 ? '= НДС к уплате' : '= НДС к возмещению'} value={`${fmt(Math.abs(c.vatToPay))} ₽`} bold />
             <Row label="= Вклад" value={`${fmt(c.contribution)} ₽`} bold valueClass={cls} />
           </div>
 
@@ -189,7 +191,7 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
                   <div key={u.materialKey} className="text-xs">
                     <p className="text-[#111110] font-medium">{u.materialLabel}</p>
                     <p className="text-[11px] text-[#6b6b66] mt-0.5 font-mono">
-                      нетто {u.netM2} м² · {u.sheets} л. ({u.sheetM2} м²) · остаток {u.remnantM2} м²
+                      нетто {m2(u.netM2)} м² · {u.sheets} л. ({m2(u.sheetM2)} м²) · остаток {m2(u.remnantM2)} м²
                     </p>
                   </div>
                 ))}
@@ -250,7 +252,7 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
                     <td className="px-3 py-2 font-mono text-[#6b6b66]">{num(it.width)}×{num(it.height)}</td>
                     <td className="px-3 py-2 font-mono">{num(it.quantity)}</td>
                     <td className="px-3 py-2 font-mono text-[#9a9a95]">{num(it.thickness)}</td>
-                    <td className="px-3 py-2 font-mono text-[#6b6b66]">{num(it.wastePercent).toLocaleString('ru-RU')}%</td>
+                    <td className="px-3 py-2 font-mono text-[#6b6b66]">{pct(num(it.wastePercent))}%</td>
                     <td className="px-3 py-2 font-mono">{fmt(num(it.costMaterial))}</td>
                     <td className="px-3 py-2">{it.hasTempering ? '✓' : '—'}</td>
                     <td className="px-3 py-2">{it.hasHoles ? '✓' : '—'}</td>

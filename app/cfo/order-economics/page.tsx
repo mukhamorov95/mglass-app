@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import { orderContribution, sumContributions, contributionColor, type OrderContribution } from '@/lib/unitEconomics'
+import { orderContribution, sumContributions, contributionColor, rub, pct, type OrderContribution } from '@/lib/unitEconomics'
 
 // Экономика B2B-заказов за месяц — только /cfo. Себестоимость и вклад каждого
 // заказа — из lib/unitEconomics, тем же расчётом, что на карточке заказа и в списке
@@ -12,11 +12,12 @@ export const dynamic = 'force-dynamic'
 const MONTHS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
 const COLOR = { red: 'text-red-600', amber: 'text-amber-600', green: 'text-emerald-600' } as const
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU')
+const fmt = rub
 function fmtM(n: number) {
-  if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(2).replace('.', ',') + ' млн'
-  if (Math.abs(n) >= 1_000) return Math.round(n / 1_000) + ' тыс'
-  return String(Math.round(n))
+  const sign = n < 0 ? '−' : '', a = Math.abs(n)
+  if (a >= 1_000_000) return sign + (a / 1_000_000).toFixed(2).replace('.', ',') + ' млн'
+  if (a >= 1_000) return sign + Math.round(a / 1_000) + ' тыс'
+  return sign + String(Math.round(a))
 }
 const num = (x: unknown) => Number(x) || 0
 
@@ -91,9 +92,9 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Kpi label={`Выручка · ${p.count} зак.`} value={`${fmtM(p.revenue)} ₽`} sub="с НДС" />
           <Kpi label="Переменные" value={`− ${fmtM(p.variable)} ₽`} sub="материал, закалка, доставка, упаковка" />
-          <Kpi label="НДС к уплате" value={`− ${fmtM(p.vatToPay)} ₽`} sub="исходящий − входящий" />
+          <Kpi label="НДС к уплате" value={`${p.vatToPay >= 0 ? '− ' : '+ '}${fmtM(Math.abs(p.vatToPay))} ₽`} sub="исходящий − входящий" />
           <Kpi label="Вклад" value={`${fmtM(p.contribution)} ₽`} cls={COLOR[contributionColor(p.contributionPct)]}
-               sub={`${p.contributionPct.toLocaleString('ru-RU')}% от выручки без НДС`} bold />
+               sub={`${pct(p.contributionPct)}% от выручки без НДС`} bold />
         </div>
 
         {/* Покрытие постоянных — ради этой цифры и считается вклад */}
@@ -140,7 +141,7 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
                   <td className="px-3 py-2 font-mono text-right text-[#6b6b66]">{fmt(r.variable)}</td>
                   <td className="px-3 py-2 font-mono text-right text-[#9a9a95]">{fmt(r.vatToPay)}</td>
                   <td className={`px-3 py-2 font-mono text-right font-semibold ${COLOR[contributionColor(r.contributionPct)]}`}>{fmt(r.contribution)}</td>
-                  <td className={`px-3 py-2 font-mono text-right font-bold ${COLOR[contributionColor(r.contributionPct)]}`}>{r.contributionPct.toLocaleString('ru-RU')}%</td>
+                  <td className={`px-3 py-2 font-mono text-right font-bold ${COLOR[contributionColor(r.contributionPct)]}`}>{pct(r.contributionPct)}%</td>
                 </tr>
               ))}
             </tbody>

@@ -140,6 +140,18 @@ export function sumContributions(rows: OrderContribution[]): PortfolioContributi
   }
 }
 
+// Рубли и проценты для экранов экономики: минус — типографский «−», дробные — с запятой.
+export function rub(x: number): string {
+  const v = Math.round(x)
+  return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('ru-RU')
+}
+export function pct(x: number): string {
+  return (x < 0 ? '−' : '') + Math.abs(x).toLocaleString('ru-RU', { maximumFractionDigits: 1 })
+}
+export function m2(x: number, digits = 1): string {
+  return x.toLocaleString('ru-RU', { maximumFractionDigits: digits })
+}
+
 // Цвет вклада — пороги проекта: < 25% красный, 25–35% жёлтый, ≥ 35% зелёный.
 export function contributionColor(pct: number): 'red' | 'amber' | 'green' {
   return pct < 25 ? 'red' : pct < 35 ? 'amber' : 'green'
