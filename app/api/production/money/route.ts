@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase-server'
+import { revenueToCover } from '@/lib/breakeven'
 
 // Read-only витрина финансов производства для цеха (санкция владельца на
 // дублирование CFO-данных). Доступ: owner-роли или users.can_view_money.
@@ -41,22 +42,16 @@ export async function GET() {
     const marginPct = revenuePlan > 0 ? margin / revenuePlan : 0
     const fixed = m.fixed.reduce((s, f) => s + (f.amount || 0), 0)
     const f = m.funds
-    // ТБ-лесенка (как хочет владелец): ТБ-0 в ноль → ТБ-1 +фонд бонусов цеха →
-    // ТБ-2 +остальные фонды (инвестиции, обучение, резерв) → ТБ-цель +доход собственника
-    // Цеху показываем только ТБ-0 и ТБ-1 (решение владельца) — уровни с фондами
-    // развития и доходом собственника остаются в CFO и наружу не отдаются
-    const be = (fundsPct: number) => {
-      const denom = marginPct * (1 - fundsPct / 100)
-      return denom > 0 ? Math.round(fixed / denom) : null
-    }
+    // Цеху показываем два уровня (решение владельца): операционную ТБ и целевую
+    // выручку с бонусным фондом цеха. Фонды развития и доход собственника остаются в CFO.
     model = {
       revenuePlan,
       marginPct: Math.round(marginPct * 1000) / 10,
       fixed,
       funds: { prodBonus: f.prodBonus || 0 },
       fundsRub: { prodBonus: Math.round(margin * (f.prodBonus || 0) / 100) },
-      tb0: be(0),
-      tb1: be(f.prodBonus || 0),
+      tb0: revenueToCover(fixed, marginPct),
+      tb1: revenueToCover(fixed, marginPct, (f.prodBonus || 0) / 100),
     }
   }
 

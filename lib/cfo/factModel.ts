@@ -1,12 +1,15 @@
 // Чистая финмодель для /cfo/model. Источник правды — «Точка безубыточности»
 // (finplan_models): два юнита M-Glass и Производство, их доходы (план), переменные
 // (VC% = сумма статей), постоянные расходы и фонды. Налог уже сидит внутри VC
-// (УСН/НДС статьями), поэтому отдельно не начисляется. Та же математика ТБ, что
-// в lib/breakeven.ts и на странице /cfo/breakeven.
+// (УСН/НДС статьями), поэтому отдельно не начисляется. ТБ считает lib/breakeven.ts —
+// та же функция, что на /cfo/breakeven.
 //
 // EBITDA считаем корректно — ДО обслуживания долга: кредит и лизинг вынесены из
 // постоянных отдельной строкой. Маржа − постоянные_без_долга = EBITDA; минус долг
 // = операционная прибыль.
+
+import { revenueToCover } from '../breakeven'
+export { isDebtRow } from '../breakeven'
 
 export type IncomeLine = {
   id: string
@@ -28,6 +31,8 @@ export type BeInput = {
   incomes: IncomeLine[]
   fixed: FixedLine[]
   fundsRub: number    // фонды из маржи, ₽ (от постоянных не зависят)
+  ownerPctRub?: number   // доход собственника в % от маржи, пересчитанный в ₽ при плане
+  ownerFixedRub?: number // доход собственника фиксированной суммой, ₽/мес
 }
 
 export type BePnl = {
@@ -43,12 +48,12 @@ export type BePnl = {
   operating: number    // EBITDA − долг (операционная прибыль после долга)
   operatingPct: number
   fundsRub: number
-  remainder: number    // операционная прибыль − фонды (как «Остаток» на break-even)
-  tb0: number | null   // ТБ-0: доход «в ноль» без фондов (все постоянные)
-  tb1: number | null   // ТБ-1: с фондами
+  ownerRub: number     // доход собственника при плановом доходе
+  remainder: number    // прибыль после долга − фонды − собственник (как «Остаток» на break-even)
+  tb0: number | null      // операционная точка безубыточности
+  tb1: number | null      // целевая выручка с фондами
+  tbTarget: number | null // целевая выручка с доходом собственника
 }
-
-export const isDebtRow = (name: string) => /кредит|лизинг/i.test(name)
 
 const r = (n: number) => Math.round(n)
 
@@ -71,11 +76,14 @@ export function computeBe(input: BeInput, excludedFixedKeys: string[] = []): BeP
   const ebitda = margin - fixedNoDebt
   const operating = margin - fixedTotal
   const fundsRub = input.fundsRub
-  const remainder = operating - fundsRub
+  const ownerRub = (input.ownerPctRub ?? 0) + (input.ownerFixedRub ?? 0)
+  const remainder = operating - fundsRub - ownerRub
 
-  const fundsPct = margin > 0 ? fundsRub / margin : 0
-  const tb0 = marginPct > 0 ? r(fixedTotal / marginPct) : null
-  const tb1 = marginPct > 0 && 1 - fundsPct > 0 ? r(fixedTotal / (marginPct * (1 - fundsPct))) : null
+  const fundsShare = margin > 0 ? fundsRub / margin : 0
+  const ownerShare = margin > 0 ? (input.ownerPctRub ?? 0) / margin : 0
+  const tb0 = revenueToCover(fixedTotal, marginPct)
+  const tb1 = revenueToCover(fixedTotal, marginPct, fundsShare)
+  const tbTarget = revenueToCover(fixedTotal, marginPct, fundsShare + ownerShare, input.ownerFixedRub ?? 0)
 
   return {
     revenue: r(revenue),
@@ -90,9 +98,11 @@ export function computeBe(input: BeInput, excludedFixedKeys: string[] = []): BeP
     operating: r(operating),
     operatingPct: revenue > 0 ? Math.round((operating / revenue) * 1000) / 10 : 0,
     fundsRub: r(fundsRub),
+    ownerRub: r(ownerRub),
     remainder: r(remainder),
     tb0,
     tb1,
+    tbTarget,
   }
 }
 

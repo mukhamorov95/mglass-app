@@ -9,6 +9,7 @@ import {
   type BePnl,
 } from '@/lib/cfo/factModel'
 import type { SourceDiag, Verdict } from '@/lib/cfo/sourceDiagnostics'
+import { BREAKEVEN_LABELS, BREAKEVEN_HINTS, DISTRIBUTION_NOTE } from '@/lib/breakeven'
 
 type FactInfo = { revenue: number; captured: boolean }
 
@@ -16,6 +17,7 @@ type Props = {
   incomes: IncomeLine[]
   fixed: FixedLine[]
   fundsRubByUnit: Record<string, number>
+  ownerByUnit: Record<string, { pctRub: number; fixedRub: number }>
   factByUnit: Record<string, FactInfo>
   diagnostics: SourceDiag[]
   daysElapsed: number
@@ -34,7 +36,7 @@ function fmt(n: number) {
 function posColor(n: number) { return n >= 0 ? '#1f9d57' : '#d04a3b' }
 function marginColor(pct: number) { return pct >= 35 ? '#1f9d57' : pct >= 25 ? '#c98a12' : '#d04a3b' }
 
-export default function ModelClient({ incomes, fixed, fundsRubByUnit, factByUnit, diagnostics, daysElapsed, monthLabel, hasData, updatedAt }: Props) {
+export default function ModelClient({ incomes, fixed, fundsRubByUnit, ownerByUnit, factByUnit, diagnostics, daysElapsed, monthLabel, hasData, updatedAt }: Props) {
   const [tab, setTab] = useState<Tab>('fact')
   const [excluded, setExcluded] = useState<string[]>([])
   const [unit, setUnit] = useState<string>('all') // 'all' | название юнита
@@ -46,7 +48,12 @@ export default function ModelClient({ incomes, fixed, fundsRubByUnit, factByUnit
     ? Object.values(fundsRubByUnit).reduce((s, v) => s + v, 0)
     : (fundsRubByUnit[unit] ?? 0)
 
-  const input = { incomes: selIncomes, fixed: selFixed, fundsRub }
+  const owners = unit === 'all' ? Object.values(ownerByUnit) : [ownerByUnit[unit] ?? { pctRub: 0, fixedRub: 0 }]
+  const input = {
+    incomes: selIncomes, fixed: selFixed, fundsRub,
+    ownerPctRub: owners.reduce((s, o) => s + o.pctRub, 0),
+    ownerFixedRub: owners.reduce((s, o) => s + o.fixedRub, 0),
+  }
   const presets = scenarioPresets(selFixed)
   const base = computeBe(input, [])
   const scen = computeBe(input, excluded)
@@ -260,11 +267,12 @@ function FactTab({ pnl, incomes, fixed, factByUnit, daysElapsed, monthLabel }: {
               <PnlRow label="− Кредит и лизинг" value={-pnl.debtTotal} sub />
               <PnlRow label="= Прибыль после долга" value={pnl.operating} total color={posColor(pnl.operating)} />
               <PnlRow label="− Фонды из маржи" value={-pnl.fundsRub} sub />
+              {pnl.ownerRub > 0 && <PnlRow label="− Доход собственника" value={-pnl.ownerRub} sub />}
               <PnlRow label="= Остаток (свободные деньги)" value={pnl.remainder} total color={posColor(pnl.remainder)} />
             </tbody>
           </table>
           <p className="text-[11px] text-[#9a9a95] mt-2.5 leading-relaxed">
-            Каждую строку объясняет вкладка <b>«Что это значит»</b>. Безубыточность: ТБ-0 <b>{pnl.tb0 != null ? fmt(pnl.tb0) : '—'}</b> (в ноль), ТБ-1 <b>{pnl.tb1 != null ? fmt(pnl.tb1) : '—'}</b> (с фондами).
+            Каждую строку объясняет вкладка <b>«Что это значит»</b>. {BREAKEVEN_LABELS.tb0}: <b>{pnl.tb0 != null ? fmt(pnl.tb0) : '—'}</b> · {BREAKEVEN_LABELS.tb1.toLowerCase()}: <b>{pnl.tb1 != null ? fmt(pnl.tb1) : '—'}</b> · {BREAKEVEN_LABELS.tbTarget.toLowerCase()}: <b>{pnl.tbTarget != null ? fmt(pnl.tbTarget) : '—'}</b>. {DISTRIBUTION_NOTE}
           </p>
         </Card>
       </div>
@@ -384,7 +392,7 @@ function CmpCol({ label, pnl, shaded }: { label: string; pnl: BePnl; shaded?: bo
       {row('EBITDA', fmt(pnl.ebitda), true, posColor(pnl.ebitda))}
       {row('Кредит и лизинг', fmt(pnl.debtTotal))}
       {row('Прибыль после долга', fmt(pnl.operating), true, posColor(pnl.operating))}
-      {row('Безубыточность ТБ-0', pnl.tb0 != null ? fmt(pnl.tb0) : '—')}
+      {row('Операционная ТБ', pnl.tb0 != null ? fmt(pnl.tb0) : '—')}
     </div>
   )
 }
@@ -468,8 +476,10 @@ function HelpTab() {
     ['Прибыль после долга', 'EBITDA минус кредит и лизинг. Реальная прибыль от операций с учётом выплат по займам.'],
     ['Фонды из маржи', 'Часть прибыли, которую откладываешь на цели: возврат инвестиций, обучение, резерв, бонусы. Задаются % от маржи в «Точке безубыточности».'],
     ['Остаток', 'Что остаётся после всех расходов, долга и отчислений в фонды — свободные деньги. Плюс — бизнес в прибыли, минус — не хватает.'],
-    ['ТБ-0 (точка безубыточности)', 'Какой доход в месяц нужен, чтобы выйти «в ноль» — покрыть все переменные и постоянные, без прибыли. Ниже неё — работаешь в убыток.'],
-    ['ТБ-1', 'То же, но с учётом отчислений в фонды — доход, чтобы и в ноль выйти, и фонды отложить.'],
+    [BREAKEVEN_LABELS.tb0, 'Какой доход в месяц нужен, чтобы выйти «в ноль»: маржинальная прибыль покрывает постоянные расходы, прибыли нет. Ниже — работаешь в убыток.'],
+    [BREAKEVEN_LABELS.tb1, `${BREAKEVEN_HINTS.tb1} Доход, чтобы и в ноль выйти, и фонды отложить.`],
+    [BREAKEVEN_LABELS.tbTarget, `${BREAKEVEN_HINTS.tbTarget} Задаётся в «Точке безубыточности».`],
+    ['Фонды и доход собственника', DISTRIBUTION_NOTE],
   ]
   return (
     <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 shadow-sm">
