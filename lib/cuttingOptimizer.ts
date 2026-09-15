@@ -62,6 +62,10 @@ export type CuttingSettings = {
   edge_margin: number
   allow_rotation: boolean
   respect_pattern: boolean
+  // Остаток листа — кусок не меньше этого (короткая × длинная сторона, мм). Меньше — полоса
+  // в отход. Решение владельца 15.09: 400×800 (в такой кусок влезает каждая шестая деталь).
+  min_remnant_short?: number
+  min_remnant_long?: number
 }
 
 export const DEFAULT_CUTTING_SETTINGS: CuttingSettings = {
@@ -142,12 +146,19 @@ function applyPlacement(placement: Placement, freeRects: FreeRect[], gap: number
 
 // ─── Single-pass packing (pre-sorted input) ────────────────────────────────────
 
-// Minimum remnant size to show (mm) — smaller ones are not worth showing
+// Minimum free-rect size for strip packing (mm) — не путать с порогом остатка
 const MIN_REMNANT_MM = 200
 
-function significantRemnants(freeRects: FreeRect[], e: number): Remnant[] {
+// Порог остатка по умолчанию — как было до 15.09, пока настройки не переданы
+export function isRemnant(w: number, h: number, settings?: Pick<CuttingSettings, 'min_remnant_short' | 'min_remnant_long'>): boolean {
+  const short = settings?.min_remnant_short ?? MIN_REMNANT_MM
+  const long = settings?.min_remnant_long ?? MIN_REMNANT_MM
+  return Math.min(w, h) >= short && Math.max(w, h) >= long
+}
+
+function significantRemnants(freeRects: FreeRect[], e: number, settings?: CuttingSettings): Remnant[] {
   return freeRects
-    .filter(r => r.w >= MIN_REMNANT_MM && r.h >= MIN_REMNANT_MM)
+    .filter(r => isRemnant(r.w, r.h, settings))
     .sort((a, b) => b.w * b.h - a.w * a.h)
     .slice(0, 5) // keep top-5 largest remnants
     .map(r => ({ x: r.x, y: r.y, w: r.w, h: r.h }))
@@ -174,7 +185,7 @@ function packWithOrder(
   function pushSheet() {
     if (curPieces.length === 0) return
     const usedArea = curPieces.reduce((s, p) => s + p.w * p.h, 0)
-    const remnants = significantRemnants(freeRects, e)
+    const remnants = significantRemnants(freeRects, e, settings)
     sheets.push({ index: sheets.length, pieces: curPieces, usedArea, totalArea: sheetW * sheetH, efficiency: Math.round(usedArea / (sheetW * sheetH) * 100), remnants })
     curPieces = []
     freeRects = [{ x: e, y: e, w: sw, h: sh }]
@@ -281,7 +292,7 @@ function packStrip(
     }
 
     const usedArea = cur.reduce((s, p) => s + p.w * p.h, 0)
-    sheets.push({ index: sheets.length, pieces: cur, usedArea, totalArea: sheetW * sheetH, efficiency: Math.round(usedArea / (sheetW * sheetH) * 100), remnants: significantRemnants(frects, e) })
+    sheets.push({ index: sheets.length, pieces: cur, usedArea, totalArea: sheetW * sheetH, efficiency: Math.round(usedArea / (sheetW * sheetH) * 100), remnants: significantRemnants(frects, e, settings) })
     todo = leftover
   }
 

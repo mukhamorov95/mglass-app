@@ -271,6 +271,7 @@ const PRODUCTION_NAV_SHOP: NavItem[] = [
 const PRODUCTION_NAV_SUPPLY: NavItem[] = [
   { href: '/production-app/material', label: 'Материал',         icon: '📦' },
   { href: '/inventory',               label: 'Склад — остатки',  icon: '🏬' },
+  { href: '/production-app/remnants', label: 'Остатки листа',    icon: '🪟' },
   { href: '/b2b-cutting',             label: 'Раскрой стекла',   icon: '✂️' },
   { href: '/production-app/buy',      label: 'Необходимо купить', icon: '🛒' },
   { href: '/production-app/docs',     label: 'Документы',        icon: '📄' },
@@ -397,7 +398,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (mode === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
-    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
+    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/remnants', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
     if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
     if (inSection(pathname, ['/production-app/guide'])) open.push('prod_learn')
   } else if (mode === 'ceo') {
@@ -432,7 +433,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
   }
   if (role === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
-    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
+    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/remnants', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
     if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
     if (inSection(pathname, ['/production-app/guide'])) open.push('prod_learn')
     return open

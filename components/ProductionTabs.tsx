@@ -16,6 +16,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/metrics',  label: '📈 Метрики',     match: p => p.startsWith('/production-app/metrics') },
   { href: '/production-app/no-marks', label: '🕳 Без отметок',  match: p => p.startsWith('/production-app/no-marks') },
   { href: '/production-app/material', label: 'Материал',       match: p => p.startsWith('/production-app/material') },
+  { href: '/production-app/remnants', label: '✂️ Остатки',     match: p => p.startsWith('/production-app/remnants') },
   { href: '/production-app/shipping', label: '📦 Отгрузка',    match: p => p.startsWith('/production-app/shipping') },
   { href: '/production-app/voronezh', label: '🚚 Воронеж',     match: p => p.startsWith('/production-app/voronezh') },
   { href: '/production-app/docs',     label: 'Документы',      match: p => p.startsWith('/production-app/docs') },
