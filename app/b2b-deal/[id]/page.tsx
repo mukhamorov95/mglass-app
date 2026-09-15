@@ -8,6 +8,8 @@ import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { deadlineFor } from '@/lib/b2b/deadline'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { parseNotes } from '@/lib/b2b/publicQuote'
+import { isShipped } from '@/lib/b2b/todayPriorities'
+import { stageDayKey } from '@/lib/production/dayLists'
 
 // А4: одна карточка сделки. Раньше просчёт и заказ жили в двух списках, документы
 // в третьем месте, деньги в четвёртом — менеджер собирал картину по вкладкам.
@@ -75,6 +77,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   )
   const rem = remainderStatus(total, paidMap.get(dealId) ?? 0)
   const paid = rem.paid
+  // Отгрузка — отметка notes.stages.shipped (цех и экран заказов); shipped_date никто не пишет
+  const shipped = isShipped(notes)
+  const shippedDay = stageDayKey((notes.stages as Record<string, unknown> | undefined)?.shipped)
   const history = (Array.isArray(notes.total_history) ? notes.total_history : []) as { old_total?: number; new_total?: number; changed_by?: string; changed_at?: string; reset?: boolean }[]
 
   return (
@@ -157,11 +162,11 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           <dl className="text-[12px] space-y-1">
             <div className="flex justify-between">
               <dt className="text-[#9a9a95]">Срок</dt>
-              <dd className="font-mono">{dt(deadlineFor(notes, order.created_at as string).toISOString())}</dd>
+              <dd className="font-mono">{dt(deadlineFor({ ...notes, launched_at: notes.launched_at ?? order.launched_at ?? undefined }, order.created_at as string).toISOString())}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-[#9a9a95]">Отгрузка</dt>
-              <dd>{notes.shipped_date ? `отгружено ${dt(notes.shipped_date as string)}` : delivery?.method === 'delivery' ? 'доставка' : delivery?.method === 'pickup' ? 'самовывоз' : 'не назначена'}</dd>
+              <dd>{shipped ? (shippedDay ? `отгружено ${dt(shippedDay)}` : 'отгружено') : delivery?.method === 'delivery' ? 'доставка, не отгружено' : delivery?.method === 'pickup' ? 'самовывоз, не отгружено' : 'не отгружено'}</dd>
             </div>
             {delivery?.address && (
               <div className="flex justify-between gap-4"><dt className="text-[#9a9a95]">Адрес</dt><dd className="text-right">{delivery.address}</dd></div>
