@@ -378,7 +378,7 @@ export default function LeadDetailPage() {
     if (!r.ok) { toast('Не удалось: ' + (d.error || '')); return }
     setSaleOpen(false); setSaleAmount(''); setSaleOrderNo(''); setSalePrepay('')
     await patch({ status: 'won' })   // событие «💰 Продано» пишет API продаж
-    toast('Продажа записана в Отдел продаж'); loadEvents()
+    toast('Продажа записана в реестр продаж'); loadEvents()
   }
 
   if (loading) return <div className="min-h-screen bg-[#f8f8f7] p-6 text-[13px] text-[#9a9a95]">Загрузка…</div>
@@ -572,7 +572,7 @@ export default function LeadDetailPage() {
                   </select>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={markSold} className="flex-1 px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold">Записать в Отдел продаж</button>
+                  <button onClick={markSold} className="flex-1 px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold">Записать в реестр продаж</button>
                   <button onClick={() => setSaleOpen(false)} className="px-3 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
                 </div>
               </div>

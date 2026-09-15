@@ -87,7 +87,7 @@ export default function SalesPage() {
         {/* Шапка + переключатель месяца */}
         <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-[18px] font-semibold text-[#111110]">💰 Отдел продаж</h1>
+            <h1 className="text-[18px] font-semibold text-[#111110]">💰 Реестр продаж и оплат</h1>
             {!canAll && <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">только мои</span>}
             <Link href="/crm" className="text-[12px] text-[#0071e3] hover:underline">→ Воронка</Link>
           </div>

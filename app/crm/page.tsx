@@ -227,7 +227,7 @@ export default function CrmPage() {
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">📊 CRM · Продажи
+            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">📊 Воронка продаж
               {scoped && <span className="ml-2 text-[11px] font-medium align-middle px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">только мои</span>}
             </h1>
             <p className="text-[13px] text-[#9a9a95] mt-0.5">

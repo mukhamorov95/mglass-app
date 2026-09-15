@@ -471,7 +471,7 @@ export default function CalculationDetailPage() {
     return (
       <div className="min-h-screen bg-[#f5f5f7] py-6 px-4">
         <div className="max-w-lg mx-auto space-y-4">
-          <Link href="/calculations" className="text-[13px] text-[#6e6e73] hover:text-[#1d1d1f]">← История расчётов</Link>
+          <Link href="/calculations" className="text-[13px] text-[#6e6e73] hover:text-[#1d1d1f]">← Расчёты</Link>
           <div className="bg-white rounded-2xl border border-[#e8e8ed] p-6 space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#6b6b66]">{isBuild ? '📐 Расчёт' : '⚡ Быстрый'}</span>

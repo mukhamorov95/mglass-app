@@ -260,7 +260,7 @@ export default async function SeoDashboardPage() {
       </div>
 
       <p className="mt-6 text-center text-xs text-neutral-400">
-        Заявки приходят с сайта и сразу попадают на доску <Link href="/crm" className="underline">CRM · Продажи</Link>. Выручка считается из «Отдел продаж» по сделкам, привязанным к лидам сайта.
+        Заявки приходят с сайта и сразу попадают на доску <Link href="/crm" className="underline">Воронка продаж</Link>. Выручка считается из «Реестра продаж и оплат» по сделкам, привязанным к лидам сайта.
       </p>
     </div>
   )

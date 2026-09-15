@@ -836,7 +836,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
         <div className="space-y-px">
           {navItem({ href: '/commercial', label: 'Аналитика менеджеров', icon: '📈' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/commercial/churn', label: 'Отток клиентов',  icon: '📉' }, 'bg-indigo-50 text-indigo-700 font-medium')}
-          {navItem({ href: '/sales',      label: 'Отдел продаж',         icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/sales',      label: 'Реестр продаж и оплат',         icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/ceo',        label: 'CEO Обзор',            icon: '👑' }, 'bg-indigo-50 text-indigo-700 font-medium')}
         </div>
       </>
