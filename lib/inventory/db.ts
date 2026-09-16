@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import type {
   InventoryItem, InventoryMove, Kind, Unit, Contour, MoveReason, MoveOrigin, RefTable, DocType, ConsumePlan, PlanRow,
 } from './types'
-import { sheetArea, INCOMING } from './units'
+import { sheetArea, INCOMING, stockSummary } from './units'
 import { normalizeUnit } from './match'
 import { planB2BOrder, planBomLines, type MatchTarget, type B2BItemLike, type BomLike } from './plan'
 // Для записи движения нужна только атрибуция «кто инициировал» — не вся роль.
@@ -72,24 +72,7 @@ export async function listMoves(opts: { itemId?: number; limit?: number; reason?
 
 export async function summary() {
   const items = await listItems({ includeInactive: false })
-  const byContour = (c: Contour) => items.filter(i => i.contour === c || i.contour === 'both')
-
-  const value = (list: InventoryItem[]) =>
-    Math.round(list.reduce((s, i) => s + Math.max(0, i.qty) * i.avg_cost, 0))
-
-  const deficit = items.filter(i => i.min_qty > 0 && i.qty <= i.min_qty)
-  const zero    = items.filter(i => i.qty <= 0 && (i.min_qty > 0 || i.target_qty > 0))
-
-  return {
-    items:      items.length,
-    b2b:        { items: byContour('b2b').length, value: value(byContour('b2b')) },
-    b2c:        { items: byContour('b2c').length, value: value(byContour('b2c')) },
-    totalValue: value(items),
-    deficit:    deficit.length,
-    zero:       zero.length,
-    noCost:     items.filter(i => i.qty > 0 && i.avg_cost <= 0).length,
-    untouched:  items.filter(i => i.qty === 0 && i.min_qty === 0 && i.target_qty === 0).length,
-  }
+  return stockSummary(items)
 }
 
 // ─── Карточки ────────────────────────────────────────────────────────────────

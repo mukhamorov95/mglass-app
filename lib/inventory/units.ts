@@ -93,6 +93,42 @@ export function stockStatus(item: { qty: number; min_qty: number; target_qty: nu
   return 'ok'
 }
 
+// Сводка склада — ОДИН расчёт на экран и на API. Раньше плашки считались на сервере
+// по всем позициям, а таблица показывала отфильтрованные: сойтись руками было нельзя.
+// «Дефицит» и «Кончилось» теперь считаются тем же stockStatus, которым подписаны
+// строки таблицы (позиция с нулём попадала сразу в оба счётчика).
+export type SummaryItem = { qty: number; min_qty: number; target_qty: number; avg_cost: number; contour: 'b2b' | 'b2c' | 'both' }
+
+export type StockSummary = {
+  items: number
+  totalValue: number
+  b2b: { items: number; value: number }
+  b2c: { items: number; value: number }
+  both: { items: number; value: number }
+  deficit: number
+  zero: number
+  noCost: number
+  untouched: number
+}
+
+export function stockSummary(items: SummaryItem[]): StockSummary {
+  const value = (list: SummaryItem[]) => Math.round(list.reduce((s, i) => s + Math.max(0, i.qty) * i.avg_cost, 0))
+  const of = (c: 'b2b' | 'b2c' | 'both') => items.filter(i => i.contour === c)
+  const st = items.map(i => stockStatus(i))
+  return {
+    items: items.length,
+    totalValue: value(items),
+    // Позиции контура «оба» — отдельной группой: иначе B2B + B2C больше общей стоимости.
+    b2b:  { items: of('b2b').length,  value: value(of('b2b'))  },
+    b2c:  { items: of('b2c').length,  value: value(of('b2c'))  },
+    both: { items: of('both').length, value: value(of('both')) },
+    deficit: st.filter(s => s === 'low').length,
+    zero:    st.filter(s => s === 'out').length,
+    noCost:  items.filter(i => i.qty > 0 && i.avg_cost <= 0).length,
+    untouched: items.filter(i => i.qty === 0 && i.min_qty === 0 && i.target_qty === 0).length,
+  }
+}
+
 export const STATUS_META: Record<StockStatus, { label: string; cls: string }> = {
   out:          { label: 'Нет',        cls: 'bg-red-50 text-red-700 border-red-200'          },
   low:          { label: 'Мало',       cls: 'bg-amber-50 text-amber-700 border-amber-200'    },

@@ -29,6 +29,7 @@ export type Summary = {
   items: number
   b2b: { items: number; value: number }
   b2c: { items: number; value: number }
+  both: { items: number; value: number }
   totalValue: number
   deficit: number
   zero: number
