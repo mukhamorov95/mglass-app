@@ -1602,7 +1602,10 @@ export default function B2BOrdersPage() {
     </div>
   )
 
+  // Шапка считает ВСЕ заказы, а список ниже — отфильтрованные: показываем обе цифры,
+  // иначе при включённом поиске сумма вверху не про то, что видно (аудит итогов, A10).
   const totalSum = orders.reduce((s, o) => s + getFinalPrice(o), 0)
+  const filteredSum = filteredOrders.reduce((s, o) => s + getFinalPrice(o), 0)
   // Готовность производства: отгружен ли заказ. Не связано с тем, найден ли клиент в базе.
   const shippedCount = orders.filter(o => !!o.parsedNotes.stages?.shipped).length
   const notShippedCount = orders.length - shippedCount
@@ -2199,7 +2202,9 @@ export default function B2BOrdersPage() {
         <div>
           <h1 className="text-[18px] font-semibold text-[#111110] tracking-tight">B2B Заказы</h1>
           <p className="text-[12px] text-[#8a8a85] mt-0.5">
-            {orders.length} заказов · {totalSum.toLocaleString('ru-RU')} ₽
+            {filteredOrders.length < orders.length
+              ? <>{filteredOrders.length} из {orders.length} заказов · {filteredSum.toLocaleString('ru-RU')} ₽ из {totalSum.toLocaleString('ru-RU')} ₽</>
+              : <>{orders.length} заказов · {totalSum.toLocaleString('ru-RU')} ₽</>}
           </p>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-medium" title="Готовность производства: отгружено / в работе">
@@ -2878,12 +2883,20 @@ export default function B2BOrdersPage() {
                       <span className="text-[#9a9a95]">Всего кг: </span>
                       <span className="font-semibold">{totalWeight.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</span>
                     </div>
-                    {hasCost && (
-                      <div>
-                        <span className="text-[#9a9a95]">Ориент. стоимость: </span>
-                        <span className="font-semibold text-[#111110]">{totalCost.toLocaleString('ru-RU')} ₽</span>
-                      </div>
-                    )}
+                    {hasCost && (() => {
+                      // Группы без цены закупки молча выпадали из суммы — теперь видно,
+                      // по скольким группам она посчитана (аудит итогов, A10).
+                      const withCost = groups.filter(g => g.estimatedCost != null).length
+                      return (
+                        <div>
+                          <span className="text-[#9a9a95]">Ориент. стоимость: </span>
+                          <span className="font-semibold text-[#111110]">{totalCost.toLocaleString('ru-RU')} ₽</span>
+                          {withCost < groups.length && (
+                            <span className="text-[#9a9a95]"> · по {withCost} из {groups.length} групп (у остальных нет цены закупки)</span>
+                          )}
+                        </div>
+                      )
+                    })()}
                     <div>
                       <span className="text-[#9a9a95]">Групп материалов: </span>
                       <span className="font-semibold">{groups.length}</span>

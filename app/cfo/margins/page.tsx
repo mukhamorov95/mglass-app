@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 
@@ -50,7 +51,12 @@ export default function MarginsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(false)
   const [period, setPeriod]   = useState(30)
-  const [filter, setFilter]   = useState<'all' | 'low' | 'ok'>('all')
+  // Фильтр из ссылки: с дашборда CFO сюда ведут «низкая маржа» (?filter=low), а экран
+  // параметр игнорировал и открывался на «все» (аудит итогов, A10).
+  const sp = useSearchParams()
+  const urlFilter = sp.get('filter')
+  const [filter, setFilter]   = useState<'all' | 'low' | 'ok'>(
+    urlFilter === 'low' || urlFilter === 'ok' ? urlFilter : 'all')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {

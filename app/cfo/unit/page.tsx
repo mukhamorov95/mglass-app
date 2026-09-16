@@ -82,7 +82,10 @@ export default function UnitEconomicsPage() {
   const grandTotal  = (c?.final_price ?? 0) + svcTotal
   const taxPct      = 12
   const taxAmt      = Math.round((c?.final_price ?? 0) * taxPct / 100)
-  const netProfit   = c?.profit ?? 0
+  const storedProfit = c?.profit ?? 0
+  // Лесенка обязана сходиться: раньше «Чистая прибыль» бралась из базы, а строки над
+  // ней вычитали налог 12% — сумма строк не давала итог (аудит итогов, A10).
+  const netProfit   = (c?.final_price ?? 0) - totalCost - taxAmt
 
   return (
     <div className="bg-[#f5f5f3] min-h-screen">
@@ -228,6 +231,11 @@ export default function UnitEconomicsPage() {
                           </span>
                         </div>
                       ))}
+                      {Math.abs(netProfit - storedProfit) > 1 && (
+                        <p className="text-[10px] text-amber-700 pt-1 leading-relaxed">
+                          В базе у расчёта сохранена прибыль {fmt(storedProfit)} — расходится на {fmt(Math.abs(netProfit - storedProfit))}: расчёт сохраняли по другой ставке налога или до правки себестоимости.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
