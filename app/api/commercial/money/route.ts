@@ -17,7 +17,8 @@ type ManagerRow = {
   revenue: number
   deals: number
   avgCheck: number
-  avgMargin: number
+  avgMargin: number       // взвешенная по выручке, а не среднее марж сделок
+  marginRevenue: number   // выручка, по которой маржа известна
   b2bRevenue: number
   b2cRevenue: number
 }
@@ -51,10 +52,18 @@ export async function GET() {
   const nameById = new Map<string, string>()
   for (const u of (users ?? []) as { id: string; name: string | null }[]) nameById.set(u.id, u.name ?? '—')
 
-  type Agg = { name: string; revenue: number; deals: number; margins: number[]; b2bRevenue: number; b2cRevenue: number }
+  // Маржа считается ВЗВЕШЕННО по выручке: раньше это было среднее марж сделок, а по
+  // команде — среднее средних по менеджерам. Итог 34% мог стоять над таблицей, где
+  // ни один менеджер такой цифры не даёт (аудит итогов, A4). Сделки без маржи в
+  // знаменатель не берём — но теперь видно, сколько выручки осталось без неё.
+  type Agg = {
+    name: string; revenue: number; deals: number; b2bRevenue: number; b2cRevenue: number
+    marginRevenue: number   // выручка сделок, у которых маржа известна
+    marginProfit: number    // маржинальная прибыль тех же сделок
+  }
   const map = new Map<string, Agg>()
   const bump = (name: string): Agg => {
-    if (!map.has(name)) map.set(name, { name, revenue: 0, deals: 0, margins: [], b2bRevenue: 0, b2cRevenue: 0 })
+    if (!map.has(name)) map.set(name, { name, revenue: 0, deals: 0, b2bRevenue: 0, b2cRevenue: 0, marginRevenue: 0, marginProfit: 0 })
     return map.get(name)!
   }
 
@@ -66,7 +75,7 @@ export async function GET() {
     const row = bump(name)
     row.deals++; row.revenue += price; row.b2bRevenue += price
     const m = Number(o.margin_percent)
-    if (Number.isFinite(m) && m > 0) row.margins.push(m)
+    if (Number.isFinite(m) && m > 0) { row.marginRevenue += price; row.marginProfit += price * m / 100 }
   }
 
   // B2C — одобренные просчёты
@@ -76,7 +85,7 @@ export async function GET() {
     const row = bump(name)
     row.deals++; row.revenue += price; row.b2cRevenue += price
     const m = Number(c.margin)
-    if (Number.isFinite(m) && m > 0) row.margins.push(m)
+    if (Number.isFinite(m) && m > 0) { row.marginRevenue += price; row.marginProfit += price * m / 100 }
   }
 
   const managers: ManagerRow[] = [...map.values()]
@@ -85,20 +94,25 @@ export async function GET() {
       revenue: Math.round(r.revenue),
       deals: r.deals,
       avgCheck: r.deals > 0 ? Math.round(r.revenue / r.deals) : 0,
-      avgMargin: r.margins.length ? Math.round(r.margins.reduce((a, b) => a + b, 0) / r.margins.length) : 0,
+      avgMargin: r.marginRevenue > 0 ? Math.round(r.marginProfit / r.marginRevenue * 100) : 0,
+      marginRevenue: Math.round(r.marginRevenue),
       b2bRevenue: Math.round(r.b2bRevenue),
       b2cRevenue: Math.round(r.b2cRevenue),
     }))
     .sort((a, b) => b.revenue - a.revenue)
 
-  const marginMgrs = managers.filter(m => m.avgMargin > 0)
   const revenue = managers.reduce((s, m) => s + m.revenue, 0)
   const deals   = managers.reduce((s, m) => s + m.deals, 0)
+  // Итог по команде — из тех же сделок, что и строки: сумма маржинальной прибыли на
+  // сумму выручки сделок с известной маржой.
+  const marginRevenue = [...map.values()].reduce((s, r) => s + r.marginRevenue, 0)
+  const marginProfit  = [...map.values()].reduce((s, r) => s + r.marginProfit, 0)
   const totals = {
     revenue,
     deals,
     avgCheck:  deals > 0 ? Math.round(revenue / deals) : 0,
-    avgMargin: marginMgrs.length ? Math.round(marginMgrs.reduce((s, m) => s + m.avgMargin, 0) / marginMgrs.length) : 0,
+    avgMargin: marginRevenue > 0 ? Math.round(marginProfit / marginRevenue * 100) : 0,
+    marginRevenue: Math.round(marginRevenue),
   }
 
   return NextResponse.json({ month: since.slice(0, 7), managers, totals })
