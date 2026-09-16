@@ -398,5 +398,12 @@ export function factoryQuoteToItem(q: FactoryQuote, quantity: number, comment?: 
     vatRate: VAT, servicesCost: 0,
     baseSaleExVat: saleExVat, saleExVat, outputVat: saleIncVat - saleExVat, saleIncVat,
     comment: [q.spec, comment].filter(Boolean).join(' · ') || undefined,
+    // Состав себестоимости сохраняем в позицию: по нему видно комплектующие
+    // изделия в экономике заказа, а не одну строку «Материал».
+    bom: (q.costLines ?? []).map(l => ({
+      name: l.name, unit: l.unit,
+      qty: Math.round(l.qty * qty * 1000) / 1000,
+      price: l.price, total: Math.round(l.total * qty),
+    })),
   }
 }

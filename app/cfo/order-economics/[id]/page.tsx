@@ -67,6 +67,20 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
   const plan = [...planByMaterial.values()].sort((a, b) => b.cost - a.cost)
   const netTotal = plan.reduce((s2, p) => s2 + p.netM2, 0)
 
+  // Изделия производства: их себестоимость — не лист стекла, а состав (зеркало,
+  // лента, БП, кнопка, подложка, сборка). У просчётов до 16.09 состав не сохранялся —
+  // показываем комплектацию из комментария позиции.
+  const products = rawItems
+    .filter(it => String(it.category ?? '') === 'изделие')
+    .map(it => ({
+      label: String(it.materialName ?? 'Изделие'),
+      size: `${num(it.width)}×${num(it.height)} мм`,
+      qty: num(it.quantity),
+      cost: num(it.costMaterial),
+      bom: (Array.isArray(it.bom) ? it.bom : []) as { name: string; qty: number; unit: string; price?: number; total: number }[],
+      spec: String(it.comment ?? '').split(' · ').map(x => x.trim()).filter(Boolean),
+    }))
+
   const { data: cutRows } = await svc.from('sheet_cuts')
     .select('id, material_name, thickness, source, sheet_w, sheet_h, order_ids, created_by_name, created_at')
     .contains('order_ids', [Number(id)]).order('created_at')
@@ -207,6 +221,52 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
             )}
           </div>
         </div>
+
+        {/* Изделия производства: из чего собрано */}
+        {products.length > 0 && (
+          <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Изделия: из чего собрано</p>
+            <div className="space-y-3">
+              {products.map((p, i) => (
+                <div key={i}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-xs font-medium text-[#111110]">
+                      {p.label} · {p.size}{p.qty > 1 ? ` · ${p.qty} шт` : ''}
+                    </p>
+                    <p className="text-xs font-mono text-[#111110] whitespace-nowrap">{fmt(p.cost)} ₽</p>
+                  </div>
+                  {p.bom.length > 0 ? (
+                    <table className="w-full text-[11px] mt-1">
+                      <tbody>
+                        {p.bom.map((l, j) => (
+                          <tr key={j} className="text-[#6b6b66]">
+                            <td className="py-0.5 pr-2">{l.name}</td>
+                            <td className="py-0.5 pr-2 font-mono whitespace-nowrap text-[#9a9a95]">
+                              {l.qty} {l.unit}{l.price ? ` × ${fmt(l.price)} ₽` : ''}
+                            </td>
+                            <td className="py-0.5 text-right font-mono whitespace-nowrap">{fmt(l.total)} ₽</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-[#6b6b66] mt-1">
+                        {p.spec.length ? p.spec.join(' · ') : 'Комплектация не записана в просчёте.'}
+                      </p>
+                      <p className="text-[10px] text-[#9a9a95] mt-0.5">
+                        Просчёт сделан до 16.09 — состав по строкам (лента, блок питания, кнопка, сборка) в нём не сохранялся. В новых просчётах он будет здесь с суммами.
+                      </p>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-[#9a9a95] leading-relaxed pt-2 mt-2 border-t border-[#f0f0ec]">
+              Себестоимость изделия — полная: стекло, комплектующие, сборка и упаковка цеха. Раскрой к ней не применяется.
+            </p>
+          </div>
+        )}
 
         {/* Позиции */}
         <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">

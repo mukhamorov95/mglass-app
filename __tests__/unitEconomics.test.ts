@@ -62,12 +62,34 @@ describe('остаётся с заказа — единственное опре
 })
 
 describe('изделие производства', () => {
+  const MIRROR = [{ category: 'изделие', materialName: 'Зеркало с подсветкой Осветлённое 4 мм',
+    width: 500, height: 1700, quantity: 1,
+    totalAreaNet: 0.85, totalAreaBilled: 0.85, costMaterial: 20271, hasTempering: false }]
+
   // Регресс #5322: изделие уезжало в раскрой и получало виртуальный лист.
   // Здесь раскроя нет вовсе — себестоимость берётся как сохранена в позиции.
   it('себестоимость изделия не пересчитывается', () => {
-    const c = orderContribution(35000, [{ category: 'изделие', width: 500, height: 1700, quantity: 1,
-      totalAreaNet: 0.85, totalAreaBilled: 0.85, costMaterial: 20271, hasTempering: false }])
-    expect(c.lines.find(l => l.key === 'material')?.amount).toBe(20271)
+    const c = orderContribution(35000, MIRROR)
+    expect(c.lines.find(l => l.key === 'product')?.amount).toBe(20271)
+  })
+
+  // Замечание владельца 16.09: в заказе 0868-2 зеркала с подсветкой лежали
+  // в строке «Материал», и комплектующих было не видно.
+  it('изделие — отдельная статья, не «Материал»', () => {
+    const c = orderContribution(35000, MIRROR)
+    expect(c.lines.find(l => l.key === 'material')?.amount).toBe(0)
+    const line = c.lines.find(l => l.key === 'product')
+    expect(line?.label).toBe('Изделия производства')
+    expect(line?.how).toContain('Зеркало с подсветкой')
+    expect(line?.vatIn).toBe(Math.round(20271 * 22 / 122))
+  })
+
+  // Лист и изделие в одном заказе не смешиваются
+  it('стекло и изделие — разные строки', () => {
+    const c = orderContribution(60000, [...MIRROR, { category: 'стекло', width: 1000, height: 2000, quantity: 1,
+      totalAreaNet: 2, totalAreaBilled: 2.6, costMaterial: 5000, hasTempering: false }])
+    expect(c.lines.find(l => l.key === 'product')?.amount).toBe(20271)
+    expect(c.lines.find(l => l.key === 'material')?.amount).toBe(5000)
   })
 })
 

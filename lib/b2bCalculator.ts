@@ -86,6 +86,11 @@ export type ItemService = {
 export type B2BOrderItem = {
   localId: string
   comment?: string
+  // Состав себестоимости изделия производства (зеркало с подсветкой, лофт): лента,
+  // блок питания, кнопка, подложка, сборка. Раньше состав жил только в момент
+  // расчёта и в позицию не сохранялся — в экономике заказа изделие выглядело как
+  // «Материал 33 782 ₽» без комплектующих (замечание владельца 16.09.2026).
+  bom?: { name: string; qty: number; unit: string; price?: number; total: number }[]
   materialId: number
   materialName: string
   category: string

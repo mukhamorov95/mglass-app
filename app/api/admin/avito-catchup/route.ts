@@ -3,6 +3,7 @@ import { createClient as svc } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
 import { avitoSendMessage, avitoGetSelfId, isAvitoConfigured } from '@/lib/avito'
 import { CRM_ZONES } from '@/lib/crmStages'
+import { botGate } from '@/lib/avito/botGate'
 
 // Одноразовый «догон» после сбоя AI (кончились кредиты 05.08): находит Авито-лиды,
 // где было «Ошибка AI / AI недоступен» и клиент остался без ответа, и отправляет
@@ -10,7 +11,6 @@ import { CRM_ZONES } from '@/lib/crmStages'
 //   GET  — сухой прогон: список зависших лидов, ничего не отправляет.
 //   POST { confirm: true } — отправка. Только владелец (admin/ceo).
 
-const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 const QUALIFICATION_STAGES = new Set(CRM_ZONES.find(z => z.zone === 'Квалификация')?.stages ?? [])
 
 const CATCHUP_TEXT = 'Здравствуйте! Извините за задержку с ответом — мы на связи. Подскажите, что вас интересует (изделие и примерные размеры), и я всё посчитаю. Если удобнее — оставьте номер телефона, и менеджер оперативно свяжется с вами.'
@@ -37,14 +37,11 @@ async function collectStuck(service: ReturnType<typeof db>, days: number, cap: n
   for (const id of errLeadIds) {
     if (stuck.length >= cap) break
     const { data: lead } = await service.from('crm_leads')
-      .select('id, avito_chat_id, avito_user_id, manager, stage, status, name, phone').eq('id', id).maybeSingle()
+      .select('id, avito_chat_id, avito_user_id, manager, bot_muted, bot_muted_by, stage, status, name, phone').eq('id', id).maybeSingle()
     const l = lead as Record<string, unknown> | null
     if (!l || !l.avito_chat_id) continue
-    if (l.status === 'lost') continue
-    const mgr = (l.manager as string | null) ?? null
-    if (mgr && !AI_MANAGERS.includes(mgr)) continue          // чат забрал человек
-    const stage = (l.stage as string | null) ?? null
-    if (stage && !QUALIFICATION_STAGES.has(stage)) continue   // ушёл дальше зоны робота
+    // Тот же замок, что в вебхуке: карточку ведёт менеджер / бот выключен / ушли дальше зоны робота
+    if (!botGate(l as Parameters<typeof botGate>[0], QUALIFICATION_STAGES).allowed) continue
 
     const { data: evs } = await service.from('crm_lead_events')
       .select('kind,text,created_at').eq('lead_id', id).order('id', { ascending: false }).limit(14)
