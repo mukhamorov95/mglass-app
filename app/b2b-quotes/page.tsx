@@ -8,7 +8,7 @@ import AssignInstallationButton from '@/components/AssignInstallationButton'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
-import { orderContribution, contributionColor, rub, pct } from '@/lib/unitEconomics'
+import { orderContribution, applyCatalogWaste, buildWasteNorms, contributionColor, rub, pct } from '@/lib/unitEconomics'
 import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
 import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
@@ -813,12 +813,15 @@ export default function B2BQuotesPage() {
   const isOwner = userRole === 'admin' || userRole === 'ceo'
   const contributionByQuote = useMemo(() => {
     const m = new Map<number, { amount: number; pct: number }>()
+    // Расход материала — по нормативу справочника (решение владельца 16.09: раскрой
+    // расход не считает), так же как на экране экономики заказа
+    const norms = buildWasteNorms(materials as unknown as Record<string, unknown>[])
     for (const q of visible) {
-      const c = orderContribution(q.total_after_discount || q.total_sale_inc_vat || 0, q.items as unknown as Record<string, unknown>[])
+      const c = orderContribution(q.total_after_discount || q.total_sale_inc_vat || 0, applyCatalogWaste(q.items as unknown as Record<string, unknown>[], norms))
       if (c.revenue > 0) m.set(q.id, { amount: c.contribution, pct: c.contributionPct })
     }
     return m
-  }, [visible])
+  }, [visible, materials])
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0, templates: 0, price_approval: 0 }

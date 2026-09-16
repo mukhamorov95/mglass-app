@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { orderContribution, sumContributions, contributionColor } from '@/lib/unitEconomics'
+import { orderContribution, sumContributions, contributionColor, applyCatalogWaste, buildWasteNorms } from '@/lib/unitEconomics'
 
 // Заказ #5466 из базы, позиции как есть. Раньше по нему было три разные «маржи»:
 // +25,9% (калькулятор), −9,6% (список просчётов), −44,7% (карточка экономики).
@@ -93,5 +93,36 @@ describe('формат чисел', () => {
     expect(pct(-16.2)).toBe('−16,2')
     expect(pct(32)).toBe('32')
     expect(m2(4.2)).toBe('4,2')
+  })
+})
+
+// Расход по нормативу справочника вместо расхода из раскроя (решение владельца 16.09)
+describe('applyCatalogWaste — расход по справочнику', () => {
+  const item = {
+    materialName: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло',
+    width: 1100, height: 700, quantity: 1,
+    totalAreaNet: 0.77, totalAreaBilled: 1.76, costMaterial: 3695,
+  }
+
+  it('#5479: 1,76 м² из раскроя → 1,0 м² по нормативу 30%', () => {
+    const norms = buildWasteNorms([{ name: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло', waste_percent: 30 }])
+    const [out] = applyCatalogWaste([item], norms) as Record<string, number>[]
+    expect(out.totalAreaBilled).toBeCloseTo(1.001, 3)
+    expect(out.costMaterial).toBe(2102)
+  })
+
+  it('справочник цен перебивает карточку материала', () => {
+    const norms = buildWasteNorms(
+      [{ name: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло', waste_percent: 30 }],
+      [{ name: 'Осветлённое CrystalVision', category: 'glass', price_type: 'cost', waste_pct: 15 }],
+    )
+    expect(norms.get('Осветлённое CrystalVision|8')).toBe(15)
+  })
+
+  it('норматива нет — позицию не трогаем; изделие производства не трогаем никогда', () => {
+    expect(applyCatalogWaste([item], new Map())).toEqual([item])
+    const product = { ...item, category: 'изделие' }
+    const norms = buildWasteNorms([{ name: 'Осветлённое CrystalVision', thickness: 8, category: 'изделие', waste_percent: 30 }])
+    expect(applyCatalogWaste([product], norms)).toEqual([product])
   })
 })
