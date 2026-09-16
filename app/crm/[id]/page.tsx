@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { CRM_STAGES, stageProgress, FIRST_STAGE, ASSIGNED_STAGE } from '@/lib/crmStages'
 import { FLAGS, FLAG_BY_KEY, type FlagKey } from '@/lib/avito/flags'
 import { buildMeasureStructured } from '@/lib/measureStructured'
+import { isAiManager } from '@/lib/avito/botGate'
 
 type Lead = {
   id: number
@@ -18,6 +19,7 @@ type Lead = {
   flags: Record<string, boolean> | null; readiness: number | null
   heat: 'cold' | 'warm' | 'hot' | null; missing_next: string | null
   manager: string | null; note: string | null
+  bot_muted: boolean | null; bot_muted_by: string | null; bot_muted_at: string | null
   status: 'active' | 'won' | 'lost'; lost_reason: string | null
   avito_chat_id: string | null; created_at: string; updated_at: string
 }
@@ -29,7 +31,6 @@ const STAGES = CRM_STAGES
 const SOURCE_LABEL: Record<string, string> = {
   avito: 'Авито', call: 'Звонок', whatsapp: 'WhatsApp', site: 'Сайт', referral: 'Рекомендация', manual: 'Вручную',
 }
-const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 
 function fmtD(s: string) { return new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }
 const RUB = (n: number) => n.toLocaleString('ru-RU')
@@ -366,7 +367,7 @@ export default function LeadDetailPage() {
   async function markSold() {
     const amount = Number(saleAmount)
     if (!amount || amount <= 0) { toast('Укажи сумму продажи'); return }
-    const mgr = lead?.manager && !AI_MANAGERS.includes(lead.manager) ? lead.manager : (me || null)
+    const mgr = lead?.manager && !isAiManager(lead.manager) ? lead.manager : (me || null)
     const r = await fetch('/api/sales', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -395,7 +396,8 @@ export default function LeadDetailPage() {
     </div>
   )
 
-  const humanHandling = !!lead.manager && !AI_MANAGERS.includes(lead.manager)
+  const humanHandling = !!lead.manager && !isAiManager(lead.manager)
+  const botMuted = !!lead.bot_muted
 
   return (
     <div className="min-h-screen bg-[#f8f8f7]">
@@ -629,7 +631,20 @@ export default function LeadDetailPage() {
               <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[13px] font-semibold text-[#111110]">💬 Переписка с клиентом · Авито</p>
-                  <span className={`text-[10px] ${humanHandling ? 'text-emerald-700' : 'text-[#9a9a95]'}`}>{humanHandling ? 'ведёте вы · Иван молчит' : 'отвечает Иван (AI)'}</span>
+                  {botMuted || humanHandling ? (
+                    <span className="flex items-center gap-2">
+                      <span className="text-[10px] text-emerald-700">
+                        🔇 Иван молчит{lead.bot_muted_by ? ` · ${lead.bot_muted_by}` : ''}
+                      </span>
+                      <button
+                        onClick={() => patch({ manager: 'Иван (AI)', bot_muted: false, bot_muted_by: null, bot_muted_at: null }, 'Бот включён обратно: отвечает Иван (AI)')}
+                        className="text-[10px] px-2 py-0.5 border border-[#e4e4e0] rounded-md text-[#6b6b66] hover:bg-[#f5f5f3]">
+                        Вернуть боту
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-[#9a9a95]">отвечает Иван (AI)</span>
+                  )}
                 </div>
                 <div className="bg-[#fafaf9] rounded-lg p-2 max-h-[46vh] overflow-y-auto space-y-1.5">
                   {threadLoading && <p className="text-[12px] text-[#9a9a95] text-center py-4">Загрузка переписки…</p>}

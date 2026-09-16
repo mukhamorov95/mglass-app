@@ -4,6 +4,7 @@ import { isBotEnabled } from '@/lib/aiKillSwitch'
 import { avitoSendMessage, isAvitoConfigured } from '@/lib/avito'
 import { notifyAdmins } from '@/lib/telegram'
 import { CRM_ZONES } from '@/lib/crmStages'
+import { AI_MANAGERS, botGate } from '@/lib/avito/botGate'
 
 export const maxDuration = 120
 
@@ -14,7 +15,6 @@ const QUALIFICATION_STAGES = new Set(CRM_ZONES.find(z => z.zone === 'Квали�
 // Пишем один раз через сутки молчания и один раз через трое. Дальше — тишина:
 // навязчивость на Авито хуже, чем потерянный лид.
 
-const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 const DAY = 86_400_000
 
 const FIRST = 'Здравствуйте! Я на связи — если ещё актуально, подскажите размеры, и я посчитаю точную стоимость.'
@@ -41,13 +41,11 @@ export async function GET(req: NextRequest) {
 
   for (const t of (dueTasks ?? []) as { id: number; lead_id: number; title: string; due_at: string }[]) {
     const { data: ld } = await svc.from('crm_leads')
-      .select('id, manager, status, stage, avito_chat_id, avito_user_id').eq('id', t.lead_id).maybeSingle()
-    const lead = ld as { id: number; manager: string | null; status: string | null; stage: string | null; avito_chat_id: string | null; avito_user_id: number | null } | null
+      .select('id, manager, bot_muted, bot_muted_by, status, stage, avito_chat_id, avito_user_id').eq('id', t.lead_id).maybeSingle()
+    const lead = ld as { id: number; manager: string | null; bot_muted: boolean | null; bot_muted_by: string | null; status: string | null; stage: string | null; avito_chat_id: string | null; avito_user_id: number | null } | null
     // Бот пишет, только если лид всё ещё за ботом, в зоне «Квалификация», активен и настроен.
     if (!lead || !lead.avito_chat_id || lead.avito_user_id == null) { taskStat.skipped++; continue }
-    if (lead.manager && !AI_MANAGERS.includes(lead.manager)) { taskStat.skipped++; continue }
-    if (lead.status === 'won' || lead.status === 'lost') { taskStat.skipped++; continue }
-    if (lead.stage && !QUALIFICATION_STAGES.has(lead.stage)) { taskStat.skipped++; continue }
+    if (!botGate(lead, QUALIFICATION_STAGES).allowed) { taskStat.skipped++; continue }
     if (!isAvitoConfigured()) { taskStat.skipped++; continue }
 
     const note = t.title.replace(/^Вернуться:\s*/i, '').trim()
@@ -65,7 +63,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { data: leads } = await svc.from('crm_leads')
-    .select('id, name, manager, status, avito_chat_id, avito_user_id, followup_count, updated_at')
+    .select('id, name, manager, bot_muted, bot_muted_by, stage, status, avito_chat_id, avito_user_id, followup_count, updated_at')
     .not('avito_chat_id', 'is', null)
     .not('status', 'in', '("won","lost")')
     .lt('updated_at', new Date(Date.now() - DAY).toISOString())
@@ -73,7 +71,8 @@ export async function GET(req: NextRequest) {
     .limit(40)
 
   const rows = (leads ?? []) as {
-    id: number; name: string | null; manager: string | null; status: string | null
+    id: number; name: string | null; manager: string | null; bot_muted: boolean | null; bot_muted_by: string | null
+    stage: string | null; status: string | null
     avito_chat_id: string; avito_user_id: number | null; followup_count: number | null; updated_at: string
   }[]
 
@@ -81,8 +80,9 @@ export async function GET(req: NextRequest) {
 
   for (const lead of rows) {
     if (processed.has(lead.id)) { stat.skipped++; continue }   // уже написали по задаче-себе
-    // Чат забрал человек — Иван молчит.
-    if (lead.manager && !AI_MANAGERS.includes(lead.manager)) { stat.skipped++; continue }
+    // Тот же замок, что в вебхуке. Раньше здесь не проверялся этап: лид, уехавший
+    // в «Замер проведён» с manager = null, всё равно получал напоминание Ивана.
+    if (!botGate(lead, QUALIFICATION_STAGES).allowed) { stat.skipped++; continue }
     const sentCount = lead.followup_count ?? 0
     if (sentCount >= 2) { stat.skipped++; continue }
 

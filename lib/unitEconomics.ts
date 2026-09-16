@@ -11,7 +11,7 @@ import { VAT, TEMPERING_COST, PACKAGING_PER_M2, TRANSPORT_PER_PIECE } from './b2
 // НДС — входящий минус исходящий. К вычету принимаем НДС, уплаченный за стекло,
 // закалку и подрядные услуги. Доставка и упаковка — без входящего НДС.
 
-export type VariableKey = 'material' | 'tempering' | 'services' | 'transport' | 'packaging'
+export type VariableKey = 'product' | 'material' | 'tempering' | 'services' | 'transport' | 'packaging'
 
 export type ContributionLine = {
   key: VariableKey
@@ -90,6 +90,11 @@ export function applyCatalogWaste(items: ContributionItem[], norms: WasteNorms):
 export function orderContribution(revenueIncVat: number, items: ContributionItem[], vatRate = VAT): OrderContribution {
   let material = 0, tempering = 0, services = 0, transport = 0, packaging = 0
   let pieces = 0, temperedPieces = 0, netM2 = 0, billedM2 = 0, temperedM2 = 0
+  // Изделия производства (зеркало с подсветкой, лофт) — отдельная статья: там не
+  // лист стекла, а готовое изделие со своим составом (лента, БП, кнопка, сборка).
+  // Раньше они складывались в «Материал», и владелец не видел комплектующих.
+  let product = 0, productPieces = 0
+  const productNames: string[] = []
   const temperThk = new Set<number>()
 
   for (const it of items) {
@@ -98,7 +103,14 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
     pieces += q
     netM2 += net
     billedM2 += n(it.totalAreaBilled) || net
-    material += n(it.costMaterial)
+    if (String(it.category ?? '') === 'изделие') {
+      product += n(it.costMaterial)
+      productPieces += q
+      const nm = String(it.materialName ?? '').trim()
+      if (nm && !productNames.includes(nm)) productNames.push(nm)
+    } else {
+      material += n(it.costMaterial)
+    }
     tempering += n(it.costTempering)
     transport += n(it.costTransport)
     packaging += n(it.costPackaging)
@@ -117,6 +129,9 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
     : `ставка по толщине × ${ru(temperedM2)} м²`
 
   const all: ContributionLine[] = [
+    { key: 'product', label: 'Изделия производства',
+      how: `${productPieces} шт${productNames.length ? ` · ${productNames.join(', ')}` : ''} — стекло, комплектующие, сборка, упаковка`,
+      amount: product, vatIn: vatPart(product, vatRate) },
     { key: 'material', label: 'Материал',
       how: `нетто ${ru(netM2)} м² + расход по справочнику = ${ru(billedM2)} м² по цене закупки`,
       amount: material, vatIn: vatPart(material, vatRate) },

@@ -7,6 +7,7 @@ import { isBotEnabled } from '@/lib/aiKillSwitch'
 import { decideNextAction } from '@/lib/avito/dispatcher'
 import { FLAG_BY_KEY, type LeadFlags, type FlagKey } from '@/lib/avito/flags'
 import { getRelevantExamples } from '@/lib/avito/managerExamples'
+import { botGate, isOwnBotEcho, MUTE_LABEL } from '@/lib/avito/botGate'
 import { CRM_ZONES } from '@/lib/crmStages'
 
 // Робот ведёт заявку только в зоне «Квалификация»; дальше курирует человек.
@@ -20,10 +21,7 @@ const QUALIFICATION_STAGES = new Set(CRM_ZONES.find(z => z.zone === 'Квали�
 // прийти к уже помеченному сообщению и был отсеян дедупом (не двойной ответ).
 export const maxDuration = 60
 
-// Имена «AI ведёт чат» — при них Иван автоотвечает. Любой другой ответственный =
-// чат забрал человек, Иван молчит. Легаси «Максим» убран: он пересекался с
-// реальным человеком по имени Максим (тот забирал чат, а бот продолжал отвечать).
-const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
+// Правило «отвечает бот или молчит» — одно на систему, в lib/avito/botGate.
 
 function db() {
   return svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -59,10 +57,9 @@ export async function POST(req: NextRequest) {
   if (!v?.chat_id || body?.payload?.type !== 'message') {
     return NextResponse.json({ ok: true, skipped: true })
   }
-  // Эхо наших же сообщений — пропускаем
-  if (v.author_id != null && v.user_id != null && v.author_id === v.user_id) {
-    return NextResponse.json({ ok: true, echo: true })
-  }
+  // Исходящее в этом чате: либо эхо самого Ивана, либо менеджер написал клиенту
+  // сам — из амо, из приложения Авито или из CRM. Разбираем ниже, после дедупа.
+  const outgoing = v.author_id != null && v.user_id != null && v.author_id === v.user_id
 
   const service = db()
 
@@ -75,6 +72,49 @@ export async function POST(req: NextRequest) {
     .upsert({ msg_id: msgKey }, { onConflict: 'msg_id', ignoreDuplicates: true })
     .select('msg_id')
   if (!fresh || fresh.length === 0) return NextResponse.json({ ok: true, duplicate: true })
+
+  // ── Исходящее сообщение: менеджер взял карточку — Иван замолкает ──
+  //
+  // Решение владельца 16.09.2026: «как только с карточкой начал работать менеджер —
+  // прям стоп». Ответ менеджера из амо приходит к нам эхом нашего же аккаунта; до
+  // сегодня вебхук просто выходил на таком сообщении и не знал, что в чате уже
+  // работает человек — бот продолжал отвечать клиенту параллельно с менеджером.
+  if (outgoing) {
+    const outText = (v.content?.text ?? '').trim()
+    const { data: outLeadRows } = await service.from('crm_leads')
+      .select('id, bot_muted').eq('avito_chat_id', v.chat_id).order('id').limit(1)
+    const outLead = (outLeadRows?.[0] ?? null) as { id: number; bot_muted: boolean | null } | null
+    if (!outLead || !outText) return NextResponse.json({ ok: true, echo: true })
+
+    // С чем сравнивать: последние исходящие в ленте. «БОТ: …» — наше эхо,
+    // «МЕНЕДЖЕР: …» — менеджер отправил из CRM, там реплика уже записана.
+    const { data: outEvs } = await service.from('crm_lead_events')
+      .select('text').eq('lead_id', outLead.id).eq('kind', 'message')
+      .order('id', { ascending: false }).limit(20)
+    const texts = ((outEvs ?? []) as { text: string }[]).map(e => e.text)
+    const botTexts = texts.filter(t => t.startsWith('БОТ: ')).map(t => t.slice(5))
+    const mgrTexts = texts.filter(t => t.startsWith('МЕНЕДЖЕР: ')).map(t => t.slice(10))
+    if (isOwnBotEcho(outText, botTexts)) return NextResponse.json({ ok: true, echo: true })
+
+    const alreadyLogged = isOwnBotEcho(outText, mgrTexts)
+    if (!alreadyLogged) {
+      await service.from('crm_lead_events').insert({
+        lead_id: outLead.id, kind: 'message', author: 'Менеджер',
+        text: `МЕНЕДЖЕР: ${outText.slice(0, 4000)}`,
+      })
+    }
+    if (!outLead.bot_muted) {
+      await service.from('crm_leads').update({
+        bot_muted: true, bot_muted_at: new Date().toISOString(),
+        bot_muted_by: 'ответ менеджера в чате', updated_at: new Date().toISOString(),
+      }).eq('id', outLead.id)
+      await service.from('crm_lead_events').insert({
+        lead_id: outLead.id, kind: 'system', author: 'AI',
+        text: '🔇 Иван выключен в этом чате: менеджер ответил клиенту сам',
+      })
+    }
+    return NextResponse.json({ ok: true, manager_wrote: true, muted: true })
+  }
 
   // ЛИД СОЗДАЁМ ПЕРВЫМ ДЕЛОМ — до разбора типа сообщения.
   //
@@ -135,30 +175,18 @@ export async function POST(req: NextRequest) {
   if (v.user_id != null && lead.avito_user_id !== v.user_id) followupPatch.avito_user_id = v.user_id
   await service.from('crm_leads').update(followupPatch).eq('id', leadId)
 
-  // Диалог ведёт ЧЕЛОВЕК (менеджер забрал у Ивана или лид импортирован) — Иван
-  // не автоотвечает, чтобы клиенту не писали оба. Фиксируем сообщение и пингуем.
-  const managerName = (lead.manager as string | null) ?? null
-  if (managerName && !AI_MANAGERS.includes(managerName)) {
+  // Один замок: карточку ведёт менеджер / бот выключен по карточке / заявка вышла
+  // из квалификации / сделка закрыта — Иван молчит, сообщение сохранено выше.
+  const curStage = (lead.stage as string | null) ?? null
+  const gate = botGate(lead as Parameters<typeof botGate>[0], QUALIFICATION_STAGES)
+  if (!gate.allowed) {
     await notifyAdmins([
       '💬 <b>Авито: новое сообщение от клиента</b>',
-      `Ведёт: ${managerName}`,
+      `Иван молчит: ${MUTE_LABEL[gate.reason]}${gate.who ? ` (${gate.who})` : ''}`,
       `Клиент: ${text.slice(0, 200)}`,
       `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
     ].join('\n')).catch(() => {})
-    return NextResponse.json({ ok: true, human_handling: true })
-  }
-
-  // Робот работает только зону «Квалификация». Если лид уже дальше (закрыт на
-  // замер / в продаже / производстве) — курирует человек, бот молчит и пингует.
-  const curStage = (lead.stage as string | null) ?? null
-  if (curStage && !QUALIFICATION_STAGES.has(curStage)) {
-    await notifyAdmins([
-      '💬 <b>Авито: сообщение по заявке в работе у менеджера</b>',
-      `Этап: ${curStage}`,
-      `Клиент: ${text.slice(0, 200)}`,
-      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
-    ].join('\n')).catch(() => {})
-    return NextResponse.json({ ok: true, past_qualification: true })
+    return NextResponse.json({ ok: true, silent: gate.reason })
   }
 
   // Kill-switch с /vladislav: бот выключен — сообщение сохранено выше, отвечает человек.
@@ -328,12 +356,17 @@ export async function POST(req: NextRequest) {
     } catch { /* не блокируем ответ клиенту */ }
   }
 
-  // Перепроверка перед отправкой: не забрал ли чат человек за время работы модели.
-  const { data: cur } = await service.from('crm_leads').select('manager').eq('id', leadId).maybeSingle()
-  const curMgr = (cur as { manager: string | null } | null)?.manager ?? null
-  if (curMgr && !AI_MANAGERS.includes(curMgr)) {
-    await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `Автоответ Ивана отменён — чат забрал ${curMgr}`, author: 'AI' })
-    return NextResponse.json({ ok: true, taken_over: true })
+  // Перепроверка перед самой отправкой: менеджер мог взять карточку или ответить
+  // клиенту, пока модель думала (до минуты). Тем же замком, что и до модели.
+  const { data: cur } = await service.from('crm_leads')
+    .select('manager, bot_muted, bot_muted_by, stage, status').eq('id', leadId).maybeSingle()
+  const curGate = botGate((cur ?? {}) as Parameters<typeof botGate>[0], QUALIFICATION_STAGES)
+  if (!curGate.allowed) {
+    await service.from('crm_lead_events').insert({
+      lead_id: leadId, kind: 'system', author: 'AI',
+      text: `Автоответ Ивана отменён — ${MUTE_LABEL[curGate.reason]}${curGate.who ? `: ${curGate.who}` : ''}`,
+    })
+    return NextResponse.json({ ok: true, taken_over: curGate.reason })
   }
 
   // Ответ клиенту

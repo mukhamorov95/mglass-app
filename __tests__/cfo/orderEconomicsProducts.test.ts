@@ -33,7 +33,8 @@ describe('изделие производства не раскраиваетс�
 
   it('вклад изделия считается от сохранённой себестоимости и не уходит в минус', () => {
     const c = orderContribution(38008, [PRODUCT])
-    expect(c.lines.find(l => l.key === 'material')?.amount).toBe(20271)
+    // С 16.09 изделие — своя статья «Изделия производства», не «Материал»
+    expect(c.lines.find(l => l.key === 'product')?.amount).toBe(20271)
     expect(c.contribution).toBeGreaterThan(0)
   })
 })

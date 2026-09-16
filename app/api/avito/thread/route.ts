@@ -5,11 +5,10 @@ import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { isAvitoConfigured, avitoGetSelfId, avitoListMessages, avitoSendMessage } from '@/lib/avito'
 import { saveManagerExample, clientContextFromHistory } from '@/lib/avito/managerExamples'
+import { AI_MANAGERS, isAiManager } from '@/lib/avito/botGate'
 
 // Переписка с клиентом Авито прямо из CRM: GET — живая история диалога,
 // POST — отправить сообщение (и «забрать» лид у Ивана: manager = менеджер).
-
-const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 
 async function leadChatId(sb: ReturnType<typeof createServiceClient>, leadId: number) {
   const { data } = await sb.from('crm_leads').select('id,avito_chat_id,manager,product,status').eq('id', leadId).maybeSingle()
@@ -90,10 +89,21 @@ export async function POST(req: NextRequest) {
   } catch { /* обучение не критично */ }
 
   await sb.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `МЕНЕДЖЕР: ${text}`, author: me })
-  // Менеджер забрал диалог у AI — Иван больше не автоотвечает в этом чате.
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (!lead.manager || AI_MANAGERS.includes(lead.manager)) patch.manager = me
+  // Менеджер написал клиенту — Иван замолкает в этом чате. Флаг ставим явно, не
+  // полагаясь на смену ответственного: карточка могла уже быть на этом менеджере.
+  const tookOver = !lead.manager || isAiManager(lead.manager)
+  const patch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+    bot_muted: true, bot_muted_at: new Date().toISOString(), bot_muted_by: me ?? 'менеджер',
+  }
+  if (tookOver) patch.manager = me
   await sb.from('crm_leads').update(patch).eq('id', leadId)
+  if (tookOver) {
+    await sb.from('crm_lead_events').insert({
+      lead_id: leadId, kind: 'system', author: 'AI',
+      text: `🔇 Иван выключен в этом чате: ответил ${me ?? 'менеджер'}`,
+    })
+  }
 
-  return NextResponse.json({ ok: true, tookOver: !lead.manager || AI_MANAGERS.includes(lead.manager) })
+  return NextResponse.json({ ok: true, tookOver })
 }
