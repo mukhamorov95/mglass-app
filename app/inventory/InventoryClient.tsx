@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { InventoryItem, Contour, Kind } from '@/lib/inventory/types'
 import { KIND_LABELS, stockStatus } from '@/lib/inventory/units'
 import { INPUT, BTN, BTN_P, CARD, api, money, CONTOUR_TABS, KIND_ORDER, type ItemsResponse, type Summary } from './shared'
+import { stockSummary } from '@/lib/inventory/units'
 import StockTab from './StockTab'
 import ReceiveTab from './ReceiveTab'
 import CountTab from './CountTab'
@@ -104,18 +105,31 @@ export default function InventoryClient({ canWrite }: { canWrite: boolean }) {
 
         {error && <div className="text-[13px] text-red-600 mb-3">{error}</div>}
 
-        {sum && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
-            <Stat label="Позиций на складе" value={String(sum.items)} />
-            {canSeeCost
-              ? <Stat label="Стоимость запаса" value={money(sum.totalValue)} />
-              : <Stat label="С остатком" value={String(items.filter(i => i.qty > 0).length)} />}
-            <Stat label="B2B — стекло, зеркало" value={canSeeCost ? money(sum.b2b.value) : `${sum.b2b.items} поз.`} hint={`${sum.b2b.items} позиций`} />
-            <Stat label="B2C — фурнитура" value={canSeeCost ? money(sum.b2c.value) : `${sum.b2c.items} поз.`} hint={`${sum.b2c.items} позиций`} />
-            <Stat label="Дефицит" value={String(sum.deficit)} tone={sum.deficit ? 'warn' : 'ok'} />
-            <Stat label="Кончилось" value={String(sum.zero)} tone={sum.zero ? 'bad' : 'ok'} />
-          </div>
-        )}
+        {sum && (() => {
+          // Плашки считаем по тому же списку, который показан в таблице: раньше сводка
+          // приходила с сервера по всем позициям, и при включённом фильтре цифры вверху
+          // не имели отношения к строкам внизу (аудит итогов, A5).
+          const narrowed = filtered.length !== items.length
+          const view = narrowed ? stockSummary(filtered) : sum
+          return (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-2">
+                <Stat label="Позиций на складе" value={String(view.items)} hint={narrowed ? `из ${sum.items} всего` : undefined} />
+                {canSeeCost
+                  ? <Stat label="Стоимость запаса" value={money(view.totalValue)} hint={narrowed ? `из ${money(sum.totalValue)} всего` : undefined} />
+                  : <Stat label="С остатком" value={String(filtered.filter(i => i.qty > 0).length)} />}
+                <Stat label="B2B — стекло, зеркало" value={canSeeCost ? money(view.b2b.value) : `${view.b2b.items} поз.`} hint={`${view.b2b.items} позиций`} />
+                <Stat label="B2C — фурнитура" value={canSeeCost ? money(view.b2c.value) : `${view.b2c.items} поз.`} hint={`${view.b2c.items} позиций`} />
+                <Stat label="Оба контура" value={canSeeCost ? money(view.both.value) : `${view.both.items} поз.`} hint={`${view.both.items} позиций`} />
+                <Stat label="Дефицит · кончилось" value={`${view.deficit} · ${view.zero}`} tone={view.zero ? 'bad' : view.deficit ? 'warn' : 'ok'} />
+              </div>
+              <p className="text-[11px] text-[#9a9a95] mb-5">
+                {narrowed ? 'Плашки посчитаны по текущему фильтру. ' : ''}
+                B2B + B2C + «оба контура» = стоимость запаса; «дефицит» и «кончилось» — те же правила, что у статуса в таблице.
+              </p>
+            </>
+          )
+        })()}
 
         <div className="flex gap-1 mb-4 border-b border-[#e4e4e0]">
           {TABS.map(t => (
