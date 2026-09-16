@@ -204,7 +204,7 @@ export default function ManagerDashboardPage() {
       if (filterUserId && q.created_by !== filterUserId) return false
       if (!filterUserId && filterEmail && n.manager_name !== filterEmail) return false
       return true
-    }).slice(0, 10),
+    }),
     [quotes, filterUserId, filterEmail]
   )
 
@@ -214,8 +214,7 @@ export default function ManagerDashboardPage() {
       if (d === null || d > 0) return false
       if (filterEmail && c.crm.manager_name !== filterEmail) return false
       return true
-    }).sort((a, b) => (daysUntil(a.crm.next_contact_date) ?? 0) - (daysUntil(b.crm.next_contact_date) ?? 0))
-      .slice(0, 10),
+    }).sort((a, b) => (daysUntil(a.crm.next_contact_date) ?? 0) - (daysUntil(b.crm.next_contact_date) ?? 0)),
     [clients, filterEmail]
   )
 
@@ -365,6 +364,9 @@ export default function ManagerDashboardPage() {
                     </Link>
                   )
                 })}
+                {due.length > 8 && (
+                  <p className="text-[11px] text-[#9a9a95] px-2 pt-1">и ещё {due.length - 8} — все в CRM</p>
+                )}
               </div>
             </div>
           )
@@ -384,7 +386,7 @@ export default function ManagerDashboardPage() {
               <div className="py-8 text-center text-[12px] text-[#c4c4be]">Всё в порядке 👍</div>
             ) : (
               <div className="divide-y divide-[#f8f8f7]">
-                {overdueContacts.map(c => {
+                {overdueContacts.slice(0, 10).map(c => {
                   const d = daysUntil(c.crm.next_contact_date)!
                   return (
                     <div key={c.id} onClick={() => router.push(`/b2b-crm/${c.id}`)}
@@ -421,6 +423,9 @@ export default function ManagerDashboardPage() {
                     </div>
                   )
                 })}
+                {overdueContacts.length > 10 && (
+                  <p className="px-5 py-2 text-[11px] text-[#9a9a95]">и ещё {overdueContacts.length - 10} — весь список в CRM</p>
+                )}
               </div>
             )}
           </div>
@@ -437,7 +442,7 @@ export default function ManagerDashboardPage() {
               <div className="py-8 text-center text-[12px] text-[#c4c4be]">Все ответили 👍</div>
             ) : (
               <div className="divide-y divide-[#f8f8f7]">
-                {noReply.map(q => {
+                {noReply.slice(0, 10).map(q => {
                   const total = q.discount_percent > 0 ? q.total_after_discount : q.total_sale_inc_vat
                   const manager = parseNotes(q.notes).manager_name as string | null
                   return (
@@ -459,6 +464,9 @@ export default function ManagerDashboardPage() {
                     </div>
                   )
                 })}
+                {noReply.length > 10 && (
+                  <p className="px-5 py-2 text-[11px] text-[#9a9a95]">и ещё {noReply.length - 10} — весь список в просчётах</p>
+                )}
               </div>
             )}
           </div>
