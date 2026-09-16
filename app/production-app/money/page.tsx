@@ -272,7 +272,19 @@ export default function MoneyPage() {
                       <td className="px-4 py-2.5 text-right font-mono">{totalOrders}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{RUB(totalAmount)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-emerald-700">{RUB(totalBonus)}</td>
-                      {showReal && <td className={`px-4 py-2.5 text-right font-mono ${m?.marginPct != null && totalRealMargin >= m.marginPct ? 'text-emerald-700' : 'text-amber-700'}`}>{RUB(totalRealRub)} <span className="text-[10px] text-[#9a9a95] font-normal">{totalRealMargin}%</span></td>}
+                      {showReal && (
+                        <td className={`px-4 py-2.5 text-right font-mono ${m?.marginPct != null && totalRealMargin >= m.marginPct ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {RUB(totalRealRub)} <span className="text-[10px] text-[#9a9a95] font-normal">{totalRealMargin}%</span>
+                          {/* Маржа считается только по месяцам с себестоимостью, а «Сумма»
+                              в этой же строке — по всем: раньше две базы стояли рядом
+                              без единого слова об этом (аудит итогов, A9). */}
+                          {realRevBase < totalAmount && (
+                            <div className="text-[10px] text-[#9a9a95] font-normal">
+                              с {RUB(realRevBase)} из {RUB(totalAmount)}
+                            </div>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   </tfoot>
                 </table>
