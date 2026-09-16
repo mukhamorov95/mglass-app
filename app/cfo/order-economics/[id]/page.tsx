@@ -1,9 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { orderContribution, contributionColor, rub, pct, m2 } from '@/lib/unitEconomics'
-import { computeMaterialUsage, isSheetMaterial, type UsageItem } from '@/lib/materialUsage'
-import { CALC_REUSE_RATE } from '@/lib/autoWasteApply'
-import { REMNANT_MIN_SHORT, REMNANT_MIN_LONG } from '@/lib/cuttingOptimizer'
+import { isSheetMaterial } from '@/lib/materialUsage'
+import { orderCutFacts, type CutRow, type CutRemnant } from '@/lib/production/cutFacts'
 import { VAT } from '@/lib/b2bCalculator'
 
 // Экономика ОДНОГО заказа — только владелец, под /cfo. Все цифры — из lib/unitEconomics
@@ -30,52 +29,36 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
     return <div className="bg-[#f5f5f3] min-h-screen p-8 text-center text-sm text-[#9a9a95]">Заказ не найден. <Link href="/cfo/order-economics" className="text-blue-600">← К списку</Link></div>
   }
 
-  const [{ data: mats }, { data: variants }] = await Promise.all([
-    svc.from('b2b_materials').select('id, name, thickness, sheet_width, sheet_height, pattern_direction'),
-    svc.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
-  ])
-
   const rawItems = Array.isArray(o.items) ? (o.items as RawItem[]) : []
   const revenue = num(o.total_after_discount) || num(o.total_sale_inc_vat)
   const c = orderContribution(revenue, rawItems)
   const cls = COLOR[contributionColor(c.contributionPct)]
 
-  // ── Материал: как получился отход. Тот же раскрой и тот же возврат остатка, что
-  // в калькуляторе (CALC_REUSE_RATE), — чтобы не было второй цифры материала. ──
-  const fmtById = new Map<number, { width: number; height: number }[]>()
-  for (const v of (variants ?? []) as Record<string, unknown>[]) {
-    const w = num(v.sheet_width), h = num(v.sheet_height)
-    if (!(w > 0) || !(h > 0)) continue
-    const arr = fmtById.get(Number(v.material_id)) ?? []
-    arr.push({ width: w, height: h }); fmtById.set(Number(v.material_id), arr)
-  }
-  const sheet = new Map<string, { w: number; h: number; pat: string; fmts?: { width: number; height: number }[] }>()
-  for (const mt of (mats ?? []) as Record<string, unknown>[])
-    sheet.set(`${mt.name}|${Number(mt.thickness)}`, { w: num(mt.sheet_width) || 3210, h: num(mt.sheet_height) || 2250, pat: String(mt.pattern_direction ?? 'none'), fmts: fmtById.get(Number(mt.id)) })
-
-  const usageItems: UsageItem[] = rawItems
-    .filter(it => num(it.width) > 0 && num(it.height) > 0 && num(it.quantity) > 0 && isSheetMaterial(String(it.category ?? '')))
-    .map(it => {
-      const name = String(it.materialName ?? ''), thk = num(it.thickness)
-      const s = sheet.get(`${name}|${thk}`)
-      const billed = num(it.totalAreaBilled)
-      return {
-        materialName: name, thickness: thk, category: String(it.category ?? ''),
-        width: num(it.width), height: num(it.height), quantity: num(it.quantity),
-        costPerM2: billed > 0 ? num(it.costMaterial) / billed : 0,
-        sheetWidth: s?.w, sheetHeight: s?.h, sheetFormats: s?.fmts,
-        patternDirection: (s?.pat ?? 'none') as UsageItem['patternDirection'],
-      }
-    })
-  const usage = computeMaterialUsage(usageItems, CALC_REUSE_RATE)
-  const storedByMaterial = new Map<string, number>()
+  // ── Материал: сколько заложено в просчёт и сколько вышло по факту нарезки. Отход по
+  // раскрою больше не считаем (решение владельца 16.09) — факт даёт журнал листов. ──
+  const planByMaterial = new Map<string, { label: string; netM2: number; billedM2: number; cost: number }>()
   for (const it of rawItems) {
-    const key = `${String(it.materialName ?? '')}|${num(it.thickness)}|${String(it.category ?? '')}`
-    storedByMaterial.set(key, (storedByMaterial.get(key) ?? 0) + num(it.costMaterial))
+    if (!isSheetMaterial(String(it.category ?? ''))) continue
+    const name = String(it.materialName ?? ''), thk = num(it.thickness)
+    const key = `${name}|${thk}`
+    const netM2 = num(it.width) * num(it.height) * num(it.quantity) / 1_000_000
+    const a = planByMaterial.get(key) ?? { label: `${name}${thk > 0 ? ' ' + thk + ' мм' : ''}`, netM2: 0, billedM2: 0, cost: 0 }
+    a.netM2 += netM2
+    a.billedM2 += num(it.totalAreaBilled) || netM2
+    a.cost += num(it.costMaterial)
+    planByMaterial.set(key, a)
   }
-  // Риск остатков: если крупный остаток не вернётся на стеллаж, в материал уходят целые листы.
-  const scrapRisk = usage.reduce((s, u) => s + Math.max(0, u.fullSheetsCost - (storedByMaterial.get(u.materialKey) ?? 0)), 0)
-  const contributionIfScrap = c.contribution - Math.round(scrapRisk - scrapRisk * VAT / (100 + VAT))
+  const plan = [...planByMaterial.values()].sort((a, b) => b.cost - a.cost)
+  const netTotal = plan.reduce((s2, p) => s2 + p.netM2, 0)
+
+  const { data: cutRows } = await svc.from('sheet_cuts')
+    .select('id, material_name, thickness, source, sheet_w, sheet_h, order_ids, created_by_name, created_at')
+    .contains('order_ids', [Number(id)]).order('created_at')
+  const cuts = (cutRows ?? []) as CutRow[]
+  const { data: remRows } = cuts.length
+    ? await svc.from('sheet_remnants').select('from_cut_id, code, width_mm, height_mm, status').in('from_cut_id', cuts.map(c => c.id))
+    : { data: [] as CutRemnant[] }
+  const fact = orderCutFacts(cuts, (remRows ?? []) as CutRemnant[], Number(id), netTotal)
 
   const numLabel = o.custom_number ?? `#${o.id}`
   const discount = num(o.discount_percent)
@@ -158,34 +141,55 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
         </div>
 
         <div>
-          {/* Материал: откуда отход */}
+          {/* Материал: план просчёта и факт нарезки */}
           <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Материал: откуда отход</p>
-            {usage.length === 0 ? (
-              <p className="text-xs text-[#9a9a95]">В заказе нет листового стекла — раскрой не нужен.</p>
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Материал: расход</p>
+            {plan.length === 0 ? (
+              <p className="text-xs text-[#9a9a95]">В заказе нет листового стекла.</p>
             ) : (
               <div className="space-y-2.5">
-                {usage.map(u => (
-                  <div key={u.materialKey} className="text-xs">
-                    <p className="text-[#111110] font-medium">{u.materialLabel}</p>
+                {plan.map(p => (
+                  <div key={p.label} className="text-xs">
+                    <p className="text-[#111110] font-medium">{p.label}</p>
                     <p className="text-[11px] text-[#6b6b66] mt-0.5 font-mono">
-                      нетто {m2(u.netM2)} м² · {u.sheets} л. ({m2(u.sheetM2)} м²) · остаток {m2(u.remnantM2)} м²
+                      детали {m2(p.netM2)} м² · в просчёте {m2(p.billedM2)} м²
+                      {p.netM2 > 0 && ` (+${Math.round((p.billedM2 / p.netM2 - 1) * 100)}% по справочнику)`}
                     </p>
                   </div>
                 ))}
+
+                <div className="pt-2 border-t border-[#f0f0ec]">
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Факт нарезки</p>
+                  {fact.rows.length === 0 ? (
+                    <p className="text-[11px] text-[#9a9a95] leading-relaxed">
+                      Резчик ещё не закрыл лист по этому заказу. Факт появится, когда он отметит лист и остатки на экране «Остатки» в цехе.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {fact.rows.map(r => (
+                        <p key={r.cutId} className="text-[11px] text-[#6b6b66] font-mono">
+                          {r.fromRemnant ? 'остаток' : 'лист'} {r.sheetLabel} ({m2(r.sheetM2)} м²)
+                          {r.remnantM2 > 0 && ` · на стеллаж ${m2(r.remnantM2)} м²${r.remnantCodes.length ? ' (' + r.remnantCodes.join(', ') + ')' : ''}`}
+                          {r.wasteM2 != null ? ` · отход ${m2(r.wasteM2)} м²` : ''}
+                          {r.sharedWith.length > 0 && ` · лист общий с #${r.sharedWith.join(', #')}`}
+                        </p>
+                      ))}
+                      {fact.wasteM2 != null && (
+                        <p className="text-[11px] text-[#111110]">
+                          Отход по факту: <span className="font-mono font-semibold">{m2(fact.wasteM2)} м²</span>
+                          {fact.wastePct != null && ` (${fact.wastePct}% к деталям)`}, на стеллаж <span className="font-mono">{m2(fact.remnantM2)} м²</span>.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <p className="text-[10px] text-[#9a9a95] leading-relaxed pt-1 border-t border-[#f0f0ec]">
-                  Заказ платит за детали, рез и полосы. Кусок от {REMNANT_MIN_SHORT}×{REMNANT_MIN_LONG} мм — не отход: он ложится на стеллаж и оплачивается заказом, который его возьмёт. Так же считает калькулятор.
+                  В просчёте расход по справочнику «Стекло». Отход по раскрою в себестоимость не берём: раскрой планирует резку, а расход считает резчик после нарезки.
                 </p>
-                {scrapRisk > 0 && (
-                  <p className="text-[11px] text-[#6b6b66] leading-relaxed">
-                    <span className="font-medium text-amber-700">Риск остатков: </span>
-                    если остаток не уйдёт в другие заказы, материал дороже на {fmt(scrapRisk)} ₽ и с заказа останется <span className={`font-mono font-semibold ${COLOR[contributionColor(c.revenueExVat > 0 ? contributionIfScrap / c.revenueExVat * 100 : 0)]}`}>{fmt(contributionIfScrap)} ₽</span>.
-                  </p>
-                )}
               </div>
             )}
           </div>
-
         </div>
 
         {/* Позиции */}
