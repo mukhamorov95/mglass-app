@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { orderContribution, applyCatalogWaste, buildWasteNorms, contributionColor, rub, pct, m2 } from '@/lib/unitEconomics'
 import { isSheetMaterial } from '@/lib/materialUsage'
 import { orderCutFacts, type CutRow, type CutRemnant } from '@/lib/production/cutFacts'
+import { loadFactoryData } from '@/lib/b2bFactoryProducts'
+import { mirrorBreakdown } from '@/lib/b2b/mirrorBreakdown'
 import { VAT } from '@/lib/b2bCalculator'
 
 // Экономика ОДНОГО заказа — только владелец, под /cfo. Все цифры — из lib/unitEconomics
@@ -70,16 +72,18 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
   // Изделия производства: их себестоимость — не лист стекла, а состав (зеркало,
   // лента, БП, кнопка, подложка, сборка). У просчётов до 16.09 состав не сохранялся —
   // показываем комплектацию из комментария позиции.
-  const products = rawItems
-    .filter(it => String(it.category ?? '') === 'изделие')
-    .map(it => ({
-      label: String(it.materialName ?? 'Изделие'),
-      size: `${num(it.width)}×${num(it.height)} мм`,
-      qty: num(it.quantity),
-      cost: num(it.costMaterial),
-      bom: (Array.isArray(it.bom) ? it.bom : []) as { name: string; qty: number; unit: string; price?: number; total: number }[],
-      spec: String(it.comment ?? '').split(' · ').map(x => x.trim()).filter(Boolean),
-    }))
+  const productItems = rawItems.filter(it => String(it.category ?? '') === 'изделие')
+  // Состав себестоимости: из позиции (просчёты с 16.09) или пересчётом тем же
+  // калькулятором по сохранённой комплектации — итог обязан открываться в строки.
+  const factory = productItems.length ? await loadFactoryData(svc as never).catch(() => null) : null
+  const products = productItems.map(it => ({
+    label: String(it.materialName ?? 'Изделие'),
+    size: `${num(it.width)}×${num(it.height)} мм`,
+    qty: num(it.quantity),
+    cost: num(it.costMaterial),
+    spec: String(it.comment ?? '').split('·').map(x => x.trim()).filter(Boolean),
+    breakdown: factory ? mirrorBreakdown(it, factory) : null,
+  }))
 
   const { data: cutRows } = await svc.from('sheet_cuts')
     .select('id, material_name, thickness, source, sheet_w, sheet_h, order_ids, created_by_name, created_at')
@@ -235,27 +239,39 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
                     </p>
                     <p className="text-xs font-mono text-[#111110] whitespace-nowrap">{fmt(p.cost)} ₽</p>
                   </div>
-                  {p.bom.length > 0 ? (
-                    <table className="w-full text-[11px] mt-1">
-                      <tbody>
-                        {p.bom.map((l, j) => (
-                          <tr key={j} className="text-[#6b6b66]">
-                            <td className="py-0.5 pr-2">{l.name}</td>
-                            <td className="py-0.5 pr-2 font-mono whitespace-nowrap text-[#9a9a95]">
-                              {l.qty} {l.unit}{l.price ? ` × ${fmt(l.price)} ₽` : ''}
-                            </td>
-                            <td className="py-0.5 text-right font-mono whitespace-nowrap">{fmt(l.total)} ₽</td>
+                  {p.breakdown?.lines.length ? (
+                    <>
+                      <table className="w-full text-[11px] mt-1">
+                        <tbody>
+                          {p.breakdown.lines.map((l, j) => (
+                            <tr key={j} className="text-[#6b6b66] border-b border-[#f7f7f5] last:border-0">
+                              <td className="py-0.5 pr-2">{l.name}</td>
+                              <td className="py-0.5 pr-2 font-mono whitespace-nowrap text-[#9a9a95]">
+                                {l.unit === '%' ? '— от материалов' : `${l.qty} ${l.unit}${l.price ? ` × ${fmt(l.price)} ₽` : ''}`}
+                              </td>
+                              <td className="py-0.5 text-right font-mono whitespace-nowrap text-[#111110]">{fmt(l.total)} ₽</td>
+                            </tr>
+                          ))}
+                          <tr className="font-medium text-[#111110]">
+                            <td className="pt-1">Итого себестоимость</td>
+                            <td />
+                            <td className="pt-1 text-right font-mono">{fmt(p.breakdown.sum)} ₽</td>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </tbody>
+                      </table>
+                      {!p.breakdown.reconciles && (
+                        <p className="text-[10px] text-amber-700 mt-1 leading-relaxed">
+                          Состав пересчитан по сегодняшним ценам справочника и даёт {fmt(p.breakdown.sum)} ₽, а в просчёте сохранено {fmt(p.breakdown.stored)} ₽ — разница {fmt(Math.abs(p.breakdown.sum - p.breakdown.stored))} ₽. В деньгах заказа считается сохранённая сумма.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <>
                       <p className="text-[11px] text-[#6b6b66] mt-1">
                         {p.spec.length ? p.spec.join(' · ') : 'Комплектация не записана в просчёте.'}
                       </p>
-                      <p className="text-[10px] text-[#9a9a95] mt-0.5">
-                        Просчёт сделан до 16.09 — состав по строкам (лента, блок питания, кнопка, сборка) в нём не сохранялся. В новых просчётах он будет здесь с суммами.
+                      <p className="text-[10px] text-amber-700 mt-0.5">
+                        Разложить на строки не удалось: в просчёте нет состава, а по комплектации изделие не восстанавливается.
                       </p>
                     </>
                   )}
