@@ -33,7 +33,7 @@ export type OrderContribution = {
   contributionPct: number  // % от выручки без НДС
   pieces: number
   netM2: number
-  billedM2: number         // площадь по закупке: нетто + отход по раскрою
+  billedM2: number         // площадь по закупке: нетто + расход по справочнику «Стекло»
 }
 
 export type ContributionItem = Record<string, unknown>
@@ -74,7 +74,7 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
 
   const all: ContributionLine[] = [
     { key: 'material', label: 'Материал',
-      how: `нетто ${ru(netM2)} м² + отход по раскрою = ${ru(billedM2)} м² по цене закупки`,
+      how: `нетто ${ru(netM2)} м² + расход по справочнику = ${ru(billedM2)} м² по цене закупки`,
       amount: material, vatIn: vatPart(material, vatRate) },
     { key: 'tempering', label: 'Закалка (подрядчик)', how: temperHow,
       amount: tempering, vatIn: vatPart(tempering, vatRate) },
