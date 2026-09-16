@@ -411,6 +411,13 @@ function KnowledgeTab() {
   )
 }
 
+
+// ─── Follow-up Tab ──────────────────────────────────────────────────────────
+
+const EMPTY_FOLLOWUP: Omit<Followup, 'id'> = {
+  name: '', delay_days: 1, channel: 'whatsapp', context: 'after_quote', body: '', cta: '', bonus_offer: '', active: true,
+}
+
 function FollowupTab() {
   const [followups, setFollowups]   = useState<Followup[]>([])
   const [loading, setLoading]       = useState(true)
