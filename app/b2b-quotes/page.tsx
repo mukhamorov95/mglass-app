@@ -1553,11 +1553,33 @@ export default function B2BQuotesPage() {
                               <td />
                             </tr>
                           )}
-                          <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
-                            <td colSpan={11} className="px-2 py-1.5 text-right text-[11px] text-[#111110]">Итого к оплате</td>
-                            <td className="px-2 py-1.5 text-right font-mono font-bold whitespace-nowrap text-[11px] text-[#111110]">{fmt(finalPrice)}</td>
-                            <td />
-                          </tr>
+                          {/* Итог берётся из сохранённого поля заказа. Если позиции правили
+                              после сохранения, сумма колонки разойдётся — показываем это,
+                              а не прячем (аудит итогов, A10). */}
+                          {(() => {
+                            const disc = Number(quote.discount_percent) || 0
+                            const itemsSum = (quote.items ?? []).reduce((s, it) => {
+                              if (it.manualTotal != null) return s + Number(it.manualTotal)
+                              return s + Math.round(Number(it.saleIncVat ?? 0) * (1 - disc / 100))
+                            }, 0)
+                            const drift = Math.round(itemsSum) - Math.round(finalPrice)
+                            return (
+                              <>
+                                <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
+                                  <td colSpan={11} className="px-2 py-1.5 text-right text-[11px] text-[#111110]">Итого к оплате</td>
+                                  <td className="px-2 py-1.5 text-right font-mono font-bold whitespace-nowrap text-[11px] text-[#111110]">{fmt(finalPrice)}</td>
+                                  <td />
+                                </tr>
+                                {Math.abs(drift) > 1 && (
+                                  <tr>
+                                    <td colSpan={13} className="px-2 py-1 text-right text-[10px] text-amber-700">
+                                      Сумма позиций {fmt(itemsSum)} — расходится с сохранённым итогом на {fmt(Math.abs(drift))}: позиции правили после сохранения просчёта
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            )
+                          })()}
                         </tfoot>
                       </table>
                     </div>

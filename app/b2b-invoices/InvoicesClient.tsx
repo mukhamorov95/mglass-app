@@ -90,7 +90,10 @@ export default function InvoicesClient() {
         <div>
           <h1 className="text-[24px] font-bold text-[#111110]">Счета B2B</h1>
           <p className="text-[13px] text-[#9a9a95] mt-0.5">
-            Дебиторка: <span className="font-semibold text-[#111110]">{fmt(debt.openSum)}</span> по {debt.openCount} счетам
+            {/* Шапка всегда про неоплаченные счета, а список ниже — про выбранную
+                вкладку: без этой оговорки во вкладке «Оплачены» цифра и строки были
+                про разное (аудит итогов, A10). */}
+            Дебиторка (неоплаченные счета): <span className="font-semibold text-[#111110]">{fmt(debt.openSum)}</span> по {debt.openCount} счетам
             {debt.overdueCount > 0 && (
               <> · <span className="text-red-600 font-semibold">просрочено {fmt(debt.overdueSum)}</span> ({debt.overdueCount})</>
             )}
