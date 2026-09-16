@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { runAvitoManager, type DialogMsg, type LeadKnown } from '@/lib/ai-tools/avitoManagerRuntime'
+import { createServiceClient } from '@/lib/supabase-service'
+import { loadBotKnowledge } from '@/lib/knowledge/aiKnowledge'
 
 // Песочница AI-менеджера Авито (/crm/bot-test): тот же движок, что в вебхуке,
 // но без записи в CRM и без отправки в Авито — безопасная проверка тона и логики.
@@ -14,7 +16,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'history required' }, { status: 400 })
   }
   try {
-    const turn = await runAvitoManager(history.slice(-40), known ?? {})
+    // Песочница читает ту же базу знаний, что и боевой бот, но пробелы не пишет.
+    const knowledge = await loadBotKnowledge(createServiceClient())
+    const turn = await runAvitoManager(history.slice(-40), known ?? {}, { knowledge })
     return NextResponse.json(turn)
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'AI error' }, { status: 500 })
