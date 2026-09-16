@@ -170,6 +170,22 @@ export function effectiveItemTotal(item: B2BOrderItem, discountPercent: number):
   return Math.round(item.saleIncVat * (1 - pct / 100))
 }
 
+// Маржа ПОЗИЦИИ: договорная цена участвует как конечная сумма.
+export function itemMarginPct(item: B2BOrderItem, discountPercent: number): number {
+  const exVat = effectiveItemTotal(item, discountPercent) * 100 / (100 + VAT)
+  return exVat > 0 ? Math.round((1 - item.costExVat / exVat) * 100) : 0
+}
+
+// Маржа ЗАКАЗА — одна на всю систему: взвешенная по выручке, а не среднее по позициям.
+// Среднее врало: мелкая дорогая позиция маскировала крупную дешёвую, а скидка вообще не
+// участвовала. Эта же формула уходит в margin_percent при сохранении, поэтому экран
+// калькулятора, карточка сделки, бейдж «маржа < 15%» и отчёты показывают одно число.
+export function orderMarginPct(items: B2BOrderItem[], discountPercent: number): number {
+  const revExVat  = items.reduce((s, i) => s + effectiveItemTotal(i, discountPercent) * 100 / (100 + VAT), 0)
+  const costExVat = items.reduce((s, i) => s + i.costExVat, 0)
+  return revExVat > 0 ? Math.round((1 - costExVat / revExVat) * 100) : 0
+}
+
 export type B2BOrderTotals = {
   totalAreaNet: number
   totalWeight: number

@@ -59,7 +59,7 @@ const SUPER_CATS = [
 ] as const
 type SuperCat = typeof SUPER_CATS[number]['value']
 import {
-  calcItem, calcTotals, effectiveItemTotal, TEMPERING_COST, VAT,
+  calcItem, calcTotals, effectiveItemTotal, itemMarginPct, orderMarginPct, TEMPERING_COST, VAT,
   type B2BOrderItem, type B2BOrderTotals, type FacetPrice, type MinPriceReason,
 } from '@/lib/b2bCalculator'
 import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
@@ -72,13 +72,6 @@ function marginBadgeClass(m: number): string {
   if (s === 'green')  return 'bg-emerald-50 text-emerald-700'
   if (s === 'yellow') return 'bg-amber-50 text-amber-700'
   return 'bg-red-50 text-red-600'
-}
-
-function effectiveItemMargin(item: B2BOrderItem, discountPct: number): number {
-  // Ручная договорная цена (manualTotal) участвует в марже как конечная сумма
-  const afterDisc = effectiveItemTotal(item, discountPct)
-  const exVat = afterDisc * 100 / (100 + VAT)
-  return exVat > 0 ? Math.round((1 - item.costExVat / exVat) * 100) : 0
 }
 
 // Сопоставление распознанной с чертежа детали (толщина + тип стекла словами) с
@@ -1386,9 +1379,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     // /commercial/money и AI — среднее по позициям врало (мелкая дорогая маскировала
     // крупную дешёвую, скидка вообще не учитывалась). Считаем как реальную:
     // (выручка_безНДС_после_скидки − себестоимость_безНДС) / выручка_безНДС.
-    const revExVatAfter = itemsAuto.reduce((s, i) => s + effectiveItemTotal(i, discount) * 100 / (100 + VAT), 0)
-    const costExVatSum  = itemsAuto.reduce((s, i) => s + i.costExVat, 0)
-    const avgMargin = revExVatAfter > 0 ? Math.round((1 - costExVatSum / revExVatAfter) * 100) : 0
+    const avgMargin = orderMarginPct(itemsAuto, discount)
     const authorName = managerName ?? managerEmail ?? null
     const editing = editingOrderId != null
     const baseNotes = editing ? { ...editOrigNotesRef.current } : {}
@@ -2532,7 +2523,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                     <tbody className="divide-y divide-[#f8f8f7]">
                       {itemsAuto.map((item, idx) => {
                         const itemAfterDiscount = Math.round(item.saleIncVat * (1 - discount / 100))
-                        const em = effectiveItemMargin(item, discount)
+                        const em = itemMarginPct(item, discount)
                         return (
                           <tr key={item.localId} onClick={() => openEdit(item)}
                             title="Нажмите, чтобы изменить позицию"
@@ -2660,7 +2651,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                           <td className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap">{totals.totalCostExVat.toLocaleString('ru-RU')} ₽</td>
                           <td className="px-3 py-2.5 text-right">
                             {items.length > 0 && (() => {
-                              const avg = Math.round(itemsAuto.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / itemsAuto.length)
+                              const avg = orderMarginPct(itemsAuto, discount)
                               return <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(avg)}`}>{avg}%</span>
                             })()}
                           </td>
@@ -2852,11 +2843,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
 
                 {/* Маржа и прибыль — итоговая строка */}
                 {(() => {
-                  const avgEm = Math.round(itemsAuto.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / itemsAuto.length)
+                  const avgEm = orderMarginPct(itemsAuto, discount)
                   return (
                     <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[#f8f8f7] border border-[#f0f0ec]">
                       <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm)}`}>{avgEm}%</span>
-                      <span className="text-[12px] text-[#6b6b66]">средняя маржа</span>
+                      <span className="text-[12px] text-[#6b6b66]">маржа заказа</span>
                       <span className="ml-auto text-[12px] font-semibold font-mono text-[#111110]">
                         {totals.profit > 0 ? '+' : ''}{fmt(totals.profit)}
                       </span>
@@ -2869,7 +2860,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 {(() => {
                   const target = strategy.target_margin || 40
                   const minM   = strategy.min_margin || 25
-                  const avgEm  = Math.round(itemsAuto.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / itemsAuto.length)
+                  const avgEm  = orderMarginPct(itemsAuto, discount)
                   const price  = totals.totalAfterDiscount
                   // Цена при целевой марже m (тот же расход): множитель по марже.
                   const priceAt = (m: number) => (avgEm >= 100 || m >= 100) ? price : Math.round(price * (100 - avgEm) / (100 - m))
@@ -2885,7 +2876,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                     recs.push({ tone: 'ok', head: 'В цель', text: `Маржа ${avgEm}% — здоровая, в целевом коридоре. Цена конкурентная и прибыльная. Предел торга ≈ ${fmt(priceAt(minM))} (${minM}%).` })
                   }
                   if (items.length > 1) {
-                    const perPos = itemsAuto.map((i, idx) => ({ idx: idx + 1, m: effectiveItemMargin(i, discount), name: i.materialName }))
+                    const perPos = itemsAuto.map((i, idx) => ({ idx: idx + 1, m: itemMarginPct(i, discount), name: i.materialName }))
                     const worst = perPos.reduce((a, b) => b.m < a.m ? b : a)
                     if (worst.m < avgEm - 8) recs.push({ tone: 'info', head: `Позиция ${worst.idx}`, text: `${worst.name}: маржа ${worst.m}% — заметно ниже средней. Проверьте размер/скидку по ней.` })
                   }
@@ -3226,7 +3217,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           }, { facetPrices, surchargeRules }), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
-      const ePreviewMargin = ePreviewItem ? effectiveItemMargin(ePreviewItem, discount) : null
+      const ePreviewMargin = ePreviewItem ? itemMarginPct(ePreviewItem, discount) : null
 
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
