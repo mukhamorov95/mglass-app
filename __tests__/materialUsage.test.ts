@@ -19,11 +19,32 @@ describe('computeMaterialUsage — честный расход материал�
     expect(u.honestCost).toBeLessThanOrEqual(u.fullSheetsCost)
   })
 
+  // Одна деталь из целого листа: остаток 6+ м² — приход на стеллаж, а не отход заказа
+  // (замечание владельца по заказу #5479, 16.09.2026).
+  const onePiece: UsageItem[] = [{
+    materialName: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло',
+    width: 800, height: 1000, quantity: 1, costPerM2: 2090,
+  }]
+
+  it('одна деталь из листа: заказ платит нетто + рез, остаток идёт на стеллаж', () => {
+    const [u] = computeMaterialUsage(onePiece)
+    expect(u.remnantM2).toBeGreaterThan(5)
+    expect(u.honestCost).toBeGreaterThanOrEqual(u.netCost)
+    // до 16.09 сюда прилетали ещё 15% остатка — почти целый лишний квадрат
+    expect(u.honestCost).toBeLessThan(u.netCost * 1.1)
+    expect(u.fullSheetsCost).toBeGreaterThan(u.netCost * 5)
+  })
+
   it('reuseRate=1 → расход ≈ нетто + потеря реза (крупный остаток возвращён)', () => {
-    const [u] = computeMaterialUsage(satin60, 1)
-    // при полном реюзе честная стоимость = нетто + мелкая потеря реза
+    const [u] = computeMaterialUsage(onePiece, 1)
     expect(u.honestCost).toBeGreaterThanOrEqual(u.netCost)
     expect(u.honestCost - u.netCost).toBeLessThan(u.fullSheetsCost - u.netCost)
+  })
+
+  it('плотный раскрой: обрезки мельче 400×800 — отход заказа, не остаток', () => {
+    const [u] = computeMaterialUsage(satin60)
+    expect(u.remnantM2).toBe(0)
+    expect(u.honestCost).toBe(u.fullSheetsCost)
   })
 
   it('reuseRate=0 → расход = целые листы (ничего не возвращается)', () => {
@@ -32,8 +53,8 @@ describe('computeMaterialUsage — честный расход материал�
   })
 
   it('больше реюза — меньше расход (монотонность)', () => {
-    const lo = computeMaterialUsage(satin60, 0.3)[0].honestCost
-    const hi = computeMaterialUsage(satin60, 0.9)[0].honestCost
+    const lo = computeMaterialUsage(onePiece, 0.3)[0].honestCost
+    const hi = computeMaterialUsage(onePiece, 0.9)[0].honestCost
     expect(hi).toBeLessThan(lo)
   })
 

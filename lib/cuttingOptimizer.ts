@@ -68,11 +68,18 @@ export type CuttingSettings = {
   min_remnant_long?: number
 }
 
+// Порог остатка листа, мм. Один на систему: раскрой, калькулятор, экономика заказа и
+// стеллаж (lib/production/remnants.ts). Правится в /admin/cutting-settings.
+export const REMNANT_MIN_SHORT = 400
+export const REMNANT_MIN_LONG = 800
+
 export const DEFAULT_CUTTING_SETTINGS: CuttingSettings = {
   gap_between_pieces: 2,
   edge_margin: 2,
   allow_rotation: true,
   respect_pattern: true,
+  min_remnant_short: REMNANT_MIN_SHORT,
+  min_remnant_long: REMNANT_MIN_LONG,
 }
 
 // ─── Internal types ────────────────────────────────────────────────────────────
@@ -149,10 +156,11 @@ function applyPlacement(placement: Placement, freeRects: FreeRect[], gap: number
 // Minimum free-rect size for strip packing (mm) — не путать с порогом остатка
 const MIN_REMNANT_MM = 200
 
-// Порог остатка по умолчанию — как было до 15.09, пока настройки не переданы
+// Один порог остатка на всю систему: кусок от 400×800 мм ложится на стеллаж и идёт
+// в следующие заказы, меньше — полоса в отход (решение владельца 15.09.2026).
 export function isRemnant(w: number, h: number, settings?: Pick<CuttingSettings, 'min_remnant_short' | 'min_remnant_long'>): boolean {
-  const short = settings?.min_remnant_short ?? MIN_REMNANT_MM
-  const long = settings?.min_remnant_long ?? MIN_REMNANT_MM
+  const short = settings?.min_remnant_short ?? REMNANT_MIN_SHORT
+  const long = settings?.min_remnant_long ?? REMNANT_MIN_LONG
   return Math.min(w, h) >= short && Math.max(w, h) >= long
 }
 
