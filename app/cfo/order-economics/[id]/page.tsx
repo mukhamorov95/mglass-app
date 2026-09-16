@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import { orderContribution, contributionColor, rub, pct, m2 } from '@/lib/unitEconomics'
+import { orderContribution, applyCatalogWaste, buildWasteNorms, contributionColor, rub, pct, m2 } from '@/lib/unitEconomics'
 import { isSheetMaterial } from '@/lib/materialUsage'
 import { orderCutFacts, type CutRow, type CutRemnant } from '@/lib/production/cutFacts'
 import { VAT } from '@/lib/b2bCalculator'
@@ -29,7 +29,15 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
     return <div className="bg-[#f5f5f3] min-h-screen p-8 text-center text-sm text-[#9a9a95]">Заказ не найден. <Link href="/cfo/order-economics" className="text-blue-600">← К списку</Link></div>
   }
 
-  const rawItems = Array.isArray(o.items) ? (o.items as RawItem[]) : []
+  // Расход материала — по нормативу справочника: заказы до 16.09 несут в себе расход
+  // из раскроя (решение владельца 16.09 — раскрой расход не считает).
+  const [{ data: matRows }, { data: matrixRows }] = await Promise.all([
+    svc.from('b2b_materials').select('name, thickness, category, waste_percent'),
+    svc.from('glass_price_matrix').select('name, category, price_type, waste_pct'),
+  ])
+  const norms = buildWasteNorms(matRows ?? [], matrixRows ?? [])
+  const storedItems = Array.isArray(o.items) ? (o.items as RawItem[]) : []
+  const rawItems = applyCatalogWaste(storedItems, norms) as RawItem[]
   const revenue = num(o.total_after_discount) || num(o.total_sale_inc_vat)
   const c = orderContribution(revenue, rawItems)
   const cls = COLOR[contributionColor(c.contributionPct)]
@@ -152,7 +160,7 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
                   <div key={p.label} className="text-xs">
                     <p className="text-[#111110] font-medium">{p.label}</p>
                     <p className="text-[11px] text-[#6b6b66] mt-0.5 font-mono">
-                      детали {m2(p.netM2)} м² · в просчёте {m2(p.billedM2)} м²
+                      детали {m2(p.netM2)} м² · расход {m2(p.billedM2)} м²
                       {p.netM2 > 0 && ` (+${Math.round((p.billedM2 / p.netM2 - 1) * 100)}% по справочнику)`}
                     </p>
                   </div>

@@ -43,6 +43,50 @@ const vatPart = (sumWithVat: number, rate: number) => sumWithVat * rate / (100 +
 const r = (x: number) => Math.round(x)
 const ru = (x: number, d = 2) => x.toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d })
 
+// Расход по нормативу справочника «Стекло». Заказы, сохранённые до 16.09.2026, несут в
+// себе расход из раскроя: на #5479 одна деталь 0,77 м² превратилась в 1,76 м² («откуда
+// ещё квадратный метр»). Решение владельца: расход — по справочнику, факт — от резчика
+// после нарезки. Здесь пересчитываем материал позиции по нормативу, не трогая ни цену
+// клиенту, ни остальные статьи. norms: `${materialName}|${thickness}` → % расхода.
+export type WasteNorms = Map<string, number>
+
+type MatRow = { name?: unknown; thickness?: unknown; category?: unknown; waste_percent?: unknown }
+type MatrixRow = { name?: unknown; category?: unknown; price_type?: unknown; waste_pct?: unknown }
+
+// Норматив расхода как его видит калькулятор: справочник цен (строка себестоимости)
+// перебивает карточку материала — там первоисточник.
+export function buildWasteNorms(materials: MatRow[], matrix: MatrixRow[] = []): WasteNorms {
+  const byName = new Map<string, number>()
+  for (const r of matrix) {
+    if (String(r.price_type ?? '') !== 'cost') continue
+    const w = n(r.waste_pct)
+    if (w > 0) byName.set(`${String(r.name ?? '')}|${String(r.category ?? '')}`, w)
+  }
+  const out: WasteNorms = new Map()
+  for (const m of materials) {
+    const name = String(m.name ?? ''), thk = n(m.thickness)
+    const cat = String(m.category ?? '') === 'зеркало' ? 'mirror' : 'glass'
+    const norm = byName.get(`${name}|${cat}`) ?? n(m.waste_percent)
+    if (norm > 0) out.set(`${name}|${thk}`, norm)
+  }
+  return out
+}
+
+export function applyCatalogWaste(items: ContributionItem[], norms: WasteNorms): ContributionItem[] {
+  if (!norms.size) return items
+  return items.map(it => {
+    if (String(it.category ?? '') === 'изделие') return it
+    const q = n(it.quantity)
+    const net = n(it.totalAreaNet) || n(it.width) * n(it.height) / 1_000_000 * q
+    const billed = n(it.totalAreaBilled) || net
+    const cost = n(it.costMaterial)
+    const norm = norms.get(`${String(it.materialName ?? '')}|${n(it.thickness)}`)
+    if (norm == null || !(net > 0) || !(billed > 0) || !(cost > 0)) return it
+    const newBilled = Math.round(net * (1 + norm / 100) * 10000) / 10000
+    return { ...it, totalAreaBilled: newBilled, costMaterial: Math.round(newBilled * (cost / billed)) }
+  })
+}
+
 export function orderContribution(revenueIncVat: number, items: ContributionItem[], vatRate = VAT): OrderContribution {
   let material = 0, tempering = 0, services = 0, transport = 0, packaging = 0
   let pieces = 0, temperedPieces = 0, netM2 = 0, billedM2 = 0, temperedM2 = 0
