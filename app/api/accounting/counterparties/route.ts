@@ -82,10 +82,15 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     items,
+    // «Долг» — сумма только положительных остатков: наша переплата поставщику не
+    // гасит долг перед другим. Поэтому переплату отдаём отдельным полем, иначе
+    // плашка не сходится с колонкой «баланс» под ней (аудит итогов, A7).
     totals: items.reduce((t, r) => ({
       ordered: t.ordered + r.ordered, paidPurchase: t.paidPurchase + r.paidPurchase,
-      paidCash: t.paidCash + r.paidCash, debt: t.debt + Math.max(0, r.balance),
+      paidCash: t.paidCash + r.paidCash,
+      debt: t.debt + Math.max(0, r.balance),
+      prepaid: t.prepaid + Math.max(0, -r.balance),
       openRequests: t.openRequests + r.openRequests,
-    }), { ordered: 0, paidPurchase: 0, paidCash: 0, debt: 0, openRequests: 0 }),
+    }), { ordered: 0, paidPurchase: 0, paidCash: 0, debt: 0, prepaid: 0, openRequests: 0 }),
   })
 }

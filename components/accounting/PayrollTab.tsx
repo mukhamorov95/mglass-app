@@ -65,20 +65,31 @@ export function PayrollTab({ unit, month, onChanged }: {
 
   if (loading) return <p className="text-[13px] text-[#9a9a95] py-6 text-center">Загрузка…</p>
 
+  // «Долг людям» — сумма только положительных остатков: переплаты не гасят чужой долг.
+  // Но тогда плашка не равна сумме колонки, поэтому переплату показываем рядом, а не
+  // прячем; неразнесённые выплаты — тоже деньги, которые уже ушли (аудит итогов, A7).
   const totals = people.reduce((t, p) => ({
     accrued: t.accrued + p.accrued, paid: t.paid + p.paid,
-    debt: t.debt + Math.max(0, p.debt), withheld: t.withheld + p.withheld,
-  }), { accrued: 0, paid: 0, debt: 0, withheld: 0 })
+    debt: t.debt + Math.max(0, p.debt),
+    overpaid: t.overpaid + Math.max(0, -p.debt),
+    withheld: t.withheld + p.withheld,
+  }), { accrued: 0, paid: 0, debt: 0, overpaid: 0, withheld: 0 })
 
   return (
     <div className="space-y-3">
       {err && <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-[13px]">{err}</div>}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {([['Начислено', totals.accrued], ['Выплачено', totals.paid], ['Долг людям', totals.debt], ['НДФЛ и взносы', totals.withheld]] as const).map(([label, v]) => (
+        {([
+          ['Начислено', totals.accrued, null],
+          ['Выплачено', totals.paid, unassigned > 0 ? `+ ${RUB(unassigned)} без человека` : null],
+          ['Долг людям', totals.debt, totals.overpaid > 0 ? `переплата ${RUB(totals.overpaid)}` : null],
+          ['НДФЛ и взносы', totals.withheld, null],
+        ] as const).map(([label, v, hint]) => (
           <div key={label} className="bg-white rounded-xl border border-[#e4e4e0] px-3 py-2.5">
             <p className="text-[11px] uppercase tracking-widest text-[#9a9a95]">{label}</p>
             <p className="text-[15px] font-mono font-semibold text-[#111110] mt-0.5">{RUB(v)}</p>
+            {hint && <p className="text-[10px] text-[#9a9a95] mt-0.5">{hint}</p>}
           </div>
         ))}
       </div>
