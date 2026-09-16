@@ -64,7 +64,7 @@ function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
 // Mirrors the same deduplication logic as the KP print page:
 // each item's final_price includes services — delivery must be counted once per group.
-function computeGroupTotal(items: Calc[]): number {
+function computeGroupBreakdown(items: Calc[]): { products: number; services: { name: string; total: number }[]; servicesSum: number; duplicated: number; total: number } {
   const svcMap = new Map<string, { total: number; isDelivery: boolean }>()
   let productSum = 0
   for (const item of items) {
@@ -82,9 +82,18 @@ function computeGroupTotal(items: Calc[]): number {
       }
     }
   }
-  const svcSum = Array.from(svcMap.values()).reduce((s, v) => s + v.total, 0)
-  return productSum + svcSum
+  const services = [...svcMap.entries()].map(([name, v]) => ({ name, total: v.total }))
+  const servicesSum = services.reduce((s, v) => s + v.total, 0)
+  // Сколько услуг задвоилось по расчётам (доставка на каждое изделие): на эту сумму
+  // группа НЕ выставляется клиенту, значит и в прибыль группы она попасть не должна.
+  const rawServices = items.reduce((s, item) =>
+    s + ((item.financial_breakdown?.serviceLines ?? []) as { total: number }[])
+      .filter(l => l.total > 0).reduce((a, l) => a + l.total, 0), 0)
+  return { products: productSum, services, servicesSum, duplicated: rawServices - servicesSum, total: productSum + servicesSum }
 }
+
+// Совместимость: где нужна только сумма.
+function computeGroupTotal(items: Calc[]): number { return computeGroupBreakdown(items).total }
 
 function getDesc(c: Calc): string {
   const d = c.input_data
@@ -486,10 +495,17 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
               {rows.map((row, rowIdx) => {
                 if (row.type === 'group') {
                   const { items: gi } = row
-                  const groupTotal = computeGroupTotal(gi)
+                  // Строки группы печатают цену изделия без услуг, а «Итого» добавляет
+                  // услуги с доставкой один раз на группу: без этих двух строк видимые
+                  // цены не складывались в итог (аудит итогов, A6).
+                  const gb = computeGroupBreakdown(gi)
+                  const groupTotal = gb.total
                   const groupCost  = gi.reduce((s, x) => s + ((x.cost_breakdown?.totalCost as number) ?? 0), 0)
-                  const groupProfit= gi.reduce((s, x) => s + x.profit, 0)
-                  const avgMargin  = gi.reduce((s, x) => s + x.margin, 0) / gi.length
+                  // Прибыль группы: сумма прибыли расчётов минус задвоенная доставка —
+                  // её клиент платит один раз, значит и прибыли с неё одна.
+                  const groupProfit= gi.reduce((s, x) => s + x.profit, 0) - gb.duplicated
+                  // Маржа группы — от её же денег, а не среднее марж расчётов.
+                  const avgMargin  = gb.total > 0 ? groupProfit / gb.total * 100 : 0
                   const st = STATUS_META[gi[0].status] ?? STATUS_META.draft
                   const managerName = gi[0].created_by ? (usersMap[gi[0].created_by] ?? '') : ''
                   const mStatus = computeMarginStatus(avgMargin, defaultSettings ?? { default_margin: 40, min_margin: 25 })
@@ -628,6 +644,11 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
                           <div className="flex items-baseline gap-1">
                             <span className="text-[11px] text-[#9a9a95]">Итого</span>
                             <span className="text-[15px] font-bold tabular-nums text-[#111110]">{fmt(groupTotal)}</span>
+                            {gb.servicesSum > 0 && (
+                              <span className="text-[10px] text-[#9a9a95] ml-1">
+                                = изделия {fmt(gb.products)} + {gb.services.map(x => `${x.name} ${fmt(x.total)}`).join(' + ')}
+                              </span>
+                            )}
                           </div>
                           {groupCost > 0 && (
                             <div className="flex items-baseline gap-1">
