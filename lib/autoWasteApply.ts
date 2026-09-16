@@ -31,7 +31,16 @@ type MatLike = {
  * Вернуть позиции с себестоимостью и маржой по автоматическому расходу.
  * Геометрия, цена клиента, услуги и договорные цены — без изменений.
  */
+// Решение владельца 16.09.2026: расход по раскрою в просчёт не берём. Раскрой —
+// планирование резки, а не норма расхода: он кроит каждый заказ с чистого листа и
+// приписывает заказу куски, которые уйдут в другие заказы. Расход берём из справочника
+// («Стекло», waste_percent), а факт — из журнала листов, который заполняет резчик после
+// нарезки (lib/production/cutFacts.ts, экран экономики заказа).
+// Логика ниже сохранена целиком: вернуть true — и авторасход снова работает.
+export const AUTO_WASTE_ENABLED = false
+
 export function applyAutoWasteToItems(items: B2BOrderItem[], materials: MatLike[]): B2BOrderItem[] {
+  if (!AUTO_WASTE_ENABLED) return items
   if (!items.length) return items
   const matLookup = new Map<string, MatLike>()
   for (const m of materials) matLookup.set(`${m.name}|${m.thickness}`, m)
