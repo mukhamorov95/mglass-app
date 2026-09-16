@@ -226,6 +226,10 @@ export default function AccountingPage() {
   const fundRow = (f: Fund) => {
     const total = sumFund(f.id)
     const subs = subfunds.filter(s => s.fund_id === f.id)
+    // Операции без подфонда: раньше они не попадали никуда, и сумма подфондов молча
+    // была меньше фонда — раскрытие, которое не сходится с итогом (аудит итогов, A8).
+    const subsSum = subs.reduce((acc, x) => acc + sumSub(x.id), 0)
+    const noSub = Math.round((total - subsSum) * 100) / 100
     const isOpen = open.has(f.id)
     const isVar = f.fund_class === 'variable'
     const bg = f.fund_class === 'income' ? 'bg-emerald-50 border-emerald-200' : isVar ? 'bg-amber-50 border-amber-200' : 'bg-white border-[#e4e4e0]'
@@ -247,6 +251,18 @@ export default function AccountingPage() {
                 <span className="font-mono">{RUB(sumSub(s.id))}</span>
               </div>
             ))}
+            {noSub !== 0 && (
+              <div className="flex justify-between py-1 text-[13px] text-amber-700">
+                <span>Без подфонда</span>
+                <span className="font-mono">{RUB(noSub)}</span>
+              </div>
+            )}
+            {(subs.length > 0 || noSub !== 0) && (
+              <div className="flex justify-between py-1 mt-1 border-t border-[#f0f0ec] text-[12px] text-[#9a9a95]">
+                <span>Итого по фонду</span>
+                <span className="font-mono">{RUB(subsSum + noSub)}</span>
+              </div>
+            )}
             <button onClick={() => addSubfund(f.id)} className="text-[12px] text-blue-600 py-1">＋ добавить подфонд</button>
           </div>
         )}
@@ -327,6 +343,10 @@ export default function AccountingPage() {
               <span className="font-semibold">Остаток за месяц</span>
               <span className="font-mono font-semibold">{RUB(income - variable - fixedAndFunds)}</span>
             </div>
+            {/* Из чего сложился остаток: сумма трёх блоков выше, но нигде не была названа */}
+            <p className="text-[11px] text-[#9a9a95] px-3 mt-1">
+              Доходы {RUB(income)} − переменные {RUB(variable)} − постоянные и фонды {RUB(fixedAndFunds)}
+            </p>
 
             {log.length > 0 && (
               <details className="mt-4 bg-white rounded-xl border border-[#e4e4e0] px-4 py-3">
