@@ -429,6 +429,15 @@ function TotalRow({ label, plan, actual, highlight }: {
   )
 }
 
+// Строка-примечание под итогом: чем именно является цифра в колонке «факт».
+function NoteRow({ text }: { text: string }) {
+  return (
+    <div className="px-3 py-1.5 bg-[#fafaf9] border-b border-[#f0f0ec]">
+      <p className="text-[10px] text-[#9a9a95] leading-relaxed">{text}</p>
+    </div>
+  )
+}
+
 function MetricRow({ label, plan, actual }: { label: string; plan: string; actual: string }) {
   return (
     <div className="flex items-center px-3 py-[6px] bg-[#fafaf9] border-b border-[#f0f0ec]">
@@ -523,8 +532,15 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
   const planNet   = planEBITDA   - planFundsTotal
   const actualNet = actualEBITDA - actualFundsTotal
 
-  const tb0 = calcTB0(fc, s.avg_variable_pct)
-  const tb1 = calcTB1(fc, s.avg_variable_pct, fundsPct)
+  // ТБ считаем от VC% ЭТОГО экрана, а не от плоского avg_variable_pct из настроек:
+  // раньше справа стояла точка безубыточности по 62%, пока таблица слева показывала
+  // свою маржинальность — два ответа на одном экране (аудит итогов, A2).
+  const planVcPct   = totalPlanRev > 0 ? totalPlanVC / totalPlanRev * 100 : s.avg_variable_pct
+  const factVcPct   = totalActualRev > 0 ? totalActualVC / totalActualRev * 100 : null
+  const tbVcPct     = factVcPct ?? planVcPct
+  const tbVcSource  = factVcPct != null ? 'факт месяца' : 'план'
+  const tb0 = calcTB0(fc, tbVcPct)
+  const tb1 = calcTB1(fc, tbVcPct, fundsPct)
 
   const vcActualPct = totalActualRev > 0 ? totalActualVC / totalActualRev * 100 : 0
 
@@ -611,7 +627,12 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-sm font-semibold text-[#111110]">CFO Center — Финансовая модель</h1>
-            <p className="text-[10px] text-[#9a9a95] mt-0.5">{monthLabel} · Единственный источник финансовой правды</p>
+            {/* Подпись была «Единственный источник финансовой правды», хотя постоянные
+                расходы здесь свои (cfo_settings), а рабочая финмодель — /cfo/model. */}
+            <p className="text-[10px] text-[#9a9a95] mt-0.5">
+              {monthLabel} · план на настройках cfo_settings ·{' '}
+              <a href="/cfo/model" className="text-blue-600 hover:underline">рабочая финмодель — /cfo/model</a>
+            </p>
           </div>
           {savedAt && <span className="text-[10px] text-emerald-600">Сохранено в {savedAt}</span>}
         </div>
@@ -681,23 +702,26 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
 
               {/* ═══ ПЕРЕМЕННЫЕ РАСХОДЫ ═══════════════════════════ */}
               <SectionHead label="ПЕРЕМЕННЫЕ РАСХОДЫ (VC)" />
+              {/* Факт переменных — ТОЛЬКО фактическая себестоимость расчётов. Раньше для
+                  части направлений строка считалась как «выручка × плановый VC%», а итог
+                  оставался суммой фактических себестоимостей: колонка не складывалась в
+                  свой же итог (аудит итогов, A2). */}
               {REV_DIRS.filter(d => d.cat !== 'other').map(dir => {
                 const planVC   = (revPlan[dir.id] ?? 0) * dir.vcPct / 100
-                const actualVC = dir.id === 'b2c_mirror' || dir.id === 'b2c_shower' || dir.id === 'b2c_loft'
-                  ? (monthActuals[dir.id as keyof MonthActuals]?.cost ?? 0)
-                  : (monthActuals[dir.id as keyof MonthActuals]?.revenue ?? 0) * dir.vcPct / 100
+                const actualVC = Math.round(monthActuals[dir.id as keyof MonthActuals]?.cost ?? 0)
                 return (
                   <DataRow key={dir.id}
                     label={`${dir.label} (${dir.vcPct}% VC)`}
                     indent
                     plan={Math.round(planVC)}
-                    actual={Math.round(actualVC)}
+                    actual={actualVC}
                     negative
                     dimActual={actualVC === 0}
                   />
                 )
               })}
               <TotalRow label="ИТОГО ПЕРЕМЕННЫЕ" plan={Math.round(totalPlanVC)} actual={Math.round(totalActualVC)} />
+              <NoteRow text="Факт — себестоимость расчётов розницы за месяц. B2B-заказы на этот экран не попадают: их экономика в /cfo/order-economics." />
 
               {/* ═══ МАРЖИНАЛЬНАЯ ПРИБЫЛЬ ════════════════════════ */}
               <SectionHead label="МАРЖИНАЛЬНАЯ ПРИБЫЛЬ" />
@@ -714,11 +738,11 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                   label={FC_LABELS[key] ?? key}
                   indent
                   plan={s.fixed_costs[key]}
-                  actual={s.fixed_costs[key]}
                   negative
                 />
               ))}
               <TotalRow label="ИТОГО ПОСТОЯННЫЕ" plan={fc} actual={fc} />
+              <NoteRow text="Факта постоянных расходов система не ведёт: в колонке «факт» стоит план. Фактические платежи — в бухгалтерии (ОДДС), план по статьям — в финмодели CFO." />
 
               {/* ═══ EBITDA ══════════════════════════════════════ */}
               <SectionHead label="ОПЕРАЦИОННАЯ ПРИБЫЛЬ (EBITDA)" />
@@ -804,8 +828,12 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                 <TBWidget label="Целевая выручка с фондами" target={tb1} actual={totalActualRev} color="red" />
                 <div className="pt-2 border-t border-[#f0f0ec] space-y-1">
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-[#9a9a95]">VC% (план)</span>
-                    <span className="font-mono font-medium">{s.avg_variable_pct}%</span>
+                    <span className="text-[#9a9a95]">VC% ({tbVcSource})</span>
+                    <span className="font-mono font-medium">{tbVcPct.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-[#9a9a95]">VC% в настройках</span>
+                    <span className="font-mono text-[#9a9a95]">{s.avg_variable_pct}%</span>
                   </div>
                   <div className="flex justify-between text-[10px]">
                     <span className="text-[#9a9a95]">Фонды%</span>
