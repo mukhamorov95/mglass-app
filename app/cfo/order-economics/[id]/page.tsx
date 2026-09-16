@@ -17,6 +17,14 @@ const COLOR = { red: 'text-red-600', amber: 'text-amber-600', green: 'text-emera
 
 type RawItem = Record<string, unknown>
 
+// Расход позиции в % — из тех же чисел, что попали в себестоимость (после пересчёта
+// по нормативу справочника), а не из сохранённого `wastePercent` заказа.
+const wasteOf = (it: RawItem) => {
+  const net = num(it.totalAreaNet) || num(it.width) * num(it.height) / 1_000_000 * num(it.quantity)
+  const billed = num(it.totalAreaBilled) || net
+  return net > 0 ? (billed / net - 1) * 100 : num(it.wastePercent)
+}
+
 export default async function OrderEconomicsDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const svc = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -215,7 +223,8 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
                     <td className="px-3 py-2 font-mono text-[#6b6b66]">{num(it.width)}×{num(it.height)}</td>
                     <td className="px-3 py-2 font-mono">{num(it.quantity)}</td>
                     <td className="px-3 py-2 font-mono text-[#9a9a95]">{num(it.thickness)}</td>
-                    <td className="px-3 py-2 font-mono text-[#6b6b66]">{pct(num(it.wastePercent))}%</td>
+                    {/* Расход — тот же, по которому посчитан материал выше, а не сохранённый из раскроя */}
+                    <td className="px-3 py-2 font-mono text-[#6b6b66]">{pct(wasteOf(it))}%</td>
                     <td className="px-3 py-2 font-mono">{fmt(num(it.costMaterial))}</td>
                     <td className="px-3 py-2">{it.hasTempering ? '✓' : '—'}</td>
                     <td className="px-3 py-2">{it.hasHoles ? '✓' : '—'}</td>
