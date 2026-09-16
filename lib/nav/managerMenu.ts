@@ -80,3 +80,21 @@ export const MANAGER_B2B: NavItem[] = [
   { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
 ]
 
+
+// ─── AI (только владелец) ─────────────────────────────────────────────────────
+
+// Раздел AI в рабочем месте «Менеджер», под MGlass и B2B (решение владельца 16.09).
+// База знаний — на первом уровне: её наполняют постоянно. Экраны бота и агентов
+// существовали и раньше, но были разбросаны по «СЕО» и «Админу».
+export const OWNER_AI: NavEntry[] = [
+  { href: '/ai/knowledge', label: 'База знаний', icon: '📚' },
+  { sectionLabel: 'Бот Авито «Иван»', icon: '💬', items: [
+    { href: '/admin/avito-funnel', label: 'Воронка бота',   icon: '📊' },
+    { href: '/crm/bot-test',       label: 'Песочница бота', icon: '🧪' },
+    { href: '/ai-stats',           label: 'Статистика AI',  icon: '📈' },
+  ] },
+  { sectionLabel: 'Агенты', icon: '⚡', items: [
+    { href: '/admin/agents',            label: 'AI-агенты',         icon: '⚡' },
+    { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🎛️' },
+  ] },
+]

@@ -396,171 +396,19 @@ const EMPTY_KB: Omit<KBArticle, 'id'> = {
   category: 'glass', title: '', content: '', tags: [], active: true, sort_order: 0,
 }
 
+// База знаний переехала в раздел AI (/ai/knowledge). Здесь была своя вкладка поверх
+// таблицы sales_knowledge_base, которой в боевой базе нет, — экран молча ничего не
+// показывал и не сохранял. Теперь база одна: её читает и команда, и бот.
 function KnowledgeTab() {
-  const [articles, setArticles]   = useState<KBArticle[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [catFilter, setCatFilter] = useState('')
-  const [expanded, setExpanded]   = useState<number | null>(null)
-  const [form, setForm]           = useState<Omit<KBArticle, 'id'>>(EMPTY_KB)
-  const [editId, setEditId]       = useState<number | null>(null)
-  const [showForm, setShowForm]   = useState(false)
-  const [saving, setSaving]       = useState(false)
-  const [tagInput, setTagInput]   = useState('')
-
-  useEffect(() => { load().catch(() => setLoading(false)) }, [catFilter])
-
-  async function load() {
-    setLoading(true)
-    const q = catFilter ? `?category=${catFilter}` : ''
-    const res = await fetch(`/api/admin/knowledge-base${q}`)
-    setArticles(res.ok ? await res.json() : [])
-    setLoading(false)
-  }
-
-  async function save() {
-    if (!form.title.trim() || !form.content.trim()) return
-    setSaving(true)
-    await fetch('/api/admin/knowledge-base', {
-      method: editId ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editId ? { id: editId, ...form } : form),
-    })
-    setSaving(false)
-    setShowForm(false)
-    load()
-  }
-
-  async function del(id: number) {
-    if (!confirm('Удалить статью?')) return
-    await fetch('/api/admin/knowledge-base', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
-    setArticles(prev => prev.filter(a => a.id !== id))
-  }
-
-  function startEdit(a: KBArticle) {
-    setForm({ category: a.category, title: a.title, content: a.content, tags: a.tags, active: a.active, sort_order: a.sort_order })
-    setTagInput(a.tags.join(', '))
-    setEditId(a.id)
-    setShowForm(true)
-  }
-
-  if (loading) return <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
-
   return (
-    <div>
-      <div className="flex items-center justify-between gap-4 mb-5">
-        <div className="flex gap-1 flex-wrap">
-          {KB_CATEGORIES.map(c => (
-            <button key={c.value} onClick={() => setCatFilter(c.value)}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${catFilter === c.value ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66] hover:text-[#111110]'}`}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <button onClick={() => { setForm(EMPTY_KB); setTagInput(''); setEditId(null); setShowForm(true) }}
-          className="flex-shrink-0 px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
-          + Статья
-        </button>
-      </div>
-
-      <div className="space-y-2">
-        {articles.map(a => (
-          <div key={a.id} className="bg-white border border-[#e4e4e0] rounded-xl">
-            <div className="flex items-center justify-between gap-3 p-4 cursor-pointer" onClick={() => setExpanded(expanded === a.id ? null : a.id)}>
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f5f5f0] text-[#6b6b66] flex-shrink-0">
-                  {KB_CATEGORIES.find(c => c.value === a.category)?.label ?? a.category}
-                </span>
-                <span className="text-[13px] font-medium text-[#111110] truncate">{a.title}</span>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button onClick={e => { e.stopPropagation(); startEdit(a) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">Ред.</button>
-                <button onClick={e => { e.stopPropagation(); del(a.id) }}
-                  className="text-[11px] px-2 py-1 rounded-lg text-red-400 hover:text-red-600 transition-colors">✕</button>
-                <span className="text-[#c0c0bb] text-sm">{expanded === a.id ? '▲' : '▼'}</span>
-              </div>
-            </div>
-            {expanded === a.id && (
-              <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3">
-                <p className="text-[13px] text-[#111110] leading-relaxed whitespace-pre-wrap">{a.content}</p>
-                {a.tags.length > 0 && (
-                  <div className="flex gap-1.5 flex-wrap mt-3">
-                    {a.tags.map(t => (
-                      <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">{t}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-        {articles.length === 0 && (
-          <div className="text-center py-16 text-[13px] text-[#8a8a85]">Нет статей в выбранной категории.</div>
-        )}
-      </div>
-
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-5">{editId ? 'Изменить статью' : 'Новая статья'}</h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Категория</label>
-                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
-                    {KB_CATEGORIES.filter(c => c.value).map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Порядок</label>
-                  <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: +e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Заголовок</label>
-                <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  placeholder="Закалённое стекло vs обычное"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Содержание</label>
-                <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                  rows={6} placeholder="Объяснение, факты, аргументы для менеджера..."
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300" />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Теги (через запятую)</label>
-                <input type="text" value={tagInput} onChange={e => {
-                  setTagInput(e.target.value)
-                  setForm(f => ({ ...f, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))
-                }}
-                  placeholder="стекло, безопасность, закалка"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
-              </div>
-            </div>
-            <div className="mt-5 flex gap-3">
-              <button onClick={save} disabled={saving}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
-                {saving ? 'Сохранение...' : 'Сохранить'}
-              </button>
-              <button onClick={() => setShowForm(false)}
-                className="px-5 py-2 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
-                Отмена
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+    <div className="bg-white border border-[#e4e4e0] rounded-xl px-5 py-6 max-w-xl">
+      <p className="text-[14px] font-semibold text-[#111110]">База знаний переехала в раздел AI</p>
+      <p className="text-[13px] text-[#6b6b66] mt-1 leading-relaxed">
+        Одна база для команды и для бота: что бот знает, чего не знает и какие вопросы клиентов остались без ответа.
+      </p>
+      <a href="/ai/knowledge" className="inline-block mt-4 px-4 py-2 rounded-lg text-[13px] font-semibold bg-[#111110] text-white">Открыть базу знаний</a>
     </div>
   )
-}
-
-// ─── Follow-up Tab ──────────────────────────────────────────────────────────
-
-const EMPTY_FOLLOWUP: Omit<Followup, 'id'> = {
-  name: '', delay_days: 1, channel: 'whatsapp', context: 'after_quote', body: '', cta: '', bonus_offer: '', active: true,
 }
 
 function FollowupTab() {

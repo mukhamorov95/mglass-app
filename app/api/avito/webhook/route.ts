@@ -7,6 +7,7 @@ import { isBotEnabled } from '@/lib/aiKillSwitch'
 import { decideNextAction } from '@/lib/avito/dispatcher'
 import { FLAG_BY_KEY, type LeadFlags, type FlagKey } from '@/lib/avito/flags'
 import { getRelevantExamples } from '@/lib/avito/managerExamples'
+import { loadBotKnowledge, recordKnowledgeGap } from '@/lib/knowledge/aiKnowledge'
 import { botGate, isOwnBotEcho, MUTE_LABEL } from '@/lib/avito/botGate'
 import { CRM_ZONES } from '@/lib/crmStages'
 
@@ -215,11 +216,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Few-shot: подбираем похожие ответы живых менеджеров (fail-open → []).
-  const examples = await getRelevantExamples(service, { product: known.product, clientText: text })
+  const [examples, knowledge] = await Promise.all([
+    getRelevantExamples(service, { product: known.product, clientText: text }),
+    loadBotKnowledge(service),
+  ])
 
   let turn
   try {
-    turn = await runAvitoManager(history, known, { examples })
+    turn = await runAvitoManager(history, known, { examples, knowledge })
   } catch (e) {
     const emsg = e instanceof Error ? e.message : String(e)
     const estatus = (e as { status?: number } | null)?.status
@@ -263,6 +267,9 @@ export async function POST(req: NextRequest) {
     await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `Ошибка AI: ${emsg}`, author: 'AI' })
     return NextResponse.json({ ok: false, ai_error: true }, { status: 500 })
   }
+
+  // Бот упёрся в незнание — вопрос попадает в «Чего бот не знает» на /ai/knowledge.
+  if (turn.knowledge_gap) await recordKnowledgeGap(service, { question: turn.knowledge_gap, leadId })
 
   // Снятые данные — только заполняем пустое/обновляем непустым
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }

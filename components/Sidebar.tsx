@@ -9,7 +9,7 @@ import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 import { hasB2BSalesScope, isAllClientsScope } from '@/lib/b2bScope'
 import {
-  MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, isGroup, isSection,
+  MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, OWNER_AI, isGroup, isSection,
   type NavItem, type NavEntry, type NavSection,
 } from '@/lib/nav/managerMenu'
 
@@ -378,6 +378,7 @@ const hrefsOf = (entries: NavEntry[]): string[] =>
 // Аккордеон раскрывается на любом адресе своего меню, плюс карточки сделок
 const MGLASS_PATHS = [...hrefsOf(MANAGER_MGLASS), '/deal']
 const B2B_PATHS = [...hrefsOf(MANAGER_B2B), '/b2b-deal', '/manager-dashboard']
+const AI_PATHS = [...hrefsOf(OWNER_AI), '/ai']
 
 function inSection(pathname: string, paths: string[]): boolean {
   return paths.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -396,6 +397,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   if (mode === 'manager') {
     if (inSection(pathname, MGLASS_PATHS)) open.push('mglass', ...activeSections(pathname, MANAGER_MGLASS))
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
+    if (inSection(pathname, AI_PATHS))    open.push('ai', ...activeSections(pathname, OWNER_AI))
   } else if (mode === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
     if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/remnants', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
@@ -916,6 +918,13 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
           'bg-orange-400', 'text-[#c2600a]',
           MANAGER_B2B,
           'bg-[#fff1e8] text-[#c2410c] font-medium',
+        )}
+        <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
+        {workspaceAccordion(
+          'ai', 'AI',
+          'bg-violet-500', 'text-violet-700',
+          OWNER_AI,
+          'bg-violet-50 text-violet-700 font-medium',
         )}
       </>
     )
