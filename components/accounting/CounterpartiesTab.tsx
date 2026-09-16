@@ -11,7 +11,7 @@ type Row = {
   name: string; ordered: number; paidPurchase: number; paidCash: number
   openRequests: number; lastOp: string | null; balance: number
 }
-type Totals = { ordered: number; paidPurchase: number; paidCash: number; debt: number; openRequests: number }
+type Totals = { ordered: number; paidPurchase: number; paidCash: number; debt: number; prepaid?: number; openRequests: number }
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const DD = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`
@@ -45,11 +45,16 @@ export function CounterpartiesTab({ unit, from }: { unit: 'ip' | 'ooo'; from: st
     <div className="space-y-3">
       {totals && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {([['Заказано', totals.ordered], ['Оплачено в закупках', totals.paidPurchase],
-             ['Ушло деньгами', totals.paidCash], ['Долг поставщикам', totals.debt]] as const).map(([label, v]) => (
+          {([
+            ['Заказано', totals.ordered, null],
+            ['Оплачено в закупках', totals.paidPurchase, null],
+            ['Ушло деньгами', totals.paidCash, null],
+            ['Долг поставщикам', totals.debt, (totals.prepaid ?? 0) > 0 ? `наша предоплата ${RUB(totals.prepaid ?? 0)}` : null],
+          ] as const).map(([label, v, hint]) => (
             <div key={label} className="bg-white rounded-xl border border-[#e4e4e0] px-3 py-2.5">
               <p className="text-[11px] uppercase tracking-widest text-[#9a9a95]">{label}</p>
               <p className="text-[15px] font-mono font-semibold text-[#111110] mt-0.5">{RUB(v)}</p>
+              {hint && <p className="text-[10px] text-[#9a9a95] mt-0.5">{hint}</p>}
             </div>
           ))}
         </div>
