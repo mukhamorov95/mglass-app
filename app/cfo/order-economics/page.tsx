@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import { orderContribution, sumContributions, contributionColor, rub, pct, type OrderContribution } from '@/lib/unitEconomics'
+import { orderContribution, applyCatalogWaste, buildWasteNorms, sumContributions, contributionColor, rub, pct, type OrderContribution } from '@/lib/unitEconomics'
 
 // Экономика B2B-заказов за месяц — только /cfo. Себестоимость и «остаётся с заказа»
 // (маржинальный доход) — из lib/unitEconomics, тем же расчётом, что на карточке заказа
@@ -45,9 +45,16 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
     svc.from('finplan_models').select('data').eq('unit', 'production').maybeSingle(),
   ])
 
+  // Расход по нормативу справочника — заказы до 16.09 несут расход из раскроя
+  const [{ data: matRows }, { data: matrixRows }] = await Promise.all([
+    svc.from('b2b_materials').select('name, thickness, category, waste_percent'),
+    svc.from('glass_price_matrix').select('name, category, price_type, waste_pct'),
+  ])
+  const norms = buildWasteNorms(matRows ?? [], matrixRows ?? [])
+
   const rows: Row[] = ((ordersRaw ?? []) as Record<string, unknown>[])
     .map(o => ({
-      ...orderContribution(num(o.total_after_discount) || num(o.total_sale_inc_vat), Array.isArray(o.items) ? o.items as Record<string, unknown>[] : []),
+      ...orderContribution(num(o.total_after_discount) || num(o.total_sale_inc_vat), applyCatalogWaste(Array.isArray(o.items) ? o.items as Record<string, unknown>[] : [], norms)),
       id: Number(o.id), client: String(o.client_name ?? '—'),
     }))
     .filter(r => r.revenue > 0)
