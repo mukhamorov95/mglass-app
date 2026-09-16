@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react'
 
 type Manager = {
-  name: string; revenue: number; deals: number; avgCheck: number; avgMargin: number
+  name: string; revenue: number; deals: number; avgCheck: number; avgMargin: number; marginRevenue?: number
   b2bRevenue: number; b2cRevenue: number
 }
-type Data = { month: string; managers: Manager[]; totals: { revenue: number; deals: number; avgCheck: number; avgMargin: number } }
+type Data = { month: string; managers: Manager[]; totals: { revenue: number; deals: number; avgCheck: number; avgMargin: number; marginRevenue?: number } }
 
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
 const fmtK = (n: number) => n >= 1000 ? (n / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + 'к ₽' : n + ' ₽'
@@ -57,7 +57,7 @@ export function MoneyLeaderboard() {
           { label: 'Выручка',       value: fmt(data.totals.revenue) },
           { label: 'Сделок',        value: String(data.totals.deals) },
           { label: 'Средний чек',   value: fmt(data.totals.avgCheck) },
-          { label: 'Средняя маржа', value: data.totals.avgMargin + '%', color: marginColor(data.totals.avgMargin) },
+          { label: 'Маржа (по выручке)', value: data.totals.avgMargin + '%', color: marginColor(data.totals.avgMargin) },
         ].map(k => (
           <div key={k.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{k.label}</p>
@@ -109,6 +109,16 @@ export function MoneyLeaderboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+          {/* Из чего сложилась маржа: без этой строки процент нечем проверить */}
+          <div className="px-4 py-2 border-t border-[#f0f0ec]">
+            <p className="text-[10px] text-[#9a9a95] leading-relaxed">
+              Маржа взвешена по выручке: маржинальная прибыль ÷ выручка сделок, у которых маржа известна
+              {data.totals.marginRevenue != null && data.totals.revenue > 0 && (
+                <> — {fmt(data.totals.marginRevenue)} из {fmt(data.totals.revenue)} ₽
+                  ({Math.round(data.totals.marginRevenue / data.totals.revenue * 100)}% выручки)</>
+              )}. Сделки без маржи в расчёт не входят.
+            </p>
           </div>
         </div>
       )}
