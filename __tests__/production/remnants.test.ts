@@ -22,9 +22,10 @@ describe('остаток листа — порог 400×800 (решение вл
     expect(remnantError({ w: 450, h: 900 }, SHEET, { min_remnant_short: 500, min_remnant_long: 1000 })).toMatch(/меньше 500×1000/)
     expect(thresholdLabel({ min_remnant_short: 500, min_remnant_long: 1000 })).toBe('500×1000')
   })
-  it('раскрой по умолчанию — прежние 200×200, пока настройки не переданы', () => {
-    expect(isRemnant(300, 300)).toBe(true)
-    expect(isRemnant(300, 300, { min_remnant_short: 400, min_remnant_long: 800 })).toBe(false)
+  it('порог один на систему: раскрой и калькулятор без настроек считают по 400×800', () => {
+    expect(isRemnant(300, 300)).toBe(false)
+    expect(isRemnant(400, 800)).toBe(true)
+    expect(isRemnant(300, 300, { min_remnant_short: 200, min_remnant_long: 200 })).toBe(true)
   })
   it('проверка списка: округляет размеры, чистит место', () => {
     const r = checkRemnants([{ w: 812.4, h: 1500, location: ' С-1 ' }, { w: 100, h: 100 }], SHEET)

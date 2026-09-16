@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { orderContribution, contributionColor, rub, pct, m2 } from '@/lib/unitEconomics'
 import { computeMaterialUsage, isSheetMaterial, type UsageItem } from '@/lib/materialUsage'
 import { CALC_REUSE_RATE } from '@/lib/autoWasteApply'
+import { REMNANT_MIN_SHORT, REMNANT_MIN_LONG } from '@/lib/cuttingOptimizer'
 import { VAT } from '@/lib/b2bCalculator'
 
 // Экономика ОДНОГО заказа — только владелец, под /cfo. Все цифры — из lib/unitEconomics
@@ -173,7 +174,7 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
                   </div>
                 ))}
                 <p className="text-[10px] text-[#9a9a95] leading-relaxed pt-1 border-t border-[#f0f0ec]">
-                  Отход по раскрою реальных деталей; крупный остаток считается возвратным на стеллаж на {Math.round(CALC_REUSE_RATE * 100)}% — так же, как в калькуляторе.
+                  Заказ платит за детали, рез и полосы. Кусок от {REMNANT_MIN_SHORT}×{REMNANT_MIN_LONG} мм — не отход: он ложится на стеллаж и оплачивается заказом, который его возьмёт. Так же считает калькулятор.
                 </p>
                 {scrapRisk > 0 && (
                   <p className="text-[11px] text-[#6b6b66] leading-relaxed">

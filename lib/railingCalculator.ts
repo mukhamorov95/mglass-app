@@ -183,10 +183,12 @@ export function computeRailing(segments: RailingSegment[], p: RailingParams): Ra
     }
   }
 
-  // Ограждения считают возврат остатка по 0.7 — так было до 15.09.2026, когда общий
-  // коэффициент системы стал 0.85. Цены ограждений не меняем молча: переход на общий
-  // коэффициент — решение владельца (docs/UNIT_ECONOMICS_ROUTE.md, открытые вопросы).
-  const usage = computeMaterialUsage(items, p.reuseRate ?? RAILING_REUSE_RATE, p.cutting ?? DEFAULT_CUTTING_SETTINGS)
+  // Ограждения считают возврат остатка по 0.7 и порог остатка 200×200 — так было до
+  // 15.09.2026, когда система перешла на «заказ платит рез и полосы» и порог 400×800.
+  // Цены ограждений не меняем молча: переход на общую модель — решение владельца
+  // (docs/UNIT_ECONOMICS_ROUTE.md, открытые вопросы).
+  const usage = computeMaterialUsage(items, p.reuseRate ?? RAILING_REUSE_RATE,
+    p.cutting ?? { ...DEFAULT_CUTTING_SETTINGS, min_remnant_short: 200, min_remnant_long: 200 })
   const totals = sumUsage(usage)
   const sheetsNeeded = usage.reduce((s, u) => s + u.sheets, 0)
 
