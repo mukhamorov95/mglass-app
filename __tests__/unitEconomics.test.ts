@@ -77,7 +77,8 @@ describe('изделие производства', () => {
   // в строке «Материал», и комплектующих было не видно.
   it('изделие — отдельная статья, не «Материал»', () => {
     const c = orderContribution(35000, MIRROR)
-    expect(c.lines.find(l => l.key === 'material')?.amount).toBe(0)
+    // заказ только из изделий — пустой строки «Материал» на экране нет
+    expect(c.lines.find(l => l.key === 'material')).toBeUndefined()
     const line = c.lines.find(l => l.key === 'product')
     expect(line?.label).toBe('Изделия производства')
     expect(line?.how).toContain('Зеркало с подсветкой')
