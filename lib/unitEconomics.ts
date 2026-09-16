@@ -144,8 +144,10 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
     { key: 'packaging', label: 'Упаковка', how: `${PACKAGING_PER_M2} ₽/м² × ${ru(netM2)} м²`,
       amount: packaging, vatIn: 0 },
   ]
-  // Пустые статьи не показываем, кроме материала — его отсутствие само по себе сигнал.
-  const lines = all.filter(l => l.key === 'material' || l.amount > 0)
+  // Пустые статьи не показываем. Исключение — материал: нулевой материал в заказе
+  // со стеклом сам по себе сигнал. Но если заказ целиком из изделий производства
+  // (зеркало с подсветкой), пустая строка «Материал 0 ₽» только мешает.
+  const lines = all.filter(l => l.amount > 0 || (l.key === 'material' && product === 0))
 
   // Считаем от округлённых статей: на экране «выручка − переменные − НДС = вклад»
   // обязано сходиться до рубля, иначе расчёту не верят.
