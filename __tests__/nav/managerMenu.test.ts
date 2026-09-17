@@ -48,7 +48,8 @@ describe('структура по ТЗ (Н1)', () => {
     const before = [
       '/manager', '/calculator/shower', '/calculator/mirror', '/calculator/loft', '/configurator',
       '/my-day', '/deals', '/calculator/build', '/calculator/quick', '/calculator/b2b-mglass', '/calculations',
-      '/kp', '/contracts', '/my-earnings', '/clients', '/crm', '/sales', '/orders',
+      // '/sales/managers' — третий срез продаж (показатели менеджеров), добавлен 17.09
+      '/kp', '/contracts', '/my-earnings', '/clients', '/crm', '/sales', '/sales/managers', '/orders',
       '/measure-requests', '/measure-calendar', '/measurer', '/installations', '/calendar', '/inventory',
       '/b2b-today', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-invoices', '/b2b-crm',
     ]
