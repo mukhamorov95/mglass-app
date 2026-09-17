@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
 import { salePaymentKey } from '@/lib/payments/paymentKeys'
+import { resolvePeriod, parseManagers } from '@/lib/sales/period'
+import { mskDayKey } from '@/lib/time'
 
 // Отдел продаж: леджер продаж. GET — продажи за месяц + итоги + по менеджерам
 // (владелец/РОП — все, менеджер — свои). POST — создать продажу (в т.ч. из лида).
@@ -25,18 +27,6 @@ async function whoAmI(): Promise<{ name: string; canAll: boolean } | null> {
   return { name, canAll }
 }
 
-// Границы месяца по строке YYYY-MM (или текущий), без Date-в-рендере на клиенте.
-function monthRange(m: string | null): { from: string; to: string; ym: string } {
-  const now = new Date()
-  let y = now.getFullYear(), mo = now.getMonth() + 1
-  const mm = /^(\d{4})-(\d{2})$/.exec(m ?? '')
-  if (mm) { y = Number(mm[1]); mo = Number(mm[2]) }
-  const from = `${y}-${String(mo).padStart(2, '0')}-01`
-  const ny = mo === 12 ? y + 1 : y, nmo = mo === 12 ? 1 : mo + 1
-  const to = `${ny}-${String(nmo).padStart(2, '0')}-01`
-  return { from, to, ym: `${y}-${String(mo).padStart(2, '0')}` }
-}
-
 type SaleRow = { id: number; amount: number; manager: string | null }
 
 export async function GET(req: NextRequest) {
@@ -45,7 +35,12 @@ export async function GET(req: NextRequest) {
   const me = await whoAmI()
   if (!me) return NextResponse.json({ error: 'no user' }, { status: 401 })
 
-  const { from, to, ym } = monthRange(new URL(req.url).searchParams.get('month'))
+  const sp = new URL(req.url).searchParams
+  const period = resolvePeriod(
+    { month: sp.get('month'), from: sp.get('from'), to: sp.get('to'), mode: sp.get('mode') },
+    mskDayKey(),
+  )
+  const picked = parseManagers(sp.get('managers'))
   const sb = createServiceClient()
   // Отдел продаж — ТОЛЬКО розница M-Glass. B2B/производство сюда не мешаем:
   // каждый оплаченный B2B-заказ автоматически рождает строку department='b2b'
@@ -53,19 +48,23 @@ export async function GET(req: NextRequest) {
   // они занижали средний чек. То же правило уже действует в сверке денег
   // (api/cron/money-integrity) и в замороженном базлайне.
   let query = sb.from('crm_sales').select('*')
-    .gte('sale_date', from).lt('sale_date', to)
+    .gte('sale_date', period.from).lt('sale_date', period.toExclusive)
     .eq('voided', false).neq('department', 'b2b')
     .order('sale_date', { ascending: true }).order('id', { ascending: true })
+    .limit(2000)
   if (!me.canAll) query = query.eq('manager', me.name)
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const sales = (data ?? []) as SaleRow[]
+  // Весь период целиком — разрез по менеджерам считаем по нему, иначе, выбрав
+  // одного, нельзя вернуться к остальным: их просто не будет в списке.
+  const all = (data ?? []) as SaleRow[]
+  const sales = picked.length ? all.filter(r => picked.includes(r.manager ?? '—')) : all
 
   // «Поступило» ≠ «продано»: продажа считается полной суммой счёта в месяце
   // первой оплаты, а деньги приходят частями (предоплата/промежуточные/остаток)
   // и живут построчно в payments. Показываем обе цифры — их расхождение и есть
   // дебиторка месяца.
-  const saleIds = sales.map(r => r.id)
+  const saleIds = all.map(r => r.id)
   const paidBySale = new Map<number, number>()
   if (saleIds.length > 0) {
     const { data: pays } = await sb.from('payments')
@@ -83,7 +82,7 @@ export async function GET(req: NextRequest) {
   const count = sales.length
   const avg = count ? Math.round(sum / count) : 0
   const byMgr = new Map<string, { manager: string; count: number; sum: number; paid: number }>()
-  for (const r of sales) {
+  for (const r of all) {
     const k = r.manager || '—'
     const cur = byMgr.get(k) ?? { manager: k, count: 0, sum: 0, paid: 0 }
     cur.count++; cur.sum += Number(r.amount || 0); cur.paid += paidBySale.get(r.id) ?? 0
@@ -92,7 +91,18 @@ export async function GET(req: NextRequest) {
   const managers = [...byMgr.values()].map(m => ({ ...m, avg: m.count ? Math.round(m.sum / m.count) : 0 })).sort((a, b) => b.sum - a.sum)
 
   const salesOut = sales.map(r => ({ ...r, paid_amount: paidBySale.get(r.id) ?? 0 }))
-  return NextResponse.json({ sales: salesOut, totals: { sum, count, avg, paid }, managers, month: ym, me: me.name, canAll: me.canAll })
+  return NextResponse.json({
+    sales: salesOut,
+    totals: { sum, count, avg, paid },
+    // Итог всего периода — чтобы при выбранном менеджере было видно, какую долю
+    // он занимает, а не только его собственная сумма в отрыве от всего.
+    periodTotals: { sum: all.reduce((s, r) => s + Number(r.amount || 0), 0), count: all.length },
+    managers,
+    selected: picked,
+    period: { mode: period.mode, from: period.from, to: period.to, label: period.label },
+    month: period.month,
+    me: me.name, canAll: me.canAll,
+  })
 }
 
 export async function POST(req: NextRequest) {
