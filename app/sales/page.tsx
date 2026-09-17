@@ -17,7 +17,7 @@ type Sale = {
 }
 // paid — реально поступившие деньги (из payments), отдельно от суммы продаж:
 // продажа считается полной суммой счёта, а деньги приходят частями.
-type Totals = { sum: number; count: number; avg: number; paid?: number }
+type Totals = { sum: number; count: number; avg: number; paid?: number; paidLedger?: number }
 type MgrRow = { manager: string; count: number; sum: number; avg: number; paid?: number }
 type PeriodMode = 'month' | 'quarter' | 'year' | 'range'
 type Query = { mode: PeriodMode; month: string; from: string; to: string; managers: string[] }
@@ -177,11 +177,17 @@ export default function SalesPage() {
             <p className="text-[11px] text-[#c4c4be] mt-0.5">{label}{filtered ? ` · ${q.managers.join(', ')}` : ''}</p>
           </div>
           <div className={tile}>
-            <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Поступило денег</p>
+            <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Оплачено по отметкам</p>
             <p className="text-[20px] font-bold text-emerald-700 mt-0.5">{fmt(totals.paid ?? 0)}</p>
             {totals.sum > (totals.paid ?? 0) && (
               <p className="text-[11px] text-amber-700 mt-0.5">ждём {fmt(totals.sum - (totals.paid ?? 0))}</p>
             )}
+            {/* Две разные цифры: галочки предоплаты/остатка — и то, что дошло до
+                платежей. У истории из книги платежей нет, и без подписи экран
+                показывал «поступило 0 ₽» на оплаченный месяц. */}
+            <p className="text-[11px] text-[#c4c4be] mt-0.5">
+              в платежах учтено {fmt(totals.paidLedger ?? 0)}
+            </p>
           </div>
           <div className={tile}><p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Количество</p><p className="text-[20px] font-bold text-[#111110] mt-0.5">{totals.count}</p></div>
           <div className={tile}><p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Средний чек</p><p className="text-[20px] font-bold text-[#111110] mt-0.5">{fmt(totals.avg)}</p></div>
