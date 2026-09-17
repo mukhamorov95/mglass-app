@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pickUrgent, daysSince, plurDays, orphanTitle, orphanSpec, orphanTotal, productLabel,
+  pickUrgent, daysSince, plurDays, lyingFor, orphanTitle, orphanSpec, orphanTotal, productLabel,
   STALE_SHOWN, type MyDayDeal, type MyDayMeasure, type OrphanCalc,
 } from '@/lib/b2c/myDay'
 
@@ -73,6 +73,10 @@ describe('возраст', () => {
   it('daysSince считает целые сутки', () => {
     expect(daysSince(new Date(NOW - 3 * DAY - 3600_000).toISOString(), NOW)).toBe(3)
     expect(daysSince(null, NOW)).toBe(0)
+  })
+  it('свежий расчёт — «сегодня», не «лежит 0 дней»', () => {
+    expect(lyingFor(new Date(NOW - 3600_000).toISOString(), NOW)).toBe('сегодня')
+    expect(lyingFor(new Date(NOW - 6 * DAY).toISOString(), NOW)).toBe('лежит 6 дней')
   })
   it('склонение дней', () => {
     expect(plurDays(1)).toBe('1 день')
