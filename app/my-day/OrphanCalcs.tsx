@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { mskDateTime } from '@/lib/time'
-import { orphanTitle, orphanSpec, orphanTotal, productLabel, daysSince, plurDays, type OrphanCalc } from '@/lib/b2c/myDay'
+import { orphanTitle, orphanSpec, orphanTotal, productLabel, lyingFor, type OrphanCalc } from '@/lib/b2c/myDay'
 
 const RUB = (v: number | string | null | undefined) =>
   v == null ? '—' : `${Math.round(Number(v)).toLocaleString('ru-RU')} ₽`
@@ -151,9 +151,11 @@ export function OrphanCalcs() {
                       {mskDateTime(o.created_at)} · {RUB(o.final_price)} · {productLabel(o.product_type)}
                       {o.created_by_name && ` · ${o.created_by_name}`}
                     </p>
+                    {/* Раскрывается всегда: даже когда описания нет, внутри ссылка
+                        в карточку расчёта — там параметры и состав себестоимости. */}
                     <p className="text-[11px] text-[#c4c4be] mt-0.5">
-                      {spec.length > 0 || o.client_phone ? (seen ? 'свернуть' : 'что посчитано ▾') : 'без описания'}
-                      {!archiveView && ` · лежит ${plurDays(daysSince(o.created_at))}`}
+                      {seen ? 'свернуть' : 'что посчитано ▾'}
+                      {!archiveView && ` · ${lyingFor(o.created_at)}`}
                     </p>
                   </button>
                   <div className="flex items-center gap-2 shrink-0">
@@ -179,8 +181,12 @@ export function OrphanCalcs() {
 
                 {seen && (
                   <div className="mt-2 rounded-lg bg-[#fafaf9] border border-[#f0f0ec] px-3 py-2">
-                    {spec.length > 0 && (
+                    {spec.length > 0 ? (
                       <p className="text-[12px] text-[#4b4b47] whitespace-pre-wrap leading-relaxed">{spec.join('\n')}</p>
+                    ) : (
+                      <p className="text-[12px] text-[#9a9a95]">
+                        Кроме названия, в расчёте ничего не записано. Параметры и состав — в карточке расчёта.
+                      </p>
                     )}
                     {o.client_phone && <p className="text-[12px] text-[#4b4b47] mt-1">Телефон в расчёте: {o.client_phone}</p>}
                     <Link href={`/calculations/${o.id}`}

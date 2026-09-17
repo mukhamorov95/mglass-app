@@ -37,6 +37,12 @@ export function plurDays(n: number): string {
   return `${n} дней`
 }
 
+// «сегодня» вместо «лежит 0 дней» — ноль в подписи выглядит ошибкой, а не свежестью.
+export function lyingFor(iso: string | null | undefined, now: number = Date.now()): string {
+  const d = daysSince(iso, now)
+  return d === 0 ? 'сегодня' : `лежит ${plurDays(d)}`
+}
+
 export function pickUrgent(deals: MyDayDeal[], measures: MyDayMeasure[], now: number = Date.now()) {
   const today = mskDayKey(new Date(now))
   const tomorrow = mskDayKey(new Date(now + DAY))
