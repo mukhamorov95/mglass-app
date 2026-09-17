@@ -81,6 +81,10 @@
       "schedule": "0 4 * * *"
     },
     {
+      "path": "/api/cron/ai-recommendations",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/agent-vlad",
       "schedule": "0 6 * * *"
     },
