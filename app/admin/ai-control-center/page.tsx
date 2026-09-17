@@ -7,24 +7,12 @@ import {
   SEVERITY_LABEL, SEVERITY_COLOR, FIX_ACTION_LABEL, LOG_KEY,
   type CheckResult, type CheckStatus, type FixStatus, type IssueMeta, type FixLogEntry,
 } from '@/lib/healthCheckRunner'
+import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { PERSPECTIVES, REC_STATUS_LABEL, type Recommendation, type RecStatus } from '@/lib/ai/recommendationTypes'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'health' | 'calculators' | 'ai' | 'recommendations' | 'log'
-
-type Recommendation = {
-  id: string
-  title: string
-  priority: 'critical' | 'high' | 'medium' | 'low'
-  category: string
-  problem: string
-  impact: string
-  recommendation: string
-  metric?: string
-  status: 'pending' | 'implementing' | 'done' | 'dismissed' | 'deferred'
-  source: 'ai' | 'system'
-  createdAt: string
-}
 
 type CalcBreakdown = {
   materialName: string
@@ -34,16 +22,17 @@ type CalcBreakdown = {
   costPerSqm: number
   wastePct: number
   materialCost: number
-  margin: number
-  basePrice: number
   ledCost: number
-  installCost: number
-  deliveryCost: number
+  directCost: number
+  marginPct: number
+  taxPct: number
+  marginAmount: number
+  taxAmount: number
+  productPrice: number
+  installCost: number | null
+  deliveryCost: number | null
   totalPrice: number
 }
-
-const REC_KEY      = 'mglass_ai_recommendations'
-const IMPL_LOG_KEY = 'mglass_impl_log'
 
 const PRIORITY_COLOR: Record<string, string> = {
   critical: 'bg-red-100 text-red-700 border border-red-200',
@@ -54,18 +43,6 @@ const PRIORITY_COLOR: Record<string, string> = {
 const PRIORITY_LABEL: Record<string, string> = {
   critical: 'Критично', high: 'Высокий', medium: 'Средний', low: 'Низкий',
 }
-const STATUS_LABEL_REC: Record<string, string> = {
-  pending: 'Ожидает', implementing: 'Внедряется', done: 'Внедрено', dismissed: 'Отклонено', deferred: 'Отложено',
-}
-
-const PERSPECTIVES = [
-  { id: 'ceo',       label: 'CEO / Собственник',    icon: '👑' },
-  { id: 'analyst',   label: 'Системный аналитик',    icon: '🔍' },
-  { id: 'product',   label: 'Product Owner',         icon: '🎯' },
-  { id: 'erp',       label: 'ERP-специалист',        icon: '⚙️' },
-  { id: 'marketing', label: 'Маркетолог / SEO',      icon: '📣' },
-]
-
 // ── IssueCard (inline for health check tab) ───────────────────────────────────
 
 function IssueCard({
@@ -141,64 +118,76 @@ function IssueCard({
 
 // ── RecommendationCard ────────────────────────────────────────────────────────
 
+// Каждая рекомендация ждёт решения владельца: в работу, в архив или убрать.
+// Взятая в работу закрывается «Сделано» с записью, что получилось.
 function RecommendationCard({
-  rec, onStatusChange, onLog,
+  rec, onDecide,
 }: {
   rec: Recommendation
-  onStatusChange: (id: string, status: Recommendation['status']) => void
-  onLog: (rec: Recommendation, action: string) => void
+  onDecide: (id: string, status: RecStatus, resultNote?: string) => Promise<void>
 }) {
-  const isDone      = rec.status === 'done'
-  const isDismissed = rec.status === 'dismissed'
+  const [busy, setBusy] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const [note, setNote] = useState('')
+  const decide = async (status: RecStatus, resultNote?: string) => {
+    setBusy(true)
+    try { await onDecide(rec.id, status, resultNote) } finally { setBusy(false); setClosing(false) }
+  }
+  const btn = 'px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-40'
 
   return (
-    <div className={`rounded-xl border overflow-hidden transition-opacity ${isDone ? 'opacity-60' : isDismissed ? 'opacity-40' : ''}`}>
+    <div className={`rounded-xl border border-[#e8e8e5] overflow-hidden ${rec.status === 'archived' ? 'opacity-70' : ''}`}>
       <div className="px-5 py-3 bg-white flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PRIORITY_COLOR[rec.priority]}`}>
-              {PRIORITY_LABEL[rec.priority]}
-            </span>
-            <span className="text-[10px] text-[#9a9a95] bg-[#f4f3f1] px-2 py-0.5 rounded-full">{rec.category}</span>
-            {rec.source === 'ai' && <span className="text-[10px] text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">AI</span>}
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PRIORITY_COLOR[rec.priority]}`}>{PRIORITY_LABEL[rec.priority]}</span>
+            {rec.category && <span className="text-[10px] text-[#9a9a95] bg-[#f4f3f1] px-2 py-0.5 rounded-full">{rec.category}</span>}
+            {rec.perspective && <span className="text-[10px] text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">{PERSPECTIVES.find(p => p.id === rec.perspective)?.label ?? rec.perspective}</span>}
           </div>
           <p className="text-[13px] font-semibold text-[#1a1a18]">{rec.title}</p>
         </div>
-        <span className="text-[10px] text-[#9a9a95] flex-shrink-0 mt-1">
-          {STATUS_LABEL_REC[rec.status]}
+        <span className="text-[10px] text-[#9a9a95] flex-shrink-0 mt-1 text-right">
+          {REC_STATUS_LABEL[rec.status]}<br />{new Date(rec.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
         </span>
       </div>
       <div className="px-5 pb-4 bg-white space-y-2">
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Проблема</p><p className="text-[12px] text-[#3a3a38]">{rec.problem}</p></div>
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Влияние</p><p className="text-[12px] text-[#3a3a38]">{rec.impact}</p></div>
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Рекомендация</p><p className="text-[12px] text-[#3a3a38]">{rec.recommendation}</p></div>
-        {rec.metric && <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2"><p className="text-[11px] text-emerald-700 font-medium">📈 {rec.metric}</p></div>}
+        {rec.problem && <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Проблема</p><p className="text-[12px] text-[#3a3a38]">{rec.problem}</p></div>}
+        {rec.impact && <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Чем это стоит</p><p className="text-[12px] text-[#3a3a38]">{rec.impact}</p></div>}
+        {rec.action && <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Что сделать</p><p className="text-[12px] text-[#3a3a38]">{rec.action}</p></div>}
+        {rec.metric && <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2"><p className="text-[11px] text-emerald-800"><b>Результат:</b> {rec.metric}</p></div>}
+        {rec.status === 'done' && (
+          <div className="rounded-lg bg-[#f5f5f3] px-3 py-2">
+            <p className="text-[11px] text-[#3a3a38]"><b>Сделано{rec.done_at ? ` ${new Date(rec.done_at).toLocaleDateString('ru-RU')}` : ''}.</b> {rec.result_note ?? 'Итог не записан'}</p>
+          </div>
+        )}
       </div>
-      {!isDone && !isDismissed && (
-        <div className="px-5 py-3 bg-[#fafaf8] border-t border-[#f0f0ec] flex items-center gap-2">
-          <button
-            onClick={() => { onStatusChange(rec.id, 'done'); onLog(rec, 'Отмечено внедрённым') }}
-            className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-          >
-            ✓ Внедрить
-          </button>
-          <button
-            onClick={() => { onStatusChange(rec.id, 'deferred'); onLog(rec, 'Отложено') }}
-            className="px-3 py-1.5 rounded-lg text-[11px] border border-[#d8d8d4] text-[#4a4a46] hover:bg-[#f0f0ec] transition-colors"
-          >
-            Отложить
-          </button>
-          <button
-            onClick={() => { onStatusChange(rec.id, 'dismissed'); onLog(rec, 'Отклонено') }}
-            className="px-2 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#5a5a55] transition-colors ml-auto"
-          >
-            Отклонить
-          </button>
+      {closing && (
+        <div className="px-5 py-3 bg-[#fafaf8] border-t border-[#f0f0ec] space-y-2">
+          <textarea id={`rec-note-${rec.id}`} value={note} onChange={e => setNote(e.target.value)} rows={2}
+            placeholder="Что получилось — цифрой, если есть: «конверсия в замер 3% → 6%»"
+            className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] bg-white" />
+          <div className="flex gap-2">
+            <button disabled={busy} onClick={() => decide('done', note)} className={`${btn} bg-emerald-600 text-white hover:bg-emerald-700`}>Сохранить итог</button>
+            <button onClick={() => setClosing(false)} className={`${btn} text-[#6b6b66] hover:bg-[#f0f0ec]`}>Отмена</button>
+          </div>
         </div>
       )}
-      {isDone && (
-        <div className="px-5 py-2.5 bg-emerald-50 border-t border-emerald-100">
-          <p className="text-[11px] text-emerald-700 font-medium">✓ Внедрено</p>
+      {!closing && (
+        <div className="px-5 py-3 bg-[#fafaf8] border-t border-[#f0f0ec] flex items-center gap-2 flex-wrap">
+          {rec.status === 'new' && <>
+            <button disabled={busy} onClick={() => decide('in_work')} className={`${btn} bg-[#111110] text-white hover:bg-[#2a2a28]`}>В работу</button>
+            <button disabled={busy} onClick={() => decide('archived')} className={`${btn} border border-[#d8d8d4] text-[#4a4a46] hover:bg-[#f0f0ec]`}>В архив</button>
+            <button disabled={busy} onClick={() => decide('removed')} className={`${btn} text-[#9a9a95] hover:text-red-600 ml-auto`}>Убрать — не актуально</button>
+          </>}
+          {rec.status === 'in_work' && <>
+            <button disabled={busy} onClick={() => setClosing(true)} className={`${btn} bg-emerald-600 text-white hover:bg-emerald-700`}>Сделано</button>
+            <button disabled={busy} onClick={() => decide('archived')} className={`${btn} border border-[#d8d8d4] text-[#4a4a46] hover:bg-[#f0f0ec]`}>В архив</button>
+          </>}
+          {rec.status === 'archived' && <>
+            <button disabled={busy} onClick={() => decide('in_work')} className={`${btn} bg-[#111110] text-white hover:bg-[#2a2a28]`}>Вернуть в работу</button>
+            <button disabled={busy} onClick={() => decide('removed')} className={`${btn} text-[#9a9a95] hover:text-red-600 ml-auto`}>Убрать</button>
+          </>}
+          {rec.status === 'done' && <span className="text-[11px] text-emerald-700 font-medium">✓ Сделано</span>}
         </div>
       )}
     </div>
@@ -230,11 +219,11 @@ export default function AIControlCenter() {
   const [aiLoading, setAiLoading]      = useState(false)
   const [aiError, setAiError]          = useState('')
   const [aiRecs, setAiRecs]            = useState<Recommendation[]>([])
+  const [recsError, setRecsError]      = useState('')
 
   // ── Recommendations state ───────────────────────────────────────────────────
   const [recs, setRecs]               = useState<Recommendation[]>([])
-  const [recFilter, setRecFilter]     = useState<string>('all')
-  const [implLog, setImplLog]         = useState<{ ts: string; title: string; action: string }[]>([])
+  const [recFilter, setRecFilter]     = useState<RecStatus>('new')
 
   // ── Overview metrics ────────────────────────────────────────────────────────
   const [metrics, setMetrics]         = useState<{ calcs: number; orders: number; users: number } | null>(null)
@@ -266,28 +255,15 @@ export default function AIControlCenter() {
       })
       .catch(() => { try { const raw = localStorage.getItem(LOG_KEY); if (raw) setFixLog(JSON.parse(raw)) } catch {} })
 
-    // Load recommendations — DB first, localStorage fallback
+    // Рекомендации — только из базы: localStorage одного браузера и был причиной,
+    // почему они «не сохранялись».
     fetch('/api/admin/ai-recommendations')
-      .then(r => r.ok ? r.json() : null)
-      .then(rows => {
-        if (rows && rows.length > 0) {
-          setRecs(rows.map((r: Record<string, string>) => ({
-            id: r.id, title: r.title,
-            priority: r.priority as Recommendation['priority'],
-            category: r.category ?? '',
-            problem: r.description ?? '', impact: '', recommendation: r.title,
-            status: r.status as Recommendation['status'],
-            source: (r.source ?? 'ai') as Recommendation['source'],
-            createdAt: r.created_at,
-          })))
-        } else {
-          try { const raw = localStorage.getItem(REC_KEY); if (raw) setRecs(JSON.parse(raw)) } catch {}
-        }
+      .then(async r => {
+        const body = await r.json().catch(() => null)
+        if (!r.ok) { setRecsError(body?.error ?? 'Не удалось загрузить рекомендации'); return }
+        setRecs(body ?? [])
       })
-      .catch(() => { try { const raw = localStorage.getItem(REC_KEY); if (raw) setRecs(JSON.parse(raw)) } catch {} })
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    try { const rawLog = localStorage.getItem(IMPL_LOG_KEY); if (rawLog) setImplLog(JSON.parse(rawLog)) } catch {}
+      .catch(() => setRecsError('Не удалось загрузить рекомендации'))
 
     // Load quick metrics
     const fetchMetrics = async () => {
@@ -348,47 +324,52 @@ export default function AIControlCenter() {
 
   // ── Calculator ──────────────────────────────────────────────────────────────
 
+  // Пример формулы цены на зеркале 900×500 по канонической формуле проекта:
+  // цена = себестоимость ÷ (1 − маржа − налог), маржа и налог 12% — из финансовых
+  // настроек зеркал. Раньше здесь была маржа без налога и вшитые 2500/1200 ₽.
   const loadCalcExample = useCallback(async () => {
     setCalcLoading(true)
     try {
       const sb = createClient()
-      const [glassRes, stratRes, servRes, ledRes] = await Promise.all([
+      const [glassRes, finRes, servRes, ledRes] = await Promise.all([
         sb.from('glass_price_matrix').select('name, price').eq('price_type', 'cost').eq('category', 'mirror').limit(1).single(),
-        fetch('/api/admin/owner-strategy').then(r => r.json()).catch(() => ({ target_margin: 40 })),
+        sb.from('financial_settings').select('default_margin, tax_percent').eq('product_type', 'mirror').eq('tier', 'standard').limit(1).maybeSingle(),
         sb.from('services').select('name, price').eq('active', true),
         sb.from('mirror_lighting_components').select('cost_price, unit').eq('component_type', 'led_strip').eq('active', true).limit(1).single(),
       ])
 
       const glass    = glassRes.data
-      const margin   = Number(stratRes?.target_margin ?? 40)
+      const fin      = finRes.data as { default_margin: number | string; tax_percent: number | string } | null
       const services = servRes.data ?? []
       const led      = ledRes.data
-
-      if (!glass) return
+      if (!glass || !fin) { setCalcData(null); return }
 
       const W = 900, H = 500
       const areaSqm   = (W * H) / 1_000_000
       const wastePct  = 10
-      const areaWithWaste = areaSqm * (1 + wastePct / 100)
-      const matCost   = Math.round(areaWithWaste * glass.price)
-      const basePrice = Math.round(matCost / (1 - margin / 100))
-
-      const perimeter  = 2 * (W + H) / 1000
-      const ledCost    = led ? Math.round(perimeter * led.cost_price) : 0
+      const matCost   = Math.round(areaSqm * (1 + wastePct / 100) * glass.price)
+      const ledCost   = led ? Math.round((2 * (W + H) / 1000) * led.cost_price) : 0
+      const directCost = matCost + ledCost
+      const marginPct = Number(fin.default_margin)
+      const taxPct    = Number(fin.tax_percent)
+      const model = calcFinancialModel({ directCost, marginPercent: marginPct, taxPercent: taxPct })
+      if (!model) { setCalcData(null); return }
 
       const installSvc  = services.find(s => s.name?.toLowerCase().includes('монтаж'))
       const deliverySvc = services.find(s => s.name?.toLowerCase().includes('доставка'))
-      const installCost = installSvc ? Math.round(installSvc.price) : 2500
-      const deliveryCost = deliverySvc ? Math.round(deliverySvc.price) : 1200
+      const installCost  = installSvc ? Math.round(installSvc.price) : null
+      const deliveryCost = deliverySvc ? Math.round(deliverySvc.price) : null
+      const productPrice = Math.round(model.basePrice)
 
       setCalcData({
         materialName: glass.name, widthMm: W, heightMm: H, areaSqm,
-        costPerSqm: glass.price, wastePct, materialCost: matCost,
-        margin, basePrice, ledCost, installCost, deliveryCost,
-        totalPrice: basePrice + ledCost + installCost + deliveryCost,
+        costPerSqm: glass.price, wastePct, materialCost: matCost, ledCost, directCost,
+        marginPct, taxPct, marginAmount: model.marginAmount, taxAmount: model.taxAmount, productPrice,
+        installCost, deliveryCost,
+        totalPrice: productPrice + (installCost ?? 0) + (deliveryCost ?? 0),
       })
-    } catch {}
-    setCalcLoading(false)
+    } catch { setCalcData(null) }
+    finally { setCalcLoading(false) }
   }, [])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -398,75 +379,29 @@ export default function AIControlCenter() {
 
   async function runAIAnalysis() {
     setAiLoading(true); setAiError('')
-    const healthSummary = hcDone ? {
-      ok:    checks.filter(c => c.status === 'ok').length,
-      warn:  checks.filter(c => c.status === 'warn').length,
-      error: checks.filter(c => c.status === 'error').length,
-      issues: checks.filter(c => c.status !== 'ok' && c.status !== 'pending').map(c => ({ id: c.id, status: c.status, detail: c.detail })),
-    } : null
-
     try {
-      const res  = await fetch('/api/admin/ai-control-center/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ perspective, healthSummary }) })
-      const json = await res.json()
-      if (json.error) { setAiError(json.error); return }
-
-      const newRecs: Recommendation[] = (json.recommendations ?? []).map((r: Omit<Recommendation, 'id' | 'status' | 'source' | 'createdAt'>) => ({
-        ...r,
-        id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        status: 'pending' as const,
-        source: 'ai' as const,
-        createdAt: new Date().toISOString(),
-      }))
-      setAiRecs(newRecs)
-
-      // Merge into main recommendations (avoid duplicates by title)
-      setRecs(prev => {
-        const existingTitles = new Set(prev.map(r => r.title))
-        const toAdd = newRecs.filter(r => !existingTitles.has(r.title))
-        const merged = [...prev, ...toAdd]
-        try { localStorage.setItem(REC_KEY, JSON.stringify(merged)) } catch {}
-        if (toAdd.length > 0) {
-          fetch('/api/admin/ai-recommendations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(toAdd.map(r => ({
-              id: r.id, title: r.title, description: r.problem || null,
-              priority: r.priority, category: r.category || null,
-              status: r.status, source: r.source,
-            }))),
-          }).catch(() => {})
-        }
-        return merged
-      })
+      const res  = await fetch('/api/admin/ai-recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ perspective }) })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json.error) { setAiError(json.error ?? 'Не удалось получить рекомендации'); return }
+      const created = (json.created ?? []) as Recommendation[]
+      setAiRecs(created)
+      setRecs(prev => [...created, ...prev])
+      if (!created.length) setAiError('Новых рекомендаций нет: всё, что AI предложил, уже было в списке')
     } catch (e) { setAiError(String(e)) }
-    setAiLoading(false)
+    finally { setAiLoading(false) }
   }
 
   // ── Recommendations management ───────────────────────────────────────────────
 
-  function updateRecStatus(id: string, status: Recommendation['status']) {
-    setRecs(prev => {
-      const updated = prev.map(r => r.id === id ? { ...r, status } : r)
-      try { localStorage.setItem(REC_KEY, JSON.stringify(updated)) } catch {}
-      const rec = updated.find(r => r.id === id)
-      if (rec) {
-        fetch('/api/admin/ai-recommendations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify([{
-            id: rec.id, title: rec.title, description: rec.problem || null,
-            priority: rec.priority, category: rec.category || null,
-            status: rec.status, source: rec.source,
-          }]),
-        }).catch(() => {})
-      }
-      return updated
+  async function decideRec(id: string, status: RecStatus, resultNote?: string) {
+    const res = await fetch('/api/admin/ai-recommendations', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status, result_note: resultNote }),
     })
-  }
-
-  function addImplLog(rec: Recommendation, action: string) {
-    const entry = { ts: new Date().toISOString(), title: rec.title, action }
-    setImplLog(prev => { const u = [entry, ...prev]; try { localStorage.setItem(IMPL_LOG_KEY, JSON.stringify(u)) } catch {} return u })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || json.error) { setRecsError(json.error ?? 'Решение не сохранилось'); return }
+    setRecsError('')
+    setRecs(prev => prev.map(r => r.id === id ? json as Recommendation : r))
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -490,14 +425,18 @@ export default function AIControlCenter() {
       return o[a.status] - o[b.status]
     })
 
-  const filteredRecs = recs.filter(r => recFilter === 'all' || r.priority === recFilter || r.status === recFilter)
+  const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+  const recCount = (st: RecStatus) => recs.filter(r => r.status === st).length
+  const filteredRecs = recs.filter(r => r.status === recFilter)
+    .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9) || b.created_at.localeCompare(a.created_at))
+  const decisions = recs.filter(r => r.decided_at).sort((a, b) => (b.decided_at ?? '').localeCompare(a.decided_at ?? ''))
 
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: 'overview',        label: 'Обзор' },
     { id: 'health',          label: 'Health Check', badge: errorCount + warnCount > 0 ? errorCount + warnCount : undefined },
-    { id: 'calculators',     label: 'Калькуляторы' },
+    { id: 'calculators',     label: 'Формула цены' },
     { id: 'ai',              label: 'AI Анализ' },
-    { id: 'recommendations', label: 'Рекомендации', badge: recs.filter(r => r.status === 'pending').length || undefined },
+    { id: 'recommendations', label: 'Рекомендации', badge: recCount('new') || undefined },
     { id: 'log',             label: 'Журнал' },
   ]
 
@@ -593,20 +532,20 @@ export default function AIControlCenter() {
                   Запустить Health Check
                 </button>
                 <button onClick={() => setTab('ai')} className="w-full h-9 rounded-lg border border-[#d8d8d4] text-[#4a4a46] text-[12px] font-semibold hover:bg-[#f0f0ec] transition-colors">
-                  Получить AI анализ →
+                  Получить рекомендации →
                 </button>
                 <button onClick={() => setTab('recommendations')} className="w-full h-9 rounded-lg border border-[#d8d8d4] text-[#4a4a46] text-[12px] font-semibold hover:bg-[#f0f0ec] transition-colors">
-                  Рекомендации ({recs.filter(r => r.status === 'pending').length}) →
+                  Ждут решения ({recCount('new')}) →
                 </button>
               </div>
             </div>
           </div>
 
           {/* Recommendations preview */}
-          {recs.filter(r => r.status === 'pending' && r.priority === 'critical').length > 0 && (
+          {recs.filter(r => r.status === 'new' && r.priority === 'critical').length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4">
               <p className="text-[12px] font-semibold text-red-700 mb-2">Критичные рекомендации</p>
-              {recs.filter(r => r.status === 'pending' && r.priority === 'critical').slice(0, 2).map(r => (
+              {recs.filter(r => r.status === 'new' && r.priority === 'critical').slice(0, 2).map(r => (
                 <div key={r.id} className="text-[12px] text-red-700 flex items-start gap-2">
                   <span>•</span><span>{r.title}</span>
                 </div>
@@ -718,8 +657,15 @@ export default function AIControlCenter() {
 
       {/* ══════════════════════ CALCULATORS ══════════════════════ */}
       {tab === 'calculators' && (
-        <div className="grid grid-cols-2 gap-6">
-          {/* Left: Example calculation */}
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-[#e8e8e5] px-5 py-4">
+            <p className="text-[13px] font-semibold text-[#2a2a28]">Что это за вкладка</p>
+            <p className="text-[12px] text-[#6b6b66] mt-1 max-w-3xl">
+              Наглядный пример, как система считает цену клиенту: на зеркале 900×500 мм по текущим ценам и финансовым настройкам.
+              Формула та же, что в калькуляторах: цена = себестоимость ÷ (1 − маржа − налог). Меняются настройки — меняется пример.
+            </p>
+          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
             <h2 className="text-[14px] font-semibold text-[#2a2a28]">Пример расчёта</h2>
             {calcLoading ? (
@@ -735,14 +681,15 @@ export default function AIControlCenter() {
                 <div className="divide-y divide-[#f5f5f3]">
                   {[
                     { label: 'Площадь', value: `${calcData.areaSqm.toFixed(3)} м²` },
-                    { label: `Цена материала (себест.)`, value: `${fmt(calcData.costPerSqm)} ₽/м²` },
-                    { label: `Потери +${calcData.wastePct}%`, value: `+${fmt(Math.round(calcData.materialCost - calcData.areaSqm * calcData.costPerSqm))} ₽` },
-                    { label: 'Себестоимость материала', value: `${fmt(calcData.materialCost)} ₽`, bold: true },
-                    { label: `Маржа ${calcData.margin}%`, value: `+${fmt(calcData.basePrice - calcData.materialCost)} ₽` },
-                    { label: 'Цена зеркала', value: `${fmt(calcData.basePrice)} ₽`, bold: true },
-                    ...(calcData.ledCost > 0 ? [{ label: 'Подсветка (LED)', value: `+${fmt(calcData.ledCost)} ₽` }] : []),
-                    { label: 'Монтаж', value: `+${fmt(calcData.installCost)} ₽` },
-                    { label: 'Доставка', value: `+${fmt(calcData.deliveryCost)} ₽` },
+                    { label: 'Цена материала (себест.)', value: `${fmt(calcData.costPerSqm)} ₽/м²` },
+                    { label: `Материал с потерями +${calcData.wastePct}%`, value: `${fmt(calcData.materialCost)} ₽` },
+                    ...(calcData.ledCost > 0 ? [{ label: 'Подсветка (себест.)', value: `${fmt(calcData.ledCost)} ₽` }] : []),
+                    { label: 'Себестоимость', value: `${fmt(calcData.directCost)} ₽`, bold: true },
+                    { label: `Маржа ${calcData.marginPct}%`, value: `+${fmt(calcData.marginAmount)} ₽` },
+                    { label: `Налог ${calcData.taxPct}%`, value: `+${fmt(calcData.taxAmount)} ₽` },
+                    { label: 'Цена изделия', value: `${fmt(calcData.productPrice)} ₽`, bold: true },
+                    { label: 'Монтаж', value: calcData.installCost != null ? `+${fmt(calcData.installCost)} ₽` : 'не задан в услугах' },
+                    { label: 'Доставка', value: calcData.deliveryCost != null ? `+${fmt(calcData.deliveryCost)} ₽` : 'не задана в услугах' },
                   ].map((row, i) => (
                     <div key={i} className={`flex items-center justify-between px-5 py-3 ${row.bold ? 'bg-[#fafaf8]' : ''}`}>
                       <span className={`text-[12px] ${row.bold ? 'font-semibold text-[#2a2a28]' : 'text-[#5a5a55]'}`}>{row.label}</span>
@@ -757,36 +704,18 @@ export default function AIControlCenter() {
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-[#e8e8e5] p-8 text-center">
-                <p className="text-[12px] text-[#9a9a95]">Нет данных в glass_price_matrix</p>
+                <p className="text-[12px] text-[#9a9a95]">Нет цены зеркала в справочнике стекла или финансовых настроек зеркал</p>
               </div>
             )}
           </div>
 
-          {/* Right: Formula breakdown */}
           <div className="space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Формула расчёта</h2>
+            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Формула</h2>
             <div className="space-y-3">
               {[
-                {
-                  step: '1', title: 'Площадь с потерями',
-                  formula: 'S = (W × H / 1 000 000) × (1 + waste%)',
-                  note: 'waste — процент потерь при раскрое (обычно 5–15%)',
-                },
-                {
-                  step: '2', title: 'Себестоимость материала',
-                  formula: 'cost = S × price_per_m² (из glass_price_matrix)',
-                  note: 'price_type = "cost", category = "mirror" или "glass"',
-                },
-                {
-                  step: '3', title: 'Цена с маржой',
-                  formula: 'price = cost ÷ (1 - margin / 100)',
-                  note: 'margin — целевая маржа из owner-strategy (target_margin%)',
-                },
-                {
-                  step: '4', title: 'Дополнения',
-                  formula: 'total = price + led + install + delivery',
-                  note: 'LED — периметр × цена LED-ленты; услуги — из таблицы services',
-                },
+                { step: '1', title: 'Себестоимость', formula: 'материал × (1 + потери) + подсветка', note: 'цены — из справочника стекла и компонентов подсветки' },
+                { step: '2', title: 'Цена изделия', formula: 'себестоимость ÷ (1 − маржа − налог)', note: 'маржа и налог 12% — из финансовых настроек зеркал; накладные уже внутри маржи' },
+                { step: '3', title: 'Итого клиенту', formula: 'цена изделия + монтаж + доставка', note: 'монтаж и доставка — из справочника услуг' },
               ].map(s => (
                 <div key={s.step} className="bg-white rounded-xl border border-[#e8e8e5] px-5 py-4">
                   <div className="flex items-start gap-3">
@@ -800,23 +729,8 @@ export default function AIControlCenter() {
                 </div>
               ))}
             </div>
-
-            <div className="bg-white rounded-xl border border-[#e8e8e5] px-5 py-4">
-              <p className="text-[12px] font-semibold text-[#4a4a46] mb-3">Задействованные таблицы</p>
-              {[
-                ['glass_price_matrix', 'Цены на стекло/зеркало'],
-                ['financial_settings', 'Финансовые параметры'],
-                ['services',           'Монтаж, доставка'],
-                ['mirror_lighting_components', 'LED, каркасы, БП'],
-                ['facet_prices',       'Фацетная обработка'],
-              ].map(([table, desc]) => (
-                <div key={table} className="flex items-center justify-between py-1.5 border-b border-[#f5f5f3] last:border-0">
-                  <code className="text-[11px] text-blue-600 font-mono">{table}</code>
-                  <span className="text-[11px] text-[#8a8a85]">{desc}</span>
-                </div>
-              ))}
-            </div>
           </div>
+        </div>
         </div>
       )}
 
@@ -870,7 +784,7 @@ export default function AIControlCenter() {
                 {PERSPECTIVES.map(p => (
                   <button key={p.id} onClick={() => setPerspective(p.id)}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${perspective === p.id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebе8]'}`}>
-                    {p.icon} {p.label}
+                    {p.label}
                   </button>
                 ))}
               </div>
@@ -897,7 +811,7 @@ export default function AIControlCenter() {
                       <span className="text-[10px] text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">AI</span>
                     </div>
                     <p className="text-[12px] font-semibold text-[#2a2a28]">{r.title}</p>
-                    <p className="text-[11px] text-[#6a6a65] mt-1">{r.recommendation}</p>
+                    <p className="text-[11px] text-[#6a6a65] mt-1">{r.action}</p>
                   </div>
                 ))}
                 {aiRecs.length > 3 && (
@@ -921,40 +835,33 @@ export default function AIControlCenter() {
       {/* ══════════════════════ RECOMMENDATIONS ══════════════════════ */}
       {tab === 'recommendations' && (
         <div>
-          {/* Filter bar */}
           <div className="flex items-center gap-2 mb-6 flex-wrap">
-            {[
-              { id: 'all',       label: 'Все' },
-              { id: 'critical',  label: 'Критично' },
-              { id: 'high',      label: 'Высокий' },
-              { id: 'medium',    label: 'Средний' },
-              { id: 'low',       label: 'Низкий' },
-              { id: 'pending',   label: 'Ожидают' },
-              { id: 'done',      label: 'Внедрено' },
-              { id: 'dismissed', label: 'Отклонено' },
-            ].map(f => (
-              <button key={f.id} onClick={() => setRecFilter(f.id)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${recFilter === f.id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebе8]'}`}>
-                {f.label}
-                {f.id === 'all' && recs.length > 0 && <span className="ml-1 text-[10px] opacity-60">{recs.length}</span>}
+            {([
+              ['new', 'Ждут решения'], ['in_work', 'В работе'], ['done', 'Сделано'], ['archived', 'Архив'], ['removed', 'Убранные'],
+            ] as [RecStatus, string][]).map(([id, label]) => (
+              <button key={id} onClick={() => setRecFilter(id)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${recFilter === id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebе8]'}`}>
+                {label} <span className="ml-1 text-[10px] opacity-60">{recCount(id)}</span>
               </button>
             ))}
             <div className="ml-auto">
               <button onClick={() => setTab('ai')} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-violet-600 text-white hover:bg-violet-700 transition-colors">
-                ✦ Получить AI рекомендации
+                ✦ Получить рекомендации
               </button>
             </div>
           </div>
 
+          {recsError && <p className="mb-4 text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{recsError}</p>}
+
           {filteredRecs.length === 0 ? (
             <div className="bg-[#f7f7f4] rounded-xl border border-[#e8e8e5] p-10 text-center">
-              <p className="text-[14px] text-[#8a8a85] mb-2">Нет рекомендаций</p>
-              <p className="text-[12px] text-[#b0b0aa]">Запустите AI анализ во вкладке «AI Анализ»</p>
+              <p className="text-[14px] text-[#8a8a85] mb-2">{recFilter === 'new' ? 'Всё разобрано' : 'Пусто'}</p>
+              <p className="text-[12px] text-[#b0b0aa]">Новые рекомендации приходят каждый день в 9:00 по Москве, пока разобраны прошлые. Или получите их вручную во вкладке «AI Анализ».</p>
             </div>
           ) : (
             <div className="space-y-3">
               {filteredRecs.map(rec => (
-                <RecommendationCard key={rec.id} rec={rec} onStatusChange={updateRecStatus} onLog={addImplLog} />
+                <RecommendationCard key={rec.id} rec={rec} onDecide={decideRec} />
               ))}
             </div>
           )}
@@ -994,24 +901,20 @@ export default function AIControlCenter() {
             </div>
           )}
 
-          {/* Implementation log */}
-          {implLog.length > 0 && (
+          {decisions.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[13px] font-semibold text-[#4b4b47]">Журнал рекомендаций</h2>
-                <button onClick={() => { setImplLog([]); try { localStorage.removeItem(IMPL_LOG_KEY) } catch {} }} className="text-[11px] text-[#9a9a95] hover:text-[#5a5a55]">Очистить</button>
-              </div>
+              <h2 className="text-[13px] font-semibold text-[#4b4b47] mb-3">Решения по рекомендациям</h2>
               <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
                 <div className="divide-y divide-[#f5f5f3]">
-                  {implLog.map((e, i) => (
-                    <div key={i} className="px-4 py-3 flex items-start gap-4">
+                  {decisions.map(r => (
+                    <div key={r.id} className="px-4 py-3 flex items-start gap-4">
                       <div className="flex-shrink-0 w-[72px]">
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-[10px] text-[#9a9a95]">{new Date(r.decided_at!).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
+                        <p className="text-[10px] text-[#9a9a95]">{new Date(r.decided_at!).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-[#2a2a28]">{e.title}</p>
-                        <p className="text-[11px] text-[#6a6a65] mt-0.5">{e.action}</p>
+                        <p className="text-[12px] font-medium text-[#2a2a28]">{r.title}</p>
+                        <p className="text-[11px] text-[#6a6a65] mt-0.5">{REC_STATUS_LABEL[r.status]}{r.decided_by ? ` · ${r.decided_by}` : ''}{r.result_note ? ` · ${r.result_note}` : ''}</p>
                       </div>
                     </div>
                   ))}
@@ -1020,10 +923,10 @@ export default function AIControlCenter() {
             </div>
           )}
 
-          {fixLog.length === 0 && implLog.length === 0 && (
+          {fixLog.length === 0 && decisions.length === 0 && (
             <div className="bg-[#f7f7f4] rounded-xl border border-[#e8e8e5] p-10 text-center">
               <p className="text-[13px] text-[#8a8a85]">Журнал пуст</p>
-              <p className="text-[11px] text-[#b0b0aa] mt-1">Здесь появятся исправления из Health Check и действия с рекомендациями</p>
+              <p className="text-[11px] text-[#b0b0aa] mt-1">Здесь появятся исправления из Health Check и решения по рекомендациям</p>
             </div>
           )}
         </div>
