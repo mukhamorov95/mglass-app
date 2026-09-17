@@ -23,27 +23,35 @@ export type LeadScore = {
 
 const TOTAL_POSITIVE_WEIGHT = POSITIVE_FLAGS.reduce((s, f) => s + f.weight, 0)
 
+// Флаг считается собранным с учётом старых карточек: до 17.09 готовность объекта
+// писалась в object_ready, отдельного finish_known не было.
+function has(flags: LeadFlags, k: FlagKey): boolean {
+  if (k === 'finish_known') return !!flags.finish_known || !!flags.object_ready
+  return !!flags[k]
+}
+
 /**
- * Правило 🟢 (из решения владельца): лид уходит человеку, если собрано ВСЁ ядро
- * (продукт + размеры + место + телефон), ИЛИ клиент прямо готов на замер и дал
- * телефон (быстрый путь — не мучаем сбором остального).
+ * Когда клиент уходит менеджеру (решение владельца 17.09.2026), бот не тянет дальше:
+ * — собран портрет: изделие + размеры + известно про чистовую + телефон;
+ * — клиент спросил цену, и понятны изделие и размеры: цену считает только менеджер,
+ *   а дальнейшие вопросы бота на этом месте теряли клиентов;
+ * — клиент сам готов на замер и дал телефон.
  */
 export function scoreLead(flags: LeadFlags): LeadScore {
   const disqualified = DISQUALIFY_KEYS.some(k => flags[k])
   const coreTotal = CORE_KEYS.length
-  const coreDone = CORE_KEYS.filter(k => flags[k]).length
+  const coreDone = CORE_KEYS.filter(k => has(flags, k)).length
 
-  const setWeight = POSITIVE_FLAGS.filter(f => flags[f.key]).reduce((s, f) => s + f.weight, 0)
+  const setWeight = POSITIVE_FLAGS.filter(f => has(flags, f.key)).reduce((s, f) => s + f.weight, 0)
   const readiness = disqualified || TOTAL_POSITIVE_WEIGHT === 0
     ? 0
-    : Math.round((100 * setWeight) / TOTAL_POSITIVE_WEIGHT)
+    : Math.min(100, Math.round((100 * setWeight) / TOTAL_POSITIVE_WEIGHT))
 
-  const allCore = coreDone === coreTotal
-  const measureFastTrack = !!flags.ready_measure && !!flags.contact
-  const isHot = !disqualified && (allCore || measureFastTrack)
+  const portrait = coreDone === coreTotal
+  const priceTrack = !!flags.price_asked && !!flags.product && !!flags.sizes
+  const measureTrack = !!flags.ready_measure && !!flags.contact
+  const isHot = !disqualified && (portrait || priceTrack || measureTrack)
 
-  // «Закрыт на замер» (терминал робота → человек): клиент согласился на платный
-  // замер + телефон + адрес + объект готов (правило владельца — минимум срывов).
   const measureClosed = !disqualified && !!flags.measure_agreed && !!flags.contact
     && !!flags.address_known && !!flags.object_ready
 
@@ -53,15 +61,14 @@ export function scoreLead(flags: LeadFlags): LeadScore {
     else if (readiness > 0) heat = 'warm'
   }
 
-  const missingNext = disqualified || isHot ? null : (ASK_ORDER.find(k => !flags[k]) ?? null)
+  const missingNext = disqualified || isHot ? null : (ASK_ORDER.find(k => !has(flags, k)) ?? null)
 
   const reason = disqualified
     ? 'дисквалификация (не наш профиль / отказ / спам)'
-    : isHot
-      ? (allCore ? 'собрано ядро заявки' : 'готов на замер + телефон')
-      : heat === 'warm'
-        ? `в работе бота: собрано ядра ${coreDone}/${coreTotal}`
-        : 'новый/сырой лид'
+    : portrait ? 'собран портрет клиента'
+      : priceTrack ? 'спросил цену — считает менеджер'
+        : measureTrack ? 'готов на замер + телефон'
+          : heat === 'warm' ? `портрет ${coreDone}/${coreTotal}` : 'новый лид'
 
   return { readiness, heat, isHot, measureClosed, disqualified, coreDone, coreTotal, missingNext, reason }
 }

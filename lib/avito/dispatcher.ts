@@ -8,6 +8,7 @@ import { type LeadFlags } from './flags'
 export type DispatchAction =
   | 'disqualify'     // не наш профиль / отказ / спам → в потерю
   | 'close_measure'  // закрыт на замер → этап «Замер назначен», передача человеку
+  | 'handoff'        // портрет собран / спросил цену → менеджеру, бот замолкает
   | 'park'           // клиент отложил → «Долгострой» + задача-себе с датой
   | 'collect'        // добираем недостающий флаг, ведём дальше
 
@@ -32,6 +33,11 @@ export function decideNextAction(flags: LeadFlags): Dispatch {
 
   if (score.measureClosed)
     return { action: 'close_measure', stage: STAGE_MEASURE, toLost: false, handoff: true, reason: 'закрыт на замер (согласие+телефон+адрес+готовность)', score }
+
+  // Передача раньше «отложенных»: клиент с известным портретом нужен менеджеру,
+  // даже если ремонт ещё идёт — срок и замер согласует человек.
+  if (score.isHot)
+    return { action: 'handoff', stage: null, toLost: false, handoff: true, reason: score.reason, score }
 
   if (flags.stall)
     return { action: 'park', stage: STAGE_PARK, toLost: false, handoff: false, reason: 'клиент отложил — ставим задачу-себе и ведём по триггеру', score }

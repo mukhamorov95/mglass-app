@@ -18,8 +18,9 @@ const QUALIFICATION_STAGES = new Set(CRM_ZONES.find(z => z.zone === 'Квали�
 
 const DAY = 86_400_000
 
-const FIRST = 'Здравствуйте! Я на связи — если ещё актуально, подскажите размеры, и я посчитаю точную стоимость.'
-const SECOND = 'Добрый день! Не хочу быть навязчивым — просто напомню о себе. Если задача ещё в силе, напишите, посчитаю и подскажу по срокам.'
+// Коротко и без обещания цены: цену бот не называет, считает менеджер.
+const FIRST = 'Здравствуйте! Задача ещё актуальна? Подскажите размеры — передам менеджеру на расчёт.'
+const SECOND = 'Добрый день! Напомню о себе: если душевая или зеркало ещё нужны — напишите, поможем.'
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -68,9 +69,17 @@ export async function GET(req: NextRequest) {
     .select('id, name, manager, bot_muted, bot_muted_by, stage, status, avito_chat_id, avito_user_id, followup_count, updated_at')
     .not('avito_chat_id', 'is', null)
     .not('status', 'in', '("won","lost")')
+    .eq('bot_muted', false)
+    // Новый лид из вебхука создаётся без этапа — он тоже в квалификации.
+    .or(`stage.is.null,stage.in.(${[...QUALIFICATION_STAGES].map(x => `"${x}"`).join(',')})`)
+    .or('followup_count.is.null,followup_count.lt.2')
+    // Окно 30 дней и фильтры в запросе, а не в цикле: раньше брались 40 самых старых
+    // лидов с июля, отсеивались в коде и никогда не обновлялись — до свежих очередь
+    // не доходила, за месяц не ушло ни одного напоминания при 88 подходящих.
+    .gte('updated_at', new Date(Date.now() - 30 * DAY).toISOString())
     .lt('updated_at', new Date(Date.now() - DAY).toISOString())
-    .order('updated_at')
-    .limit(40)
+    .order('updated_at', { ascending: false })
+    .limit(60)
 
   const rows = (leads ?? []) as {
     id: number; name: string | null; manager: string | null; bot_muted: boolean | null; bot_muted_by: string | null

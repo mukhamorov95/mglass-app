@@ -4,15 +4,14 @@
 //
 // Идея: вместо одного непрозрачного score 0–100 лид описывается набором дискретных
 // флажков. Из них детерминированно (в коде, не моделью) считается готовность и
-// «светофор». Как только собрано ядро (или клиент готов на замер + дал телефон) —
-// лид загорается 🟢 и уходит живому менеджеру.
+// решение «отдать менеджеру».
 
 export type FlagGroup = 'core' | 'support' | 'info' | 'disqualify'
 
 export type FlagKey =
-  | 'product' | 'sizes' | 'place' | 'contact'
-  | 'photo' | 'ready_measure' | 'measure_agreed' | 'address_known' | 'object_ready'
-  | 'price_ok' | 'price_quoted' | 'b2b' | 'repeat_referral' | 'timeline' | 'budget'
+  | 'product' | 'sizes' | 'finish_known' | 'contact'
+  | 'place' | 'photo' | 'ready_measure' | 'measure_agreed' | 'address_known' | 'object_ready'
+  | 'price_asked' | 'price_ok' | 'price_quoted' | 'b2b' | 'repeat_referral' | 'timeline' | 'budget'
   | 'in_zone' | 'object_type' | 'stall'
   | 'not_our_profile' | 'refused' | 'spam'
 
@@ -23,47 +22,51 @@ export type FlagDef = {
   label: string          // как показываем менеджеру в карточке
   group: FlagGroup
   weight: number         // вклад в readiness (для не-disqualify групп)
-  isCore?: boolean       // входит в «ядро» заявки
-  askPriority?: number   // порядок, в котором бот добывает недостающий флаг (меньше — раньше)
-  ask?: string           // подсказка боту: как добыть флаг у клиента
-  desc?: string          // подсказка боту/модели: когда ставить флаг
+  isCore?: boolean       // входит в портрет клиента — собран портрет, клиент уходит менеджеру
+  askPriority?: number   // порядок, в котором бот узнаёт недостающее (меньше — раньше)
+  ask?: string           // подсказка боту: что узнать, одним коротким вопросом
+  desc?: string          // подсказка модели: когда ставить флаг
 }
 
+// Портрет клиента по решению владельца 17.09.2026: изделие, размеры, готова ли
+// чистовая отделка, телефон. Собран — клиент сразу у менеджера, бот не тянет
+// разговор дальше. Место установки, фото, адрес, согласие на замер бот больше не
+// добывает: это работа менеджера. Факты (стоимость замера, условия) — только из
+// базы знаний, здесь их нет намеренно.
 export const FLAGS: FlagDef[] = [
-  // 🎯 Ядро — база заявки
-  { key: 'product', label: 'Продукт определён', group: 'core', weight: 3, isCore: true, askPriority: 0,
-    ask: 'уточни, что нужно: душевая / зеркало / лофт-перегородка / стекло',
+  // 🎯 Портрет клиента
+  { key: 'product', label: 'Изделие определено', group: 'core', weight: 3, isCore: true, askPriority: 0,
+    ask: 'какое изделие нужно',
     desc: 'клиент назвал изделие нашего профиля (душевая/зеркало/лофт/стекло)' },
-  { key: 'sizes', label: 'Размеры проёма', group: 'core', weight: 3, isCore: true, askPriority: 1,
-    ask: 'попроси размеры проёма (хотя бы примерно, в см)',
+  { key: 'sizes', label: 'Размеры', group: 'core', weight: 3, isCore: true, askPriority: 1,
+    ask: 'примерные размеры',
     desc: 'есть размеры хотя бы примерные' },
-  { key: 'place', label: 'Место/тип установки', group: 'core', weight: 2, isCore: true, askPriority: 2,
-    ask: 'уточни, куда ставим: ниша / угол / вдоль стены / проём',
-    desc: 'понятно, где и как ставится (ниша/угол/проём/стена)' },
-  { key: 'contact', label: 'Телефон получен', group: 'core', weight: 3, isCore: true, askPriority: 4,
-    ask: 'мягко попроси телефон, чтобы согласовать замер и прислать расчёт',
+  { key: 'finish_known', label: 'Известно про чистовую отделку', group: 'core', weight: 2, isCore: true, askPriority: 2,
+    ask: 'готова ли чистовая отделка (плитка, поддон)',
+    desc: 'клиент ответил, готова ли чистовая отделка — неважно, да или нет' },
+  { key: 'contact', label: 'Телефон получен', group: 'core', weight: 3, isCore: true, askPriority: 3,
+    ask: 'телефон, чтобы менеджер связался',
     desc: 'клиент оставил номер телефона' },
 
-  // ⚡ Усиливающие — ускоряют/утяжеляют заявку
-  { key: 'photo', label: 'Фото места установки', group: 'support', weight: 3, askPriority: 3,
-    ask: 'попроси фото проёма/места, где будет стоять изделие — так точнее расчёт и замер',
+  // ⚡ Усиливающие — видны менеджеру, бот их не выспрашивает
+  { key: 'place', label: 'Место/тип установки', group: 'support', weight: 1,
+    desc: 'понятно, где и как ставится (ниша/угол/проём/стена)' },
+  { key: 'photo', label: 'Фото места установки', group: 'support', weight: 2,
     desc: 'клиент прислал фото проёма/места установки' },
-  { key: 'ready_measure', label: 'Готов на замер', group: 'support', weight: 3, askPriority: 5,
-    ask: 'предложи замер (2500₽ по Москве, сумма идёт в зачёт заказа) и прощупай готовность к выезду',
-    desc: 'клиент в принципе не против замера/выезда — сильный сигнал покупки' },
-  { key: 'measure_agreed', label: 'Согласился на замер', group: 'support', weight: 3, askPriority: 6,
-    ask: 'зафиксируй согласие на замер (2500₽, в зачёт заказа) и спроси удобное окно (день/время)',
-    desc: 'клиент ЯВНО согласился на платный замер (2500₽, в зачёт заказа)' },
-  { key: 'address_known', label: 'Адрес объекта', group: 'support', weight: 2, askPriority: 7,
-    ask: 'уточни адрес объекта (город, район/улица) — для выезда замерщика',
-    desc: 'известен адрес, куда ехать на замер' },
-  { key: 'object_ready', label: 'Объект готов к замеру', group: 'support', weight: 2, askPriority: 8,
-    ask: 'уточни готовность: закончена ли черновая, установлена ли ванна/поддон, есть ли доступ',
-    desc: 'зона готова к замеру (черновая закончена, ванна/поддон на месте, есть доступ) — иначе выезд сорвётся' },
+  { key: 'object_ready', label: 'Чистовая отделка готова', group: 'support', weight: 2,
+    desc: 'клиент подтвердил: чистовая отделка готова (плитка выложена, поддон/ванна стоят)' },
+  { key: 'price_asked', label: 'Спросил цену', group: 'support', weight: 2,
+    desc: 'клиент спросил цену или стоимость — сигнал покупки' },
+  { key: 'ready_measure', label: 'Готов на замер', group: 'support', weight: 2,
+    desc: 'клиент сам заговорил о замере или не против выезда' },
+  { key: 'measure_agreed', label: 'Согласился на замер', group: 'support', weight: 2,
+    desc: 'клиент явно согласился на замер' },
+  { key: 'address_known', label: 'Адрес объекта', group: 'support', weight: 1,
+    desc: 'известен адрес объекта' },
   { key: 'price_ok', label: 'Цена устроила', group: 'support', weight: 2,
     desc: 'цена названа и клиента устроила (важно: «дорого» — НЕ ставит этот флаг и НЕ отказ)' },
   { key: 'price_quoted', label: 'Цена озвучена', group: 'support', weight: 1,
-    desc: 'бот назвал предварительную цену' },
+    desc: 'клиенту назвали цену' },
   { key: 'b2b', label: 'Дизайнер / прораб / опт', group: 'support', weight: 2,
     desc: 'профессиональный покупатель: дизайнер, прораб, опт' },
   { key: 'repeat_referral', label: 'Повторный / по рекомендации', group: 'support', weight: 2,
@@ -73,17 +76,17 @@ export const FLAGS: FlagDef[] = [
   { key: 'budget', label: 'Бюджет подтверждён', group: 'support', weight: 1,
     desc: 'клиент назвал/подтвердил бюджет' },
   { key: 'in_zone', label: 'Москва / МО', group: 'support', weight: 1,
-    desc: 'объект в Москве или области (зона монтажа)' },
+    desc: 'объект в Москве или области' },
 
   // ℹ️ Инфо-сегментация и состояние
   { key: 'object_type', label: 'Тип объекта известен', group: 'info', weight: 1,
     desc: 'выяснен тип объекта: квартира / частный дом / коммерция' },
   { key: 'stall', label: 'Отложен (ремонт/отпуск/позже)', group: 'info', weight: 0,
-    desc: 'клиент отложил: «ремонт идёт», «в отпуске», «позже», «ждём плитку» — НЕ отказ, вести по триггеру' },
+    desc: 'клиент отложил: «ремонт идёт», «в отпуске», «позже» — НЕ отказ' },
 
   // ⛔ Дисквалификация — гасит лид (readiness → 0, статус → refused)
   { key: 'not_our_profile', label: 'Не наш профиль', group: 'disqualify', weight: 0,
-    desc: 'запрос не наш профиль: автостёкла, ремонт стеклопакетов, мебель без стекла' },
+    desc: 'запрос не по нашему профилю (что не делаем — в базе знаний)' },
   { key: 'refused', label: 'Явный отказ', group: 'disqualify', weight: 0,
     desc: 'клиент явно отказался («не интересно / уже купил / передумал»); «дорого» сюда НЕ входит' },
   { key: 'spam', label: 'Спам / нерелевант', group: 'disqualify', weight: 0,
