@@ -27,7 +27,19 @@ async function whoAmI(): Promise<{ name: string; canAll: boolean } | null> {
   return { name, canAll }
 }
 
-type SaleRow = { id: number; amount: number; manager: string | null }
+type SaleRow = {
+  id: number; amount: number; manager: string | null
+  prepayment?: number | null; prepayment_paid?: boolean | null; remainder_paid?: boolean | null
+}
+
+// Сколько по строке продажи отмечено оплаченным. Импорт книги проставляет эти
+// галочки по цвету ячейки, но строк в денежном ядре (payments) у истории нет —
+// без этой цифры экран показывал «поступило 0 ₽» на полностью оплаченный месяц.
+function markedPaid(r: SaleRow): number {
+  const total = Number(r.amount || 0)
+  const pre = Number(r.prepayment || 0)
+  return (r.prepayment_paid ? pre : 0) + (r.remainder_paid ? Math.max(0, total - pre) : 0)
+}
 
 export async function GET(req: NextRequest) {
   const guard = await requireRole(['admin', 'ceo', 'manager', 'commercial'])
@@ -78,14 +90,17 @@ export async function GET(req: NextRequest) {
   }
 
   const sum = sales.reduce((s, r) => s + Number(r.amount || 0), 0)
-  const paid = sales.reduce((s, r) => s + (paidBySale.get(r.id) ?? 0), 0)
+  const paid = sales.reduce((s, r) => s + markedPaid(r), 0)
+  // Отдельно — то, что дошло до денежного ядра: расхождение с отметками и есть
+  // «отмечено галочкой, но платежа в системе нет».
+  const paidLedger = sales.reduce((s, r) => s + (paidBySale.get(r.id) ?? 0), 0)
   const count = sales.length
   const avg = count ? Math.round(sum / count) : 0
   const byMgr = new Map<string, { manager: string; count: number; sum: number; paid: number }>()
   for (const r of all) {
     const k = r.manager || '—'
     const cur = byMgr.get(k) ?? { manager: k, count: 0, sum: 0, paid: 0 }
-    cur.count++; cur.sum += Number(r.amount || 0); cur.paid += paidBySale.get(r.id) ?? 0
+    cur.count++; cur.sum += Number(r.amount || 0); cur.paid += markedPaid(r)
     byMgr.set(k, cur)
   }
   const managers = [...byMgr.values()].map(m => ({ ...m, avg: m.count ? Math.round(m.sum / m.count) : 0 })).sort((a, b) => b.sum - a.sum)
@@ -93,7 +108,7 @@ export async function GET(req: NextRequest) {
   const salesOut = sales.map(r => ({ ...r, paid_amount: paidBySale.get(r.id) ?? 0 }))
   return NextResponse.json({
     sales: salesOut,
-    totals: { sum, count, avg, paid },
+    totals: { sum, count, avg, paid, paidLedger },
     // Итог всего периода — чтобы при выбранном менеджере было видно, какую долю
     // он занимает, а не только его собственная сумма в отрыве от всего.
     periodTotals: { sum: all.reduce((s, r) => s + Number(r.amount || 0), 0), count: all.length },
