@@ -2,69 +2,68 @@ import { describe, it, expect } from 'vitest'
 import { scoreLead } from '@/lib/avito/scoreLead'
 import { CORE_KEYS } from '@/lib/avito/flags'
 
-describe('scoreLead — светофор', () => {
-  it('пустой лид — холодный, ничего не собрано', () => {
+describe('scoreLead — портрет клиента (решение владельца 17.09)', () => {
+  it('портрет — это изделие, размеры, чистовая отделка и телефон', () => {
+    expect([...CORE_KEYS].sort()).toEqual(['contact', 'finish_known', 'product', 'sizes'])
+  })
+
+  it('пустой лид — холодный, первым спрашиваем изделие', () => {
     const s = scoreLead({})
     expect(s.heat).toBe('cold')
     expect(s.isHot).toBe(false)
-    expect(s.readiness).toBe(0)
-    expect(s.coreDone).toBe(0)
-    expect(s.missingNext).toBe('product') // первый по ASK_ORDER
+    expect(s.missingNext).toBe('product')
   })
 
-  it('часть флагов — тёплый, бот добирает недостающее', () => {
+  it('изделие и размеры — дальше чистовая отделка, а не место установки или фото', () => {
     const s = scoreLead({ product: true, sizes: true })
-    expect(s.heat).toBe('warm')
     expect(s.isHot).toBe(false)
-    expect(s.readiness).toBeGreaterThan(0)
-    expect(s.missingNext).toBe('place') // product+sizes есть → следующий place
+    expect(s.missingNext).toBe('finish_known')
   })
 
-  it('всё ядро собрано — горячий, уходит человеку', () => {
-    const flags = Object.fromEntries(CORE_KEYS.map(k => [k, true]))
-    const s = scoreLead(flags)
+  it('собран портрет — сразу менеджеру', () => {
+    const s = scoreLead({ product: true, sizes: true, finish_known: true, contact: true })
     expect(s.isHot).toBe(true)
-    expect(s.heat).toBe('hot')
-    expect(s.coreDone).toBe(s.coreTotal)
+    expect(s.reason).toContain('портрет')
     expect(s.missingNext).toBeNull()
   })
 
-  it('быстрый путь: готов на замер + телефон → горячий даже без полного ядра', () => {
-    const s = scoreLead({ ready_measure: true, contact: true })
+  it('чистовая НЕ готова — всё равно менеджеру: известно, значит портрет собран', () => {
+    expect(scoreLead({ product: true, sizes: true, finish_known: true, contact: true, stall: true }).isHot).toBe(true)
+  })
+
+  it('старые карточки: object_ready засчитывается как известная отделка', () => {
+    expect(scoreLead({ product: true, sizes: true, object_ready: true, contact: true }).isHot).toBe(true)
+  })
+
+  it('спросил цену при известных изделии и размерах — менеджеру, без телефона', () => {
+    const s = scoreLead({ product: true, sizes: true, price_asked: true })
     expect(s.isHot).toBe(true)
-    expect(s.heat).toBe('hot')
-    expect(s.reason).toContain('замер')
+    expect(s.reason).toContain('цену')
   })
 
-  it('«закрыт на замер» = согласие + телефон + адрес + готовность', () => {
-    expect(scoreLead({ measure_agreed: true, contact: true, address_known: true, object_ready: true }).measureClosed).toBe(true)
-    expect(scoreLead({ measure_agreed: true, contact: true }).measureClosed).toBe(false)
-    expect(scoreLead({ measure_agreed: true, contact: true, address_known: true, object_ready: true, refused: true }).measureClosed).toBe(false)
-  })
-
-  it('готов на замер БЕЗ телефона — ещё не горячий', () => {
-    const s = scoreLead({ ready_measure: true })
+  it('спросил цену, но изделие неизвестно — бот сначала узнаёт изделие', () => {
+    const s = scoreLead({ price_asked: true })
     expect(s.isHot).toBe(false)
-    expect(s.heat).toBe('warm')
+    expect(s.missingNext).toBe('product')
   })
 
-  it('дисквалификация гасит лид независимо от других флагов', () => {
-    const flags = { ...Object.fromEntries(CORE_KEYS.map(k => [k, true])), not_our_profile: true }
-    const s = scoreLead(flags)
+  it('сам готов на замер и дал телефон — менеджеру', () => {
+    expect(scoreLead({ ready_measure: true, contact: true }).isHot).toBe(true)
+  })
+
+  it('место установки и фото бот не выспрашивает', () => {
+    const s = scoreLead({ product: true, sizes: true, finish_known: true })
+    expect(s.missingNext).toBe('contact')
+  })
+
+  it('дисквалификация гасит лид независимо от портрета', () => {
+    const s = scoreLead({ product: true, sizes: true, finish_known: true, contact: true, not_our_profile: true })
     expect(s.disqualified).toBe(true)
     expect(s.isHot).toBe(false)
-    expect(s.heat).toBe('cold')
     expect(s.readiness).toBe(0)
-    expect(s.missingNext).toBeNull()
   })
 
-  it('«дорого» не гасит лид (refused не выставлен) — путь к price_ok открыт', () => {
-    const s = scoreLead({ product: true, sizes: true, price_quoted: true })
-    expect(s.disqualified).toBe(false)
-    expect(s.heat).toBe('warm')
-  })
-
-  it('readiness растёт монотонно при добавлении флагов', () => {
+  it('readiness растёт с портретом и не выходит за 100', () => {
     const a = scoreLead({ product: true })
     const b = scoreLead({ product: true, sizes: true })
     const c = scoreLead({ product: true, sizes: true, contact: true })

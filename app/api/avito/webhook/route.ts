@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
-import { runAvitoManager, type DialogMsg, type LeadKnown } from '@/lib/ai-tools/avitoManagerRuntime'
+import { runAvitoManager, handoffReply, type DialogMsg, type LeadKnown } from '@/lib/ai-tools/avitoManagerRuntime'
 import { avitoSendMessage, isAvitoConfigured } from '@/lib/avito'
 import { notifyAdmins } from '@/lib/telegram'
 import { isBotEnabled } from '@/lib/aiKillSwitch'
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
 
   let turn
   try {
-    turn = await runAvitoManager(history, known, { examples, knowledge })
+    turn = await runAvitoManager(history, known, { examples, knowledge, flags: (lead.flags ?? {}) as LeadFlags })
   } catch (e) {
     const emsg = e instanceof Error ? e.message : String(e)
     const estatus = (e as { status?: number } | null)?.status
@@ -303,56 +303,42 @@ export async function POST(req: NextRequest) {
   patch.heat = sc.heat
   patch.missing_next = sc.missingNext
 
-  const wasHot = (lead.heat as string | null) === 'hot'
-  const becameHot = sc.isHot && !wasHot
   const becameQualified = (turn.qualified || sc.isHot) && !lead.qualified
   if (turn.qualified || sc.isHot) patch.qualified = true
 
+  // Передача менеджеру: собран портрет, спросил цену при известных изделии и размерах,
+  // или модель просит человека. Один раз — дальше бот в этом чате молчит.
+  const handoff = dispatch.action === 'handoff' || dispatch.action === 'close_measure' || turn.needs_human
   const measureClosed = dispatch.action === 'close_measure'
   if (measureClosed) {
-    patch.stage = dispatch.stage          // → «Замер назначен» (выходит из зоны робота)
+    patch.stage = dispatch.stage
     patch.qualified = true
   } else if (dispatch.action === 'disqualify') {
     patch.status = 'lost'
     if (!lead.lost_reason) patch.lost_reason = dispatch.reason
   } else if (dispatch.action === 'park' && dispatch.stage && curStage !== dispatch.stage) {
-    patch.stage = dispatch.stage          // → «Долгострой» (задача-себе — Фаза B)
+    patch.stage = dispatch.stage
   }
   await service.from('crm_leads').update(patch).eq('id', leadId)
 
-  // Каждый новый флаг — событие в ленту (прозрачная история + материал для обучения).
   if (newlySet.length) {
     await service.from('crm_lead_events').insert(
       newlySet.map(k => ({ lead_id: leadId, kind: 'system', text: `✅ Флаг: ${FLAG_BY_KEY[k].label}`, author: 'AI' })),
     )
   }
 
-  if (measureClosed) {
-    // Терминал робота: заявка закрыта на замер → задача менеджеру оформить выезд.
+  if (handoff) {
+    const why = turn.needs_human && dispatch.action !== 'handoff' && !measureClosed ? 'нужен человек' : sc.reason
     await service.from('crm_lead_events').insert({
-      lead_id: leadId, kind: 'system', author: 'AI',
-      text: `🎯 Закрыт на замер (согласие + телефон + адрес + готовность) — оформить выезд замерщика`,
+      lead_id: leadId, kind: 'system', author: 'AI', text: `🤝 Передано менеджеру: ${why}`,
     })
     try {
       await service.from('crm_tasks').insert({
-        lead_id: leadId, kind: 'measure',
-        title: 'Оформить заявку на замер (подтвердить время из графика замерщиков)',
-        due_at: new Date().toISOString(),
-      })
-    } catch { /* не блокируем ответ клиенту */ }
-  } else if (becameHot) {
-    await service.from('crm_lead_events').insert({
-      lead_id: leadId, kind: 'system', author: 'AI',
-      text: `🔥 Заявка готова менеджеру (${sc.reason}), готовность ${sc.readiness}%`,
-    })
-    try {
-      await service.from('crm_tasks').insert({
-        lead_id: leadId, kind: 'call', title: `Перезвонить — заявка готова (${sc.reason})`,
+        lead_id: leadId, kind: 'call', title: `Связаться с клиентом Авито — ${why}`,
         due_at: new Date().toISOString(),
       })
     } catch { /* не блокируем ответ клиенту */ }
   } else if (dispatch.action === 'park') {
-    // Задача-себе: бот вернётся к отложенному клиенту в назначенный день (Фаза B).
     const days = turn.followUp.inDays ?? 3
     const due = new Date(Date.now() + days * 86_400_000).toISOString()
     const note = turn.followUp.note
@@ -371,11 +357,11 @@ export async function POST(req: NextRequest) {
   }
 
   // Перепроверка перед самой отправкой: менеджер мог взять карточку или ответить
-  // клиенту, пока модель думала (до минуты). Тем же замком, что и до модели.
+  // клиенту, пока модель думала. Тем же замком, что и до модели.
   const { data: cur } = await service.from('crm_leads')
     .select('manager, bot_muted, bot_muted_by, stage, status').eq('id', leadId).maybeSingle()
-  const curGate = botGate((cur ?? {}) as Parameters<typeof botGate>[0], QUALIFICATION_STAGES)
-  if (!curGate.allowed) {
+  const curGate = botGate((cur ?? {}) as Parameters<typeof botGate>[0], measureClosed ? undefined : QUALIFICATION_STAGES)
+  if (!curGate.allowed && !(dispatch.action === 'disqualify' && curGate.reason === 'closed')) {
     await service.from('crm_lead_events').insert({
       lead_id: leadId, kind: 'system', author: 'AI',
       text: `Автоответ Ивана отменён — ${MUTE_LABEL[curGate.reason]}${curGate.who ? `: ${curGate.who}` : ''}`,
@@ -383,17 +369,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, taken_over: curGate.reason })
   }
 
-  // Ответ клиенту
-  await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `БОТ: ${turn.reply}`, author: 'AI' })
+  // Клиенту, которого отдаём менеджеру, бот вопросов больше не задаёт.
+  const hasPhone = !!(turn.extracted.phone ?? lead.phone)
+  const reply = handoff ? handoffReply(turn.reply, hasPhone) : turn.reply
+
+  await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `БОТ: ${reply}`, author: 'AI' })
   if (isAvitoConfigured() && v.user_id != null) {
-    try { await avitoSendMessage(v.user_id, v.chat_id, turn.reply) }
+    try { await avitoSendMessage(v.user_id, v.chat_id, reply) }
     catch (e) {
       await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `Не отправлено в Авито: ${e instanceof Error ? e.message : e}`, author: 'AI' })
     }
   } else {
-    // Раньше это молчаливо ничего не отправляло: ответ бота зафиксирован «БОТ:»,
-    // но в Авито не ушёл (нет user_id в payload или Авито не сконфигурирован) —
-    // клиент без ответа, никто не видит. Оставляем видимую системную пометку.
+    // Ответ зафиксирован «БОТ:», но в Авито не ушёл — без пометки этого никто не увидит.
     await service.from('crm_lead_events').insert({
       lead_id: leadId, kind: 'system', author: 'AI',
       text: !isAvitoConfigured()
@@ -402,23 +389,27 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // Закрыт на замер / горячий лид / нужен человек → Telegram
-  if (measureClosed || becameHot || becameQualified || turn.needs_human) {
-    const title = measureClosed ? '🎯 <b>Авито: ЗАКРЫТ НА ЗАМЕР — оформить выезд замерщика</b>'
-      : becameHot ? '🔥 <b>Авито: заявка готова менеджеру</b>'
-      : becameQualified ? '⭐ <b>Горячий лид с Авито</b>'
-      : '✋ <b>Авито: нужен человек</b>'
+  // Бот замолкает ПОСЛЕ отправки фразы передачи: иначе замок выше отменил бы её саму.
+  if (handoff) {
+    await service.from('crm_leads').update({
+      bot_muted: true, bot_muted_at: new Date().toISOString(), bot_muted_by: 'передано менеджеру',
+    }).eq('id', leadId)
+  }
+
+  if (handoff || (becameQualified && dispatch.action !== 'disqualify')) {
+    const title = measureClosed ? '🎯 <b>Авито: клиент готов на замер</b>'
+      : handoff ? '🤝 <b>Авито: клиент передан менеджеру</b>'
+      : '⭐ <b>Авито: новый целевой клиент</b>'
     const setFlags = Object.keys(mergedFlags)
       .filter(k => mergedFlags[k as FlagKey] && FLAG_BY_KEY[k as FlagKey]?.group !== 'disqualify')
       .map(k => FLAG_BY_KEY[k as FlagKey].label)
     const lines = [
       title,
+      handoff ? `Почему: ${turn.needs_human && dispatch.action !== 'handoff' && !measureClosed ? 'нужен человек' : sc.reason}` : '',
       [turn.extracted.name ?? lead.name, turn.extracted.phone ?? lead.phone].filter(Boolean).join(' · '),
       [turn.extracted.product ?? lead.product, turn.extracted.sizes ?? lead.sizes].filter(Boolean).join(' · '),
-      turn.est_amount != null ? `Предв. цена: ${Math.round(turn.est_amount).toLocaleString('ru-RU')} ₽` : '',
-      `Готовность: ${sc.readiness}% · ядро ${sc.coreDone}/${sc.coreTotal}`,
+      `Портрет: ${sc.coreDone}/${sc.coreTotal}`,
       setFlags.length ? `Флаги: ${setFlags.join(', ')}` : '',
-      `Скоринг бота: ${turn.score}/100 — ${turn.score_reason}`,
       '',
       `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
     ].filter(Boolean)
