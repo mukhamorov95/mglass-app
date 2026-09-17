@@ -2,78 +2,74 @@ import Link from 'next/link'
 import { OrphanCalcs } from './OrphanCalcs'
 import { createClient } from '@/lib/supabase-server'
 import { getSessionUser, getRole } from '@/lib/getRole'
-import { mskDate, mskDayKey } from '@/lib/time'
+import { seesAllDeals } from '@/lib/b2c/dealScope'
+import { mskDate } from '@/lib/time'
 import { telHref } from '@/lib/b2c/phoneKey'
+import { pickUrgent, daysSince, plurDays, type MyDayDeal, type MyDayMeasure } from '@/lib/b2c/myDay'
 
 // «Мой день» — что требует действия СЕГОДНЯ. Не сводка и не отчёт: только то,
 // по чему нужно шевельнуться, и сразу ссылкой туда, где это делается.
 //
-// Почему не «все сделки»: список из сорока карточек не говорит, за какую браться.
-// Здесь три группы, и каждая отвечает на вопрос «почему это здесь».
+// Порядок блоков — это и есть порядок работы, сверху вниз:
+//   1. обещали связаться сегодня — дату назначил сам менеджер, она наступила;
+//   2. замер сегодня и завтра — человек уже выезжает;
+//   3. сделки без движения — главный разбор дня;
+//   4. замер не назначен — заявка стоит и никуда не движется;
+//   5. расчёты без клиента — хвосты, которые надо закрыть или убрать в архив.
+// Первые два блока почти всегда пустые: это сегодняшние обязательства с
+// конкретной датой, и если они есть — они важнее зависших сделок.
 export const dynamic = 'force-dynamic'
-
-type Deal = {
-  id: number; client_name: string | null; phone: string | null; address: string | null; updated_at: string
-  next_contact_at: string | null; lost_at: string | null; archived_at: string | null
-}
-type MR = { id: number; deal_id: number | null; client_name: string | null; address: string | null; scheduled_at: string | null; status: string | null }
-
-const DAY = 86400000
-
-
-// Отбор вынесен из компонента: время нельзя брать в теле рендера — результат
-// становится нестабильным при повторной отрисовке (правило react-hooks/purity).
-function pickUrgent(deals: Deal[], measures: MR[]) {
-  const now = Date.now()
-  const today = mskDayKey(new Date(now))
-  const tomorrow = mskDayKey(new Date(now + DAY))
-  const todayISO = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' })
-  return {
-    // Обещали связаться сегодня или раньше — это сильнее «давно не трогали»:
-    // дату назначил сам менеджер, и она уже наступила.
-    promised: deals
-      .filter(d => !!d.next_contact_at && d.next_contact_at <= todayISO)
-      .sort((a, b) => (a.next_contact_at ?? '').localeCompare(b.next_contact_at ?? '')),
-    // Замер сегодня или завтра — самое срочное: человек уже выехал или выедет.
-    soon: measures.filter(m => {
-      if (!m.scheduled_at) return false
-      const k = mskDayKey(new Date(m.scheduled_at))
-      return k === today || k === tomorrow
-    }),
-    // Заявка без даты — её никто не назначил, и она молча стоит.
-    unscheduled: measures.filter(m => !m.scheduled_at),
-    // Сделка без движения неделю: не «плохо», а «вспомни». Те, кому уже назначен
-    // контакт, сюда не попадают — они выше и с конкретной датой.
-    stale: deals
-      .filter(d => !d.next_contact_at && now - new Date(d.updated_at).getTime() > 7 * DAY)
-      .slice(0, 12),
-  }
-}
 
 export default async function MyDay() {
   const sb = await createClient()
   const user = await getSessionUser()
   const role = await getRole()
-  const owner = role === 'admin' || role === 'ceo'
 
-  // Менеджер видит своё; владелец — всё. Это то же правило, что в карточке сделки.
+  // Право видеть чужое — то же, что в API сделок (seesAllDeals), иначе экран и
+  // API расходятся: на одном менеджер видит чужое, на другом нет.
+  const { data: profile } = user
+    ? await sb.from('users').select('can_view_all_clients').eq('id', user.id).maybeSingle()
+    : { data: null }
+  const seeAll = seesAllDeals(role, profile?.can_view_all_clients as boolean | null)
+
   // Отказы и архив в «сегодня» не тянем: это закрытые сделки, а не работа на день.
   let dq = sb.from('deals')
-    .select('id, client_name, phone, address, updated_at, next_contact_at, lost_at, archived_at')
+    .select('id, client_name, phone, address, updated_at, next_contact_at, manager_id')
     .is('lost_at', null).is('archived_at', null)
     .order('updated_at', { ascending: true })
-  if (!owner && user) dq = dq.eq('manager_id', user.id)
+  if (!seeAll && user) dq = dq.eq('manager_id', user.id)
   const { data: dealsRaw } = await dq
-  const deals = (dealsRaw ?? []) as Deal[]
+  const deals = (dealsRaw ?? []) as MyDayDeal[]
 
-  const { data: mrRaw } = await sb
-    .from('measure_requests')
-    .select('id, deal_id, client_name, address, scheduled_at, status')
+  // Заявки на замер тоже по своему менеджеру: RLS на measure_requests открыт
+  // всему персоналу, и без этого фильтра менеджер видел чужие заявки.
+  let mq = sb.from('measure_requests')
+    .select('id, deal_id, client_name, phone, address, scope, scheduled_at, status, manager_id, manager_name, created_at')
     .in('status', ['new', 'scheduled'])
     .order('scheduled_at', { ascending: true, nullsFirst: false })
-  const measures = (mrRaw ?? []) as MR[]
+  if (!seeAll && user) mq = mq.eq('manager_id', user.id)
+  const { data: mrRaw } = await mq
+  const measures = (mrRaw ?? []) as MyDayMeasure[]
 
-  const { promised, soon, unscheduled, stale } = pickUrgent(deals, measures)
+  const { promised, soon, unscheduled, stale, staleTotal } = pickUrgent(deals, measures)
+
+  // Чья сделка — владельцу это первый вопрос к чужой карточке. Менеджеру своё
+  // имя показывать незачем: в его списке все сделки его.
+  const names = new Map<string, string>()
+  if (seeAll) {
+    const ids = [...new Set([...stale, ...promised].map(d => d.manager_id).filter(Boolean))] as string[]
+    if (ids.length) {
+      const { data: us } = await sb.from('users').select('id, name').in('id', ids)
+      for (const u of us ?? []) names.set(u.id as string, (u.name as string) ?? '')
+    }
+  }
+  // Имя менеджера идёт первым: строку обрезает по ширине, и приписанное в конец
+  // имя видно не было бы.
+  const withOwner = (d: MyDayDeal, base: string) => {
+    const who = seeAll && d.manager_id ? names.get(d.manager_id) ?? null : null
+    return who ? `${who} · ${base}` : base
+  }
+  const mgr = (m: MyDayMeasure) => (seeAll ? m.manager_name : null)
 
   const empty = promised.length === 0 && soon.length === 0 && unscheduled.length === 0 && stale.length === 0
 
@@ -82,10 +78,11 @@ export default async function MyDay() {
       <div className="max-w-3xl mx-auto space-y-5">
         <div>
           <h1 className="text-[20px] font-bold text-[#111110]">Мой день</h1>
-          <p className="text-[13px] text-[#9a9a95] mt-0.5">Что требует действия сегодня. Остальное — в «Сделках».</p>
+          <p className="text-[13px] text-[#9a9a95] mt-0.5">
+            Что требует действия сегодня, сверху вниз. Остальное — в «Сделках».
+            {seeAll && ' Показаны все менеджеры.'}
+          </p>
         </div>
-
-        <OrphanCalcs />
 
         {empty && (
           <div className="rounded-xl border border-[#e4e4e0] bg-white p-6 text-center">
@@ -95,51 +92,61 @@ export default async function MyDay() {
         )}
 
         {promised.length > 0 && (
-          <Block title="Обещали связаться" hint="дату назначили вы — она уже наступила">
+          <Block title="Обещали связаться" count={promised.length} hint="дату назначили вы — она уже наступила">
             {promised.map(d => (
               <Row key={d.id} href={`/deal/${d.id}`}
                    left={d.client_name ?? 'Без имени'}
                    right={mskDate(d.next_contact_at!)}
-                   sub={[d.phone, d.address].filter(Boolean).join(' · ') || 'телефона и адреса нет'}
+                   sub={withOwner(d, [d.phone, d.address].filter(Boolean).join(' · ') || 'телефона и адреса нет')}
                    warn tel={d.phone} />
             ))}
           </Block>
         )}
 
         {soon.length > 0 && (
-          <Block title="Замер сегодня и завтра" hint="человек выезжает — проверьте адрес и телефон">
+          <Block title="Замер сегодня и завтра" count={soon.length} hint="человек выезжает — проверьте адрес и телефон">
             {soon.map(m => (
               <Row key={m.id} href={m.deal_id ? `/deal/${m.deal_id}` : '/measure-requests'}
                    left={m.client_name ?? 'Без имени'}
                    right={m.scheduled_at ? mskDate(m.scheduled_at) : ''}
-                   sub={m.address ?? 'адрес не указан'} warn={!m.address} />
-            ))}
-          </Block>
-        )}
-
-        {unscheduled.length > 0 && (
-          <Block title="Замер не назначен" hint="заявка есть, даты нет — она никуда не движется">
-            {unscheduled.map(m => (
-              <Row key={m.id} href={m.deal_id ? `/deal/${m.deal_id}` : '/measure-requests'}
-                   left={m.client_name ?? 'Без имени'} right="назначить"
-                   sub={m.address ?? 'адрес не указан'} warn={!m.address} />
+                   sub={[mgr(m), m.address ?? 'адрес не указан'].filter(Boolean).join(' · ')}
+                   warn={!m.address} tel={m.phone} />
             ))}
           </Block>
         )}
 
         {stale.length > 0 && (
-          <Block title="Сделки без движения" hint="больше недели ничего не менялось">
+          <Block title="Сделки без движения" count={staleTotal} shown={stale.length}
+                 hint="больше недели ничего не менялось — начните с самой старой"
+                 more={staleTotal > stale.length ? { href: '/deals', label: `и ещё ${staleTotal - stale.length} в «Сделках»` } : undefined}>
             {stale.map(d => (
               <Row key={d.id} href={`/deal/${d.id}`}
                    left={d.client_name ?? 'Без имени'}
-                   right={mskDate(d.updated_at)}
-                   sub={[d.phone, d.address].filter(Boolean).join(' · ') || 'телефона и адреса нет'} />
+                   right={plurDays(daysSince(d.updated_at))}
+                   sub={withOwner(d, [d.phone, d.address].filter(Boolean).join(' · ') || 'телефона и адреса нет')}
+                   tel={d.phone} />
             ))}
           </Block>
         )}
 
+        {unscheduled.length > 0 && (
+          <Block title="Замер не назначен" count={unscheduled.length} hint="заявка есть, даты нет — она никуда не движется">
+            {unscheduled.map(m => (
+              <Row key={m.id} href={m.deal_id ? `/deal/${m.deal_id}` : '/measure-requests'}
+                   left={m.client_name ?? 'Без имени'}
+                   right={m.created_at ? `ждёт ${plurDays(daysSince(m.created_at))}` : 'назначить'}
+                   // Чей клиент и что замерять — без этого строка не говорит ничего.
+                   sub={[mgr(m), m.scope, m.address ?? 'адрес не указан'].filter(Boolean).join(' · ')}
+                   warn={!m.address} tel={m.phone} />
+            ))}
+          </Block>
+        )}
+
+        <OrphanCalcs />
+
         <div className="flex flex-wrap gap-2 pt-1">
           <Link href="/deals" className="px-4 py-2 rounded-lg bg-[#111110] text-white text-[13px] font-medium">Все сделки →</Link>
+          <Link href="/measure-requests" className="px-4 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[13px]">Замеры</Link>
           <Link href="/calculator/build" className="px-4 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[13px]">Новый расчёт</Link>
         </div>
       </div>
@@ -147,14 +154,25 @@ export default async function MyDay() {
   )
 }
 
-function Block({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+function Block({ title, hint, count, shown, more, children }: {
+  title: string; hint: string; count: number; shown?: number
+  more?: { href: string; label: string }; children: React.ReactNode
+}) {
   return (
     <div className="rounded-xl border border-[#e4e4e0] bg-white overflow-hidden">
       <div className="px-4 pt-3 pb-2">
-        <h2 className="text-[13px] font-semibold text-[#111110]">{title}</h2>
+        <h2 className="text-[13px] font-semibold text-[#111110]">
+          {title} · {shown != null && shown < count ? `${shown} из ${count}` : count}
+        </h2>
         <p className="text-[11px] text-[#9a9a95]">{hint}</p>
       </div>
       <div className="divide-y divide-[#f0f0ee]">{children}</div>
+      {/* Обрезанный список без этой строки превращает счётчик в неправду. */}
+      {more && (
+        <Link href={more.href} className="block px-4 py-2 text-[12px] text-[#6b6b66] border-t border-[#f0f0ee] hover:bg-[#fafaf9]">
+          {more.label} →
+        </Link>
+      )}
     </div>
   )
 }

@@ -11,6 +11,14 @@ import { isOwnerRole } from '@/lib/getRole'
 
 const OWNER_LIKE = ['admin', 'ceo', 'commercial', 'cfo']
 
+// Одно правило «видит чужие сделки» на API и на страницы. Раньше страница
+// «Мой день» считала владельцем только admin/ceo и вовсе не проверяла
+// can_view_all_clients — из-за расхождения менеджер с правом видеть всех
+// видел свои сделки, но чужие заявки на замер.
+export function seesAllDeals(role: string | null | undefined, canViewAllClients?: boolean | null): boolean {
+  return isOwnerRole(role ?? '') || OWNER_LIKE.includes(role ?? '') || canViewAllClients === true
+}
+
 export type DealActor = {
   userId: string
   name: string | null
@@ -31,7 +39,7 @@ export async function requireDealActor(): Promise<DealActor | NextResponse> {
     userId: user.id,
     name: (profile?.name as string) || user.email || null,
     role,
-    seeAll: isOwnerRole(role) || OWNER_LIKE.includes(role) || profile?.can_view_all_clients === true,
+    seeAll: seesAllDeals(role, profile?.can_view_all_clients as boolean | null),
   }
 }
 
