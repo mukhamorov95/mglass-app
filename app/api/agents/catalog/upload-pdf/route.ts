@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { requireOwner } from '@/lib/apiAuth'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import * as tg from '@/lib/telegram'
@@ -12,10 +12,9 @@ function db() {
 }
 
 export async function POST(req: Request) {
-  // Проверяем сессию
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Только владелец: разбор PDF тратит дорогую модель и готовит записи в справочники.
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const formData = await req.formData()
   const file = formData.get('file') as File | null

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { createClient as createServerClient } from '@/lib/supabase-server'
+import { requireOwner } from '@/lib/apiAuth'
 
 function db() {
   return createClient(
@@ -11,9 +11,9 @@ function db() {
 
 // Manually trigger processing of a single config task
 export async function POST(req: Request) {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Только владелец: задача переписывает базу знаний клиентского бота.
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { taskId } = await req.json() as { taskId: string }
   if (!taskId) return NextResponse.json({ error: 'taskId required' }, { status: 400 })
