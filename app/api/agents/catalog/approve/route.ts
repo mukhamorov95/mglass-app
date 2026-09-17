@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { requireOwner } from '@/lib/apiAuth'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 function db() {
@@ -7,9 +7,9 @@ function db() {
 }
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Только владелец: одобрение пишет позиции прямо в справочники материалов и услуг.
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { id, idx, reject } = await req.json()
 

@@ -4,7 +4,7 @@ import { requireOwner } from '@/lib/apiAuth'
 const ALLOWED_KEYS = ['revenue', 'analyst', 'production', 'catalog']
 
 export async function POST(
-  req: Request,
+  _req: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
   const { key } = await params
@@ -15,10 +15,12 @@ export async function POST(
   const guard = await requireOwner()
   if (guard instanceof NextResponse) return guard
 
-  // Строим baseUrl: для localhost используем http, для прода — https
-  const host = req.headers.get('host') ?? 'localhost:3000'
-  const isLocal = host.includes('localhost') || host.includes('127.0.0.1')
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${isLocal ? 'http' : 'https'}://${host}`
+  // Адрес — только из настроек, не из заголовка Host: иначе поддельный Host увёл бы
+  // запрос вместе с CRON_SECRET на чужой сервер.
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
+    ?? (process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : null)
+  if (!baseUrl) return NextResponse.json({ ok: false, error: 'Не задан адрес приложения (NEXT_PUBLIC_APP_URL)' }, { status: 500 })
 
   let res: Response
   try {
