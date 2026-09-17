@@ -9,6 +9,7 @@ import { FLAG_BY_KEY, type LeadFlags, type FlagKey } from '@/lib/avito/flags'
 import { getRelevantExamples } from '@/lib/avito/managerExamples'
 import { loadBotKnowledge, recordKnowledgeGap } from '@/lib/knowledge/aiKnowledge'
 import { botGate, isOwnBotEcho, MUTE_LABEL } from '@/lib/avito/botGate'
+import { muteIfHumanInThread } from '@/lib/avito/humanInThread'
 import { CRM_ZONES } from '@/lib/crmStages'
 
 // Робот ведёт заявку только в зоне «Квалификация»; дальше курирует человек.
@@ -198,6 +199,12 @@ export async function POST(req: NextRequest) {
       `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
     ].join('\n')).catch(() => {})
     return NextResponse.json({ ok: true, bot_disabled: true })
+  }
+
+  // Менеджер мог писать в этот чат прямо из Авито/амо ещё до эхо-детектора —
+  // тогда в ленте его нет. Сверяемся с самой перепиской: был человек — молчим.
+  if (v.user_id != null && await muteIfHumanInThread(service, { id: leadId, bot_muted: lead.bot_muted as boolean | null }, v.user_id, v.chat_id)) {
+    return NextResponse.json({ ok: true, silent: 'muted' })
   }
 
   // История диалога — ПОСЛЕДНИЕ 40 сообщений в хронологическом порядке.

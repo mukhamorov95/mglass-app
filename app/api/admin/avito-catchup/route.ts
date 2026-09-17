@@ -4,6 +4,7 @@ import { requireOwner } from '@/lib/apiAuth'
 import { avitoSendMessage, avitoGetSelfId, isAvitoConfigured } from '@/lib/avito'
 import { CRM_ZONES } from '@/lib/crmStages'
 import { botGate } from '@/lib/avito/botGate'
+import { muteIfHumanInThread } from '@/lib/avito/humanInThread'
 
 // Одноразовый «догон» после сбоя AI (кончились кредиты 05.08): находит Авито-лиды,
 // где было «Ошибка AI / AI недоступен» и клиент остался без ответа, и отправляет
@@ -97,6 +98,7 @@ export async function POST(req: NextRequest) {
   for (const s of stuck) {
     const userId = s.userId ?? selfId
     if (userId == null) { results.push({ id: s.id, sent: false, error: 'нет user_id аккаунта' }); continue }
+    if (await muteIfHumanInThread(service, { id: s.id }, userId, s.chatId)) { results.push({ id: s.id, sent: false, error: 'в чате писал менеджер' }); continue }
     try {
       await avitoSendMessage(userId, s.chatId, CATCHUP_TEXT)
       await service.from('crm_lead_events').insert([

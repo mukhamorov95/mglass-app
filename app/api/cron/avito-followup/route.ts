@@ -5,6 +5,7 @@ import { avitoSendMessage, isAvitoConfigured } from '@/lib/avito'
 import { notifyAdmins } from '@/lib/telegram'
 import { CRM_ZONES } from '@/lib/crmStages'
 import { AI_MANAGERS, botGate } from '@/lib/avito/botGate'
+import { muteIfHumanInThread } from '@/lib/avito/humanInThread'
 
 export const maxDuration = 120
 
@@ -47,6 +48,7 @@ export async function GET(req: NextRequest) {
     if (!lead || !lead.avito_chat_id || lead.avito_user_id == null) { taskStat.skipped++; continue }
     if (!botGate(lead, QUALIFICATION_STAGES).allowed) { taskStat.skipped++; continue }
     if (!isAvitoConfigured()) { taskStat.skipped++; continue }
+    if (await muteIfHumanInThread(svc, lead, lead.avito_user_id, lead.avito_chat_id)) { taskStat.skipped++; continue }
 
     const note = t.title.replace(/^Вернуться:\s*/i, '').trim()
     const text = note && !/отложенному клиенту/i.test(note)
@@ -101,6 +103,7 @@ export async function GET(req: NextRequest) {
     // Нечем отправить — молчим. Записать «БОТ: …» в ленту, не доставив
     // сообщение клиенту, хуже чем не написать: лента станет врать менеджеру.
     if (!isAvitoConfigured() || lead.avito_user_id == null) { stat.skipped++; continue }
+    if (await muteIfHumanInThread(svc, lead, lead.avito_user_id, lead.avito_chat_id)) { stat.skipped++; continue }
 
     const text = sentCount === 0 ? FIRST : SECOND
     try {
