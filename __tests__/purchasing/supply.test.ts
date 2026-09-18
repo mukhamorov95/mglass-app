@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   supplyState, writeFor, frontier, buildPurchaseGroups, summarizeNeeds, withThickness,
+  supplierOrderItems, splitForSupplierOrder,
   type PurchaseMaterial, type SheetVariant, type SupplyState,
 } from '@/lib/purchasing/supply'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS } from '@/lib/cuttingOptimizer'
@@ -140,5 +141,40 @@ describe('подпись материала', () => {
   })
   it('«14 мм» в названии не спутать с толщиной 4', () => {
     expect(withThickness('Стекло 14 мм', 4)).toBe('Стекло 14 мм 4 мм')
+  })
+})
+
+
+describe('заказ поставщику', () => {
+  it('«пришёл» по заказу поставщику — «принят», а не цеховое «есть»', () => {
+    expect(writeFor('in_stock', { materialStatus: 'ordered', materialOrdered: '2026-09-18' }, '2026-09-20', { fromPurchase: true }))
+      .toEqual({ materialStatus: 'received', stages: { material_ordered: '2026-09-18' } })
+  })
+
+  it('уже заказанное и нарезанное повторно не заказывается — иначе два счёта', () => {
+    const { take, skipped } = splitForSupplierOrder([
+      { id: 1, state: 'not_ordered' as const, cut: false },
+      { id: 2, state: 'ordered' as const, cut: false },
+      { id: 3, state: 'in_stock' as const, cut: false },
+      { id: 4, state: 'not_ordered' as const, cut: true },
+    ])
+    expect(take.map(o => o.id)).toEqual([1])
+    expect(skipped).toEqual([
+      { id: 2, reason: 'уже заказан' }, { id: 3, reason: 'материал есть' }, { id: 4, reason: 'уже нарезан' },
+    ])
+  })
+
+  it('позиции — в формате канбана закупок: чистое название, толщина числом, листы, формат, номера заказов', () => {
+    const orders = [{ id: 5, client: 'А', items: [{ materialName: 'Серебро', thickness: 4, width: 1000, height: 1000 }, { materialName: 'Нечто', thickness: 5, width: 500, height: 1000 }] }]
+    const { groups, unknown, materialByKey } = buildPurchaseGroups(orders, MATS, VARS)
+    const rows = summarizeNeeds(runCuttingOptimizer(groups, DEFAULT_CUTTING_SETTINGS), materialByKey)
+    const items = supplierOrderItems(rows, unknown, id => `0${id}-1`)
+    expect(items[0]).toMatchObject({
+      material_name: 'Серебро', thickness: 4, sheets_count: rows[0].sheets,
+      sheet_width: rows[0].sheetWidth, sheet_height: rows[0].sheetHeight,
+      area_m2: 1, estimated_cost: rows[0].cost, order_ids: [5], order_refs: ['05-1'], unmatched: false,
+    })
+    // Не распознанное не теряется — идёт строкой с пометкой
+    expect(items[1]).toMatchObject({ material_name: 'Нечто 5 мм', thickness: 5, area_m2: 0.5, sheets_count: null, unmatched: true })
   })
 })

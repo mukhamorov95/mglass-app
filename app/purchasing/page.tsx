@@ -13,7 +13,13 @@ type QueueOrder = {
   state: SupplyState; materialStatus: string | null
   updatedAt: string | null; updatedByName: string | null
   cut: boolean; pieces: number; netM2: number; materials: string[]
+  po: { id: number; supplier: string } | null
 }
+type SupplierOrder = {
+  id: number; supplier: string; invoice: string | null; amount: number | null; status: string
+  createdAt: string; expected: string | null; orders: string[]; sheets: number
+}
+type PoForm = { ids: number[]; supplierName: string; amount: string; invoice: string; expected: string; comment: string; estimate: number | null }
 type Data = {
   queue: QueueOrder[]
   frontier: { lastId: number | null; gaps: number[]; after: number[] }
@@ -22,6 +28,8 @@ type Data = {
   unknown: UnknownMaterial[]
   totals: { sheets: number; netM2: number; cost: number; unknownM2: number; itemsM2: number; triplexM2: number }
   toOrderIds: number[]
+  supplierOrders: SupplierOrder[]
+  suppliers: { id: string; name: string }[]
   canOpenCard: boolean
 }
 
@@ -42,6 +50,7 @@ export default function PurchasingPage() {
   const [busy, setBusy] = useState(false)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [msg, setMsg] = useState<string | null>(null)
+  const [form, setForm] = useState<PoForm | null>(null)
 
   const load = useCallback(async (cut: boolean) => {
     const r = await fetch(`/api/purchasing${cut ? '?cut=1' : ''}`)
@@ -65,6 +74,51 @@ export default function PurchasingPage() {
       if (!r.ok || !j) { setMsg(j?.error ?? 'Не сохранилось'); return }
       if (j.failed?.length) setMsg(`Не сохранились: ${j.failed.map((f: { id: number }) => f.id).join(', ')}`)
       setPicked(new Set())
+      await load(withCut)
+    } finally { setBusy(false) }
+  }
+
+  function openForm(ids: number[], estimate: number | null) {
+    setMsg(null)
+    setForm({ ids, supplierName: '', amount: estimate ? String(Math.round(estimate)) : '', invoice: '', expected: '', comment: '', estimate })
+  }
+
+  // «Заказал» → заказ поставщику + отметка «заказан» одним действием.
+  async function submitSupplierOrder() {
+    if (!form) return
+    if (!form.supplierName.trim()) { setMsg('Укажите поставщика'); return }
+    setBusy(true); setMsg(null)
+    try {
+      const r = await fetch('/api/purchasing/supplier-order', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderIds: form.ids, supplierName: form.supplierName.trim(), amount: form.amount,
+          invoiceNumber: form.invoice, expectedDate: form.expected, comment: form.comment,
+        }),
+      })
+      const j = await r.json().catch(() => null)
+      if (!r.ok || !j) { setMsg(j?.error ?? 'Не удалось завести заказ поставщику'); return }
+      const parts = [`Заказ поставщику №${j.purchaseOrderId} заведён, отмечено «заказан»: ${j.marked.length}`]
+      if (j.skipped?.length) parts.push(`пропущено ${j.skipped.length} (уже заказаны или нарезаны)`)
+      if (j.failed?.length) parts.push(`не отметились: ${j.failed.map((f: { id: number }) => f.id).join(', ')}`)
+      setMsg(parts.join(' · '))
+      setForm(null); setPicked(new Set())
+      await load(withCut)
+    } finally { setBusy(false) }
+  }
+
+  async function arrived(poId: number) {
+    setBusy(true); setMsg(null)
+    try {
+      const r = await fetch('/api/purchasing/supplier-order/arrived', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchaseOrderId: poId }),
+      })
+      const j = await r.json().catch(() => null)
+      if (!r.ok || !j) { setMsg(j?.error ?? 'Не сохранилось'); return }
+      const parts = [`Материал по заказу поставщику №${poId} пришёл, «есть»: ${j.marked.length}`]
+      if (j.skipped?.length) parts.push(`не тронуты ${j.skipped.length} — у них уже стояла другая отметка`)
+      setMsg(parts.join(' · '))
       await load(withCut)
     } finally { setBusy(false) }
   }
@@ -119,12 +173,51 @@ export default function PurchasingPage() {
               </p>
             </div>
             {d.toOrderIds.length > 0 && (
-              <button onClick={() => mark(d.toOrderIds, 'ordered')} disabled={busy}
+              <button onClick={() => openForm(d.toOrderIds, d.totals.cost)} disabled={busy}
                 className="px-3 py-2 rounded-lg bg-[#111110] text-white text-[12.5px] font-semibold disabled:opacity-40">
-                Заказал — отметить эти {d.toOrderIds.length}
+                Заказал — завести заказ поставщику
               </button>
             )}
           </div>
+          {form && (
+            <div className="px-4 py-3 border-b border-[#e4e4e0] bg-[#fafaf9] space-y-2">
+              <p className="text-[13px] font-semibold text-[#111110]">
+                Заказ поставщику на {form.ids.length} {form.ids.length === 1 ? 'заказ' : 'заказов'}
+              </p>
+              <p className="text-[11.5px] text-[#9a9a95]">
+                Позиции (материал, листы, формат, м²) система посчитает сама тем же раскроем и положит в канбан закупок.
+                Заказам поставится «заказан». Поставщику ничего не отправляется.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                <div>
+                  <input list="purch-suppliers" value={form.supplierName} onChange={e => setForm({ ...form, supplierName: e.target.value })}
+                    placeholder="Поставщик *" className="w-full px-3 py-2 border border-[#e4e4e0] rounded-lg text-[13px] bg-white outline-none focus:border-[#111110]" />
+                  <datalist id="purch-suppliers">{d.suppliers.map(sp => <option key={sp.id} value={sp.name} />)}</datalist>
+                </div>
+                <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value.replace(/[^\d.,]/g, '') })} inputMode="decimal"
+                  placeholder={form.estimate ? 'Сумма' : 'Сумма (пусто — оценка по раскрою)'}
+                  className="px-3 py-2 border border-[#e4e4e0] rounded-lg text-[13px] bg-white outline-none focus:border-[#111110]" />
+                <input value={form.invoice} onChange={e => setForm({ ...form, invoice: e.target.value })} placeholder="№ счёта"
+                  className="px-3 py-2 border border-[#e4e4e0] rounded-lg text-[13px] bg-white outline-none focus:border-[#111110]" />
+                <input type="date" value={form.expected} onChange={e => setForm({ ...form, expected: e.target.value })} title="Когда ждём материал"
+                  className="px-3 py-2 border border-[#e4e4e0] rounded-lg text-[13px] bg-white outline-none focus:border-[#111110]" />
+              </div>
+              <input value={form.comment} onChange={e => setForm({ ...form, comment: e.target.value })} placeholder="Комментарий (необязательно)"
+                className="w-full px-3 py-2 border border-[#e4e4e0] rounded-lg text-[13px] bg-white outline-none focus:border-[#111110]" />
+              {form.estimate != null && <p className="text-[11px] text-[#9a9a95]">Оценка по раскрою и ценам справочника: {rub(form.estimate)}. Если сумма счёта другая — впишите её.</p>}
+              <div className="flex flex-wrap gap-2">
+                <button onClick={submitSupplierOrder} disabled={busy}
+                  className="px-3 py-2 rounded-lg bg-[#111110] text-white text-[12.5px] font-semibold disabled:opacity-40">
+                  {busy ? 'Завожу…' : 'Завести заказ поставщику и отметить'}
+                </button>
+                <button onClick={() => { const ids = form.ids; setForm(null); void mark(ids, 'ordered') }} disabled={busy}
+                  className="px-3 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[12.5px] text-[#4b4b47] hover:border-[#111110] disabled:opacity-40">
+                  Только отметить «заказан»
+                </button>
+                <button onClick={() => setForm(null)} className="px-3 py-2 text-[12.5px] text-[#9a9a95] hover:text-[#111110]">Отмена</button>
+              </div>
+            </div>
+          )}
           {d.needs.length === 0 && d.unknown.length === 0 ? (
             <p className="px-4 py-6 text-center text-[13px] text-[#9a9a95]">На всё в очереди материал заказан или есть.</p>
           ) : (
@@ -200,6 +293,41 @@ export default function PurchasingPage() {
           )}
         </div>
 
+        {/* Заказы поставщикам, по которым ждём материал */}
+        {d.supplierOrders.length > 0 && (
+          <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#e4e4e0] flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-[14px] font-semibold text-[#111110]">Ждём материал · {d.supplierOrders.length}</p>
+                <p className="text-[12px] text-[#9a9a95] mt-0.5">Заказы поставщикам, по которым материал ещё не пришёл. «Пришёл» ставит их заказам «есть».</p>
+              </div>
+              <Link href="/admin/procurement" className="text-[12px] text-[#0071e3] hover:underline">→ Канбан закупок</Link>
+            </div>
+            <div className="divide-y divide-[#f0f0ec]">
+              {d.supplierOrders.map(p => (
+                <div key={p.id} className="px-4 py-2.5 flex items-center gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] text-[#111110]">
+                      <b>№{p.id}</b> · {p.supplier}{p.invoice ? ` · счёт ${p.invoice}` : ''}
+                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">{p.status}</span>
+                    </p>
+                    <p className="text-[11.5px] text-[#9a9a95]">
+                      от {dm(p.createdAt)}{p.expected ? ` · ждём ${dm(p.expected)}` : ''}
+                      {p.sheets > 0 && ` · ${p.sheets} лист.`}
+                      {p.amount != null && ` · ${rub(p.amount)}`}
+                      {p.orders.length > 0 && ` · заказы: ${p.orders.join(', ')}`}
+                    </p>
+                  </div>
+                  <button onClick={() => arrived(p.id)} disabled={busy}
+                    className="px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-[12px] font-semibold text-emerald-700 disabled:opacity-40">
+                    Пришёл
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Очередь заказов по порядку добавления */}
         <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-[#e4e4e0] flex items-center justify-between gap-3 flex-wrap">
@@ -219,7 +347,7 @@ export default function PurchasingPage() {
             <div className="px-4 py-2 border-b border-[#e4e4e0] bg-[#fafaf9] flex items-center gap-2 flex-wrap text-[12px]">
               <span className="text-[#6b6b66]">Выбрано {picked.size}:</span>
               {ORDER.map(s => (
-                <button key={s} onClick={() => mark([...picked], s)} disabled={busy}
+                <button key={s} onClick={() => s === 'ordered' ? openForm([...picked], null) : mark([...picked], s)} disabled={busy}
                   className={`px-2.5 py-1 rounded-lg border ${STATE_UI[s].on} disabled:opacity-40`}>
                   {STATE_UI[s].label}
                 </button>
@@ -241,6 +369,7 @@ export default function PurchasingPage() {
                         : <span className="font-semibold">{o.number}</span>}
                       <span className="text-[#9a9a95]"> · {dm(o.createdAt)} · </span>{o.client}
                       {o.cut && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-[#f0f0ec] text-[#6b6b66]">нарезан</span>}
+                      {o.po && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">в заказе поставщику №{o.po.id} · {o.po.supplier}</span>}
                     </p>
                     <p className="text-[11.5px] text-[#9a9a95] truncate">
                       {o.materials.join(' · ') || 'материал не указан'} · {o.pieces} дет. · {m2(o.netM2)}
@@ -274,6 +403,7 @@ export default function PurchasingPage() {
         </div>
 
         <p className="text-[11px] text-[#c4c4be]">
+          «Заказал» заводит заказ поставщику в канбан закупок и ставит заказам «заказан»; «Пришёл» ставит им «есть».
           Отметка пишется в статус материала заказа — её же видят менеджер в «Заказах B2B» и цех. «Заказан» и «есть»
           убирают заказ из расчёта закупки и из раскроя «на закупку», «не заказан» возвращает. Склад листов пока не ведётся,
           поэтому рекомендация его не вычитает.

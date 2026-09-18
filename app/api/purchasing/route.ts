@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { getSessionUser, getRole, isOwnerRole } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
-import { parseNotes, PROD_SINCE } from '@/lib/orderFlags'
 import { mskDayKey } from '@/lib/time'
-import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type CuttingSettings } from '@/lib/cuttingOptimizer'
-import {
-  supplyState, writeFor, frontier, buildPurchaseGroups, summarizeNeeds, withThickness,
-  type SupplyState, type OrderItem, type PurchaseMaterial, type SheetVariant,
-} from '@/lib/purchasing/supply'
+import { frontier, type SupplyState } from '@/lib/purchasing/supply'
+import { loadOrders, computeNeeds, writeSupply } from '@/lib/purchasing/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,13 +13,17 @@ export const dynamic = 'force-dynamic'
 // заказанное складывается в раскрой — сколько листов какого материала заказать.
 //
 // Service-role: заказы и справочник читаются целиком, поэтому роль проверяем
-// здесь, до первого запроса. Пишем тем же точечным писателем, что и менеджер
-// (mark_order_stages + patch_order_notes_shallow), — не блобом notes.
+// здесь, до первого запроса.
 
 const ROLES = ['admin', 'ceo', 'buyer'] as const
 const STATES: SupplyState[] = ['not_ordered', 'ordered', 'in_stock']
-
-type Row = { id: number; custom_number: string | null; client_name: string | null; created_at: string; items: unknown; notes: unknown }
+// Колонки канбана закупок, в которых материал ещё не пришёл (вместе со старыми
+// значениями, которые канбан сам сводит к этим колонкам).
+const OPEN_PO = ['invoice_received', 'sent_to_payment', 'paid_ready', 'pending_approval', 'waiting_payment', 'partially_paid', 'paid', 'in_transit']
+const PO_LABEL: Record<string, string> = {
+  invoice_received: 'Счёт получен', sent_to_payment: 'На оплате', paid_ready: 'Оплачен / к забору',
+  pending_approval: 'Счёт получен', waiting_payment: 'На оплате', partially_paid: 'На оплате', paid: 'Оплачен / к забору', in_transit: 'В пути',
+}
 
 export async function GET(req: NextRequest) {
   const guard = await requireRole([...ROLES])
@@ -32,86 +32,57 @@ export async function GET(req: NextRequest) {
   const withCut = new URL(req.url).searchParams.get('cut') === '1'
   const svc = createServiceClient()
 
-  const { data, error } = await svc.from('b2b_orders')
-    .select('id, custom_number, client_name, created_at, items, notes')
-    .gte('created_at', PROD_SINCE).is('archived_at', null)
-    .order('created_at', { ascending: true }).limit(2000)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  let all
+  try { all = await loadOrders(svc) } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }) }
 
-  const rows = ((data ?? []) as Row[]).filter(o => {
-    const n = parseNotes(o.notes)
-    return n.status !== 'quote' && n.historical !== true
-  })
-
-  // Нарезан = материал уже был. Смотрим и отметку этапа, и задачу резки цеха:
-  // пишут их две разные точки, и одна без другой бывает.
-  const ids = rows.map(o => o.id)
-  const cutByTask = new Set<number>()
-  for (let i = 0; i < ids.length; i += 500) {
-    const { data: tasks } = await svc.from('production_tasks')
-      .select('order_id').eq('stage_key', 'cutting').eq('status', 'done').in('order_id', ids.slice(i, i + 500))
-    for (const t of tasks ?? []) cutByTask.add(Number(t.order_id))
-  }
-
-  const userIds = new Set<string>()
-  const all = rows.map(o => {
-    const n = parseNotes(o.notes)
-    const stages = (n.stages ?? {}) as Record<string, string | null>
-    const items = (Array.isArray(o.items) ? o.items : []) as OrderItem[]
-    const cut = !!(stages.cut || stages.packaged || stages.shipped) || cutByTask.has(o.id)
-    const by = typeof n.material_status_updated_by === 'string' ? n.material_status_updated_by : null
-    if (by) userIds.add(by)
-    return {
-      id: o.id,
-      number: (o.custom_number ?? '').trim() || `№${o.id}`,
-      client: o.client_name ?? '—',
-      createdAt: o.created_at,
-      state: supplyState(n.material_status),
-      materialStatus: (n.material_status as string | undefined) ?? null,
-      materialOrdered: stages.material_ordered ?? null,
-      updatedAt: (n.material_status_updated_at as string | undefined) ?? null,
-      updatedBy: by,
-      cut,
-      pieces: items.reduce((s, it) => s + Math.max(1, Number(it.quantity) || 1), 0),
-      netM2: Math.round(items.reduce((s, it) => s + ((Number(it.width) || 0) * (Number(it.height) || 0) * Math.max(1, Number(it.quantity) || 1)) / 1e6, 0) * 100) / 100,
-      materials: [...new Set(items.map(it => withThickness(it.materialName ?? '', it.thickness)).filter(Boolean))].slice(0, 3),
-    }
-  })
-  // Позиции нужны только раскрою — в ответ экрану их не отдаём.
-  const itemsOf = new Map(rows.map(o => [o.id, (Array.isArray(o.items) ? o.items : []) as OrderItem[]]))
-
+  const userIds = [...new Set(all.map(o => o.updatedBy).filter(Boolean))] as string[]
   const names = new Map<string, string>()
-  if (userIds.size) {
-    const { data: us } = await svc.from('users').select('id, name').in('id', [...userIds])
+  if (userIds.length) {
+    const { data: us } = await svc.from('users').select('id, name').in('id', userIds)
     for (const u of us ?? []) names.set(u.id as string, (u.name as string) ?? '')
   }
 
   const queue = all.filter(o => withCut || !o.cut)
-  const edge = frontier(queue)
-
-  // Что заказать — только по заказам, которые ещё не нарезаны и без отметки.
   const toOrder = all.filter(o => !o.cut && o.state === 'not_ordered')
-  const [{ data: mats }, { data: vars }, { data: settingsRow }] = await Promise.all([
-    svc.from('b2b_materials').select('id, name, thickness, cost_price, sheet_width, sheet_height, pattern_direction').eq('active', true),
-    svc.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, active'),
-    svc.from('cutting_settings').select('*').eq('id', 1).maybeSingle(),
-  ])
-  const { groups, unknown, materialByKey, extraLayerM2 } = buildPurchaseGroups(
-    toOrder.map(o => ({ id: o.id, client: o.client, items: itemsOf.get(o.id) ?? [] })),
-    (mats ?? []) as PurchaseMaterial[],
-    (vars ?? []) as SheetVariant[],
-  )
-  const settings = { ...DEFAULT_CUTTING_SETTINGS, ...((settingsRow ?? {}) as Partial<CuttingSettings>) }
-  const needs = summarizeNeeds(runCuttingOptimizer(groups, settings), materialByKey)
+  const { needs, unknown, extraLayerM2, itemsM2 } = await computeNeeds(svc, toOrder)
+
+  // Заказы поставщикам, по которым материал ещё не пришёл, — с кнопкой «Пришёл».
+  const numberOf = new Map(all.map(o => [o.id, o.number]))
+  const { data: pos } = await svc.from('purchase_orders')
+    .select('id, supplier_name, invoice_number, amount, status, created_at, expected_date, b2b_order_ids, items')
+    .in('status', OPEN_PO).order('created_at', { ascending: false }).limit(100)
+  const openPos = (pos ?? []).map(p => {
+    const items = (Array.isArray(p.items) ? p.items : []) as { sheets_count?: number | null }[]
+    const orderIds = ((p.b2b_order_ids ?? []) as number[]).map(Number)
+    return {
+      id: p.id as number,
+      supplier: (p.supplier_name as string) || 'Не выбран',
+      invoice: (p.invoice_number as string | null) ?? null,
+      amount: p.amount == null ? null : Number(p.amount),
+      status: PO_LABEL[p.status as string] ?? (p.status as string),
+      createdAt: p.created_at as string,
+      expected: (p.expected_date as string | null) ?? null,
+      orders: orderIds.map(id => numberOf.get(id) ?? `№${id}`),
+      orderIds,
+      sheets: items.reduce((s, i) => s + (Number(i.sheets_count) || 0), 0),
+    }
+  })
+  // У заказа — последний открытый заказ поставщику, в который он вошёл.
+  const poOf = new Map<number, { id: number; supplier: string }>()
+  for (const p of [...openPos].reverse()) for (const id of p.orderIds) poOf.set(id, { id: p.id, supplier: p.supplier })
+
+  const { data: suppliers } = await svc.from('suppliers').select('id, name').eq('active', true).order('name')
 
   return NextResponse.json({
-    queue: queue.map(o => ({ ...o, updatedByName: o.updatedBy ? names.get(o.updatedBy) ?? null : null })),
-    frontier: edge,
-    counts: {
-      active: all.filter(o => !o.cut).length,
-      cut: all.filter(o => o.cut).length,
-      toOrder: toOrder.length,
-    },
+    queue: queue.map(o => ({
+      id: o.id, number: o.number, client: o.client, createdAt: o.createdAt,
+      state: o.state, materialStatus: o.materialStatus,
+      updatedAt: o.updatedAt, updatedByName: o.updatedBy ? names.get(o.updatedBy) ?? null : null,
+      cut: o.cut, pieces: o.pieces, netM2: o.netM2, materials: o.materials,
+      po: poOf.get(o.id) ?? null,
+    })),
+    frontier: frontier(queue),
+    counts: { active: all.filter(o => !o.cut).length, cut: all.filter(o => o.cut).length, toOrder: toOrder.length },
     needs,
     unknown,
     totals: {
@@ -119,23 +90,23 @@ export async function GET(req: NextRequest) {
       netM2: Math.round(needs.reduce((s, r) => s + r.netM2, 0) * 100) / 100,
       cost: needs.reduce((s, r) => s + r.cost, 0),
       unknownM2: Math.round(unknown.reduce((s, u) => s + u.m2, 0) * 100) / 100,
-      // Раскрытие итога: площадь позиций заказов + вторые слои триплекса = нетто
-      // в строках + не распознанное.
-      // Из сырых площадей позиций: сумма уже округлённых площадей заказов
-      // расходилась с итогом на копейки квадратного метра.
-      itemsM2: Math.round(toOrder.reduce((s, o) => s + (itemsOf.get(o.id) ?? []).reduce((a, it) =>
-        a + ((Number(it.width) || 0) * (Number(it.height) || 0) * Math.max(1, Number(it.quantity) || 1)) / 1e6, 0), 0) * 100) / 100,
+      // Раскрытие итога: площадь позиций + вторые слои триплекса = строки + не распознанное.
+      itemsM2,
       triplexM2: extraLayerM2,
     },
     toOrderIds: toOrder.map(o => o.id),
+    supplierOrders: openPos.map(p => ({
+      id: p.id, supplier: p.supplier, invoice: p.invoice, amount: p.amount, status: p.status,
+      createdAt: p.createdAt, expected: p.expected, orders: p.orders, sheets: p.sheets,
+    })),
+    suppliers: (suppliers ?? []).map(s => ({ id: s.id as string, name: s.name as string })),
     // Карточка сделки показывает деньги и маржу — закупщику она закрыта,
     // поэтому ссылку на неё отдаём только владельцу.
     canOpenCard: isOwnerRole(await getRole()),
   })
 }
 
-// Отметка «не заказан / заказан / есть» — на один заказ или пачкой (все заказы
-// из «что заказать» одной кнопкой). Каждая запись точечная, под блокировкой строки.
+// Отметка «не заказан / заказан / есть» — на один заказ или пачкой.
 export async function POST(req: NextRequest) {
   const guard = await requireRole([...ROLES])
   if (guard instanceof NextResponse) return guard
@@ -148,26 +119,8 @@ export async function POST(req: NextRequest) {
   if (ids.length > 300) return NextResponse.json({ error: 'Слишком много за раз' }, { status: 400 })
 
   const svc = createServiceClient()
-  const { data: rows, error } = await svc.from('b2b_orders').select('id, notes').in('id', ids)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const today = mskDayKey()
-  const now = new Date().toISOString()
-  const done: number[] = []
-  const failed: { id: number; error: string }[] = []
-
-  for (const r of (rows ?? []) as { id: number; notes: unknown }[]) {
-    const n = parseNotes(r.notes)
-    const stages = (n.stages ?? {}) as Record<string, string | null>
-    const w = writeFor(state, { materialStatus: n.material_status, materialOrdered: stages.material_ordered ?? null }, today)
-    const s1 = await svc.rpc('mark_order_stages', { p_order_id: r.id, p_stages: w.stages })
-    if (s1.error) { failed.push({ id: r.id, error: s1.error.message }); continue }
-    const s2 = await svc.rpc('patch_order_notes_shallow', {
-      p_order_id: r.id,
-      p_patch: { material_status: w.materialStatus, material_status_updated_at: now, material_status_updated_by: user?.id ?? null },
-    })
-    if (s2.error) { failed.push({ id: r.id, error: s2.error.message }); continue }
-    done.push(r.id)
-  }
-  return NextResponse.json({ ok: failed.length === 0, done, failed })
+  let orders
+  try { orders = await loadOrders(svc, ids) } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }) }
+  const res = await writeSupply(svc, orders, state, { today: mskDayKey(), userId: user?.id ?? null })
+  return NextResponse.json({ ok: res.failed.length === 0, ...res })
 }

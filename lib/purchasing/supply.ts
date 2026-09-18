@@ -32,6 +32,7 @@ export function writeFor(
   state: SupplyState,
   current: { materialStatus?: unknown; materialOrdered?: string | null },
   today: string,
+  opts: { fromPurchase?: boolean } = {},
 ): { materialStatus: string; stages: Record<string, string | null> } {
   if (state === 'not_ordered') {
     // «Нет (цех)» — тоже «не заказан», но сообщение цеха о нехватке не стираем.
@@ -41,7 +42,8 @@ export function writeFor(
   const status = state === 'ordered'
     // Уже двигающийся по закупке статус (счёт, оплачен, в пути) не откатываем в «заказан».
     ? (ORDERED.has(String(current.materialStatus)) ? String(current.materialStatus) : 'ordered')
-    : 'ready'
+    // Пришёл по заказу поставщику — «принят»; отметили, что лежит на складе, — «есть».
+    : (opts.fromPurchase ? 'received' : 'ready')
   return { materialStatus: status, stages: { material_ordered: current.materialOrdered || today } }
 }
 
@@ -168,6 +170,8 @@ export function buildPurchaseGroups(
 export type NeedRow = {
   key: string
   label: string
+  materialName: string   // как в справочнике — для заказа поставщику
+  thickness: number
   pieces: number
   orders: number[]
   netM2: number          // чистая площадь деталей
@@ -193,6 +197,8 @@ export function summarizeNeeds(results: MaterialCuttingResult[], materialByKey: 
     return {
       key: r.materialKey,
       label: r.materialLabel,
+      materialName: mat?.name ?? r.materialLabel,
+      thickness: Number(mat?.thickness) || 0,
       pieces: r.totalPieces,
       orders: orders.sort((a, b) => a - b),
       netM2: r2(net / 1e6),
@@ -206,4 +212,55 @@ export function summarizeNeeds(results: MaterialCuttingResult[], materialByKey: 
       unplaced: r.unplacedCount,
     }
   }).sort((a, b) => b.cost - a.cost || b.netM2 - a.netM2)
+}
+
+// ─── Заказ поставщику ───────────────────────────────────────────────────────
+
+// Позиции заказа поставщику в том виде, в каком их читает канбан закупок
+// (/admin/procurement) и заводит «Заказы B2B»: материал, формат, листы, м²,
+// оценка. Не распознанное — строкой с unmatched, чтобы не потерялось в счёте.
+export function supplierOrderItems(
+  needs: NeedRow[],
+  unknown: UnknownMaterial[],
+  numberOf: (orderId: number) => string,
+) {
+  const known = needs.map(r => ({
+    material_name: r.materialName,
+    thickness: r.thickness || null,
+    sheet_width: r.sheetWidth,
+    sheet_height: r.sheetHeight,
+    area_m2: r.netM2,
+    required_area_m2: r.sheetsM2,
+    sheets_count: r.sheets,
+    estimated_cost: r.cost,
+    order_ids: r.orders,
+    order_refs: r.orders.map(numberOf),
+    unmatched: false,
+    sheet_format_source: 'purchasing_nesting',
+  }))
+  const unmatched = unknown.map(u => ({
+    material_name: withThickness(u.material, u.thickness),
+    thickness: u.thickness || null,
+    sheet_width: null,
+    sheet_height: null,
+    area_m2: r2(u.m2),
+    required_area_m2: null,
+    sheets_count: null,
+    estimated_cost: null,
+    order_ids: u.orders,
+    order_refs: u.orders.map(numberOf),
+    unmatched: true,
+    sheet_format_source: 'purchasing_nesting',
+  }))
+  return [...known, ...unmatched]
+}
+
+// Из заказа поставщику → какие заказы отметить. Заказ, на который материал уже
+// заказан или есть, повторно не заказываем — иначе он попал бы в два счёта.
+export function splitForSupplierOrder<T extends { id: number; state: SupplyState; cut: boolean }>(orders: T[]) {
+  const take = orders.filter(o => !o.cut && o.state === 'not_ordered')
+  const skipped = orders.filter(o => o.cut || o.state !== 'not_ordered').map(o => ({
+    id: o.id, reason: o.cut ? 'уже нарезан' : o.state === 'ordered' ? 'уже заказан' : 'материал есть',
+  }))
+  return { take, skipped }
 }
