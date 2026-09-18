@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  supplyState, writeFor, frontier, buildPurchaseGroups, summarizeNeeds,
+  supplyState, writeFor, frontier, buildPurchaseGroups, summarizeNeeds, withThickness,
   type PurchaseMaterial, type SheetVariant, type SupplyState,
 } from '@/lib/purchasing/supply'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS } from '@/lib/cuttingOptimizer'
@@ -126,5 +126,19 @@ describe('итог «что заказать» сходится с площад�
     const inRows = rows.reduce((s, r) => s + r.netM2, 0) + unknown.reduce((s, u) => s + u.m2, 0)
     expect(extraLayerM2).toBe(1)
     expect(inRows).toBeCloseTo(itemsM2 + extraLayerM2, 6)
+  })
+})
+
+describe('подпись материала', () => {
+  it('толщина дописывается, если её нет в названии', () => {
+    expect(withThickness('Серебро', 4)).toBe('Серебро 4 мм')
+    expect(withThickness('Осветлённое CrystalVision', '8.0')).toBe('Осветлённое CrystalVision 8 мм')
+  })
+  it('у изделия толщина уже в названии — второй раз не пишется', () => {
+    expect(withThickness('Зеркало с подсветкой Осветлённое 4 мм', 4)).toBe('Зеркало с подсветкой Осветлённое 4 мм')
+    expect(withThickness('Триплекс 4,4мм', 4.4)).toBe('Триплекс 4,4мм')
+  })
+  it('«14 мм» в названии не спутать с толщиной 4', () => {
+    expect(withThickness('Стекло 14 мм', 4)).toBe('Стекло 14 мм 4 мм')
   })
 })

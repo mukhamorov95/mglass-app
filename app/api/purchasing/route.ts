@@ -6,7 +6,7 @@ import { parseNotes, PROD_SINCE } from '@/lib/orderFlags'
 import { mskDayKey } from '@/lib/time'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type CuttingSettings } from '@/lib/cuttingOptimizer'
 import {
-  supplyState, writeFor, frontier, buildPurchaseGroups, summarizeNeeds,
+  supplyState, writeFor, frontier, buildPurchaseGroups, summarizeNeeds, withThickness,
   type SupplyState, type OrderItem, type PurchaseMaterial, type SheetVariant,
 } from '@/lib/purchasing/supply'
 
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
       cut,
       pieces: items.reduce((s, it) => s + Math.max(1, Number(it.quantity) || 1), 0),
       netM2: Math.round(items.reduce((s, it) => s + ((Number(it.width) || 0) * (Number(it.height) || 0) * Math.max(1, Number(it.quantity) || 1)) / 1e6, 0) * 100) / 100,
-      materials: [...new Set(items.map(it => [it.materialName, it.thickness ? `${it.thickness} мм` : ''].filter(Boolean).join(' ')))].slice(0, 3),
+      materials: [...new Set(items.map(it => withThickness(it.materialName ?? '', it.thickness)).filter(Boolean))].slice(0, 3),
     }
   })
   // Позиции нужны только раскрою — в ответ экрану их не отдаём.
@@ -121,7 +121,10 @@ export async function GET(req: NextRequest) {
       unknownM2: Math.round(unknown.reduce((s, u) => s + u.m2, 0) * 100) / 100,
       // Раскрытие итога: площадь позиций заказов + вторые слои триплекса = нетто
       // в строках + не распознанное.
-      itemsM2: Math.round(toOrder.reduce((s, o) => s + o.netM2, 0) * 100) / 100,
+      // Из сырых площадей позиций: сумма уже округлённых площадей заказов
+      // расходилась с итогом на копейки квадратного метра.
+      itemsM2: Math.round(toOrder.reduce((s, o) => s + (itemsOf.get(o.id) ?? []).reduce((a, it) =>
+        a + ((Number(it.width) || 0) * (Number(it.height) || 0) * Math.max(1, Number(it.quantity) || 1)) / 1e6, 0), 0) * 100) / 100,
       triplexM2: extraLayerM2,
     },
     toOrderIds: toOrder.map(o => o.id),

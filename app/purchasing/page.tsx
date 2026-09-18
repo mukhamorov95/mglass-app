@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import type { NeedRow, UnknownMaterial, SupplyState } from '@/lib/purchasing/supply'
+import { withThickness, type NeedRow, type UnknownMaterial, type SupplyState } from '@/lib/purchasing/supply'
 
 // Материал под заказы (docs/PURCHASING_ROUTE.md). Одна страница отвечает на два
 // вопроса закупщика: на какой заказ материал последний раз заказывали — и что
@@ -161,7 +161,7 @@ export default function PurchasingPage() {
                   {d.unknown.map(u => (
                     <tr key={`u-${u.material}-${u.thickness}`} className="border-b border-[#f0f0ec] last:border-0 bg-amber-50/40">
                       <td className="px-3 py-2 text-[#111110]">
-                        {u.material}{u.thickness ? ` ${u.thickness} мм` : ''}
+                        {withThickness(u.material, u.thickness)}
                         <span className="block text-[11px] text-amber-700">нет в справочнике материалов — на листы не разложено</span>
                       </td>
                       <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{u.pieces}</td>

@@ -75,6 +75,16 @@ export type SheetVariant = { material_id: number; sheet_width: number; sheet_hei
 
 export type UnknownMaterial = { material: string; thickness: number; pieces: number; m2: number; orders: number[] }
 
+// «Серебро» + 4 → «Серебро 4 мм», но «Зеркало … 4 мм» + 4 → без повтора толщины:
+// у изделий она уже вписана в название.
+export function withThickness(name: string, thk: number | string | null | undefined): string {
+  const t = Number(thk) || 0
+  const n = (name ?? '').trim()
+  if (!t) return n
+  const tail = new RegExp(`(^|\\s)${String(t).replace('.', '[.,]')}\\s*мм\\s*$`, 'i')
+  return tail.test(n) ? n : `${n} ${t} мм`.trim()
+}
+
 const keyOf = (name: string, thk: number) => `${name.trim().toLowerCase()}|${Number(thk) || 0}`
 
 // Позиции заказов → группы деталей под раскрой. Группа — материал + толщина:
@@ -133,7 +143,7 @@ export function buildPurchaseGroups(
           const thk = Number(mat.thickness) || 0
           g = {
             pieces: [],
-            materialLabel: `${mat.name}${thk ? ` ${thk} мм` : ''}`,
+            materialLabel: withThickness(mat.name, thk),
             category: '',
             sheetWidth: mat.sheet_width ?? 3210,
             sheetHeight: mat.sheet_height ?? 2250,
