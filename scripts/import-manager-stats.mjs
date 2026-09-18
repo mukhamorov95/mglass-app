@@ -48,31 +48,55 @@ const url = `https://docs.google.com/spreadsheets/d/${book.id}/gviz/tq?tqx=out:c
 const res = await fetch(url)
 if (!res.ok) { console.error(`Лист недоступен: HTTP ${res.status}`); process.exit(1) }
 
-const { facts, unknown, days } = parseManagerStats(parseCsv(await res.text()))
+const { facts, monthly, unknown, days } = parseManagerStats(parseCsv(await res.text()))
 const rows = SINCE ? facts.filter(f => f.stat_date >= SINCE) : facts
+const months = SINCE ? monthly.filter(m => m.month >= SINCE.slice(0, 7)) : monthly
 
-console.log(`Дней в листе: ${days}. Фактов: ${facts.length}${SINCE ? `, после ${SINCE}: ${rows.length}` : ''}${DRY ? '  (сухой прогон)' : ''}`)
+console.log(`Дней в листе: ${days}. Дневных фактов: ${facts.length}, помесячных итогов: ${monthly.length}${SINCE ? ` (после ${SINCE}: ${rows.length} / ${months.length})` : ''}${DRY ? '  (сухой прогон)' : ''}`)
 if (unknown.length) console.log(`Не опознаны как менеджеры (в базу не пошли): ${unknown.join(' · ')}`)
 
-if (!DRY && rows.length) {
+if (!DRY) {
+  const now = new Date().toISOString()
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await sb.from('manager_stats_daily')
-      .upsert(rows.slice(i, i + 500).map(r => ({ ...r, source: 'gsheet_mgmt', updated_at: new Date().toISOString() })),
+      .upsert(rows.slice(i, i + 500).map(r => ({ ...r, source: 'gsheet_mgmt', updated_at: now })),
         { onConflict: 'stat_date,manager,metric' })
-    if (error) { console.error('ошибка записи:', error.message); process.exit(1) }
+    if (error) { console.error('ошибка записи дней:', error.message); process.exit(1) }
+  }
+  const monthRows = months.map(m => ({
+    month: m.month, manager: m.manager, metric: m.metric, book: m.book, days: m.days,
+    value: m.value, kind: m.kind, delta: m.delta, note_day: m.day ?? null, updated_at: now,
+  }))
+  for (let i = 0; i < monthRows.length; i += 500) {
+    const { error } = await sb.from('manager_stats_monthly')
+      .upsert(monthRows.slice(i, i + 500), { onConflict: 'month,manager,metric' })
+    if (error) { console.error('ошибка записи месяцев:', error.message); process.exit(1) }
   }
 }
 
-// Итог по месяцам — чтобы было видно, что загрузилось, а не «ок».
-const byMonth = new Map()
-for (const f of rows) {
-  const k = f.stat_date.slice(0, 7)
-  const cur = byMonth.get(k) ?? {}
-  cur[f.metric] = (cur[f.metric] ?? 0) + f.value
-  byMonth.set(k, cur)
+// Сверка «итог месяца в книге ↔ сумма дней». Молча выбирать одну из цифр нельзя:
+// где они расходятся, печатаем, кто прав и почему.
+const label = Object.fromEntries(METRICS.map(m => [m.key, m.label]))
+const fmtv = (k, v) => (MONEY_METRICS.has(k) ? rub(v) : Math.round(v).toLocaleString('ru-RU'))
+const odd = months.filter(m => m.kind !== 'match' && !(m.kind === 'no_total' && !m.days))
+console.log(`\nСверка итог месяца ↔ сумма дней: расхождений ${odd.length}`)
+for (const m of odd) {
+  const why = m.kind === 'month_only' ? 'внесено только в итог месяца — берём итог'
+    : m.kind === 'total_misses_last_day' ? `итог в книге не включает ${m.day} — берём дни, книгу поправить`
+    : m.kind === 'no_total' ? 'итог месяца в книге пустой, а дни заполнены — берём дни, книгу проверить'
+    : 'итог меньше суммы дней — берём дни, книгу проверить'
+  console.log(`  ${m.month} ${m.manager.padEnd(10)} ${label[m.metric].padEnd(16)} книга ${fmtv(m.metric, m.book ?? 0)} · дни ${fmtv(m.metric, m.days)} → ${why}`)
 }
-console.log('\nПо месяцам (сумма по всем менеджерам):')
-for (const [m, v] of [...byMonth.entries()].sort().slice(-12)) {
-  const parts = METRICS.map(k => `${k.label} ${MONEY_METRICS.has(k.key) ? rub(v[k.key] ?? 0) : Math.round(v[k.key] ?? 0)}`)
-  console.log(`  ${m}: ${parts.join(' · ')}`)
+
+// Итог по месяцам — то, что увидит экран, в том же виде, что колонка книги.
+const byMonth = new Map()
+for (const m of months) {
+  const cur = byMonth.get(m.month) ?? {}
+  cur[m.metric] = (cur[m.metric] ?? 0) + m.value
+  byMonth.set(m.month, cur)
+}
+console.log('\nПо месяцам (как покажет экран):')
+for (const [mo, v] of [...byMonth.entries()].sort().slice(-12)) {
+  const parts = METRICS.map(k => `${k.label} ${fmtv(k.key, v[k.key] ?? 0)}`)
+  console.log(`  ${mo}: ${parts.join(' · ')}`)
 }

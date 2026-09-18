@@ -60,12 +60,52 @@ export function dayColumns(header) {
   return out
 }
 
-// Строки листа → факты {date, manager, metric, value}. Всё, что внутри блока
-// показателя не опознано как менеджер, возвращаем в unknown: новый человек в
-// книге не должен потеряться молча.
+// Колонки итога месяца. В книге перед днями каждого месяца стоит колонка с
+// итогом — её владелец и читает (август 26 — колонка ADL). Заголовок у неё
+// пустой, поэтому находим её как колонку прямо перед первым днём месяца.
+export function monthColumns(header) {
+  const days = dayColumns(header)
+  const out = []
+  for (const d of days) {
+    const month = d.date.slice(0, 7)
+    const last = out[out.length - 1]
+    if (last && last.month === month) { last.days.push(d); continue }
+    const i = d.i - 1
+    // Колонка-итог обязана быть пустой в шапке: если там дата или маркер года,
+    // значит раскладка листа поменялась, и итог месяца мы не знаем.
+    const head = String(header[i] ?? '').trim()
+    out.push({ month, i: head === '' ? i : null, days: [d] })
+  }
+  return out
+}
+
+// Итог месяца против суммы дней. В книге встречаются два разных расхождения,
+// и правы в них разные стороны:
+//   • итог больше дней — сумма внесена только в итог месяца, без дня (Дима,
+//     февраль–июнь 2026). Правда — итог;
+//   • итог меньше дней ровно на значение последнего дня — формула итога не
+//     захватывает 31-е число (май и июль 2025). Правда — дни, а книгу надо чинить.
+export function resolveMonth(book, days, lastDay) {
+  if (book == null) return { value: days, kind: 'no_total', delta: 0 }
+  const delta = Math.round((book - days) * 100) / 100
+  if (Math.abs(delta) < 0.5) return { value: book, kind: 'match', delta: 0 }
+  if (delta > 0) return { value: book, kind: 'month_only', delta }
+  if (lastDay && Math.abs(-delta - lastDay.value) < 0.5) {
+    return { value: days, kind: 'total_misses_last_day', delta, day: lastDay.date }
+  }
+  return { value: days, kind: 'total_below_days', delta }
+}
+
+// Строки листа → дневные факты {date, manager, metric, value} и помесячная
+// сверка {month, manager, metric, book, days, value, kind}. Всё, что внутри
+// блока показателя не опознано как менеджер, возвращаем в unknown: новый
+// человек в книге не должен потеряться молча.
 export function parseManagerStats(rows) {
-  const days = dayColumns(rows[0] ?? [])
+  const header = rows[0] ?? []
+  const days = dayColumns(header)
+  const months = monthColumns(header)
   const facts = []
+  const monthly = []
   const unknown = new Set()
   let current = null
 
@@ -88,6 +128,17 @@ export function parseManagerStats(rows) {
       const v = parseNumber(rows[r][i])
       if (v) facts.push({ stat_date: date, manager, metric: current.key, value: v })
     }
+    for (const m of months) {
+      const book = m.i == null ? null : parseNumber(rows[r][m.i])
+      let sum = 0, lastDay = null
+      for (const d of m.days) {
+        const v = parseNumber(rows[r][d.i])
+        if (v) { sum += v; lastDay = { date: d.date, value: v } }
+      }
+      if (!book && !sum) continue
+      const res = resolveMonth(book, sum, lastDay)
+      monthly.push({ month: m.month, manager, metric: current.key, book, days: sum, ...res })
+    }
   }
-  return { facts, unknown: [...unknown], days: days.length }
+  return { facts, monthly, unknown: [...unknown], days: days.length }
 }

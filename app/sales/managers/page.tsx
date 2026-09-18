@@ -12,12 +12,26 @@ import type { StatRow } from '@/lib/sales/managerStats'
 
 type PeriodMode = 'month' | 'quarter' | 'year' | 'range'
 type Query = { mode: PeriodMode; month: string; from: string; to: string; managers: string[] }
+type BookNote = {
+  month: string; manager: string; metric: string
+  book: number | null; days: number; value: number; kind: string; text: string
+}
 type Data = {
   rows: StatRow[]; totals: StatRow
   period: { mode: PeriodMode; from: string; to: string; label: string }
-  month: string; daysWithData: number; updatedAt: string | null; lastDay: string | null
+  month: string; wholeMonths: string[]; partialDays: [string, string][]
+  bookNotes: BookNote[]
+  updatedAt: string | null; lastDay: string | null
   canAll: boolean
 }
+
+const METRIC_LABEL: Record<string, string> = {
+  talks: 'разговоры', measure_assigned: 'замер назначен', measure_done: 'замер проведён',
+  payments: 'оплат', prepay: 'предоплаты', remainder: 'остатки', money_total: 'всего денег',
+}
+const MONEY = new Set(['prepay', 'remainder', 'money_total'])
+const MONTHS_RU = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+const monthRu = (ym: string) => `${MONTHS_RU[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const num = (n: number) => Math.round(n).toLocaleString('ru-RU')
@@ -182,9 +196,53 @@ export default function ManagerStatsPage() {
           </div>
         </div>
 
+        {/* Сверка с книгой: где итог месяца в книге не равен сумме её же дней,
+            видно обе цифры и какую показываем. Молча выбирать одну нельзя. */}
+        {d && d.bookNotes.length > 0 && (
+          <div className="mt-4 bg-white border border-amber-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-amber-100 bg-amber-50/50">
+              <p className="text-[13px] font-semibold text-[#111110]">Сверка с книгой · {d.bookNotes.length}</p>
+              <p className="text-[11px] text-[#6b6b66] mt-0.5">В этих строках итог месяца в книге не равен сумме её же дней. Показано, что стоит в книге, что дают дни и какая цифра на экране.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-[12px]">
+                <thead>
+                  <tr className="text-[#9a9a95] text-[10px] uppercase border-b border-[#f0f0ec]">
+                    <th className="text-left font-medium px-3 py-1.5">Месяц</th>
+                    <th className="text-left font-medium px-3 py-1.5">Менеджер</th>
+                    <th className="text-left font-medium px-3 py-1.5">Показатель</th>
+                    <th className="text-right font-medium px-3 py-1.5">Итог в книге</th>
+                    <th className="text-right font-medium px-3 py-1.5">Сумма дней</th>
+                    <th className="text-right font-medium px-3 py-1.5">На экране</th>
+                    <th className="text-left font-medium px-3 py-1.5">Почему</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.bookNotes.map(n => {
+                    const v = (x: number | null) => x == null ? 'пусто' : MONEY.has(n.metric) ? fmt(x) : num(x)
+                    return (
+                      <tr key={`${n.month}-${n.manager}-${n.metric}`} className="border-b border-[#f7f7f5] last:border-0">
+                        <td className="px-3 py-1.5 whitespace-nowrap text-[#6b6b66]">{monthRu(n.month)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-[#111110]">{n.manager}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-[#6b6b66]">{METRIC_LABEL[n.metric] ?? n.metric}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-[#6b6b66]">{v(n.book)}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-[#6b6b66]">{v(n.days)}</td>
+                        <td className="px-3 py-1.5 text-right font-mono font-semibold text-[#111110]">{v(n.value)}</td>
+                        <td className="px-3 py-1.5 text-[#6b6b66]">{n.text}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         <p className="mt-3 text-[11px] text-[#c4c4be]">
-          Источник — управленческая книга владельца, лист «Аналитика дохода»: {d?.daysWithData ?? 0} дней с данными в периоде,
-          последний день в базе — {day(d?.lastDay ?? null)}. Проценты рядом с числом — конверсия из предыдущего шага
+          Источник — управленческая книга владельца, лист «Аналитика дохода». Целые месяцы берутся из итога
+          месяца в книге (та колонка, что видна в свёрнутом месяце: август 26 — ADL)
+          {d && d.partialDays.length > 0 && <>, края периода ({d.partialDays.map(([a, b]) => `${day(a)}–${day(b)}`).join(', ')}) — по дням</>}.
+          Последний день в базе — {day(d?.lastDay ?? null)}. Проценты рядом с числом — конверсия из предыдущего шага
           (разговор → назначен → проведён → оплата). «Всего денег» книга ведёт отдельной строкой;
           {gap ? ' ⚠ у отмеченных она не сходится с суммой предоплат и остатков.' : ' у всех сходится с суммой предоплат и остатков.'}
         </p>

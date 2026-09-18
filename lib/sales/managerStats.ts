@@ -74,3 +74,52 @@ export function foldStats(facts: StatFact[], picked: string[] = []): { rows: Sta
   for (const r of rows) for (const { key } of METRIC_KEYS) sum[key] += r[key]
   return { rows, totals: makeRow('Итого', sum), days: days.size }
 }
+
+// Период → целые месяцы + хвосты по дням. Целый месяц берётся из итога месяца
+// книги (manager_stats_monthly) — ровно та колонка, по которой владелец сверяет
+// (август 26 — ADL). Дни нужны только там, где период режет месяц пополам: в
+// итоге месяца есть суммы, внесённые без дня, и сложить дни вместо итога значит
+// потерять их (Дима, февраль–июнь 2026).
+export function splitPeriod(from: string, to: string): { months: string[]; dayRanges: [string, string][] } {
+  const months: string[] = []
+  const dayRanges: [string, string][] = []
+  if (!from || !to || from > to) return { months, dayRanges }
+
+  const lastDay = (ym: string) => {
+    const [y, m] = ym.split('-').map(Number)
+    return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`
+  }
+  const nextMonth = (ym: string) => {
+    const [y, m] = ym.split('-').map(Number)
+    return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
+  }
+
+  let ym = from.slice(0, 7)
+  const endYm = to.slice(0, 7)
+  while (ym <= endYm) {
+    const first = `${ym}-01`, last = lastDay(ym)
+    const lo = from > first ? from : first
+    const hi = to < last ? to : last
+    if (lo === first && hi === last) months.push(ym)
+    else dayRanges.push([lo, hi])
+    ym = nextMonth(ym)
+  }
+  return { months, dayRanges }
+}
+
+export type MonthNote = {
+  month: string; manager: string; metric: MetricKey
+  book: number | null; days: number; value: number
+  kind: 'month_only' | 'total_misses_last_day' | 'total_below_days' | 'no_total'
+  note_day: string | null
+}
+
+// Подпись к расхождению книги — одна фраза, что в книге и что показано.
+export function describeNote(n: MonthNote): string {
+  switch (n.kind) {
+    case 'month_only': return 'внесено только в итог месяца, без дня — показан итог книги'
+    case 'total_misses_last_day': return `итог месяца в книге не включает ${n.note_day ? n.note_day.split('-').reverse().join('.') : 'последний день'} — показана сумма дней, книгу стоит поправить`
+    case 'no_total': return 'итог месяца в книге пустой, а по дням суммы есть — показана сумма дней'
+    default: return 'итог месяца в книге меньше суммы дней — показана сумма дней'
+  }
+}
