@@ -220,6 +220,8 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
 
   buyer: [
     '/',
+    // Материал под заказы — рабочий экран закупщика (docs/PURCHASING_ROUTE.md).
+    '/purchasing',
     '/orders',
     '/b2b-orders',
     '/admin/shower-hardware',
