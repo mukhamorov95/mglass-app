@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { foldStats, type StatFact } from '@/lib/sales/managerStats'
+import { foldStats, splitPeriod, describeNote, type StatFact } from '@/lib/sales/managerStats'
 
 const f = (manager: string, metric: string, value: number, stat_date = '2026-09-01'): StatFact =>
   ({ manager, metric, value, stat_date })
@@ -55,5 +55,34 @@ describe('свод показателей менеджеров', () => {
   it('чужой показатель из книги в свод не попадает', () => {
     const { rows } = foldStats([...FACTS, f('Александра', 'стоимость привлечения', 999)])
     expect(rows[0].money_total).toBe(444377)
+  })
+})
+
+
+describe('период для показателей: целые месяцы из итога книги, хвосты — по дням', () => {
+  it('целый месяц и квартал — только итоги месяцев, без дней', () => {
+    expect(splitPeriod('2026-08-01', '2026-08-31')).toEqual({ months: ['2026-08'], dayRanges: [] })
+    expect(splitPeriod('2026-07-01', '2026-09-30')).toEqual({ months: ['2026-07', '2026-08', '2026-09'], dayRanges: [] })
+  })
+
+  it('период режет месяцы — края по дням, середина итогами', () => {
+    expect(splitPeriod('2026-07-15', '2026-09-10')).toEqual({
+      months: ['2026-08'],
+      dayRanges: [['2026-07-15', '2026-07-31'], ['2026-09-01', '2026-09-10']],
+    })
+  })
+
+  it('внутри одного месяца — только дни', () => {
+    expect(splitPeriod('2026-02-03', '2026-02-20')).toEqual({ months: [], dayRanges: [['2026-02-03', '2026-02-20']] })
+  })
+
+  it('февраль високосного и переход года', () => {
+    expect(splitPeriod('2028-02-01', '2028-02-29').months).toEqual(['2028-02'])
+    expect(splitPeriod('2025-12-01', '2026-01-31').months).toEqual(['2025-12', '2026-01'])
+  })
+
+  it('подпись расхождения называет день, который книга потеряла', () => {
+    expect(describeNote({ month: '2025-07', manager: 'Яна', metric: 'prepay', book: 1405965, days: 1426260, value: 1426260, kind: 'total_misses_last_day', note_day: '2025-07-31' }))
+      .toContain('31.07.2025')
   })
 })

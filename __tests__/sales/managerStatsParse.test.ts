@@ -71,3 +71,35 @@ describe('управленческая книга: разбор фактов', (
     expect(facts).toContainEqual({ stat_date: '2026-09-01', manager: 'Айжан', metric: 'money_total', value: 198921 })
   })
 })
+
+const resolveMonth = mgmt.resolveMonth as (book: number | null, days: number, lastDay: { date: string; value: number } | null) =>
+  { value: number; kind: string; delta: number; day?: string }
+const monthColumns = mgmt.monthColumns as (h: string[]) => { month: string; i: number | null; days: { i: number; date: string }[] }[]
+
+describe('итог месяца против суммы дней', () => {
+  it('колонка итога — пустая колонка прямо перед первым днём месяца', () => {
+    const cols = monthColumns(['', 'Откуда', 'р.2 026', '', '01.08', '02.08', '', '01.09'])
+    expect(cols.map(c => [c.month, c.i])).toEqual([['2026-08', 3], ['2026-09', 6]])
+  })
+
+  it('совпало — показываем итог', () => {
+    expect(resolveMonth(4141469, 4141469, null)).toMatchObject({ value: 4141469, kind: 'match' })
+  })
+
+  it('итог больше дней: внесено только в итог (Дима, февраль 2026) — прав итог', () => {
+    expect(resolveMonth(111866, 0, null)).toMatchObject({ value: 111866, kind: 'month_only', delta: 111866 })
+  })
+
+  it('итог меньше ровно на последний день: формула не берёт 31-е — правы дни', () => {
+    const r = resolveMonth(2129625, 2177778, { date: '2025-07-31', value: 48153 })
+    expect(r).toMatchObject({ value: 2177778, kind: 'total_misses_last_day', day: '2025-07-31' })
+  })
+
+  it('итог меньше, но не на последний день — правы дни, причина неизвестна', () => {
+    expect(resolveMonth(100, 130, { date: '2025-07-31', value: 10 })).toMatchObject({ value: 130, kind: 'total_below_days' })
+  })
+
+  it('итог месяца пустой — берём дни и помечаем', () => {
+    expect(resolveMonth(null, 180600, { date: '2026-01-20', value: 180600 })).toMatchObject({ value: 180600, kind: 'no_total' })
+  })
+})
