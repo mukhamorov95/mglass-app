@@ -103,6 +103,11 @@ export default function KpPage() {
   // Черновик, подставленный из быстрого расчёта: пока КП не сохранено, он живёт
   // в sessionStorage и переживает перезагрузку и уход на другой экран.
   const [fromQuick, setFromQuick] = useState(false)
+  // Импорт старого КП из файла: имя источника, предупреждения разбора, ошибка.
+  const [importing, setImporting] = useState(false)
+  const [importedFrom, setImportedFrom] = useState<string | null>(null)
+  const [importWarnings, setImportWarnings] = useState<string[]>([])
+  const [importError, setImportError] = useState<string | null>(null)
   const [speechSupported, setSpeechSupported] = useState(true)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const transcriptRef = useRef('')
@@ -223,6 +228,27 @@ export default function KpPage() {
     } catch { setBusy('Ошибка разбора') } finally { setTimeout(() => setBusy(null), 800) }
   }
 
+  // Старое КП (PDF/фото) → наша структура. Разбор не сохраняет ничего сам:
+  // менеджер правит форму и жмёт «Сохранить КП», как и в остальных случаях.
+  async function importKp(file: File) {
+    setImporting(true); setImportError(null); setImportWarnings([]); setImportedFrom(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/ai/kp-import', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.kp) {
+        setImportError(data.detail || data.error || `Не удалось разобрать файл (${res.status})`)
+        return
+      }
+      applyKp(data.kp)
+      setImportedFrom(file.name)
+      setImportWarnings(Array.isArray(data.warnings) ? data.warnings : [])
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : 'Ошибка сети')
+    } finally { setImporting(false) }
+  }
+
   function applyKp(kp: Record<string, unknown>) {
     setForm(f => {
       const next = { ...f }
@@ -325,6 +351,7 @@ export default function KpPage() {
   function dropDraft() {
     try { sessionStorage.removeItem('mglass_kp_prefill') } catch { /* ignore */ }
     setFromQuick(false)
+    setImportedFrom(null); setImportWarnings([]); setImportError(null)
   }
 
   function newKp() {
@@ -384,6 +411,29 @@ export default function KpPage() {
               {interimText && <p className="text-[12px] text-[#9a9a95] mt-1 italic">…{interimText}</p>}
               <button onClick={() => transcript.trim() && structure(transcript)} disabled={!transcript.trim() || !!busy}
                 className="mt-2 px-3 py-1.5 text-[12px] font-medium rounded-lg bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] disabled:opacity-50">Разобрать текст → структуру</button>
+            </div>
+
+            {/* старое КП из файла */}
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className={`px-4 py-2.5 rounded-lg text-[13px] font-semibold cursor-pointer ${importing ? 'bg-[#e8e8e4] text-[#9a9a95]' : 'bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
+                  {importing ? 'Читаю файл…' : '📄 Загрузить старое КП'}
+                  <input type="file" accept=".pdf,image/*" className="hidden" disabled={importing}
+                    onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importKp(f) }} />
+                </label>
+                {importedFrom && <span className="text-[12px] text-[#6b6b66]">из файла «{importedFrom}»</span>}
+              </div>
+              <p className="text-[12px] text-[#9a9a95] mt-2">
+                КП, сделанное по старому шаблону (PDF или фото), разберётся в нашу структуру — дальше правьте строки и сохраняйте как обычно.
+                Word или Excel сохраните в PDF. Цены переносятся как есть, ничего не пересчитывается.
+              </p>
+              {importError && <p className="text-[12px] text-red-600 mt-2">{importError}</p>}
+              {importWarnings.length > 0 && (
+                <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
+                  <p className="text-[12px] font-semibold text-amber-800">Проверьте перед отправкой:</p>
+                  {importWarnings.map((w, i) => <p key={i} className="text-[12px] text-amber-800">— {w}</p>)}
+                </div>
+              )}
             </div>
 
             {/* header fields */}
