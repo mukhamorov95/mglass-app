@@ -7,6 +7,7 @@ import Link from 'next/link'
 import ProductVisualization from '@/components/ProductVisualization'
 import type { MirrorInputs } from '@/lib/mirrorCalculator'
 import type { LoftInputs }   from '@/lib/loftCalculator'
+import { kpFromQuick, type QuickSnapshot } from '@/lib/kp/fromQuick'
 
 type CostLine = { name: string; qty: number; unit: string; price: number; total: number; note?: string }
 
@@ -468,6 +469,15 @@ export default function CalculationDetailPage() {
       try { sessionStorage.setItem(isBuild ? 'mglass_build_reopen' : 'mglass_quick_reopen', JSON.stringify({ ...(calc.input_data ?? {}), __parentCalcId: calc.id })) } catch { /* ignore */ }
       window.location.assign(isBuild ? '/calculator/build' : '/calculator/quick')
     }
+    // Сохранённый расчёт → КП без пересчёта: владелец ждёт, что сохранённый
+    // просчёт можно превратить в предложение прямо отсюда, а не проходить
+    // калькулятор заново.
+    const kp = isBuild ? null : kpFromQuick((calc.input_data ?? {}) as QuickSnapshot)
+    const toKp = () => {
+      if (!kp) return
+      try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(kp)) } catch { /* ignore */ }
+      window.location.assign('/kp')
+    }
     return (
       <div className="min-h-screen bg-[#f5f5f7] py-6 px-4">
         <div className="max-w-lg mx-auto space-y-4">
@@ -482,8 +492,16 @@ export default function CalculationDetailPage() {
               <span className="text-[26px] font-bold font-mono text-[#1d1d1f]">{(calc.final_price ?? 0).toLocaleString('ru-RU')} ₽</span>
             </div>
             {calc.client_text && <p className="text-[12px] text-[#9a9a95]">{calc.client_text}</p>}
+            {kp && (
+              <button onClick={toKp}
+                className="w-full px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28]">
+                Сформировать КП →
+              </button>
+            )}
             <button onClick={reopen}
-              className="w-full px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28]">
+              className={`w-full px-4 py-2.5 text-[13px] font-semibold rounded-lg ${kp
+                ? 'border border-[#111110] text-[#111110] hover:bg-[#f0f0ec]'
+                : 'bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
               Открыть в калькуляторе и пересчитать
             </button>
           </div>

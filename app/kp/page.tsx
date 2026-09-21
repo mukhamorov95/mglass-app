@@ -100,6 +100,9 @@ export default function KpPage() {
   const [canDelete, setCanDelete] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [interimText, setInterimText] = useState('')
+  // Черновик, подставленный из быстрого расчёта: пока КП не сохранено, он живёт
+  // в sessionStorage и переживает перезагрузку и уход на другой экран.
+  const [fromQuick, setFromQuick] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(true)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const transcriptRef = useRef('')
@@ -115,12 +118,15 @@ export default function KpPage() {
     try {
       const raw = sessionStorage.getItem('mglass_kp_prefill')
       if (!raw) return
-      sessionStorage.removeItem('mglass_kp_prefill')
+      // Раньше ключ стирался при чтении: перезагрузка страницы или возврат на неё
+      // оставляли пустую форму, и КП, который менеджер уже считал сделанным,
+      // исчезал. Стираем только после сохранения или явной очистки.
       const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number; deal_id?: number; client_name?: string; client_phone?: string; client_address?: string }
       // Из карточки сделки: клиент и связь уже подставлены — менеджер их не вводит заново.
       if (typeof p.deal_id === 'number') dealIdRef.current = p.deal_id
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTab('new')
+      setFromQuick(true)
       setForm(f => ({
         ...f,
         title: p.title ?? f.title,
@@ -286,12 +292,13 @@ export default function KpPage() {
       if (editingId) {
         const res = await fetch('/api/kp', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingId, content }) })
         const data = await res.json().catch(() => ({}))
-        if (res.ok) setSavedId(editingId)
+        if (res.ok) { dropDraft(); setSavedId(editingId) }
         else setSaveError(data.error || `Ошибка ${res.status}`)
       } else {
         const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, ...(dealIdRef.current ? { deal_id: dealIdRef.current } : {}) }) })
         const data = await res.json().catch(() => ({}))
         if (res.ok && data.id) {
+          dropDraft()
           setEditingId(data.id)
           // setForm напрямую (не set — тот сбрасывает savedId)
           if (data.number && !form.number) setForm(f => ({ ...f, number: data.number }))
@@ -311,7 +318,21 @@ export default function KpPage() {
     setEditingId(r.id); setSavedId(null); setTranscript(''); setTab('new')
   }
 
-  function newKp() { setForm(emptyForm()); setEditingId(null); setSavedId(null); setTranscript(''); setTab('new') }
+  // «Новое КП» выглядит как вкладка, но очищает форму. Пока КП не сохранено,
+  // этот клик стирал работу без предупреждения — теперь спрашивает.
+  const hasContent = (f: Form) => !!(f.items.length || f.spec.length || f.title.trim() || f.client_name.trim() || numOr(f.total) > 0)
+
+  function dropDraft() {
+    try { sessionStorage.removeItem('mglass_kp_prefill') } catch { /* ignore */ }
+    setFromQuick(false)
+  }
+
+  function newKp() {
+    if (tab === 'new' && !savedId && !editingId && hasContent(form)
+      && !confirm('Очистить форму? Это КП ещё не сохранено — оно пропадёт.')) return
+    dropDraft()
+    setForm(emptyForm()); setEditingId(null); setSavedId(null); setTranscript(''); setTab('new')
+  }
 
   // group history by month
   const groups = (() => {
@@ -341,6 +362,11 @@ export default function KpPage() {
 
         {tab === 'new' ? (
           <div className="space-y-4">
+            {fromQuick && !savedId && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[13px] text-amber-800">
+                Данные подставлены из быстрого расчёта. В историю КП попадёт только после кнопки «Сохранить КП» внизу.
+              </div>
+            )}
             {/* voice */}
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
               <div className="flex items-center gap-3 flex-wrap">
