@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { formatPhone, telHref, waHref } from '@/lib/b2c/phoneKey'
 import type { DealStage } from '@/lib/b2c/dealProgress'
+import { kpItemsFromCalcs } from '@/lib/kp/fromQuick'
 
 // Карточка Сделки (B2C). Паттерн — как /b2b-deal, но модель своя (deals — тонкая
 // группировка по объекту). Этаж и деньги приходят с сервера тем же кодом, что
@@ -355,12 +356,12 @@ export default function DealPage() {
   // менеджер их вводил при просчёте, повторно не заставляем. deal_id несёт связь в КП.
   function makeKp() {
     if (!deal) return
-    const items = calcs.map(c => {
-      const name = (PRODUCT[c.product_type] ?? c.product_type) + (c.parent_calc_id ? ' (пересчёт)' : '')
-      const sum = Math.round(Number(c.final_price) || 0)
-      return { name, qty: 1, price: sum, sum }
-    })
-    const total = items.reduce((s, i) => s + i.sum, 0)
+    const { items, total } = kpItemsFromCalcs(calcs.map(c => ({
+      product_type: c.product_type,
+      final_price: c.final_price,
+      label: (PRODUCT[c.product_type] ?? c.product_type) + (c.parent_calc_id ? ' (пересчёт)' : ''),
+      input_data: c.input_data,
+    })))
     const prefill = {
       title: (deal.client_name || 'Коммерческое предложение').toUpperCase(),
       items, subtotal: total, total,

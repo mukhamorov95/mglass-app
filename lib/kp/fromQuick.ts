@@ -89,6 +89,28 @@ export function kpFromQuick(s: QuickSnapshot): KpPrefill | null {
   }
 }
 
+// КП из карточки сделки. Расчёт товарного калькулятора — одна строка (его состав
+// живёт в самом расчёте), быстрый расчёт раскрывается по изделиям: иначе клиент
+// получает КП со строкой «Быстрый расчёт» на всю сумму.
+export type DealCalc = { product_type: string; final_price: number; label: string; input_data?: Record<string, unknown> }
+
+export function kpItemsFromCalcs(calcs: DealCalc[]): { items: KpItem[]; total: number } {
+  const items: KpItem[] = []
+  for (const c of calcs) {
+    const price = Math.round(Number(c.final_price) || 0)
+    const kp = c.product_type === 'quick' ? kpFromQuick((c.input_data ?? {}) as QuickSnapshot) : null
+    if (!kp) { items.push({ name: c.label, qty: 1, price, sum: price }); continue }
+    items.push(...kp.items)
+    // Главный здесь — итог расчёта, он же на карточке сделки: строки обязаны дать
+    // именно его. Разницу (скидка, правка цены руками) показываем строкой, а не
+    // прячем в изделия.
+    const target = price > 0 ? price : kp.total
+    const diff = target - kp.subtotal
+    if (diff) items.push({ name: diff < 0 ? 'Скидка' : 'Корректировка', qty: 1, sum: diff })
+  }
+  return { items, total: items.reduce((s, i) => s + i.sum, 0) }
+}
+
 function fitToSubtotal(items: KpItem[], subtotal: number) {
   const sum = items.reduce((acc, i) => acc + i.sum, 0)
   const diff = subtotal - sum

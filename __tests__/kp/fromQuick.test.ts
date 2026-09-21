@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { kpFromQuick, quickTotals, designerMarkupPct, type QuickCartItem } from '@/lib/kp/fromQuick'
+import { kpFromQuick, kpItemsFromCalcs, quickTotals, designerMarkupPct, type QuickCartItem } from '@/lib/kp/fromQuick'
 
 const item = (p: Partial<QuickCartItem> & { title: string; productPrice: number }): QuickCartItem => ({
   installTotal: 0, sections: 1, perSection: 0, delivery: 0, lift: 0,
@@ -94,5 +94,60 @@ describe('kpFromQuick', () => {
     expect(big.name).toBe('Крупное')
     // цена и сумма строки с qty=1 не расходятся после правки остатка
     expect(big.price).toBe(big.sum)
+  })
+})
+
+describe('kpItemsFromCalcs — КП из карточки сделки', () => {
+  const quickInput = {
+    cart: [
+      item({ title: 'Перегородка на ванну', productPrice: 68333, installTotal: 13000, sections: 2, perSection: 6500, delivery: 5000 }),
+      item({ title: 'Зеркало в спальню', productPrice: 38546, installTotal: 6500, sections: 1, perSection: 6500 }),
+    ],
+    designer: 10,
+  }
+
+  it('быстрый расчёт раскрывается по изделиям, а не одной строкой', () => {
+    const { items, total } = kpItemsFromCalcs([
+      { product_type: 'quick', final_price: 151086, label: '⚡ Быстрый', input_data: quickInput },
+    ])
+    expect(items.map(i => i.name)).toEqual([
+      'Перегородка на ванну', 'Монтаж — Перегородка на ванну', 'Доставка — Перегородка на ванну',
+      'Зеркало в спальню', 'Монтаж — Зеркало в спальню',
+    ])
+    // 131 379 ₽ по корзине + 15% дизайнеру = столько же, сколько показывает карточка
+    expect(total).toBe(151086)
+  })
+
+  it('скидка расчёта — отдельная строка, строки сходятся с итогом', () => {
+    const { items, total } = kpItemsFromCalcs([
+      { product_type: 'quick', final_price: 141086, label: '⚡ Быстрый', input_data: { ...quickInput, measureDiscount: '10000' } },
+    ])
+    expect(items[items.length - 1]).toEqual({ name: 'Скидка', qty: 1, sum: -10000 })
+    expect(items.reduce((s, i) => s + i.sum, 0)).toBe(total)
+    expect(total).toBe(141086)
+  })
+
+  it('товарный расчёт остаётся одной строкой', () => {
+    const { items, total } = kpItemsFromCalcs([
+      { product_type: 'mirror', final_price: 56688, label: '🪞 Зеркало' },
+      { product_type: 'quick', final_price: 0, label: '⚡ Быстрый', input_data: {} },
+    ])
+    expect(items).toEqual([
+      { name: '🪞 Зеркало', qty: 1, price: 56688, sum: 56688 },
+      { name: '⚡ Быстрый', qty: 1, price: 0, sum: 0 },
+    ])
+    expect(total).toBe(56688)
+  })
+})
+
+describe('kpItemsFromCalcs — итог строк равен итогу расчёта', () => {
+  it('цена расчёта правлена руками — разница отдельной строкой', () => {
+    const { items, total } = kpItemsFromCalcs([{
+      product_type: 'quick', final_price: 160000, label: '⚡ Быстрый',
+      input_data: { cart: [item({ title: 'Душевая', productPrice: 100000 })] },
+    }])
+    expect(items[items.length - 1]).toEqual({ name: 'Корректировка', qty: 1, sum: 60000 })
+    expect(items.reduce((s, i) => s + i.sum, 0)).toBe(total)
+    expect(total).toBe(160000)
   })
 })
