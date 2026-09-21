@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canAccessRoute } from '@/lib/getRole'
+import { canAccessRoute, ROLE_HOME, type Role } from '@/lib/getRole'
 
 // Закупщик Вера с B2B-скоупом должна проходить в калькулятор и B2B-контур.
 // Регрессия: гейт знал только 'mglass_only' и выкидывал 'all_clients' в /access-denied.
@@ -32,5 +32,17 @@ describe('canAccessRoute — B2B-скоуп закупщика', () => {
   it('обычный доступ закупщика (каталог) сохраняется независимо от скоупа', () => {
     expect(canAccessRoute('buyer', '/admin/glass-prices')).toBe(true)
     expect(canAccessRoute('buyer', '/b2b-orders')).toBe(true)
+  })
+})
+
+describe('стартовая страница закупщика', () => {
+  it('закупщик попадает на «Материал под заказы», и этот путь ему открыт', () => {
+    expect(ROLE_HOME.buyer).toBe('/purchasing')
+    expect(canAccessRoute('buyer', '/purchasing')).toBe(true)
+  })
+  it('стартовая страница каждой роли ей же и разрешена — иначе вход в кольцо редиректов', () => {
+    for (const [role, home] of Object.entries(ROLE_HOME)) {
+      expect(canAccessRoute(role as Role, home as string), `${role} → ${home}`).toBe(true)
+    }
   })
 })
