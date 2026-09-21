@@ -36,6 +36,8 @@ export function organizationSchema() {
     "@type": "Organization",
     "@id": ORG_ID,
     name: SITE.brand,
+    legalName: SITE.legalName,
+    taxID: SITE.inn,
     url: SITE.url,
     telephone: SITE.phone.display,
     foundingDate: String(SITE.foundedYear),

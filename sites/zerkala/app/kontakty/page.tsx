@@ -36,7 +36,11 @@ export default function ContactsPage() {
             <div className="text-sm text-muted">Компания</div>
             <div className="mt-1 text-lg font-semibold">{SITE.brand}</div>
             <p className="mt-2 text-sm text-muted">
-              {SITE.legalName}. Работаем с {SITE.foundedYear} года.
+              {SITE.legalName}
+              <br />
+              ИНН {SITE.inn}, ОГРНИП {SITE.ogrnip}
+              <br />
+              Работаем с {SITE.foundedYear} года, {SITE.projects} проектов.
             </p>
           </div>
         </div>
