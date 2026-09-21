@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { adShareLimits, adShare, maxCostPerSale } from '@/lib/leadgen/adPayback'
+import { adShareLimits, adShare, maxCostPerSale, channelProfit } from '@/lib/leadgen/adPayback'
 
 // Строки financial_settings на 21.09.2026
 const STANDARD = { default_margin: 40, manager_percent: 3, realization_percent: 3, marketing_percent: 5, transport_percent: 1.5, operation_percent: 6.5 }
@@ -36,5 +36,15 @@ describe('Авито апрель–июль 2026', () => {
   })
   it('нулевая выручка — доли нет', () => {
     expect(adShare(1000, 0)).toBeNull()
+  })
+})
+
+describe('channelProfit', () => {
+  it('Директ 06.2025–03.2026 съел ~1,06 млн прибыли; даже при всём сайте — ~0,65 млн', () => {
+    expect(Math.round(channelProfit(2_101_049, 3_991_467, STANDARD))).toBe(-1_063_268)
+    expect(Math.round(channelProfit(2_101_049, 5_600_029, STANDARD))).toBe(-645_041)
+  })
+  it('Авито 04–07.2026 оставил ~126 тыс', () => {
+    expect(Math.round(channelProfit(226_500, 1_356_875, STANDARD))).toBe(126_288)
   })
 })

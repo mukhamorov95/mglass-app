@@ -27,3 +27,9 @@ export function adShare(spend: number, revenue: number): number | null {
 export function maxCostPerSale(avgCheck: number, sharePct: number): number {
   return (avgCheck * sharePct) / 100
 }
+
+// Сколько канал оставил компании после своей рекламы, ₽: выручка × доля «до нуля прибыли» − расход.
+// Отрицательное — канал съел прибыль, которую принесли бы эти продажи.
+export function channelProfit(spend: number, revenue: number, s: PriceSettings): number {
+  return (revenue * adShareLimits(s).breakEven) / 100 - spend
+}
