@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { kpFromQuick } from '@/lib/kp/fromQuick'
 
 const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
@@ -130,20 +131,11 @@ export default function QuickCalcPage() {
     // его в историю автоматически, без отдельного действия. Так история наполняется
     // сама на дошедших до клиента расчётах, а не зависит от привычки жать «Сохранить».
     await persistCalc({ silent: true })
-    const multi = list.length > 1
-    // Надбавку дизайнера закладываем в цены изделий (клиент видит уже с ней).
-    const k = 1 + designerMarkupPct / 100
-    const items: { name: string; qty?: number; price?: number; sum: number }[] = []
-    for (const it of list) {
-      const suf = multi ? ` — ${it.title}` : ''
-      const pp = Math.round(it.productPrice * k)
-      items.push({ name: it.title, qty: 1, price: pp, sum: pp })
-      if (it.installTotal > 0) items.push({ name: `Монтаж${suf}`, qty: it.sections || 1, price: Math.round(it.perSection * k), sum: Math.round(it.installTotal * k) })
-      if (it.delivery > 0) items.push({ name: `Доставка${suf}`, qty: 1, sum: Math.round(it.delivery * k) })
-      if (it.lift > 0) items.push({ name: `Подъём${suf}`, qty: 1, sum: Math.round(it.lift * k) })
-    }
-    const subtotal = grandWithDesigner
-    const content = { title: (list.length === 1 ? list[0].title : 'Коммерческое предложение').toUpperCase(), items, subtotal, total: finalGrand }
+    const content = kpFromQuick({
+      cart: list, designer, measureDiscount, extraMode, extraVal,
+      clientName, clientPhone,
+    })
+    if (!content) return
     try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch { /* ignore */ }
     router.push('/kp')
   }
@@ -213,7 +205,7 @@ export default function QuickCalcPage() {
           createdDeal = !!er?.created
         } catch { /* заведём позже вручную из «требуют привязки» */ }
       }
-      if (!silent) setSaveMsg(createdDeal ? 'Сохранено, заведена сделка ✓' : 'Сохранено в историю расчётов ✓')
+      if (!silent) setSaveMsg(createdDeal ? 'Сохранено, заведена сделка ✓ — КП делается кнопкой «Сформировать КП»' : 'Сохранено в «Расчёты» ✓ — КП делается кнопкой «Сформировать КП»')
       return true
     } finally {
       if (!silent) { setSaving(false); setTimeout(() => setSaveMsg(null), 4000) }
@@ -385,7 +377,7 @@ export default function QuickCalcPage() {
               </p>
             ) : (
               <p className="text-[11px] text-[#9a9a95] mt-2 text-center">
-                Сохранённый расчёт появится в истории — его можно открыть и пересчитать
+                Сохранение кладёт расчёт в «Расчёты». КП из него делает соседняя кнопка — или «Сформировать КП» в самом расчёте
               </p>
             )}
           </div>
