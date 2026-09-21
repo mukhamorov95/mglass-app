@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Вендорные минифицированные бандлы (pdf.js) и сервис-воркер — не наш код
     "public/**",
+    // Отдельные проекты сайтов со своим package.json и линтом
+    "sites/**",
   ]),
 ]);
 

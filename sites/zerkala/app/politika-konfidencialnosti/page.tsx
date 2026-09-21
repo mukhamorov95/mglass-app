@@ -1,0 +1,51 @@
+import { Breadcrumbs, Container } from "@/components/ui";
+import { pageMetadata } from "@/lib/seo";
+import { SITE } from "@/lib/site";
+
+export const metadata = pageMetadata({
+  path: "/politika-konfidencialnosti",
+  title: "Политика конфиденциальности | M-Glass",
+  description: "Как мы обрабатываем персональные данные, которые вы оставляете в форме заявки на сайте.",
+});
+
+export default function PrivacyPage() {
+  const crumbs = [
+    { name: "Зеркала на заказ", path: "/" },
+    { name: "Политика конфиденциальности", path: "/politika-konfidencialnosti" },
+  ];
+  return (
+    <Container className="max-w-3xl pb-10">
+      <Breadcrumbs items={crumbs} />
+      <h1 className="mt-6 text-3xl font-bold tracking-tight">Политика конфиденциальности</h1>
+      <div className="prose-site mt-6 leading-relaxed text-ink/85">
+        <p>
+          Оператор персональных данных — {SITE.legalName} (далее — «мы»). Политика действует для сайта {SITE.url} и описывает,
+          какие данные мы получаем через форму заявки и как их используем. Обработка ведётся в соответствии с Федеральным законом
+          от 27.07.2006 № 152-ФЗ «О персональных данных».
+        </p>
+        <h2 className="mt-8 text-xl font-semibold">Какие данные мы получаем</h2>
+        <p>
+          Имя, номер телефона и сведения о зеркале, которые вы указываете в форме (размеры, пожелания). Вместе с заявкой сохраняются
+          адрес страницы, с которой она отправлена, и метки рекламной кампании, если вы пришли по рекламной ссылке.
+        </p>
+        <h2 className="mt-8 text-xl font-semibold">Зачем</h2>
+        <p>Чтобы связаться с вами, рассчитать стоимость зеркала, договориться о замере, изготовлении и монтаже.</p>
+        <h2 className="mt-8 text-xl font-semibold">Кому передаём</h2>
+        <p>
+          Данные не продаём и не передаём третьим лицам, кроме случаев, предусмотренных законом. Их видят сотрудники, которые
+          обрабатывают заявку.
+        </p>
+        <h2 className="mt-8 text-xl font-semibold">Сколько храним и как отозвать согласие</h2>
+        <p>
+          Храним, пока это нужно для выполнения заказа и учёта, либо до отзыва согласия. Чтобы отозвать согласие или удалить данные,
+          позвоните по телефону {SITE.phone.display}.
+        </p>
+        <h2 className="mt-8 text-xl font-semibold">Файлы cookie и аналитика</h2>
+        <p>
+          Сайт может использовать Яндекс.Метрику для подсчёта посещений. Она сохраняет cookie в браузере; отключить их можно в
+          настройках браузера.
+        </p>
+      </div>
+    </Container>
+  );
+}
