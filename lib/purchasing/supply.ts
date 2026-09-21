@@ -321,3 +321,17 @@ export function splitForSupplierOrder<T extends { id: number; state: SupplyState
   }))
   return { take, skipped }
 }
+
+// Строка сверки под таблицей должна складываться теми числами, которые человек
+// видит. Площадь позиций, слои триплекса, строки и «не распознано» округляются
+// каждое само по себе, и три из четырёх уже не сходятся с четвёртым на копейку
+// квадратного метра (57,28 + 1,42 = 58,70 против 58,69 в строках). Поэтому
+// слои триплекса — не отдельно округлённое число, а остаток до суммы строк:
+// он мал, справочен, и ошибка в нём не больше сотой.
+export function reconcileTotals(p: { itemsM2: number; rowsM2: number; unknownM2: number }): {
+  itemsM2: number; triplexM2: number; totalM2: number
+} {
+  const items = r2(p.itemsM2)
+  const total = r2(p.rowsM2 + p.unknownM2)
+  return { itemsM2: items, triplexM2: r2(total - items), totalM2: total }
+}
