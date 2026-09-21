@@ -2,6 +2,7 @@ import { type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { sendMessage } from '@/lib/telegram'
 import { withCors, corsPreflight } from '@/lib/configurator/cors'
+import { parseLead } from '@/lib/configurator/leadPayload'
 
 // Заявка с публичного сайта. Путь /api/configurator/ уже открыт в middleware —
 // поэтому форма на стороннем домене может сюда постучаться без авторизации.
@@ -23,13 +24,6 @@ function rateLimited(ip: string): boolean {
   return false
 }
 
-const clean = (v: unknown, max: number) =>
-  typeof v === 'string' ? v.trim().slice(0, max) : ''
-
-// Телефон принимаем как введён, но проверяем, что цифр достаточно: иначе форму
-// заполняет бот, а менеджер тратит время на «звонок» по строке из букв.
-const digits = (s: string) => (s.match(/\d/g) ?? []).length
-
 async function notifyOwners(text: string) {
   if (!process.env.TELEGRAM_BOT_TOKEN) return
   try {
@@ -49,32 +43,21 @@ export async function POST(req: NextRequest) {
     return withCors({ error: 'Слишком много заявок. Попробуйте позже.' }, { status: 429 })
   }
 
-  const body = await req.json().catch(() => null) as Record<string, unknown> | null
-  const phone = clean(body?.phone, 32)
-  if (digits(phone) < 10) {
-    return withCors({ error: 'Нужен телефон' }, { status: 400 })
-  }
-  const name = clean(body?.name, 120)
-  const comment = clean(body?.comment, 600)
-  const context = clean(body?.context, 160)
-  const source = clean(body?.source, 40) || 'site'
+  const parsed = parseLead(await req.json().catch(() => null))
+  if (parsed.kind === 'bot') return withCors({ ok: true })
+  if (parsed.kind === 'invalid') return withCors({ error: parsed.error }, { status: 400 })
 
   try {
     const svc = createServiceClient()
-    await svc.from('site_leads').insert({ name, phone, comment, context, source, ip })
+    // Supabase не бросает исключение на ошибку вставки, а возвращает её —
+    // без этой строки заявка терялась бы из базы молча. Телефон в лог не пишем.
+    const { error } = await svc.from('site_leads').insert({ ...parsed.row, ip })
+    if (error) console.error('[configurator/lead] site_leads insert:', error.message)
   } catch {
     // База недоступна — заявку всё равно доставим сообщением, а не потеряем.
   }
 
-  await notifyOwners(
-    [
-      '🔔 Заявка с сайта',
-      name ? `Имя: ${name}` : null,
-      `Телефон: ${phone}`,
-      context ? `Страница: ${context}` : null,
-      comment ? `Комментарий: ${comment}` : null,
-    ].filter(Boolean).join('\n')
-  )
+  await notifyOwners(parsed.message)
 
   return withCors({ ok: true })
 }

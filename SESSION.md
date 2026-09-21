@@ -5,8 +5,10 @@
   контакты, политика. `npm run check:seo` — 0 ошибок. Сайт закрыт от индексации, пока владелец не
   подтвердит 5 фактов в `sites/zerkala/lib/site.ts` (телефон, год, 400+, юрлицо, зона) — сборка с
   SITE_INDEXABLE=1 без этого падает. Корневые tsconfig/eslint исключают `sites/`.
-- Следующий: С2 — `POST /api/public/site-lead` в mglass-app → crm_leads (source='site-zerkala'),
-  CORS на домен сайта; затем С3 — публичная цена от движка lib/mirror/mirrorQuote.ts.
+- С2 частично: форма сайта → существующий публичный /api/configurator/lead (site_leads + Telegram
+  владельцу); парсер lib/configurator/leadPayload.ts (+ловушка для ботов, размеры, UTM, 5 тестов).
+  В crm_leads не пишем — в /crm режим «Только Авито» (owner_strategy.crm_ingest_mode), решение владельца.
+- Следующий: С3 — публичная цена от движка lib/mirror/mirrorQuote.ts (скилл mglass-finance).
 - Ждёт владельца: домен, телефон сайта (три разных номера на наших сайтах), срок/гарантия/замер для
   зеркал, юрлицо и ИНН, кому назначать заявки, какие фото работ показывать.
 
