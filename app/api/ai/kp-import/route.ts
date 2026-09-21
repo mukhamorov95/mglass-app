@@ -4,6 +4,9 @@ import { createClient } from '@/lib/supabase-server'
 import { reconcileKp } from '@/lib/kpReconcile'
 import { KP_SCHEMA } from '@/lib/kp/schema'
 import { kpImportWarnings, kpReconcileNotes } from '@/lib/kp/importCheck'
+import { createServiceClient } from '@/lib/supabase-service'
+import { safeFileName, sourcePath } from '@/lib/kp/sourceFile'
+import { randomUUID } from 'crypto'
 
 // Старое КП (PDF или фото) → наша структура. Владелец: «делал КП пять месяцев
 // назад, хочу подгрузить, отредактировать под нас, сохранить и отправить».
@@ -57,7 +60,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'too_large', detail: 'Файл больше 20 МБ — сожмите или разбейте на части.' }, { status: 413 })
   }
 
-  const b64 = Buffer.from(await file.arrayBuffer()).toString('base64')
+  const bytes = Buffer.from(await file.arrayBuffer())
+  const b64 = bytes.toString('base64')
+
+  // Файл кладём в приватный бакет ДО разбора: владелец просил, чтобы исходник
+  // хранился вместе с КП — иначе через месяц не проверить, откуда взялась цифра.
+  // Путь начинается с id загрузившего: пока КП не сохранено, ссылку открывает
+  // только он. Не залилось — не повод терять разбор, скажем об этом замечанием.
+  const svc = createServiceClient()
+  const path = sourcePath(user.id, file.name, randomUUID())
+  const up = await svc.storage.from('kp-sources')
+    .upload(path, bytes, { contentType: type || 'application/octet-stream', upsert: false })
+  const stored = !up.error
   const media = isPdf
     ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: b64 } }
     : { type: 'image' as const, source: { type: 'base64' as const, media_type: (type.startsWith('image/') ? type : 'image/jpeg') as 'image/jpeg', data: b64 } }
@@ -93,7 +107,9 @@ export async function POST(req: Request) {
     const raw = structuredClone(tool.input) as Record<string, unknown>
     const kp = reconcileKp(tool.input as Record<string, unknown>)
     const warnings = [...kpReconcileNotes(raw, kp), ...kpImportWarnings(kp)]
-    return NextResponse.json({ kp, warnings, source: { name: file.name, size: file.size } })
+    if (!stored) warnings.push('Файл не сохранился в хранилище — КП разобрано, но исходник к нему не приложится.')
+    const source = stored ? { path, name: safeFileName(file.name), size: file.size, type } : null
+    return NextResponse.json({ kp, warnings, source })
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'import_failed', detail: detail.slice(0, 200) }, { status: 502 })

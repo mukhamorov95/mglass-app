@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { PRODUCTION_DAYS, matchProductionDays } from '@/lib/kp/importCheck'
+import type { KpSourceFile } from '@/lib/kp/sourceFile'
 
 interface ISpeechRecognition extends EventTarget {
   lang: string; continuous: boolean; interimResults: boolean
@@ -27,6 +28,9 @@ type Form = {
   spec_note: string; vat_label: string; vat_note: string
   production_days: string; warranty: string; vat: string
   photo_url: string | null
+  // Исходник, из которого собрано это КП (старый файл клиента). Лежит в content,
+  // поэтому доезжает до истории и обратно в форму при правке.
+  source_file?: KpSourceFile | null
 }
 
 type HistoryRow = {
@@ -57,6 +61,7 @@ function emptyForm(): Form {
     spec_note: 'Стекло закалённое и безопасное: при повреждении рассыпается на мелкие неострые фрагменты. Кромка полируется по всему периметру.',
     vat_label: 'НДС 5% ВКЛЮЧЁН', vat_note: '', production_days: '15 раб. дней', warranty: 'Изделие + монтаж', vat: '5% включён',
     photo_url: null,
+    source_file: null,
   }
 }
 
@@ -246,6 +251,7 @@ export default function KpPage() {
       // Форма больше не черновик быстрого расчёта — иначе наверху остаётся
       // подсказка про расчёт, которого в этой форме уже нет.
       dropDraft()
+      if (data.source?.path) setForm(f => ({ ...f, source_file: data.source as KpSourceFile }))
       setImportedFrom(file.name)
       setImportWarnings(Array.isArray(data.warnings) ? data.warnings : [])
     } catch (e) {
@@ -348,7 +354,7 @@ export default function KpPage() {
 
   function editRow(r: HistoryRow) {
     const c = r.content as Partial<Form>
-    setForm({ ...emptyForm(), ...c, spec: c.spec ?? [], items: c.items ?? [], photo_url: c.photo_url ?? null, number: r.number })
+    setForm({ ...emptyForm(), ...c, spec: c.spec ?? [], items: c.items ?? [], photo_url: c.photo_url ?? null, source_file: c.source_file ?? null, number: r.number })
     setEditingId(r.id); setSavedId(null); setTranscript(''); setTab('new')
   }
 
@@ -431,6 +437,14 @@ export default function KpPage() {
                 </label>
                 {importedFrom && <span className="text-[12px] text-[#6b6b66]">из файла «{importedFrom}»</span>}
               </div>
+              {form.source_file?.path && (
+                <div className="mt-3 flex items-center gap-3 flex-wrap bg-[#f5f5f3] border border-[#e4e4e0] rounded-lg px-3 py-2">
+                  <span className="text-[12px] text-[#6b6b66]">📎 Исходник сохранится вместе с КП:</span>
+                  <a href={`/api/kp/source?path=${encodeURIComponent(form.source_file.path)}`} target="_blank" rel="noreferrer"
+                    className="text-[12px] font-medium text-[#111110] underline underline-offset-2">{form.source_file.name}</a>
+                  <button onClick={() => set({ source_file: null })} className="text-[12px] text-[#9a9a95] hover:text-red-500">убрать</button>
+                </div>
+              )}
               <p className="text-[12px] text-[#9a9a95] mt-2">
                 КП, сделанное по старому шаблону (PDF или фото), разберётся в нашу структуру — дальше правьте строки и сохраняйте как обычно.
                 Word или Excel сохраните в PDF. Цены переносятся как есть, ничего не пересчитывается.
@@ -589,6 +603,13 @@ export default function KpPage() {
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>
                             <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">✏️</button>
+                            {(() => {
+                              const src = r.content?.source_file as KpSourceFile | undefined
+                              return src?.path ? (
+                                <a href={`/api/kp/source?path=${encodeURIComponent(src.path)}`} target="_blank" rel="noreferrer"
+                                  title={`Исходный файл: ${src.name}`} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">📎</a>
+                              ) : null
+                            })()}
                             <a href={`/kp/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">PDF</a>
                             {canDelete && <button onClick={e => deleteKp(r.id, e)} className="text-[12px] text-red-400 hover:text-red-600" title="Удалить (только админ)">🗑</button>}
                           </div>
