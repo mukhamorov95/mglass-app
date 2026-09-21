@@ -5,8 +5,18 @@
 
 import { kpNum } from '@/lib/kpReconcile'
 
+// Срок изготовления в КП — список, а не свободный текст. Из файла приходит
+// «20 рабочих дней», «20 р.д.», «20 дней» — берём число и ищем свой вариант.
+export const PRODUCTION_DAYS = ['10 раб. дней', '12 раб. дней', '15 раб. дней', '20 раб. дней', '25 раб. дней']
+
+export function matchProductionDays(v: unknown): string | null {
+  const m = String(v ?? '').match(/\d+/)
+  if (!m) return null
+  return PRODUCTION_DAYS.find(o => o.startsWith(m[0] + ' ')) ?? null
+}
+
 export type ImportedItem = { name?: unknown; qty?: unknown; price?: unknown; sum?: unknown }
-export type ImportedKp = { items?: unknown; total?: unknown; subtotal?: unknown; title?: unknown; client_name?: unknown }
+export type ImportedKp = { items?: unknown; total?: unknown; subtotal?: unknown; title?: unknown; client_name?: unknown; production_days?: unknown }
 
 const rub = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 
@@ -54,5 +64,10 @@ export function kpImportWarnings(kp: ImportedKp): string[] {
   }
 
   if (!String(kp.title ?? '').trim()) out.push('Заголовок не прочитался — впишите тип изделия.')
+
+  const days = String(kp.production_days ?? '').trim()
+  if (days && !matchProductionDays(days)) {
+    out.push(`Срок изготовления в файле — «${days}», в нашем списке только ${PRODUCTION_DAYS.map(d => d.split(' ')[0]).join('/')} раб. дней: выберите вручную.`)
+  }
   return out
 }
