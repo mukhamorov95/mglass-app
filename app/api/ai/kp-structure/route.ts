@@ -2,54 +2,12 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
 import { reconcileKp } from '@/lib/kpReconcile'
+import { KP_SCHEMA } from '@/lib/kp/schema'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 // Разбор надиктованного текста в структуру КП. Поддерживает дозапись: если
 // передан existing — обновляем его новой репликой, не затирая уже заполненное.
-const KP_SCHEMA = {
-  type: 'object' as const,
-  properties: {
-    title:        { type: 'string', description: 'Заголовок — ТОЛЬКО тип изделия(й) ЗАГЛАВНЫМИ, дословно как назвал менеджер. НЕ придумывай названия линеек/коллекций/брендов/моделей и НЕ добавляй эмодзи. Напр. «ДУШЕВАЯ КАБИНА», «ЗЕРКАЛО С ПОДСВЕТКОЙ». Модель добавляй, только если её прямо произнесли.' },
-    subtitle:     { type: 'string', description: 'Краткое описание под заголовком: стекло, толщина, фурнитура' },
-    client_name:  { type: 'string', description: 'ФИО или название клиента, если назван' },
-    client_phone: { type: 'string', description: 'Телефон клиента, если назван' },
-    spec: {
-      type: 'array',
-      description: 'Спецификация изделия — пары «характеристика: значение» (тип изделия, габариты, стекло, толщина, обработка, фурнитура, петля, ручка и т.п.)',
-      items: {
-        type: 'object',
-        properties: {
-          label: { type: 'string', description: 'Название характеристики заглавными, напр. ГАБАРИТЫ' },
-          value: { type: 'string', description: 'Значение, напр. 1244 × 1000 мм' },
-        },
-        required: ['label', 'value'],
-      },
-    },
-    items: {
-      type: 'array',
-      description: 'Смета — изделия, работы и материалы',
-      items: {
-        type: 'object',
-        properties: {
-          name:  { type: 'string', description: 'Наименование. Для ИЗДЕЛИЯ — тип изделия, напр. «Душевая угловая перегородка с распашной дверью», «Зеркало с подсветкой». Для услуг — «Монтаж», «Доставка».' },
-          desc:  { type: 'string', description: 'Только для ИЗДЕЛИЯ — полное описание СТРОГО в порядке: материал (стекло/зеркало); тип материала (осветлённое / не осветлённое, марка напр. М1); обработка и толщина (напр. закалённое 8 мм); доп. информация по изделию, если есть; фурнитура и её цвет; если металлическая рама — цвет рамы; если лофт-изделие — цвет; в конце размеры. Пример: «стекло прозрачное не осветлённое М1, закалённое 8 мм, фурнитура чёрная матовая. Размеры 855х1245х1950 мм». Указывай только то, что реально названо; для услуг (монтаж/доставка) — пусто.' },
-          qty:   { type: 'number', description: 'Количество' },
-          price: { type: 'number', description: 'Цена за единицу, ₽' },
-          sum:   { type: 'number', description: 'Сумма по позиции, ₽' },
-        },
-        required: ['name'],
-      },
-    },
-    subtotal:        { type: 'number', description: 'Промежуточный итог, ₽' },
-    total:           { type: 'number', description: 'Итого к оплате, ₽' },
-    production_days: { type: 'string', description: 'Срок изготовления, напр. «15 раб. дней»' },
-    warranty:        { type: 'string', description: 'Гарантия, напр. «Изделие + монтаж»' },
-    valid_until:     { type: 'string', description: 'Актуально до — дата в формате ДД.ММ.ГГГГ, если названа' },
-    spec_note:       { type: 'string', description: 'Примечание к спецификации' },
-    notes:           { type: 'string', description: 'Прочие примечания' },
-  },
-} as const
 
 export async function POST(req: Request) {
   const sb = await createClient()
