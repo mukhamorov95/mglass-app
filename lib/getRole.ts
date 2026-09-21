@@ -332,7 +332,9 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
 export const ROLE_HOME: Partial<Record<Role, string>> = {
   partner:    '/partner',
   production: '/production-app',
-  buyer:      '/inventory',
+  // Закупщик начинает день с «Материала под заказы»: что заказать и на какой
+  // заказ материал уже заказан (решение владельца 21.09). Склад — в меню рядом.
+  buyer:      '/purchasing',
   office:     '/crm',
   logist:     '/installations',
   measurer:   '/measurer-cabinet',
