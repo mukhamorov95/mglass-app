@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { getSessionUser, getRole, isOwnerRole } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
 import { mskDayKey } from '@/lib/time'
-import { frontier, type SupplyState } from '@/lib/purchasing/supply'
+import { frontier, reconcileTotals, type SupplyState } from '@/lib/purchasing/supply'
 import { loadOrders, computeNeeds, writeSupply } from '@/lib/purchasing/server'
 
 export const dynamic = 'force-dynamic'
@@ -87,15 +87,24 @@ export async function GET(req: NextRequest) {
     unknown,
     // Что распозналось из названия изделия — угадывание не прячем.
     resolved,
-    totals: {
-      sheets: needs.reduce((s, r) => s + r.sheets, 0),
-      netM2: Math.round(needs.reduce((s, r) => s + r.netM2, 0) * 100) / 100,
-      cost: needs.reduce((s, r) => s + r.cost, 0),
-      unknownM2: Math.round(unknown.reduce((s, u) => s + u.m2, 0) * 100) / 100,
+    totals: (() => {
+      const rowsM2 = Math.round(needs.reduce((s, r) => s + r.netM2, 0) * 100) / 100
+      const unknownM2 = Math.round(unknown.reduce((s, u) => s + u.m2, 0) * 100) / 100
       // Раскрытие итога: площадь позиций + вторые слои триплекса = строки + не распознанное.
-      itemsM2,
-      triplexM2: extraLayerM2,
-    },
+      // Слои считаем остатком, иначе части не сходятся с суммой на сотую (см. reconcileTotals).
+      const rec = reconcileTotals({ itemsM2, rowsM2, unknownM2 })
+      return {
+        sheets: needs.reduce((s, r) => s + r.sheets, 0),
+        netM2: rowsM2,
+        cost: needs.reduce((s, r) => s + r.cost, 0),
+        unknownM2,
+        itemsM2: rec.itemsM2,
+        triplexM2: rec.triplexM2,
+        totalM2: rec.totalM2,
+        // Чистая сумма вторых слоёв — для проверки, что остаток не разъехался.
+        triplexRawM2: extraLayerM2,
+      }
+    })(),
     toOrderIds: toOrder.map(o => o.id),
     supplierOrders: openPos.map(p => ({
       id: p.id, supplier: p.supplier, invoice: p.invoice, amount: p.amount, status: p.status,

@@ -27,7 +27,7 @@ type Data = {
   needs: NeedRow[]
   unknown: UnknownMaterial[]
   resolved: { from: string; to: string; thickness: number; pieces: number; m2: number; orders: number[] }[]
-  totals: { sheets: number; netM2: number; cost: number; unknownM2: number; itemsM2: number; triplexM2: number }
+  totals: { sheets: number; netM2: number; cost: number; unknownM2: number; itemsM2: number; triplexM2: number; totalM2: number }
   toOrderIds: number[]
   supplierOrders: SupplierOrder[]
   suppliers: { id: string; name: string }[]
@@ -293,7 +293,7 @@ export default function PurchasingPage() {
                     <td colSpan={8} className="px-3 py-2 text-[11px] text-[#9a9a95]">
                       Площадь позиций заказов {m2(d.totals.itemsM2)}
                       {d.totals.triplexM2 > 0 && <> + вторые слои триплекса {m2(d.totals.triplexM2)}</>}
-                      {' '}= {m2(d.totals.netM2 + d.totals.unknownM2)}: {m2(d.totals.netM2)} в строках
+                      {' '}= {m2(d.totals.totalM2)}: {m2(d.totals.netM2)} в строках
                       {d.totals.unknownM2 > 0 && <> + {m2(d.totals.unknownM2)} не распознано</>}.
                     </td>
                   </tr>

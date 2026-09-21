@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   supplyState, writeFor, frontier, buildPurchaseGroups, summarizeNeeds, withThickness,
-  supplierOrderItems, splitForSupplierOrder, resolveMaterial,
+  supplierOrderItems, splitForSupplierOrder, resolveMaterial, reconcileTotals,
   type PurchaseMaterial, type SheetVariant, type SupplyState,
 } from '@/lib/purchasing/supply'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS } from '@/lib/cuttingOptimizer'
@@ -209,5 +209,19 @@ describe('стекло изделия распознаётся по назван
     expect(unknown).toHaveLength(0)
     expect(groups.get('осветлённое|4')!.pieces).toHaveLength(2)
     expect(resolved).toEqual([{ from: 'Зеркало с подсветкой Осветлённое 4 мм', to: 'Осветлённое', thickness: 4, pieces: 2, m2: 4, orders: [9] }])
+  })
+})
+
+describe('строка сверки складывается теми числами, что видно', () => {
+  it('слои триплекса — остаток до суммы строк, поэтому части сходятся', () => {
+    // Живой случай 21.09: позиции 57,275, строки 58,69 — независимое округление
+    // давало «57,28 + 1,42 = 58,70» против 58,69 в таблице.
+    const r = reconcileTotals({ itemsM2: 57.275, rowsM2: 58.69, unknownM2: 0 })
+    expect(r).toEqual({ itemsM2: 57.28, triplexM2: 1.41, totalM2: 58.69 })
+    expect(r.itemsM2 + r.triplexM2).toBeCloseTo(r.totalM2, 10)
+  })
+  it('не распознанное входит в итог сверки', () => {
+    const r = reconcileTotals({ itemsM2: 51.75, rowsM2: 48.78, unknownM2: 4.39 })
+    expect(r).toEqual({ itemsM2: 51.75, triplexM2: 1.42, totalM2: 53.17 })
   })
 })
