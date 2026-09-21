@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BLOCKS, Faq, Gallery, Highlights, LandingCard, LeadSection, SectionsView } from "@/components/blocks";
+import { BLOCKS, Faq, Gallery, Highlights, LandingCard, LeadSection, SectionsView, TrustBar } from "@/components/blocks";
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { LANDINGS, getLanding } from "@/content/landings";
 import { PHOTOS } from "@/content/photos";
@@ -69,7 +69,8 @@ export default async function LandingPage({ params }: { params: Promise<{ slug: 
       </section>
 
       <section className="pb-6">
-        <Container>
+        <Container className="grid gap-3">
+          <TrustBar />
           <Highlights items={l.highlights} />
         </Container>
       </section>

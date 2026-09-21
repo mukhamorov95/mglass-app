@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       <h1 className="mt-6 text-3xl font-bold tracking-tight">Политика конфиденциальности</h1>
       <div className="prose-site mt-6 leading-relaxed text-ink/85">
         <p>
-          Оператор персональных данных — {SITE.legalName} (далее — «мы»). Политика действует для сайта {SITE.url} и описывает,
+          Оператор персональных данных — {SITE.legalName}, ИНН {SITE.inn}, ОГРНИП {SITE.ogrnip} (далее — «мы»). Политика действует для сайта {SITE.url} и описывает,
           какие данные мы получаем через форму заявки и как их используем. Обработка ведётся в соответствии с Федеральным законом
           от 27.07.2006 № 152-ФЗ «О персональных данных».
         </p>
