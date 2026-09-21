@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
   const queue = all.filter(o => withCut || !o.cut)
   const toOrder = all.filter(o => !o.cut && o.state === 'not_ordered')
-  const { needs, unknown, extraLayerM2, itemsM2 } = await computeNeeds(svc, toOrder)
+  const { needs, unknown, extraLayerM2, itemsM2, resolved } = await computeNeeds(svc, toOrder)
 
   // Заказы поставщикам, по которым материал ещё не пришёл, — с кнопкой «Пришёл».
   const numberOf = new Map(all.map(o => [o.id, o.number]))
@@ -85,6 +85,8 @@ export async function GET(req: NextRequest) {
     counts: { active: all.filter(o => !o.cut).length, cut: all.filter(o => o.cut).length, toOrder: toOrder.length },
     needs,
     unknown,
+    // Что распозналось из названия изделия — угадывание не прячем.
+    resolved,
     totals: {
       sheets: needs.reduce((s, r) => s + r.sheets, 0),
       netM2: Math.round(needs.reduce((s, r) => s + r.netM2, 0) * 100) / 100,

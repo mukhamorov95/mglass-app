@@ -72,11 +72,11 @@ export async function loadOrders(svc: SupabaseClient, onlyIds?: number[]): Promi
 
 export async function computeNeeds(svc: SupabaseClient, orders: ActiveOrder[]) {
   const [{ data: mats }, { data: vars }, { data: settingsRow }] = await Promise.all([
-    svc.from('b2b_materials').select('id, name, thickness, cost_price, sheet_width, sheet_height, pattern_direction').eq('active', true),
+    svc.from('b2b_materials').select('id, name, thickness, category, cost_price, sheet_width, sheet_height, pattern_direction').eq('active', true),
     svc.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, active'),
     svc.from('cutting_settings').select('*').eq('id', 1).maybeSingle(),
   ])
-  const { groups, unknown, materialByKey, extraLayerM2 } = buildPurchaseGroups(
+  const { groups, unknown, materialByKey, extraLayerM2, resolved } = buildPurchaseGroups(
     orders.map(o => ({ id: o.id, client: o.client, items: o.items })),
     (mats ?? []) as PurchaseMaterial[],
     (vars ?? []) as SheetVariant[],
@@ -86,7 +86,7 @@ export async function computeNeeds(svc: SupabaseClient, orders: ActiveOrder[]) {
   // Из сырых площадей позиций: сумма уже округлённых площадей заказов
   // расходилась с итогом на сотые квадратного метра.
   const itemsM2 = Math.round(orders.reduce((s, o) => s + o.items.reduce((a, it) => a + areaOf(it), 0), 0) * 100) / 100
-  return { needs, unknown, extraLayerM2, itemsM2 }
+  return { needs, unknown, extraLayerM2, itemsM2, resolved }
 }
 
 // Отметка — тем же точечным писателем, что у менеджера: этап через

@@ -68,7 +68,7 @@ export type OrderItem = {
   triplexGlasses?: { materialName?: string; thickness?: number }[]
 }
 export type PurchaseMaterial = {
-  id: number; name: string; thickness: number | string
+  id: number; name: string; thickness: number | string; category?: string | null
   cost_price: number | string | null
   sheet_width: number | null; sheet_height: number | null
   pattern_direction: string | null
@@ -89,6 +89,42 @@ export function withThickness(name: string, thk: number | string | null | undefi
 
 const keyOf = (name: string, thk: number) => `${name.trim().toLowerCase()}|${Number(thk) || 0}`
 
+// «Осветлённое» и «осветленное» — одно и то же: в заказах пишут и так и так.
+const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim()
+
+export type ResolvedMaterial = { from: string; to: string; thickness: number; pieces: number; m2: number; orders: number[] }
+
+// Позиция-изделие называется «Зеркало с подсветкой Осветлённое 4 мм» — это не
+// материал из справочника, а изделие, в котором стекло названо внутри. Достаём
+// материал по вхождению названия: у зеркал ищем только среди зеркал, иначе
+// «Осветлённое» (зеркало, 1 180 ₽/м²) спуталось бы с «Осветлённым CrystalVision»
+// (стекло). Угадывание не прячем — экран показывает, что во что распозналось.
+export function resolveMaterial(
+  itemName: string,
+  thickness: number,
+  materials: PurchaseMaterial[],
+): PurchaseMaterial | null {
+  const hay = norm(itemName)
+  if (!hay) return null
+  const thk = Number(thickness) || 0
+  const isMirror = /зеркал/.test(hay)
+  const isGlass = !isMirror && /стекл/.test(hay)
+
+  const fits = materials.filter(m => {
+    if ((Number(m.thickness) || 0) !== thk) return false
+    const name = norm(m.name)
+    if (!name || name === hay) return false
+    // Целым словом: «серебро» не должно ловиться внутри «серебросодержащий».
+    if (!new RegExp(`(^|[^а-яa-z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^а-яa-z0-9]|$)`).test(hay)) return false
+    if (isMirror) return m.category === 'зеркало'
+    if (isGlass) return m.category !== 'зеркало'
+    return true
+  })
+  if (!fits.length) return null
+  // Самое длинное совпадение — самое точное: «Осветлённое CrystalVision» важнее «Осветлённого».
+  return fits.sort((a, b) => norm(b.name).length - norm(a.name).length || a.name.localeCompare(b.name))[0]
+}
+
 // Позиции заказов → группы деталей под раскрой. Группа — материал + толщина:
 // одно и то же стекло режется с одного листа, какой бы категорией его ни
 // подписали. Триплекс даёт деталь на каждый слой. Материал, которого нет в
@@ -97,7 +133,7 @@ export function buildPurchaseGroups(
   orders: { id: number; client: string; items: OrderItem[] }[],
   materials: PurchaseMaterial[],
   variants: SheetVariant[],
-): { groups: Map<string, PieceGroup>; unknown: UnknownMaterial[]; materialByKey: Map<string, PurchaseMaterial>; extraLayerM2: number } {
+): { groups: Map<string, PieceGroup>; unknown: UnknownMaterial[]; materialByKey: Map<string, PurchaseMaterial>; extraLayerM2: number; resolved: ResolvedMaterial[] } {
   const materialByKey = new Map<string, PurchaseMaterial>()
   for (const m of materials) materialByKey.set(keyOf(m.name, Number(m.thickness)), m)
   const formatsOf = new Map<number, SheetFormat[]>()
@@ -114,6 +150,7 @@ export function buildPurchaseGroups(
   // площади позиции их нет. Без этой цифры итог «что заказать» не сходится с
   // суммой позиций заказов.
   let extraLayerM2 = 0
+  const resolved = new Map<string, ResolvedMaterial>()
 
   for (const o of orders) {
     for (const it of o.items) {
@@ -130,8 +167,25 @@ export function buildPurchaseGroups(
 
       layers.forEach((layer, li) => { if (li > 0) extraLayerM2 += (w * h * qty) / 1e6 })
       for (const layer of layers) {
-        const key = keyOf(layer.name, layer.thk)
-        const mat = materialByKey.get(key)
+        const exactKey = keyOf(layer.name, layer.thk)
+        let mat = materialByKey.get(exactKey)
+        let key = exactKey
+        if (!mat) {
+          // Изделие: материал назван внутри названия позиции.
+          const guess = resolveMaterial(layer.name, layer.thk, materials)
+          if (guess) {
+            mat = guess
+            key = keyOf(guess.name, Number(guess.thickness) || 0)
+            const rk = `${exactKey}→${key}`
+            const r = resolved.get(rk) ?? {
+              from: layer.name, to: guess.name, thickness: Number(guess.thickness) || 0, pieces: 0, m2: 0, orders: [],
+            }
+            r.pieces += qty
+            r.m2 = r2(r.m2 + (w * h * qty) / 1e6)
+            if (!r.orders.includes(o.id)) r.orders.push(o.id)
+            resolved.set(rk, r)
+          }
+        }
         if (!mat) {
           const u = unknown.get(key) ?? { material: layer.name || 'Материал не указан', thickness: layer.thk, pieces: 0, m2: 0, orders: [] }
           u.pieces += qty
@@ -164,7 +218,10 @@ export function buildPurchaseGroups(
       }
     }
   }
-  return { groups, unknown: [...unknown.values()].sort((a, b) => b.m2 - a.m2), materialByKey, extraLayerM2: r2(extraLayerM2) }
+  return {
+    groups, unknown: [...unknown.values()].sort((a, b) => b.m2 - a.m2), materialByKey,
+    extraLayerM2: r2(extraLayerM2), resolved: [...resolved.values()].sort((a, b) => b.m2 - a.m2),
+  }
 }
 
 export type NeedRow = {
