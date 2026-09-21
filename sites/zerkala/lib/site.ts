@@ -52,7 +52,9 @@ export const SITE = {
   projects: FACTS.projects.value,
   legalName: FACTS.legalName.value,
   serviceArea: FACTS.serviceArea.value,
-  leadEndpoint: process.env.NEXT_PUBLIC_LEAD_ENDPOINT || "",
+  // Приём заявок — публичный маршрут mglass-app (site_leads + Telegram владельцу).
+  // Локально по умолчанию выключен: иначе проверка формы будит владельца.
+  leadEndpoint: process.env.NEXT_PUBLIC_LEAD_ENDPOINT || (process.env.VERCEL ? "https://mglass-app.vercel.app/api/configurator/lead" : ""),
   metrikaId: process.env.NEXT_PUBLIC_YM_ID || "",
   yandexVerification: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION || "",
   // Дата последней правки текстов — идёт в lastmod карты сайта. Меняется руками

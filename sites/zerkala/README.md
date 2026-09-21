@@ -33,7 +33,7 @@ npm run check:seo    # обход карты сайта на запущенно�
 |---|---|
 | `NEXT_PUBLIC_SITE_URL` | Боевой домен: canonical, sitemap, разметка |
 | `SITE_INDEXABLE=1` | Открыть сайт для поисковиков. Без неё — `noindex` и `Disallow: /` |
-| `NEXT_PUBLIC_LEAD_ENDPOINT` | Куда форма шлёт заявку (этап С2, эндпоинт в mglass-app) |
+| `NEXT_PUBLIC_LEAD_ENDPOINT` | Куда форма шлёт заявку. На Vercel по умолчанию `https://mglass-app.vercel.app/api/configurator/lead` (site_leads + Telegram владельцу), локально — выключено |
 | `NEXT_PUBLIC_YM_ID` | Счётчик Яндекс.Метрики |
 | `NEXT_PUBLIC_YANDEX_VERIFICATION` | Код подтверждения Яндекс.Вебмастера |
 

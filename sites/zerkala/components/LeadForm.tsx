@@ -65,7 +65,7 @@ export function LeadForm({
           consent: form.get("consent") === "on",
           product: product || "Зеркало",
           source: "site-zerkala",
-          page: window.location.pathname,
+          page: window.location.origin + window.location.pathname,
           title: document.title,
           referrer: document.referrer,
           utm: readUtm(),
