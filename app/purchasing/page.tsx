@@ -26,6 +26,7 @@ type Data = {
   counts: { active: number; cut: number; toOrder: number }
   needs: NeedRow[]
   unknown: UnknownMaterial[]
+  resolved: { from: string; to: string; thickness: number; pieces: number; m2: number; orders: number[] }[]
   totals: { sheets: number; netM2: number; cost: number; unknownM2: number; itemsM2: number; triplexM2: number }
   toOrderIds: number[]
   supplierOrders: SupplierOrder[]
@@ -278,6 +279,15 @@ export default function PurchasingPage() {
                       {d.totals.unknownM2 > 0 && `+ ${m2(d.totals.unknownM2)} не распознано`}
                     </td>
                   </tr>
+                  {/* Распознанное из названия изделия: видно, что во что превратилось. */}
+                  {d.resolved.map(r => (
+                    <tr key={`r-${r.from}-${r.to}`}>
+                      <td colSpan={8} className="px-3 py-1.5 text-[11px] text-[#6b6b66] bg-[#fbfbfa]">
+                        «{r.from}» — это изделие: стекло распознано как <b>{withThickness(r.to, r.thickness)}</b>
+                        {' '}({r.pieces} дет., {m2(r.m2)}, заказы {r.orders.map(id => byId.get(id)?.number ?? id).join(', ')}).
+                      </td>
+                    </tr>
+                  ))}
                   {/* Итог раскрывается: из чего сложилась площадь «нетто». */}
                   <tr>
                     <td colSpan={8} className="px-3 py-2 text-[11px] text-[#9a9a95]">

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   supplyState, writeFor, frontier, buildPurchaseGroups, summarizeNeeds, withThickness,
-  supplierOrderItems, splitForSupplierOrder,
+  supplierOrderItems, splitForSupplierOrder, resolveMaterial,
   type PurchaseMaterial, type SheetVariant, type SupplyState,
 } from '@/lib/purchasing/supply'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS } from '@/lib/cuttingOptimizer'
@@ -176,5 +176,38 @@ describe('заказ поставщику', () => {
     })
     // Не распознанное не теряется — идёт строкой с пометкой
     expect(items[1]).toMatchObject({ material_name: 'Нечто 5 мм', thickness: 5, area_m2: 0.5, sheets_count: null, unmatched: true })
+  })
+})
+
+describe('стекло изделия распознаётся по названию', () => {
+  const CAT: PurchaseMaterial[] = [
+    { id: 49, name: 'Осветлённое', thickness: 4, category: 'зеркало', cost_price: 1180, sheet_width: 3210, sheet_height: 2250, pattern_direction: 'none' },
+    { id: 51, name: 'Осветлённое CrystalVision', thickness: 4, category: 'стекло', cost_price: 950, sheet_width: 3210, sheet_height: 2250, pattern_direction: 'none' },
+    { id: 60, name: 'Серебро', thickness: 4, category: 'зеркало', cost_price: 730, sheet_width: 3210, sheet_height: 2250, pattern_direction: 'none' },
+  ]
+
+  it('у зеркала ищем среди зеркал: «Осветлённое», а не «Осветлённое CrystalVision»', () => {
+    expect(resolveMaterial('Зеркало с подсветкой Осветлённое 4 мм', 4, CAT)?.id).toBe(49)
+  })
+
+  it('неосветлённое зеркало — серебро', () => {
+    expect(resolveMaterial('Зеркало с подсветкой Серебро 4 мм', 4, CAT)?.id).toBe(60)
+  })
+
+  it('буква «ё» и регистр не мешают', () => {
+    expect(resolveMaterial('зеркало осветленное 4мм с подсветкой', 4, CAT)?.id).toBe(49)
+  })
+
+  it('толщина должна совпадать — 6 мм из 4-миллиметрового справочника не берём', () => {
+    expect(resolveMaterial('Зеркало с подсветкой Осветлённое 6 мм', 6, CAT)).toBeNull()
+  })
+
+  it('изделие попадает в раскрой к своему материалу, и это видно отдельной строкой', () => {
+    const { groups, unknown, resolved } = buildPurchaseGroups([
+      { id: 9, client: 'M GLASS', items: [{ materialName: 'Зеркало с подсветкой Осветлённое 4 мм', thickness: 4, width: 1000, height: 2000, quantity: 2, category: 'изделие' }] },
+    ], CAT, [])
+    expect(unknown).toHaveLength(0)
+    expect(groups.get('осветлённое|4')!.pieces).toHaveLength(2)
+    expect(resolved).toEqual([{ from: 'Зеркало с подсветкой Осветлённое 4 мм', to: 'Осветлённое', thickness: 4, pieces: 2, m2: 4, orders: [9] }])
   })
 })
