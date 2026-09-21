@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { PRODUCTION_DAYS, matchProductionDays } from '@/lib/kp/importCheck'
 
 interface ISpeechRecognition extends EventTarget {
   lang: string; continuous: boolean; interimResults: boolean
@@ -242,6 +243,9 @@ export default function KpPage() {
         return
       }
       applyKp(data.kp)
+      // Форма больше не черновик быстрого расчёта — иначе наверху остаётся
+      // подсказка про расчёт, которого в этой форме уже нет.
+      dropDraft()
       setImportedFrom(file.name)
       setImportWarnings(Array.isArray(data.warnings) ? data.warnings : [])
     } catch (e) {
@@ -255,6 +259,10 @@ export default function KpPage() {
       const s = (k: keyof Form, v: unknown) => { if (v != null && v !== '') (next as Record<string, unknown>)[k] = String(v) }
       s('title', kp.title); s('subtitle', kp.subtitle); s('client_name', kp.client_name); s('client_phone', kp.client_phone)
       s('warranty', kp.warranty); s('valid_until', kp.valid_until); s('spec_note', kp.spec_note)
+      // Срок — список: берём только то, что в нём есть, остальное менеджер выберет сам
+      // (о несовпадении он узнает из замечаний разбора, а не из молча оставшегося «15»).
+      const days = matchProductionDays(kp.production_days)
+      if (days) next.production_days = days
       if (Array.isArray(kp.spec) && kp.spec.length) next.spec = (kp.spec as Spec[]).map(x => ({ label: String(x.label ?? ''), value: String(x.value ?? ''), accent: x.accent }))
       if (Array.isArray(kp.items) && kp.items.length) next.items = (kp.items as Record<string, unknown>[]).map(x => ({
         name: String(x.name ?? ''), desc: x.desc ? String(x.desc) : '',
@@ -502,7 +510,7 @@ export default function KpPage() {
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 grid grid-cols-3 gap-3">
               <div><label className={L}>Срок изготовления</label>
                 <select className={I} value={form.production_days} onChange={e => set({ production_days: e.target.value })}>
-                  {['10 раб. дней', '12 раб. дней', '15 раб. дней', '20 раб. дней', '25 раб. дней'].map(o => <option key={o} value={o}>{o}</option>)}
+                  {PRODUCTION_DAYS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div><label className={L}>Гарантия</label><input className={I} value={form.warranty} onChange={e => set({ warranty: e.target.value })} /></div>

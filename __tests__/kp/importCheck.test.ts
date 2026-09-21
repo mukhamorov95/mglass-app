@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { kpImportWarnings, kpReconcileNotes } from '@/lib/kp/importCheck'
+import { kpImportWarnings, kpReconcileNotes, matchProductionDays } from '@/lib/kp/importCheck'
 
 // toLocaleString('ru-RU') разделяет тысячи неразрывным пробелом — сравниваем
 // по обычному, иначе тест падает на строке, которая выглядит правильной.
@@ -75,5 +75,27 @@ describe('kpReconcileNotes', () => {
   it('ничего не подставляли — молчим', () => {
     const kp = { items: [{ name: 'Изделие', sum: 100 }], total: 100 }
     expect(kpReconcileNotes(kp, kp)).toEqual([])
+  })
+})
+
+describe('matchProductionDays', () => {
+  it('число из свободного текста ложится в наш список', () => {
+    expect(matchProductionDays('20 рабочих дней')).toBe('20 раб. дней')
+    expect(matchProductionDays('срок — 10 р.д.')).toBe('10 раб. дней')
+    expect(matchProductionDays(12)).toBe('12 раб. дней')
+  })
+  it('чего нет в списке — не выдумываем', () => {
+    expect(matchProductionDays('18 дней')).toBeNull()
+    expect(matchProductionDays('по согласованию')).toBeNull()
+    expect(matchProductionDays(undefined)).toBeNull()
+  })
+  it('срок не из списка — замечание с обоими вариантами', () => {
+    const w = warn({ ...good, production_days: '18 рабочих дней' })
+    expect(w).toHaveLength(1)
+    expect(w[0]).toContain('«18 рабочих дней»')
+    expect(w[0]).toContain('10/12/15/20/25')
+  })
+  it('срок из списка замечаний не вызывает', () => {
+    expect(kpImportWarnings({ ...good, production_days: '20 раб. дней' })).toEqual([])
   })
 })
