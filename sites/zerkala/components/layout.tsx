@@ -103,7 +103,7 @@ export function Footer() {
         <div>
           <Logo />
           <p className="mt-4 text-sm text-muted">
-            Зеркала на заказ по вашим размерам. {SITE.serviceArea}.
+            Зеркала на заказ по вашим размерам. {SITE.serviceArea}; {SITE.shipping.toLowerCase()}.
           </p>
           <a href={SITE.phone.href} className="mt-4 block text-lg font-semibold">
             {SITE.phone.display}
