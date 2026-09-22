@@ -12,7 +12,6 @@ type User = {
   role: 'admin' | 'manager' | 'buyer' | 'ceo' | 'cfo' | 'commercial' | 'production' | 'seo' | 'measurer'
   active: boolean
   manager_code: number | null
-  password_plain: string | null
   see_all_orders: boolean
   can_view_all_clients: boolean
   can_view_all_deals: boolean
@@ -91,7 +90,6 @@ export default function UsersPage() {
   const [linkCopied, setLinkCopied]     = useState(false)
   const [saving, setSaving]             = useState(false)
   const [error, setError]               = useState<string | null>(null)
-  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set())
   const [editingPassword, setEditingPassword]   = useState<string | null>(null)
   const [editPasswordValue, setEditPasswordValue] = useState('')
   const [telegramCode, setTelegramCode] = useState<{ userId: string; code: string } | null>(null)
@@ -129,8 +127,11 @@ export default function UsersPage() {
     }
   }
 
-  async function updateUser(id: string, fields: Partial<User>) {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...fields } : u))
+  // password_plain — не колонка, а канал передачи нового пароля в Supabase Auth
+  // (роут /api/admin/users его не сохраняет). Поэтому тип отдельный.
+  async function updateUser(id: string, fields: Partial<User> & { password_plain?: string }) {
+    const { password_plain: _pw, ...visible } = fields
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...visible } : u))
     const res = await fetch('/api/admin/users', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -215,17 +216,11 @@ export default function UsersPage() {
     setInviteEmail(''); setInvitePassword(''); setInviteName(''); setInviteRole('manager')
   }
 
-  function togglePassword(id: string) {
-    setVisiblePasswords(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
+  // Посмотреть действующий пароль нельзя ни владельцу, ни кому-либо ещё:
+  // он хранится только хешем в Supabase Auth. Можно задать новый.
   function startEditPassword(u: User) {
     setEditingPassword(u.id)
-    setEditPasswordValue(u.password_plain ?? '')
+    setEditPasswordValue('')
   }
 
   async function savePassword(id: string) {
@@ -362,7 +357,6 @@ export default function UsersPage() {
                       </tr>
                       {groupOpen && members.map(u => {
                   const rl      = ROLE_LABELS[u.role] ?? ROLE_LABELS.manager
-                  const pwVisible = visiblePasswords.has(u.id)
                   const isAdmin = u.role === 'admin'
                   const isBuyer = u.role === 'buyer'
                   const permsExpanded = expandedPerms.has(u.id)
@@ -401,17 +395,10 @@ export default function UsersPage() {
                             <div className="flex items-center gap-1.5">
                               <span
                                 onClick={() => startEditPassword(u)}
-                                className="font-mono text-[12px] text-[#6b6b66] cursor-pointer hover:text-blue-600"
-                                title="Нажми чтобы изменить">
-                                {u.password_plain
-                                  ? pwVisible ? u.password_plain : '••••••••'
-                                  : <span className="text-[#c4c4be] text-[11px] italic">не задан</span>}
+                                className="font-mono text-[12px] text-[#9a9a95] cursor-pointer hover:text-blue-600"
+                                title="Задать новый пароль (посмотреть существующий нельзя)">
+                                ••••••••
                               </span>
-                              {u.password_plain && (
-                                <button onClick={() => togglePassword(u.id)} className="text-[#c4c4be] hover:text-[#6b6b66]">
-                                  {pwVisible ? '🙈' : '👁'}
-                                </button>
-                              )}
                               <button onClick={() => startEditPassword(u)} className="text-[#d4d4ce] hover:text-blue-400 text-[11px]">✏️</button>
                               <button onClick={() => resetLink(u.id)} className="text-[#d4d4ce] hover:text-blue-500 text-[11px]" title="Ссылка: пусть задаст пароль сам">🔗</button>
                             </div>
