@@ -1,5 +1,6 @@
 import 'server-only'
-import { amoGetAll, getUsers, type AmoLead } from '@/lib/amocrm'
+import { amoGetAll, type AmoLead } from '@/lib/amocrm'
+import { getAmoUserNames } from '@/lib/amoPeople'
 import { buildAmoActivity, type AmoActivityEvent, type AmoCallNote, type AmoActivityReport } from '@/lib/amoActivity'
 
 // Сбор данных для lib/amoActivity.ts. Только GET к AmoCRM.
@@ -12,13 +13,35 @@ async function inBatches<T, R>(items: T[], size: number, fn: (item: T) => Promis
   return out
 }
 
+export type ActivityRaw = {
+  users: { id: number; name: string }[]
+  events: AmoActivityEvent[]
+  callNotes: AmoCallNote[]
+  leads: AmoLead[]
+}
+
 export async function fetchAmoActivity(from: number, to: number): Promise<AmoActivityReport> {
+  return buildFromRaw(from, to, await fetchActivityRaw(from, to))
+}
+
+export function buildFromRaw(from: number, to: number, raw: ActivityRaw): AmoActivityReport {
+  return buildAmoActivity({
+    from, to,
+    users: raw.users,
+    events: raw.events,
+    callNotes: raw.callNotes,
+    leadResponsible: new Map(raw.leads.map(l => [l.id, l.responsible_user_id])),
+  })
+}
+
+// Сырые события периода — их же читает «Мой день» (lib/coaching/collect.ts), чтобы не ходить в amo дважды
+export async function fetchActivityRaw(from: number, to: number): Promise<ActivityRaw> {
   const dayStarts: number[] = []
   for (let t = from; t < to; t += DAY) dayStarts.push(t)
 
   // события — посуточно, по три суток параллельно: лимит amo 7 запросов в секунду
   const [users, eventsByDay, callNotesByEntity] = await Promise.all([
-    getUsers(),
+    getAmoUserNames(),
     inBatches(dayStarts, 3, a => amoGetAll<AmoActivityEvent>('/events', {
       'filter[created_at][from]': String(a),
       'filter[created_at][to]': String(Math.min(a + DAY, to) - 1),
@@ -39,11 +62,5 @@ export async function fetchAmoActivity(from: number, to: number): Promise<AmoAct
   const leads = (await inBatches(idChunks, 3, ids =>
     amoGetAll<AmoLead>('/leads', { 'filter[id][]': ids.map(String) }, 'leads'))).flat()
 
-  return buildAmoActivity({
-    from, to,
-    users: users.map(u => ({ id: u.id, name: u.name })),
-    events,
-    callNotes: callNotesByEntity.flat(),
-    leadResponsible: new Map(leads.map(l => [l.id, l.responsible_user_id])),
-  })
+  return { users, events, callNotes: callNotesByEntity.flat(), leads }
 }

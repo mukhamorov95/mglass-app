@@ -30,7 +30,7 @@
 ## AmoCRM — только чтение
 
 - Ни одного POST/PATCH/DELETE к AmoCRM API
-- Звонки (SIPUNI): notes с `note_type=call_out/call_in` и `params.duration > 0`
+- Звонки (OnlinePBX, `lib/onlinepbx.ts`; SIPUNI — только запасной click-to-call): notes с `note_type=call_out/call_in` и `params.duration > 0`
 - Сообщения (Wazzup): notes с `note_type=call_out/call_in` и `params.duration` отсутствует/0, или `note_type=amomail_message`
 
 ---

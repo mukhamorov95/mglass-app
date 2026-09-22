@@ -47,11 +47,22 @@ export async function amoGet<T = unknown>(
     else url.searchParams.set(k, v)
   }
 
-  const res = await fetch(url.toString(), {
+  const call = () => fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(8000),
     ...(revalidate ? { next: { revalidate } } : {}),
   })
+  // amo пускает 7 запросов в секунду и отвечает 429 сверх лимита — это «подожди», а не ошибка.
+  // Обрыв соединения (fetch failed) из Vercel до amo тоже бывает разовым — один повтор.
+  let res = await call().catch(async (e: unknown) => {
+    if (!(e instanceof TypeError)) throw e
+    await new Promise(r => setTimeout(r, 1000))
+    return call()
+  })
+  for (let attempt = 1; res.status === 429 && attempt <= 3; attempt++) {
+    await new Promise(r => setTimeout(r, 1000 * attempt))
+    res = await call()
+  }
   if (res.status === 204 || res.status === 404) return null
   if (!res.ok) throw new Error(`AmoCRM GET ${path} → ${res.status}: ${await res.text()}`)
   return res.json() as Promise<T>

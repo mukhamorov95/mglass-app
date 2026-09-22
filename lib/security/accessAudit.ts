@@ -38,6 +38,7 @@ export const SENSITIVE_TABLES = new Set([
   'commercial_proposals', 'deals', 'deal_payments', 'payments', 'manager_stats_daily',
   'manager_stats_monthly', 'coefficients', 'process_cost_inputs', 'production_settings',
   'security_audit_runs',   // сам отчёт прогона — список дыр
+  'manager_schedules', 'wazzup_outgoing_messages', 'manager_coaching',
 ])
 
 // Таблицы витрины: их публичность — замысел, а не упущение.

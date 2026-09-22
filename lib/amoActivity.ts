@@ -48,17 +48,18 @@ export type DayActivity = {
   talkSeconds: number
   replyMinutes: number[]
   unanswered: number
+  leftWaiting: number
 }
 
 export type CountKey =
   | 'actions' | 'messagesOwn' | 'messagesNoAuthor' | 'clientMessages' | 'tasksCompleted'
   | 'tasksPostponed' | 'cardsMoved' | 'callsOut' | 'callsOutConnected' | 'callsInAnswered'
-  | 'callsInMissed' | 'talkSeconds' | 'unanswered'
+  | 'callsInMissed' | 'talkSeconds' | 'unanswered' | 'leftWaiting'
 
 export const COUNT_KEYS: CountKey[] = [
   'actions', 'messagesOwn', 'messagesNoAuthor', 'clientMessages', 'tasksCompleted',
   'tasksPostponed', 'cardsMoved', 'callsOut', 'callsOutConnected', 'callsInAnswered',
-  'callsInMissed', 'talkSeconds', 'unanswered',
+  'callsInMissed', 'talkSeconds', 'unanswered', 'leftWaiting',
 ]
 
 export type ManagerActivity = {
@@ -87,6 +88,7 @@ const CALL_CONNECTED = 4
 // Ответ клиенту меряем только на сообщениях, пришедших днём: ночное «ответили в 9:30»
 // — это не медленный менеджер.
 const REPLY_WINDOW = { fromHour: 9, toHour: 19 }
+const LEFT_WAITING_UNTIL = 21
 
 // Не действия человека: сообщения клиента, системные отметки о беседах и связки
 // сделка↔контакт — их ставит интеграция заявок под учёткой менеджера, в том числе
@@ -147,13 +149,13 @@ export function replyEpisodes(events: AmoActivityEvent[]) {
   return out
 }
 
-function emptyDay(day: string): DayActivity {
+export function emptyDay(day: string): DayActivity {
   return {
     day, firstAt: null, lastAt: null, activeHours: 0, longestPauseMin: 0, actions: 0,
     hourly: Array(24).fill(0), hourlyNoAuthor: Array(24).fill(0),
     messagesOwn: 0, messagesNoAuthor: 0, clientMessages: 0, tasksCompleted: 0, tasksPostponed: 0,
     cardsMoved: 0, callsOut: 0, callsOutConnected: 0, callsInAnswered: 0, callsInMissed: 0,
-    talkSeconds: 0, replyMinutes: [], unanswered: 0,
+    talkSeconds: 0, replyMinutes: [], unanswered: 0, leftWaiting: 0,
   }
 }
 
@@ -234,16 +236,6 @@ export function buildAmoActivity(input: {
     addAction(e.created_by, e.created_at)
   }
 
-  for (const ep of replyEpisodes(events)) {
-    const owner = ep.leadId ? input.leadResponsible.get(ep.leadId) : undefined
-    if (!owner) continue
-    const h = mskHour(ep.startAt)
-    if (h < REPLY_WINDOW.fromHour || h >= REPLY_WINDOW.toHour) continue
-    const c = cell(owner, ep.startAt)
-    if (ep.replyAt === null) c.unanswered++
-    else c.replyMinutes.push(Math.round((ep.replyAt - ep.startAt) / 60))
-  }
-
   for (const [userId, times] of actionTimes) {
     times.sort((a, b) => a - b)
     const byDay = grid.get(userId)!
@@ -253,6 +245,22 @@ export function buildAmoActivity(input: {
       if (c.firstAt === null) c.firstAt = ts
       c.lastAt = ts
     }
+  }
+
+  for (const ep of replyEpisodes(events)) {
+    const owner = ep.leadId ? input.leadResponsible.get(ep.leadId) : undefined
+    if (!owner) continue
+    const c = cell(owner, ep.startAt)
+    const h = mskHour(ep.startAt)
+    // Клиент написал в будний вечер после последнего действия ответственного и не получил ответа
+    // до 21:00 — ждал до утра. Считаем по его сделкам, от кого бы ни был ответ.
+    const wd = new Date((ep.startAt + MSK) * 1000).getUTCDay()
+    const evening = mskDayStart(mskDay(ep.startAt)) + LEFT_WAITING_UNTIL * 3600
+    if (wd >= 1 && wd <= 5 && h < LEFT_WAITING_UNTIL && c.lastAt !== null && ep.startAt > c.lastAt
+      && (ep.replyAt === null || ep.replyAt > evening)) c.leftWaiting++
+    if (h < REPLY_WINDOW.fromHour || h >= REPLY_WINDOW.toHour) continue
+    if (ep.replyAt === null) c.unanswered++
+    else c.replyMinutes.push(Math.round((ep.replyAt - ep.startAt) / 60))
   }
 
   const names = new Map(users.map(u => [u.id, u.name]))
