@@ -45,13 +45,14 @@ export default function PbxBlock({ from, to, names }: { from: string; to: string
               {[
                 { label: 'Входящих', v: data.summary.inbound },
                 { label: 'Принято', v: data.summary.inboundAnswered },
-                { label: 'Пропущено', v: data.summary.inboundMissed, warn: data.summary.inboundMissed > 0 },
-                { label: 'Перезвонили за 2 ч', v: data.summary.missedCalledBack2h },
-                { label: 'Не перезвонили вовсе', v: data.summary.missedNeverCalledBack, warn: data.summary.missedNeverCalledBack > 0 },
+                { label: 'Пропущено звонков', v: data.summary.inboundMissed, sub: `от ${data.summary.missedClients} клиентов` },
+                { label: 'Перезвонили за 2 ч', v: data.summary.missedCalledBack2h, sub: 'клиентов' },
+                { label: 'Не перезвонили вовсе', v: data.summary.missedNeverCalledBack, sub: 'клиентов', warn: data.summary.missedNeverCalledBack > 0 },
               ].map(k => (
                 <div key={k.label} className="bg-[#f5f5f3] rounded-lg px-3 py-2">
                   <div className="text-[11px] text-[#9a9a95]">{k.label}</div>
                   <div className={`text-[18px] font-semibold ${k.warn ? 'text-red-600' : 'text-[#111110]'}`}>{k.v}</div>
+                  {'sub' in k && k.sub && <div className="text-[10px] text-[#9a9a95]">{k.sub}</div>}
                 </div>
               ))}
             </div>
@@ -80,10 +81,13 @@ export default function PbxBlock({ from, to, names }: { from: string; to: string
             </p>
             {data.summary.missedNotCalledBackList.length > 0 && (
               <details>
-                <summary className="cursor-pointer text-[12px] text-red-700">Пропущенные без перезвона — {data.summary.missedNotCalledBackList.length}</summary>
+                <summary className="cursor-pointer text-[12px] text-red-700">Клиенты, которым не перезвонили — {data.summary.missedNotCalledBackList.length}</summary>
                 <ul className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 text-[12px] text-[#111110]">
                   {data.summary.missedNotCalledBackList.map(m => (
-                    <li key={`${m.at}-${m.phone}`} className="py-0.5">{shortDay(mskDay(m.at))} {fmtTime(m.at)} — {fmtPhone(m.phone)}</li>
+                    <li key={`${m.at}-${m.phone}`} className="py-0.5">
+                      {fmtPhone(m.phone)} — последний звонок {shortDay(mskDay(m.at))} {fmtTime(m.at)}
+                      {m.attempts > 1 && <span className="text-red-700"> · звонил {m.attempts} {m.attempts % 10 >= 2 && m.attempts % 10 <= 4 && (m.attempts < 10 || m.attempts > 20) ? 'раза' : 'раз'}</span>}
+                    </li>
                   ))}
                 </ul>
               </details>
