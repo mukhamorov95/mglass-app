@@ -3,6 +3,7 @@ import { mskDayKey } from '@/lib/time'
 import { calcTypeLabel, calcDetail } from '@/lib/calcLabel'
 import { redirect } from 'next/navigation'
 import { getRole, ROLE_HOME } from '@/lib/getRole'
+import MyDay from '@/components/MyDay'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
@@ -117,6 +118,9 @@ export default async function Home() {
           Все расчёты →
         </Link>
       </div>
+
+      {/* Мой день — первое, что видит менеджер: кому позвонить и написать прямо сейчас */}
+      {role === 'manager' && <MyDay />}
 
       {/* ── NEW CALCULATION – hero section ────────────────────────────── */}
       <section>

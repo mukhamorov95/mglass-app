@@ -8,7 +8,7 @@ const day = (d: string, first: string | null, last: string | null): DayActivity 
     day: d, firstAt: ts(first), lastAt: ts(last), activeHours: 0, longestPauseMin: 0, actions: first ? 10 : 0,
     hourly: [], hourlyNoAuthor: [], messagesOwn: 0, messagesNoAuthor: 0, clientMessages: 0, tasksCompleted: 0,
     tasksPostponed: 0, cardsMoved: 0, callsOut: 0, callsOutConnected: 0, callsInAnswered: 0, callsInMissed: 0,
-    talkSeconds: 0, replyMinutes: [], unanswered: 0,
+    talkSeconds: 0, replyMinutes: [], unanswered: 0, leftWaiting: 0,
   }
 }
 const alina: ManagerSchedule = {

@@ -13,9 +13,10 @@ export type MissedClient = {
   at: number
   attempts: number
   rangTo: string[]
+  rangToIds: number[]
   owner:
-    | { kind: 'deal'; leadId: number; leadName: string; responsible: string; stage: string; url: string; autoCreated: boolean }
-    | { kind: 'contact'; contactName: string; responsible: string; url: string; autoCreated: boolean }
+    | { kind: 'deal'; leadId: number; leadName: string; responsible: string; responsibleId: number; stage: string; url: string; autoCreated: boolean }
+    | { kind: 'contact'; contactName: string; responsible: string; responsibleId: number; url: string; autoCreated: boolean }
     | { kind: 'none' }
   after: { at: number; what: 'звонок' | 'сообщение'; by: string } | null
 }
@@ -38,12 +39,16 @@ export function describeMissedClient(input: {
   const name = (id: number) => names.get(id) ?? `amo #${id}`
 
   const rangTo: string[] = []
-  const add = (n: string) => { if (!rangTo.includes(n)) rangTo.push(n) }
-  for (const id of input.amoRang) if (id) add(name(id))
+  const rangToIds: number[] = []
+  const add = (n: string, id?: number) => {
+    if (!rangTo.includes(n)) rangTo.push(n)
+    if (id && !rangToIds.includes(id)) rangToIds.push(id)
+  }
+  for (const id of input.amoRang) if (id) add(name(id), id)
   for (const ext of item.exts) {
     const uid = input.extToUser.get(ext)
     // Внутренний без человека (5200) — общая линия/группа: такой пропуск amo не записывает вовсе
-    add(uid ? name(uid) : `общая линия (вн. ${ext})`)
+    add(uid ? name(uid) : `общая линия (вн. ${ext})`, uid)
   }
 
   let owner: MissedClient['owner'] = { kind: 'none' }
@@ -53,14 +58,14 @@ export function describeMissedClient(input: {
   const contact = input.contacts[0]
   if (lead) {
     owner = {
-      kind: 'deal', leadId: lead.id, leadName: lead.name, responsible: name(lead.responsible_user_id),
+      kind: 'deal', leadId: lead.id, leadName: lead.name, responsible: name(lead.responsible_user_id), responsibleId: lead.responsible_user_id,
       stage: input.stageNames.get(`${lead.pipeline_id}:${lead.status_id}`) ?? `этап ${lead.status_id}`,
       url: `https://${input.domain}/leads/detail/${lead.id}`,
       autoCreated: AUTO.test(lead.name) || input.contacts.some(c => AUTO.test(c.name)),
     }
   } else if (contact) {
     owner = {
-      kind: 'contact', contactName: contact.name, responsible: name(contact.responsible_user_id),
+      kind: 'contact', contactName: contact.name, responsible: name(contact.responsible_user_id), responsibleId: contact.responsible_user_id,
       url: `https://${input.domain}/contacts/detail/${contact.id}`, autoCreated: AUTO.test(contact.name),
     }
   }
@@ -71,6 +76,7 @@ export function describeMissedClient(input: {
     at: item.at,
     attempts: item.attempts,
     rangTo,
+    rangToIds,
     owner,
     after: touch
       ? { at: touch.created_at, what: touch.type === 'outgoing_call' ? 'звонок' : 'сообщение', by: touch.created_by ? name(touch.created_by) : 'без автора' }
