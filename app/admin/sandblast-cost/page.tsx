@@ -17,7 +17,7 @@ const I = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outli
 const num = (v: string) => { const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : 0 }
 const rub = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 2 })
 
-type Svc = { id: number; name: string; cost_price: number | null; value: number | null; unit_label: string | null; time_minutes: number | null; consumables_cost_rub: number | null; equipment_depr_rub: number | null }
+type Svc = { id: number; name: string; cost_price: number | null; value: number | null; unit_label: string | null; active: boolean | null; time_minutes: number | null; consumables_cost_rub: number | null; equipment_depr_rub: number | null }
 
 export default function SandblastCostPage() {
   const supabase = createClient()
@@ -49,7 +49,7 @@ export default function SandblastCostPage() {
     (async () => {
       const [{ data: p }, { data: s }, { data: saved }] = await Promise.all([
         supabase.from('production_settings').select('*').eq('id', 1).maybeSingle(),
-        supabase.from('b2b_services').select('id, name, cost_price, value, unit_label, time_minutes, consumables_cost_rub, equipment_depr_rub').ilike('name', '%пескостру%').order('id'),
+        supabase.from('b2b_services').select('id, name, cost_price, value, unit_label, active, time_minutes, consumables_cost_rub, equipment_depr_rub').ilike('name', '%пескостру%').order('id'),
         supabase.from('process_cost_inputs').select('inputs, updated_at').eq('process', 'sandblast').maybeSingle(),
       ])
       if (p) setPs(p as ProductionSettings)
@@ -201,7 +201,7 @@ export default function SandblastCostPage() {
             <p className="text-[13px] font-semibold text-[#111110]">Что стоит в справочнике сейчас</p>
             {svcs.map(s => (
               <div key={s.id} className="flex justify-between gap-4 text-[12px]">
-                <span className="text-[#6b6b66]">{s.name}</span>
+                <span className="text-[#6b6b66]">{s.name}{s.active === false && <span className="text-[#b0b0aa]"> · отключена</span>}</span>
                 <span className="font-mono text-[#111110] shrink-0">
                   {Number(s.cost_price ?? 0).toLocaleString('ru-RU')} ₽
                   <span className="text-[#b0b0aa]"> · продажа {Number(s.value ?? 0).toLocaleString('ru-RU')} {s.unit_label ?? ''}</span>
@@ -209,7 +209,7 @@ export default function SandblastCostPage() {
               </div>
             ))}
             <p className="text-[11px] text-[#9a9a95]">
-              У обеих строк время, амортизация и расходники сейчас нули — значит себестоимость там вписана руками и ничем не раскрывается.
+              Время, амортизация и расходники у этих строк — нули: значит себестоимость вписана руками и ни на что не раскладывается.
             </p>
           </div>
         )}
