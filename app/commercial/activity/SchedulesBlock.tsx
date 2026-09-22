@@ -78,7 +78,7 @@ export default function SchedulesBlock({ managers, schedules, onSaved }: {
   const rows = [...managers]
   for (const s of schedules) if (!rows.some(m => m.userId === s.amo_user_id)) rows.push({ userId: s.amo_user_id, name: s.name })
   return (
-    <Card title="Графики" hint="Дата выхода, часы и рабочие дни. По ним считаются опоздания, ранние уходы и пропуски; до даты выхода дни человеку не в вину. Менять может владелец.">
+    <Card title="Графики" hint="Дата выхода, часы и рабочие дни. По ним считаются поздний старт, ранний финиш и пустые дни; до даты выхода дни человеку не в вину. Менять может владелец.">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
