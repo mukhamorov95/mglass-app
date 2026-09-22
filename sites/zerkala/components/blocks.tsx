@@ -321,3 +321,26 @@ export function LeadSection({ title = "Рассчитаем зеркало по 
     </section>
   );
 }
+
+// Отзывы — официальный виджет Яндекса с карточки компании. Свой текст отзывов не
+// копируем и разметку Review/AggregateRating не ставим: чужие отзывы размечать
+// своими нельзя (правила Яндекса и Google). compact — короткая карточка рейтинга.
+export function YandexReviews({ compact = false }: { compact?: boolean }) {
+  const src = compact ? SITE.reviews.badgeUrl : SITE.reviews.widgetUrl;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-card">
+      <iframe
+        src={src}
+        title="Отзывы о M-Glass на Яндекс Картах"
+        loading="lazy"
+        className={compact ? "h-[180px] w-full border-0" : "h-[560px] w-full border-0 sm:h-[760px]"}
+      />
+      <div className="border-t border-line px-5 py-3 text-sm text-muted">
+        Отзывы приходят из карточки компании на Яндекс Картах —{" "}
+        <a href={SITE.reviews.mapsUrl} target="_blank" rel="noopener nofollow" className="underline hover:text-ink">
+          открыть и оставить свой
+        </a>
+      </div>
+    </div>
+  );
+}

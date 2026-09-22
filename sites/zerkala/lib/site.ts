@@ -100,6 +100,16 @@ export const SITE = {
   serviceArea: FACTS.serviceArea.value,
   shipping: FACTS.shipping.value,
   address: FACTS.address.value,
+  // Отзывы — официальным виджетом Яндекса с карточки «MGlass.ru» (org 160929264216):
+  // копировать чужие отзывы к себе на сайт и размечать их своей разметкой нельзя
+  // (правила Яндекса и Google). Виджет показывает живые отзывы и рейтинг и
+  // обновляется сам — цифры на сайте не устареют.
+  reviews: {
+    orgId: "160929264216",
+    mapsUrl: FACTS.address.value.mapsUrl,
+    widgetUrl: "https://yandex.ru/maps-reviews-widget/160929264216?comments",
+    badgeUrl: "https://yandex.ru/maps-reviews-widget/160929264216",
+  },
   // Приём заявок — публичный маршрут mglass-app (site_leads + Telegram владельцу).
   // Локально по умолчанию выключен: иначе проверка формы будит владельца.
   leadEndpoint: process.env.NEXT_PUBLIC_LEAD_ENDPOINT || (process.env.VERCEL ? "https://mglass-app.vercel.app/api/configurator/lead" : ""),
