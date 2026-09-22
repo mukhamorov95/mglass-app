@@ -1,3 +1,9 @@
+## Параллельная задача (22.09): стартовые скрипты в worktree
+- `node scripts/owner-tasks.mjs` и `scan-lessons.mjs` падали ENOENT в каждом worktree: .env.local не в git
+  и лежит только в основной копии. СДЕЛАНО: scripts/lib/envLocal.mjs — сначала своя копия, потом основная
+  (родитель `git rev-parse --git-common-dir`), иначе ясная ошибка со списком путей. Обход «запускать скрипт
+  основной копии по абсолютному пути» больше не нужен. Тот же шаблон чтения ещё в ~11 скриптах scripts/ — не трогали.
+
 ## Параллельная задача (22.09): подпись быстрых расчётов в списках
 - На главной менеджера («Последние расчёты») строки quick показывались как «quick undefined×undefined мм»,
   у build в /calculations — «undefined×undefined мм» (размеры build лежат в input_data.dims, modelId нет).
