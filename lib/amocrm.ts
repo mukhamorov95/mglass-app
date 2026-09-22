@@ -52,8 +52,13 @@ export async function amoGet<T = unknown>(
     signal: AbortSignal.timeout(8000),
     ...(revalidate ? { next: { revalidate } } : {}),
   })
-  // amo пускает 7 запросов в секунду и отвечает 429 сверх лимита — это «подожди», а не ошибка
-  let res = await call()
+  // amo пускает 7 запросов в секунду и отвечает 429 сверх лимита — это «подожди», а не ошибка.
+  // Обрыв соединения (fetch failed) из Vercel до amo тоже бывает разовым — один повтор.
+  let res = await call().catch(async (e: unknown) => {
+    if (!(e instanceof TypeError)) throw e
+    await new Promise(r => setTimeout(r, 1000))
+    return call()
+  })
   for (let attempt = 1; res.status === 429 && attempt <= 3; attempt++) {
     await new Promise(r => setTimeout(r, 1000 * attempt))
     res = await call()
