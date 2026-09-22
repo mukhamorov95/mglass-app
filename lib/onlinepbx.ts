@@ -65,7 +65,7 @@ function signHeader(s: Session, method: string, path: string, contentType: strin
   return `${s.keyId}:${signature}`
 }
 
-async function apiPost(path: string, params: Record<string, string>): Promise<Record<string, unknown>> {
+async function apiPost(path: string, params: Record<string, string>, base = API_BASE): Promise<Record<string, unknown>> {
   const s = await auth()
   const body = new URLSearchParams(params).toString()
   const contentType = 'application/x-www-form-urlencoded'
@@ -73,7 +73,7 @@ async function apiPost(path: string, params: Record<string, string>): Promise<Re
   const date = new Date().toUTCString().replace('GMT', '+0000')   // RFC-2822 как date('r')
   const fullPath = `/${DOMAIN}${path}`
 
-  const doFetch = (authValue: string) => fetch(`${API_BASE}${fullPath}`, {
+  const doFetch = (authValue: string) => fetch(`${base}${fullPath}`, {
     method: 'POST',
     headers: {
       'Content-Type': contentType,
@@ -105,4 +105,22 @@ export async function onlinePbxCall(phone: string, ext: string): Promise<{ ok: b
   const to = normalizePhone(phone)
   const body = await apiPost('/call/now.json', { from: ext, to })
   return { ok: String(body?.status ?? '') === '1', body }
+}
+
+// История звонков АТС (mongo_history). Не больше недели за запрос — берём по неделям.
+// Часть кабинетов отдаёт историю только с api2 — пробуем его, если основной хост отказал.
+export async function onlinePbxHistory(from: number, to: number): Promise<Record<string, unknown>[]> {
+  if (!isOnlinePbxConfigured()) throw new Error('OnlinePBX не настроен (нет ONLINEPBX_DOMAIN / ONLINEPBX_API_KEY)')
+  const out: Record<string, unknown>[] = []
+  for (let a = from; a < to; a += 7 * 86400) {
+    const params = { start_stamp_from: String(a), start_stamp_to: String(Math.min(a + 7 * 86400, to) - 1) }
+    let j = await apiPost('/mongo_history/search.json', params)
+    if (String(j?.status ?? '') !== '1') {
+      const alt = await apiPost('/mongo_history/search.json', params, 'https://api2.onlinepbx.ru').catch(() => null)
+      if (alt && String(alt.status ?? '') === '1') j = alt
+    }
+    if (String(j?.status ?? '') !== '1') throw new Error(`OnlinePBX история: ${String(j?.comment ?? JSON.stringify(j).slice(0, 200))}`)
+    if (Array.isArray(j.data)) out.push(...(j.data as Record<string, unknown>[]))
+  }
+  return out
 }
