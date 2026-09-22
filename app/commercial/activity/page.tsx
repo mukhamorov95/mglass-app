@@ -1,14 +1,21 @@
 'use client'
 
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import {
-  fmtMinuteOfDay, fmtTime, median, mskDay,
+  COUNT_KEYS, emptyDay, fmtMinuteOfDay, fmtTime, median, mskDay,
   type AmoActivityReport, type DayActivity, type ManagerActivity,
 } from '@/lib/amoActivity'
+import { checkDay, checkPeriod, fmtHm, type ManagerSchedule } from '@/lib/managerSchedule'
+import { sameName, type WazzupAuthors } from '@/lib/wazzupOutgoing'
+import { Card, Num, fmtWait, isWeekend, nowTs, shortDay, weekday } from './ui'
+import ResultsBlock from './ResultsBlock'
+import PbxBlock from './PbxBlock'
+import SchedulesBlock from './SchedulesBlock'
 
 // Рабочий день менеджеров по AmoCRM. Команда общается с клиентами только через amo,
 // поэтому след в amo — это и есть рабочий день. Ноль здесь — повод спросить, а не
-// приговор: отпуск, больничный и работа мимо amo выглядят одинаково.
+// приговор: отпуск, больничный и работа мимо amo выглядят одинаково. Поэтому рядом —
+// норма (график), результат (сделки) и то, чего amo не видит (АТС, авторы Wazzup).
 
 type Preset = 'today' | 'yesterday' | 'week' | 'two' | 'day'
 const PRESETS: { key: Preset; label: string }[] = [
@@ -16,14 +23,8 @@ const PRESETS: { key: Preset; label: string }[] = [
   { key: 'week', label: '7 дней' }, { key: 'two', label: '14 дней' }, { key: 'day', label: 'День' },
 ]
 const HOURS = Array.from({ length: 16 }, (_, i) => i + 7) // 07:00–22:59
-const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
 
-const nowTs = () => Math.floor(Date.now() / 1000)
-const weekday = (day: string) => WEEKDAY[new Date(`${day}T12:00:00Z`).getUTCDay()]
-const isWeekend = (day: string) => { const d = new Date(`${day}T12:00:00Z`).getUTCDay(); return d === 0 || d === 6 }
-const shortDay = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
-const fmtWait = (min: number | null) =>
-  min === null ? '—' : min < 60 ? `${min} мин` : `${Math.floor(min / 60)} ч ${min % 60 ? `${min % 60} мин` : ''}`.trim()
+type ActivityResponse = AmoActivityReport & { wazzup?: (WazzupAuthors & { since: string | null }) | { error: string } }
 
 function range(preset: Preset, day: string) {
   const t = nowTs()
@@ -42,9 +43,9 @@ function cellColor(own: number, noAuthor: number) {
   return 'bg-[#f0f0ec]'
 }
 
-function HourStrip({ d }: { d: DayActivity }) {
+function HourStrip({ d, off }: { d: DayActivity; off: boolean }) {
   return (
-    <div className="flex gap-px">
+    <div className={`flex gap-px ${off ? 'opacity-40' : ''}`}>
       {HOURS.map(h => (
         <div key={h} title={`${String(h).padStart(2, '0')}:00 — действий ${d.hourly[h]}, сообщений с телефона ${d.hourlyNoAuthor[h]}`}
           className={`h-4 flex-1 min-w-[10px] rounded-[2px] ${cellColor(d.hourly[h], d.hourlyNoAuthor[h])}`} />
@@ -53,17 +54,36 @@ function HourStrip({ d }: { d: DayActivity }) {
   )
 }
 
-function Num({ v, muted }: { v: number | string; muted?: boolean }) {
-  return <span className={muted || v === 0 ? 'text-[#9a9a95]' : 'text-[#111110]'}>{v}</span>
+function DayNorm({ d, s }: { d: DayActivity; s?: ManagerSchedule }) {
+  const c = checkDay(d, s, nowTs())
+  if (c.notStarted) return <span className="text-[#9a9a95]">ещё не работал(а)</span>
+  if (!c.expected) return <span className="text-[#9a9a95]">{s ? 'выходной' : '—'}</span>
+  if (c.absent) return <span className="text-red-600">пропуск</span>
+  const parts = [c.lateMin !== null && `опоздание ${fmtWait(c.lateMin)}`, c.earlyMin !== null && `ушёл(ла) раньше на ${fmtWait(c.earlyMin)}`].filter(Boolean)
+  return parts.length ? <span className="text-amber-700">{parts.join(', ')}</span> : <span className="text-green-700">по графику</span>
 }
 
-function DayRows({ m }: { m: ManagerActivity }) {
+function PeriodNorm({ m, s }: { m: ManagerActivity; s?: ManagerSchedule }) {
+  if (!s) return <span className="text-[#9a9a95]">нет графика</span>
+  const p = checkPeriod(m.days, s, nowTs())
+  if (p.expectedDays === 0) return <span className="text-[#9a9a95]">{s.starts_on ? `с ${shortDay(s.starts_on)}` : 'нет рабочих дней'}</span>
+  const bad = p.absentDays.length + p.lateDays + p.earlyDays
+  return (
+    <span className={bad ? 'text-amber-700' : 'text-green-700'} title={p.absentDays.length ? `Пропуски: ${p.absentDays.map(shortDay).join(', ')}` : undefined}>
+      {bad ? `пропуск ${p.absentDays.length} · опозд. ${p.lateDays} · раньше ${p.earlyDays}` : 'по графику'}
+      <span className="text-[#9a9a95]"> из {p.expectedDays}</span>
+    </span>
+  )
+}
+
+function DayRows({ m, s }: { m: ManagerActivity; s?: ManagerSchedule }) {
   return (
     <table className="w-full text-[12px]">
       <thead>
         <tr className="text-[#9a9a95] text-left">
           <th className="py-1 pr-3 font-normal">День</th>
           <th className="py-1 pr-3 font-normal">Начало–конец</th>
+          <th className="py-1 pr-3 font-normal">По графику</th>
           <th className="py-1 pr-3 font-normal text-right">Часов</th>
           <th className="py-1 pr-3 font-normal text-right">Макс. пауза</th>
           <th className="py-1 pr-3 font-normal text-right">Действий</th>
@@ -80,6 +100,7 @@ function DayRows({ m }: { m: ManagerActivity }) {
           <tr key={d.day} className={`border-t border-[#f0f0ec] ${isWeekend(d.day) ? 'text-[#9a9a95]' : ''}`}>
             <td className="py-1 pr-3">{shortDay(d.day)} {weekday(d.day)}</td>
             <td className="py-1 pr-3">{d.firstAt === null ? <span className="text-[#9a9a95]">нет действий</span> : `${fmtTime(d.firstAt)}–${fmtTime(d.lastAt)}`}</td>
+            <td className="py-1 pr-3"><DayNorm d={d} s={s} /></td>
             <td className="py-1 pr-3 text-right"><Num v={d.activeHours} /></td>
             <td className="py-1 pr-3 text-right"><Num v={d.firstAt === null ? '—' : fmtWait(d.longestPauseMin)} muted /></td>
             <td className="py-1 pr-3 text-right"><Num v={d.actions} /></td>
@@ -96,13 +117,56 @@ function DayRows({ m }: { m: ManagerActivity }) {
   )
 }
 
+// Человек с графиком и без единого действия в amo иначе просто пропал бы из таблицы
+function absentee(s: ManagerSchedule, days: string[]): ManagerActivity {
+  return {
+    userId: s.amo_user_id, name: s.name, days: days.map(emptyDay),
+    total: Object.fromEntries(COUNT_KEYS.map(k => [k, 0])) as ManagerActivity['total'],
+    workDays: 0, medianStartMin: null, medianEndMin: null, avgActiveHours: 0, medianReplyMin: null, repliesCounted: 0,
+  }
+}
+
+function WazzupBlock({ w, managers }: { w: ActivityResponse['wazzup']; managers: ManagerActivity[] }) {
+  if (!w) return null
+  if ('error' in w) return <Card title="Кто писал из Wazzup"><p className="text-[13px] text-red-700">{w.error}</p></Card>
+  const hint = w.since
+    ? `Исходящие, отправленные из приложения Wazzup или с телефона, с автором по данным Wazzup. Копятся с ${shortDay(mskDay(Math.floor(Date.parse(w.since) / 1000)))}.`
+    : 'Исходящие Wazzup с автором начали сохраняться 22.09 — данные появятся после первых сообщений.'
+  return (
+    <Card title="Кто писал из Wazzup" hint={hint}>
+      {w.total === 0 ? <p className="text-[13px] text-[#9a9a95]">За период исходящих из Wazzup нет.</p> : (
+        <table className="w-full text-[13px]">
+          <tbody>
+            {w.authors.map(a => {
+              const m = managers.find(x => sameName(x.name, a.name))
+              return (
+                <tr key={a.name} className="border-b border-[#f0f0ec]">
+                  <td className="py-1.5 pr-2 text-[#111110]">{a.name}{m && m.name !== a.name && <span className="text-[#9a9a95]"> · в amo «{m.name}»</span>}</td>
+                  <td className="py-1.5 px-2 text-right"><Num v={a.total} /> <span className="text-[#9a9a95]">сообщ.</span></td>
+                  <td className="py-1.5 pl-2 text-right text-[#9a9a95]">{fmtTime(a.firstAt)}–{fmtTime(a.lastAt)}</td>
+                </tr>
+              )
+            })}
+            <tr>
+              <td className="py-1.5 pr-2 text-[#9a9a95]">без автора (прямо с телефона)</td>
+              <td className="py-1.5 px-2 text-right"><Num v={w.noAuthor} muted /></td>
+              <td />
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </Card>
+  )
+}
+
 export default function AmoActivityPage() {
   const [preset, setPreset] = useState<Preset>('today')
   const [day, setDay] = useState(() => mskDay(nowTs() - 86400))
-  const [data, setData] = useState<AmoActivityReport | null>(null)
+  const [data, setData] = useState<ActivityResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState<number | null>(null)
+  const [schedules, setSchedules] = useState<ManagerSchedule[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -111,21 +175,45 @@ export default function AmoActivityPage() {
       .then(async res => {
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? `Ошибка ${res.status}`)
-        if (!cancelled) { setData(json as AmoActivityReport); setError(null) }
+        if (!cancelled) { setData(json as ActivityResponse); setError(null) }
       })
       .catch(e => { if (!cancelled) { setError(e instanceof Error ? e.message : String(e)); setData(null) } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [preset, day])
 
+  const [schedulesError, setSchedulesError] = useState<string | null>(null)
+  const loadSchedules = useCallback(() => {
+    fetch('/api/commercial/manager-schedules')
+      .then(async res => {
+        const json = await res.json()
+        if (!res.ok || !Array.isArray(json.schedules)) throw new Error(json.error ?? `Ошибка ${res.status}`)
+        setSchedules(json.schedules as ManagerSchedule[])
+        setSchedulesError(null)
+      })
+      .catch(e => setSchedulesError(`Графики не загрузились — колонка «По графику» пустая: ${e instanceof Error ? e.message : String(e)}`))
+  }, [])
+  useEffect(() => { loadSchedules() }, [loadSchedules])
+
   const choosePreset = (p: Preset) => { if (p !== preset) { setPreset(p); setLoading(true) } }
   const chooseDay = (v: string) => { if (v && v !== day) { setDay(v); setLoading(true) } }
 
-  const managers = (data?.managers ?? []).filter(m => m.total.actions > 0 || m.total.messagesNoAuthor > 0)
+  const scheduleOf = (id: number) => schedules.find(s => s.amo_user_id === id)
+  const active = (data?.managers ?? []).filter(m => m.total.actions > 0 || m.total.messagesNoAuthor > 0)
+  const now = nowTs()
+  const missing = data
+    ? schedules
+      .filter(s => !active.some(m => m.userId === s.amo_user_id))
+      .map(s => absentee(s, data.days))
+      .filter(m => checkPeriod(m.days, scheduleOf(m.userId), now).expectedDays > 0)
+    : []
+  const managers = [...active, ...missing]
   const single = (data?.days.length ?? 0) === 1
   const firstStarter = single
-    ? managers.filter(m => m.days[0].firstAt !== null).sort((a, b) => a.days[0].firstAt! - b.days[0].firstAt!)[0]
+    ? active.filter(m => m.days[0].firstAt !== null).sort((a, b) => a.days[0].firstAt! - b.days[0].firstAt!)[0]
     : undefined
+  const r = range(preset, day)
+  const names = new Map((data?.managers ?? []).map(m => [m.userId, m.name]))
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-6">
@@ -133,7 +221,7 @@ export default function AmoActivityPage() {
         <div className="mb-4">
           <h1 className="text-[18px] font-semibold text-[#111110]">Рабочий день менеджеров</h1>
           <p className="text-[12px] text-[#9a9a95] mt-0.5">
-            По действиям в AmoCRM, московское время. Кто во сколько начал и закончил, сообщения, звонки, задачи.
+            По действиям в AmoCRM, московское время: кто во сколько начал и закончил — против графика, что из этого вышло в сделках и что amo не видит.
           </p>
         </div>
 
@@ -157,8 +245,9 @@ export default function AmoActivityPage() {
           )}
         </div>
 
-        {loading && <div className="bg-white border border-[#e4e4e0] rounded-xl p-6 text-[13px] text-[#9a9a95]">Загружаю из AmoCRM… за 14 дней это до минуты.</div>}
-        {error && <div className="bg-white border border-red-200 rounded-xl p-4 text-[13px] text-red-700">{error}</div>}
+        {loading && <div className="bg-white border border-[#e4e4e0] rounded-xl p-6 text-[13px] text-[#9a9a95] mb-4">Загружаю из AmoCRM… за 14 дней это до минуты.</div>}
+        {error && <div className="bg-white border border-red-200 rounded-xl p-4 text-[13px] text-red-700 mb-4">{error}</div>}
+        {schedulesError && <div className="bg-white border border-amber-200 rounded-xl p-3 text-[12px] text-amber-800 mb-4">{schedulesError}</div>}
 
         {data && !loading && (
           <>
@@ -179,6 +268,7 @@ export default function AmoActivityPage() {
                     {!single && <th className="px-2 py-2 font-normal text-right">Дней</th>}
                     <th className="px-2 py-2 font-normal text-right">{single ? 'Начало' : 'Начало (медиана)'}</th>
                     <th className="px-2 py-2 font-normal text-right">{single ? 'Конец' : 'Конец (медиана)'}</th>
+                    <th className="px-2 py-2 font-normal" title="Сравнение с графиком из блока «Графики» ниже">По графику</th>
                     <th className="px-2 py-2 font-normal text-right" title="Сколько разных часов было хотя бы одно действие">Часов с действиями</th>
                     <th className="px-2 py-2 font-normal text-right">Действий</th>
                     <th className="px-2 py-2 font-normal text-right" title="Из amo под своим именем + без автора (с телефона / из Wazzup) в его сделках">Сообщений</th>
@@ -194,14 +284,19 @@ export default function AmoActivityPage() {
                 <tbody>
                   {managers.map(m => {
                     const d0 = m.days[0]
+                    const s = scheduleOf(m.userId)
                     return (
                       <Fragment key={m.userId}>
                         <tr onClick={() => setOpen(open === m.userId ? null : m.userId)}
                           className="border-b border-[#f0f0ec] hover:bg-[#fafaf8] cursor-pointer">
-                          <td className="px-4 py-2 font-medium text-[#111110]">{open === m.userId ? '▾' : '▸'} {m.name}</td>
+                          <td className="px-4 py-2 font-medium text-[#111110] whitespace-nowrap">
+                            {open === m.userId ? '▾' : '▸'} {m.name}
+                            {s && (s.work_from || s.work_to) && <span className="text-[11px] font-normal text-[#9a9a95]"> {fmtHm(s.work_from)}–{fmtHm(s.work_to)}</span>}
+                          </td>
                           {!single && <td className="px-2 py-2 text-right"><Num v={`${m.workDays} из ${data.days.length}`} /></td>}
                           <td className="px-2 py-2 text-right"><Num v={single ? fmtTime(d0.firstAt) : fmtMinuteOfDay(m.medianStartMin)} /></td>
                           <td className="px-2 py-2 text-right"><Num v={single ? fmtTime(d0.lastAt) : fmtMinuteOfDay(m.medianEndMin)} /></td>
+                          <td className="px-2 py-2 text-[12px] whitespace-nowrap">{single ? <DayNorm d={d0} s={s} /> : <PeriodNorm m={m} s={s} />}</td>
                           <td className="px-2 py-2 text-right"><Num v={single ? d0.activeHours : m.avgActiveHours} /></td>
                           <td className="px-2 py-2 text-right"><Num v={m.total.actions} /></td>
                           <td className="px-2 py-2 text-right"><Num v={m.total.messagesOwn} /> <span className="text-[#9a9a95]">+{m.total.messagesNoAuthor}</span></td>
@@ -215,58 +310,72 @@ export default function AmoActivityPage() {
                         </tr>
                         {open === m.userId && (
                           <tr className="border-b border-[#e4e4e0] bg-[#fafaf8]">
-                            <td colSpan={single ? 13 : 14} className="px-4 py-3"><DayRows m={m} /></td>
+                            <td colSpan={single ? 14 : 15} className="px-4 py-3"><DayRows m={m} s={s} /></td>
                           </tr>
                         )}
                       </Fragment>
                     )
                   })}
                   {managers.length === 0 && (
-                    <tr><td colSpan={14} className="px-4 py-6 text-center text-[#9a9a95]">За период в AmoCRM нет действий менеджеров</td></tr>
+                    <tr><td colSpan={15} className="px-4 py-6 text-center text-[#9a9a95]">За период в AmoCRM нет действий менеджеров</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
 
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 mb-4">
-              <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-                <h2 className="text-[14px] font-semibold text-[#111110]">Кто во сколько работает</h2>
-                <div className="flex items-center gap-3 text-[11px] text-[#9a9a95]">
+            <ResultsBlock />
+
+            <PbxBlock from={r.from} to={r.to} names={names} />
+
+            <Card
+              title="Кто во сколько работает"
+              right={
+                <div className="flex items-center gap-3 text-[11px] text-[#9a9a95] flex-wrap">
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-[2px] bg-[#1f6f43]" /> 15+ действий в час</span>
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-[2px] bg-[#3f9a66]" /> 6–14</span>
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-[2px] bg-[#a6d4b5]" /> 1–5</span>
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-[2px] bg-[#cfdcf0]" /> только сообщения с телефона</span>
+                  <span>бледно — до даты выхода</span>
                 </div>
-              </div>
+              }
+            >
               <div className="flex gap-px pl-[180px] mb-1">
                 {HOURS.map(h => <div key={h} className="flex-1 min-w-[10px] text-[10px] text-[#9a9a95] text-center">{h}</div>)}
               </div>
-              {managers.map(m => (
-                <div key={m.userId} className="mb-3">
-                  {!single && <div className="text-[12px] font-medium text-[#111110] mb-1">{m.name}</div>}
-                  {m.days.map(d => (
-                    <div key={d.day} className="flex items-center gap-2 mb-px">
-                      <div className={`w-[172px] shrink-0 text-[11px] truncate ${isWeekend(d.day) ? 'text-[#9a9a95]' : 'text-[#111110]'}`}>
-                        {single ? <span className="font-medium">{m.name}</span> : `${shortDay(d.day)} ${weekday(d.day)}`}
-                        <span className="text-[#9a9a95]"> {d.firstAt === null ? '—' : `${fmtTime(d.firstAt)}–${fmtTime(d.lastAt)}`}</span>
+              {managers.map(m => {
+                const s = scheduleOf(m.userId)
+                return (
+                  <div key={m.userId} className="mb-3">
+                    {!single && <div className="text-[12px] font-medium text-[#111110] mb-1">{m.name}</div>}
+                    {m.days.map(d => (
+                      <div key={d.day} className="flex items-center gap-2 mb-px">
+                        <div className={`w-[172px] shrink-0 text-[11px] truncate ${isWeekend(d.day) ? 'text-[#9a9a95]' : 'text-[#111110]'}`}>
+                          {single ? <span className="font-medium">{m.name}</span> : `${shortDay(d.day)} ${weekday(d.day)}`}
+                          <span className="text-[#9a9a95]"> {d.firstAt === null ? '—' : `${fmtTime(d.firstAt)}–${fmtTime(d.lastAt)}`}</span>
+                        </div>
+                        <div className="flex-1"><HourStrip d={d} off={!!s?.starts_on && d.day < s.starts_on} /></div>
                       </div>
-                      <div className="flex-1"><HourStrip d={d} /></div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </Card>
+
+            <WazzupBlock w={data.wazzup} managers={data.managers} />
+
+            <SchedulesBlock managers={active.map(m => ({ userId: m.userId, name: m.name }))} schedules={schedules} onSaved={loadSchedules} />
 
             <details className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-[12px] text-[#6b6b66]">
               <summary className="cursor-pointer text-[13px] font-medium text-[#111110]">Как считается</summary>
               <ul className="mt-2 space-y-1.5 list-disc pl-5">
                 <li><b>Действие</b> — всё, что человек сделал в amo под своим именем: сообщение, звонок, задача, заметка, смена этапа, правка полей. Не считаются: сообщения клиентов, пропущенные звонки и связки «сделка ↔ контакт» — их ставит интеграция заявок, в том числе ночью.</li>
                 <li><b>Начало и конец</b> — первое и последнее действие за день. Для периода — медиана по дням, в которые были действия.</li>
-                <li><b>Сообщения «+N»</b> — отправлены без автора: с телефона или из приложения Wazzup, мимо интерфейса amo. Кто именно отправил, amo не знает, поэтому они засчитаны ответственному по сделке отдельно и рабочее окно не двигают. Таких сообщений больше половины.{data.noAuthorUnassigned > 0 && ` Не удалось привязать к сделке: ${data.noAuthorUnassigned}.`}</li>
-                <li><b>Ответ клиенту</b> — от первого сообщения клиента до первого нашего ответа в той же беседе, от кого бы он ни пришёл. Берутся только сообщения, пришедшие с 9 до 19, чтобы ночь не выглядела медленным ответом.</li>
-                <li><b>Звонки</b> — по заметкам телефонии (onlinePBX): «дозвонился» и «принято» — разговор состоялся, иначе — не дозвонился / пропущен.</li>
+                <li><b>По графику</b> — сравнение с графиком ниже: опоздание и ранний уход — больше чем на 15 минут; пропуск — рабочий по графику день без единого действия. До даты выхода дни не в вину. Нет графика — нет и нарушений.</li>
+                <li><b>Сообщения «+N»</b> — отправлены без автора: с телефона или из приложения Wazzup, мимо интерфейса amo. amo не знает, кто их отправил, поэтому они засчитаны ответственному по сделке отдельно и рабочее окно не двигают. Кто писал на самом деле — блок «Кто писал из Wazzup».{data.noAuthorUnassigned > 0 && ` Не удалось привязать к сделке: ${data.noAuthorUnassigned}.`}</li>
+                <li><b>Ответ клиенту</b> — от первого сообщения клиента до первого нашего ответа в той же беседе, от кого бы он ни пришёл. Берутся только сообщения, пришедшие с 9 до 19.</li>
+                <li><b>Звонки</b> в таблице — по заметкам amo (onlinePBX): «дозвонился» и «принято» — разговор состоялся. Звонки мимо карточек и пропущенные на общей линии — в блоке «Телефония».</li>
+                <li><b>Результат</b> — этап засчитан тому, кто перевёл сделку вперёд (перевод между этапами оплаты — не новая оплата); «до оплаты» — ответственному. Бюджет сделки в amo — не деньги в кассе.</li>
                 <li><b>Задачи</b>: закрыто / перенесено срок. Много переносов при малом числе закрытых — задачи двигают, а не делают.</li>
-                <li>Пустой день — сначала вопрос, а не вывод: отпуск, больничный и работа мимо amo выглядят одинаково.</li>
               </ul>
             </details>
           </>

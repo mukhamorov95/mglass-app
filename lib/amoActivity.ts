@@ -147,7 +147,7 @@ export function replyEpisodes(events: AmoActivityEvent[]) {
   return out
 }
 
-function emptyDay(day: string): DayActivity {
+export function emptyDay(day: string): DayActivity {
   return {
     day, firstAt: null, lastAt: null, activeHours: 0, longestPauseMin: 0, actions: 0,
     hourly: Array(24).fill(0), hourlyNoAuthor: Array(24).fill(0),
