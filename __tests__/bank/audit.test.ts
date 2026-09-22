@@ -42,6 +42,11 @@ describe('проверка бухгалтерии', () => {
     expect(f.find(x => x.code === 'duplicate_entries')).toBeUndefined()
   })
 
+  it('оплата и её возврат в тот же день дублем не считаются', () => {
+    const f = audit({ ...EMPTY, entries: [entry({ id: 1, kind: 'out' }), entry({ id: 2, kind: 'in' })] })
+    expect(f.find(x => x.code === 'duplicate_entries')).toBeUndefined()
+  })
+
   it('просроченный налог важнее скорого', () => {
     const f = audit({ ...EMPTY, taxes: [
       { title: 'Аванс УСН', due_date: '2026-08-20', amount: 100000, status: 'planned' },

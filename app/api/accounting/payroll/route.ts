@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { signedAmount } from '@/lib/accounting/fundSign'
 
 // Б11: зарплата по людям. Человек — подфонд зарплатных фондов ДДС, выплата —
 // операция по этому подфонду. Начисления живут в payroll_accruals: без них
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
   const to = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10)
 
   const svc = createServiceClient()
-  const { data: funds } = await svc.from('cashflow_funds').select('id,name').eq('unit', unit)
+  const { data: funds } = await svc.from('cashflow_funds').select('id,name,fund_class').eq('unit', unit)
   const payrollFunds = (funds ?? []).filter(f => isPayrollFund(f.name as string))
   const fundIds = payrollFunds.map(f => Number(f.id))
 
@@ -39,15 +40,18 @@ export async function GET(req: NextRequest) {
   const [{ data: subs }, { data: accruals }, { data: paid }] = await Promise.all([
     svc.from('cashflow_subfunds').select('id,fund_id,name,active').in('fund_id', fundIds).order('sort'),
     svc.from('payroll_accruals').select('*').eq('unit', unit).eq('month', month),
-    svc.from('cashflow_entries').select('subfund_id,fund_id,amount')
-      .eq('unit', unit).eq('kind', 'out').in('fund_id', fundIds)
+    // обе стороны: сторно на зарплатном фонде (приход) уменьшает выплату, а не теряется
+    svc.from('cashflow_entries').select('subfund_id,fund_id,kind,amount')
+      .eq('unit', unit).in('fund_id', fundIds)
       .gte('entry_date', from).lt('entry_date', to),
   ])
 
+  const classOf = new Map(payrollFunds.map(f => [Number(f.id), String(f.fund_class)]))
   const paidBySub = new Map<number, number>()
   for (const e of paid ?? []) {
     const k = Number(e.subfund_id ?? 0)
-    paidBySub.set(k, (paidBySub.get(k) ?? 0) + Number(e.amount))
+    const v = signedAmount({ kind: String(e.kind), amount: Number(e.amount) }, classOf.get(Number(e.fund_id)) ?? 'variable')
+    paidBySub.set(k, (paidBySub.get(k) ?? 0) + v)
   }
 
   const people = (subs ?? []).filter(s => s.active !== false).map(s => {

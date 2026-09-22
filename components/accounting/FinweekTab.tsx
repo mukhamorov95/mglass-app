@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { finWeeksOfMonth, buildWeekPlans, waterfall, inWeek } from '@/lib/finweek'
+import { finWeeksOfMonth, buildWeekPlans, waterfall, inWeek, weekIncome } from '@/lib/finweek'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number }
 type Entry = { entry_date: string; kind: string; fund_id: number; amount: number }
@@ -63,9 +63,7 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
   useEffect(() => { load() }, [load])
 
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
-  const factByWeek = useMemo(() =>
-    weeks.map(w => entries.reduce((s, e) => s + (e.kind === 'in' && inWeek(e.entry_date, w) ? Number(e.amount) : 0), 0)),
-  [weeks, entries])
+  const factByWeek = useMemo(() => weeks.map(w => weekIncome(entries, unitFunds, w)), [weeks, entries, unitFunds])
   const weekPlans = useMemo(() =>
     today ? buildWeekPlans(plan ?? 0, weeks, factByWeek, today) : [],
   [plan, weeks, factByWeek, today])

@@ -58,10 +58,11 @@ export function audit(input: AuditInput): Finding[] {
     })
   }
 
-  // Дубли: одинаковые юнит + дата + фонд + сумма + контрагент
+  // Дубли: одинаковые юнит + дата + фонд + сумма + контрагент + направление. Без направления
+  // оплата и её возврат в тот же день выглядели бы задвоением.
   const seen = new Map<string, number>()
   for (const e of input.entries) {
-    const k = [e.unit, e.entry_date, e.fund_id, e.amount, (e.counterparty ?? '').trim().toLowerCase()].join('|')
+    const k = [e.unit, e.entry_date, e.fund_id, e.amount, (e.counterparty ?? '').trim().toLowerCase(), e.kind].join('|')
     seen.set(k, (seen.get(k) ?? 0) + 1)
   }
   const dupes = [...seen.entries()].filter(([, n]) => n > 1)

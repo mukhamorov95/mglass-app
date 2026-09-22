@@ -6,6 +6,8 @@
 // сверху вниз (переменные → постоянные → фонды) по процентам финмодели.
 // Модуль чистый: никаких Date.now/new Date() без аргументов — дата приходит параметром.
 
+import { incomeOf, signedSums } from '@/lib/accounting/fundSign'
+
 export type FinWeek = { start: string; end: string }
 
 const DAY = 86_400_000
@@ -79,23 +81,31 @@ export function waterfall(income: number, funds: FundLike[]): { fills: FundFill[
 export type CashEntryLike = { entry_date: string; kind: string; fund_id: number; amount: number }
 export type FundAvail = { allocated: number; spent: number; available: number }
 
+// Поступления финнедели — знаковая сумма фондов «Поступлений» (lib/accounting/fundSign):
+// возврат клиенту вычитается, а кредит или возврат от поставщика на расходном фонде
+// выручкой не считается и по фондам не разливается.
+export function weekIncome(entries: CashEntryLike[], funds: FundLike[], w: FinWeek): number {
+  return incomeOf(entries.filter(e => inWeek(e.entry_date, w)), funds)
+}
+
 // Точный остаток фондов: waterfall по каждой финнеделе месяца по фактическим
-// поступлениям, минус расходы фонда за те же недели.
+// поступлениям, минус расходы фонда за те же недели. Расход — со знаком: приход на
+// фонд (возврат от поставщика, сторно) его уменьшает.
 export function fundAvailability(weeks: FinWeek[], entries: CashEntryLike[], funds: FundLike[]): Map<number, FundAvail> {
   const acc = new Map<number, FundAvail>()
+  const get = (id: number) => acc.get(id) ?? { allocated: 0, spent: 0, available: 0 }
   for (const w of weeks) {
-    const income = entries.reduce((s, e) => s + (e.kind === 'in' && inWeek(e.entry_date, w) ? Number(e.amount) : 0), 0)
-    for (const f of waterfall(income, funds).fills) {
-      const cur = acc.get(f.id) ?? { allocated: 0, spent: 0, available: 0 }
+    for (const f of waterfall(weekIncome(entries, funds, w), funds).fills) {
+      const cur = get(f.id)
       cur.allocated += f.allocated
       acc.set(f.id, cur)
     }
   }
-  for (const e of entries) {
-    if (e.kind === 'in' || !weeks.some(w => inWeek(e.entry_date, w))) continue
-    const cur = acc.get(e.fund_id) ?? { allocated: 0, spent: 0, available: 0 }
-    cur.spent += Number(e.amount)
-    acc.set(e.fund_id, cur)
+  const inMonth = entries.filter(e => weeks.some(w => inWeek(e.entry_date, w)))
+  for (const [id, v] of signedSums(inMonth, funds.filter(f => f.fund_class !== 'income')).byFund) {
+    const cur = get(id)
+    cur.spent += v
+    acc.set(id, cur)
   }
   for (const v of acc.values()) v.available = v.allocated - v.spent
   return acc

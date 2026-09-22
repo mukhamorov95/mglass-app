@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { audit, type AuditInput, type Finding } from './audit'
+import { signedAmount } from './fundSign'
 
 // Сбор данных для проверки Б14. Отдельно от чистого ядра (lib/accounting/audit.ts),
 // чтобы его можно было тестировать без базы. Читает service-role: сводка нужна и
@@ -20,9 +21,9 @@ export async function collectAudit(svc: SupabaseClient, today: string): Promise<
       svc.from('invoices').select('amount,issued_at,invoice_no').eq('status', 'issued'),
       svc.from('tax_calendar').select('title,due_date,amount,status').gte('due_date', yearAgo),
       svc.from('payroll_accruals').select('subfund_id,person_name,month,kind,amount'),
-      svc.from('cashflow_entries').select('subfund_id,amount,entry_date').eq('kind', 'out').gte('entry_date', halfYear),
+      svc.from('cashflow_entries').select('subfund_id,fund_id,kind,amount,entry_date').gte('entry_date', halfYear),
       svc.from('cashflow_period_locks').select('unit,month'),
-      svc.from('cashflow_funds').select('id,name,unit'),
+      svc.from('cashflow_funds').select('id,name,unit,fund_class'),
       svc.from('cashflow_subfunds').select('id,fund_id,name'),
     ])
 
@@ -38,12 +39,15 @@ export async function collectAudit(svc: SupabaseClient, today: string): Promise<
     .map(f => Number(f.id)))
   const payrollSubs = new Set((subfunds.data ?? [])
     .filter(s => payrollFunds.has(Number(s.fund_id))).map(s => Number(s.id)))
+  // Выплачено со знаком: сторно на зарплатном фонде уменьшает выплату (lib/accounting/fundSign)
+  const classOf = new Map((funds.data ?? []).map(f => [Number(f.id), String(f.fund_class)]))
   const paidBySub = new Map<number, number>()
   for (const e of paidPayroll.data ?? []) {
     const id = Number(e.subfund_id ?? 0)
     if (!payrollSubs.has(id)) continue
     if (String(e.entry_date).slice(0, 7) !== prevMonth) continue
-    paidBySub.set(id, (paidBySub.get(id) ?? 0) + Number(e.amount))
+    const v = signedAmount({ kind: String(e.kind), amount: Number(e.amount) }, classOf.get(Number(e.fund_id)) ?? 'variable')
+    paidBySub.set(id, (paidBySub.get(id) ?? 0) + v)
   }
   const accruedBySub = new Map<number, { name: string; amount: number }>()
   for (const a of accruals.data ?? []) {

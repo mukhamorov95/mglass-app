@@ -8,7 +8,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { finWeeksOfMonth, fundAvailability, inWeek, type FinWeek, type CashEntryLike } from '@/lib/finweek'
+import { finWeeksOfMonth, fundAvailability, weekIncome, type FinWeek, type CashEntryLike } from '@/lib/finweek'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number }
 type Subfund = { id: number; fund_id: number; name: string }
@@ -218,9 +218,7 @@ export function CommitteeTab({ unit, funds, isFin, myName }: Shared) {
 
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
   const avail = useMemo(() => fundAvailability(weeks, entries, unitFunds), [weeks, entries, unitFunds])
-  const monthIncome = useMemo(() =>
-    entries.reduce((s, e) => s + (e.kind === 'in' && weeks.some(w => inWeek(e.entry_date, w)) ? Number(e.amount) : 0), 0),
-  [entries, weeks])
+  const monthIncome = useMemo(() => weeks.reduce((s, w) => s + weekIncome(entries, unitFunds, w), 0), [entries, weeks, unitFunds])
 
   async function setStatus(r: Req, status: string) {
     await sb.from('payment_requests').update({ status, status_changed_at: new Date().toISOString(), status_changed_by: myName, updated_at: new Date().toISOString() }).eq('id', r.id)
