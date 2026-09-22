@@ -52,6 +52,7 @@ export function Header() {
           </details>
           <Link href="/zerkala-s-podsvetkoj" className="hover:text-brass">С подсветкой</Link>
           <Link href="/zerkala-v-vannuyu" className="hover:text-brass">В ванную</Link>
+          <Link href="/vopros" className="hover:text-brass">Вопросы</Link>
           <Link href="/raboty" className="hover:text-brass">Работы</Link>
           <Link href="/kontakty" className="hover:text-brass">Контакты</Link>
         </nav>
@@ -82,6 +83,7 @@ export function Header() {
                 </div>
               ))}
               <div className="flex flex-col gap-3 pt-4 text-base font-medium">
+                <Link href="/vopros">Вопросы</Link>
                 <Link href="/raboty">Наши работы</Link>
                 <Link href="/kontakty">Контакты</Link>
                 <a href={SITE.phone.href} className="font-semibold">{SITE.phone.display}</a>
@@ -131,6 +133,7 @@ export function Footer() {
           {clusters.slice(3).flatMap((c) => c.items).map((l) => (
             <Link key={l.slug} href={`/${l.slug}`} className="hover:text-ink">{l.navLabel}</Link>
           ))}
+          <Link href="/vopros" className="hover:text-ink">Вопросы</Link>
           <Link href="/raboty" className="hover:text-ink">Работы</Link>
           <Link href="/kontakty" className="hover:text-ink">Контакты</Link>
           <Link href="/politika-konfidencialnosti" className="hover:text-ink">Политика конфиденциальности</Link>

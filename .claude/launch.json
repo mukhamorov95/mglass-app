@@ -31,6 +31,17 @@
         "sites/zerkala"
       ],
       "port": 3100
+    },
+    {
+      "name": "zerkala-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "sites/zerkala"
+      ],
+      "port": 3100
     }
   ]
 }
