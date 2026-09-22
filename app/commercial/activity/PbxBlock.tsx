@@ -69,7 +69,7 @@ export default function PbxBlock({ from, to, names }: { from: string; to: string
               <tbody>
                 {data.summary.byUser.map(u => (
                   <tr key={u.ext} className="border-b border-[#f0f0ec]">
-                    <td className="py-1.5 pr-2 text-[#111110]">{(u.userId && names.get(u.userId)) ?? 'не определён'} <span className="text-[#9a9a95]">· вн. {u.ext}</span></td>
+                    <td className="py-1.5 pr-2 text-[#111110]">{(u.userId && names.get(u.userId)) ?? 'общая линия'} <span className="text-[#9a9a95]">· вн. {u.ext}</span></td>
                     <td className="py-1.5 px-2 text-right"><Num v={u.inboundAnswered} /></td>
                     <td className="py-1.5 px-2 text-right"><Num v={u.outboundAnswered} /> <span className="text-[#9a9a95]">/ {u.outbound}</span></td>
                     <td className="py-1.5 pl-2 text-right"><Num v={Math.round(u.talkSec / 60)} /></td>
@@ -105,7 +105,7 @@ function MissedList({ missed }: { missed: MissedClient[] }) {
       <summary className="cursor-pointer text-[12px] text-red-700">Клиенты, которым не перезвонили — {missed.length}</summary>
       <p className="text-[12px] text-[#6b6b66] mt-2">
         {byOwner.size > 0 && <>Клиенты из сделок: {[...byOwner].map(([n, c]) => `${n} ${c}`).join(', ')}. </>}
-        {fresh > 0 && <>Новые номера: {fresh}{freshTo.length > 0 && ` — звонок уходил на ${freshTo.join(', ')}`}. </>}
+        {fresh > 0 && <>Новые номера: {fresh}{freshTo.length > 0 && ` — звонило у: ${freshTo.join(', ')}`}. </>}
         {none > 0 && <>Номера нет в amo: {none} — этот звонок видит только АТС.</>}
       </p>
       <ul className="mt-2 space-y-2">

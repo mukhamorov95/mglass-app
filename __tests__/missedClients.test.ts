@@ -38,7 +38,7 @@ describe('чей пропущенный клиент', () => {
   it('номера нет в amo; неизвестный внутренний — как есть', () => {
     const m = describeMissedClient({ ...base, item: { at: T, phone: '9260255476', attempts: 1, exts: ['5200'] }, contacts: [], leads: new Map() })
     expect(m.owner).toEqual({ kind: 'none' })
-    expect(m.rangTo).toEqual(['вн. 5200'])
+    expect(m.rangTo).toEqual(['общая линия (вн. 5200)'])
   })
 
   it('касание после звонка — первое исходящее не раньше последнего пропущенного; без автора так и подписано', () => {
