@@ -1,5 +1,6 @@
 import 'server-only'
-import { amoGet, amoGetAll, getDomain, getPipelines, getUsers } from '@/lib/amocrm'
+import { amoGet, amoGetAll, getDomain, getPipelines } from '@/lib/amocrm'
+import { getAmoUserNames } from '@/lib/amoPeople'
 import { isOnlinePbxConfigured, onlinePbxHistory } from '@/lib/onlinepbx'
 import { extFromRecordLink, normalizePbxCall, summarizePbx, type PbxCall, type PbxSummary } from '@/lib/pbxCalls'
 import { describeMissedClient, type AmoContactHit, type AmoLeadHit, type MissedClient, type TouchEvent } from '@/lib/missedClients'
@@ -62,7 +63,7 @@ export async function fetchPbxReport(from: number, to: number): Promise<PbxRepor
 // По два запроса за раз — лимит amo 7 в секунду, а экран в это время грузит и таблицу.
 export async function describeMissed(list: PbxSummary['missedNotCalledBackList'], notes: CallNote[], extToUser: Map<string, number>): Promise<MissedClient[]> {
   if (list.length === 0) return []
-  const [users, pipelines] = await Promise.all([getUsers(), getPipelines()])
+  const [users, pipelines] = await Promise.all([getAmoUserNames(), getPipelines()])
   const names = new Map(users.map(u => [u.id, u.name]))
   const stageNames = new Map<string, string>()
   for (const p of pipelines) for (const s of p._embedded.statuses) stageNames.set(`${p.id}:${s.id}`, `${p.name} → ${s.name}`)

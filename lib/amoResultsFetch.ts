@@ -1,5 +1,6 @@
 import 'server-only'
-import { amoGetAll, getPipelines, getUsers } from '@/lib/amocrm'
+import { amoGetAll, getPipelines } from '@/lib/amocrm'
+import { getAmoUserNames } from '@/lib/amoPeople'
 import {
   advanceOf, buildAmoResults, stageId,
   type AmoResultsReport, type ContactEvent, type OpenTask, type ResultLead, type StatusEvent,
@@ -31,7 +32,7 @@ const eventsOfType = (types: string[], from: number, to: number) =>
 export async function fetchAmoResults(from: number, to: number): Promise<AmoResultsReport> {
   const now = Math.floor(Date.now() / 1000)
   // Последовательно по группам: всё разом — это больше 7 запросов в секунду, и amo режет 429
-  const [users, pipelines] = await Promise.all([getUsers(), getPipelines()])
+  const [users, pipelines] = await Promise.all([getAmoUserNames(), getPipelines()])
   const statusEvents = await eventsOfType(['lead_status_changed'], from, to)
   const contacts = await eventsOfType(['outgoing_chat_message', 'outgoing_call'], from, to)
   const [newLeads, openTasks] = await Promise.all([
@@ -50,7 +51,7 @@ export async function fetchAmoResults(from: number, to: number): Promise<AmoResu
 
   return buildAmoResults({
     from, to, now,
-    users: users.map(u => ({ id: u.id, name: u.name })),
+    users,
     stageNames, statusEvents, newLeads, paidLeads, contacts, openTasks,
   })
 }

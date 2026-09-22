@@ -1,5 +1,6 @@
 import 'server-only'
-import { amoGetAll, getUsers, type AmoLead } from '@/lib/amocrm'
+import { amoGetAll, type AmoLead } from '@/lib/amocrm'
+import { getAmoUserNames } from '@/lib/amoPeople'
 import { buildAmoActivity, type AmoActivityEvent, type AmoCallNote, type AmoActivityReport } from '@/lib/amoActivity'
 
 // Сбор данных для lib/amoActivity.ts. Только GET к AmoCRM.
@@ -40,7 +41,7 @@ export async function fetchActivityRaw(from: number, to: number): Promise<Activi
 
   // события — посуточно, по три суток параллельно: лимит amo 7 запросов в секунду
   const [users, eventsByDay, callNotesByEntity] = await Promise.all([
-    getUsers(),
+    getAmoUserNames(),
     inBatches(dayStarts, 3, a => amoGetAll<AmoActivityEvent>('/events', {
       'filter[created_at][from]': String(a),
       'filter[created_at][to]': String(Math.min(a + DAY, to) - 1),
@@ -61,5 +62,5 @@ export async function fetchActivityRaw(from: number, to: number): Promise<Activi
   const leads = (await inBatches(idChunks, 3, ids =>
     amoGetAll<AmoLead>('/leads', { 'filter[id][]': ids.map(String) }, 'leads'))).flat()
 
-  return { users: users.map(u => ({ id: u.id, name: u.name })), events, callNotes: callNotesByEntity.flat(), leads }
+  return { users, events, callNotes: callNotesByEntity.flat(), leads }
 }
