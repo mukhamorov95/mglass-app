@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const items = Array.isArray(order.items) ? (order.items as Record<string, unknown>[]) : []
   if (items.length === 0) return NextResponse.json({ error: 'В заказе нет позиций' }, { status: 400 })
 
-  const rescaled = rescaleItemsToTotal(items, oldTotal, nt)
+  const rescaled = rescaleItemsToTotal(items, oldTotal, nt, Number(order.discount_percent) || 0)
 
   // actor name для истории
   let actor: string | null = null

@@ -59,13 +59,23 @@ describe('itemCostPanel — обычное стекло', () => {
     expect(p.reconciles).toBe(true)
   })
 
-  it('услуги идут отдельной строкой с их названиями', () => {
+  // В позиции сохранена цена ПРОДАЖИ услуг, а в себестоимость вошла закупка.
+  // Поэтому строку услуг выводим остатком, а не берём servicesCost.
+  it('услуги идут остатком — по себестоимости, а не по цене продажи', () => {
     const p = itemCostPanel({
-      ...glass, servicesCost: 800, costWithVat: 7200,
+      ...glass, servicesCost: 800, costWithVat: 6600,   // закупка услуг = 200
       services: [{ name: 'Сверление' }, { name: 'Вырез' }],
     })!
-    expect(p.lines[p.lines.length - 1]).toEqual({ name: 'Услуги: Сверление, Вырез', qty: 1, unit: '₽', total: 800 })
-    expect(p.sum).toBe(7200)
+    expect(p.lines[p.lines.length - 1]).toEqual({ name: 'Услуги (себестоимость): Сверление, Вырез', qty: 1, unit: '₽', total: 200 })
+    expect(p.sum).toBe(6600)
+    expect(p.reconciles).toBe(true)
+  })
+
+  it('позиция с услугами больше не зажигает ложное «не сходится»', () => {
+    const p = itemCostPanel({ ...glass, servicesCost: 4500, costWithVat: 8900 })!
+    expect(p.reconciles).toBe(true)
+    expect(p.lines[p.lines.length - 1].name).toBe('Услуги (себестоимость)')
+    expect(p.lines[p.lines.length - 1].total).toBe(2500)
   })
 
   it('триплексация — своя строка', () => {
