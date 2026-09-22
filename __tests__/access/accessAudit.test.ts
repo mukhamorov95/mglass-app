@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { auditAccess, countBySeverity, formatReport, type AccessSnapshot } from '@/lib/security/accessAudit'
+import { auditAccess, countBySeverity, escapeHtml, formatReport, SENSITIVE_TABLES, type AccessSnapshot } from '@/lib/security/accessAudit'
 
 const empty: AccessSnapshot = { policies: [], grants: [], rls: [], suspicious_columns: [] }
 
@@ -217,5 +217,25 @@ describe('витрина, где чтение публично осознанн�
     })
     expect(f.map(x => x.code)).toContain('public_write_policy')
     expect(f.map(x => x.code)).toContain('anon_write_open')
+  })
+})
+
+describe('отчёт не ломается и не утекает', () => {
+  it('«<» в имени политики не рвёт HTML-разметку телеграма', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [{ table: 'materials', policy: 'read <all>', cmd: 'r', roles: ['PUBLIC'], using: 'true' }],
+    })
+    const r = formatReport(f)
+    expect(r).toContain('read &lt;all&gt;')
+    expect(r).not.toContain('<all>')
+  })
+
+  it('escapeHtml экранирует & первым, чтобы не задвоить', () => {
+    expect(escapeHtml('a < b & c > d')).toBe('a &lt; b &amp; c &gt; d')
+  })
+
+  it('сам отчёт прогона — чувствительная таблица', () => {
+    expect(SENSITIVE_TABLES.has('security_audit_runs')).toBe(true)
   })
 })

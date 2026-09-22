@@ -37,6 +37,7 @@ export const SENSITIVE_TABLES = new Set([
   'supplier_price_rows', 'glass_price_matrix', 'purchase_orders', 'calculations',
   'commercial_proposals', 'deals', 'deal_payments', 'payments', 'manager_stats_daily',
   'manager_stats_monthly', 'coefficients', 'process_cost_inputs', 'production_settings',
+  'security_audit_runs',   // сам отчёт прогона — список дыр
 ])
 
 // Таблицы витрины: их публичность — замысел, а не упущение.
@@ -183,6 +184,12 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || a.table.localeCompare(b.table))
 }
 
+// Отчёт уходит в телеграм с parse_mode: HTML: один «<» в имени политики или
+// в тексте ошибки — и Bot API отвергает сообщение целиком.
+export function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 export function countBySeverity(f: Finding[]) {
   return {
     high: f.filter(x => x.severity === 'high').length,
@@ -204,7 +211,7 @@ export function formatReport(f: Finding[], prev?: Finding[] | null): string {
   if (prev && fresh.length) lines.push(`Новых с прошлого раза: ${fresh.length}.`)
   if (prev && !fresh.length) lines.push('Новых с прошлого раза нет.')
   lines.push('')
-  for (const x of f.filter(x => x.severity === 'high').slice(0, 8)) lines.push(`• ${x.title}`)
+  for (const x of f.filter(x => x.severity === 'high').slice(0, 8)) lines.push(`• ${escapeHtml(x.title)}`)
   const restHigh = c.high - Math.min(c.high, 8)
   if (restHigh > 0) lines.push(`…и ещё ${restHigh} важных`)
   lines.push('', 'Полный список — «Безопасность» в админке.')

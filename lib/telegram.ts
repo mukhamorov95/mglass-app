@@ -72,14 +72,26 @@ async function getAdminIds(): Promise<number[]> {
   return (data ?? []).map((row: { telegram_id: number }) => row.telegram_id)
 }
 
+// Bot API отвечает 200 и {ok:false}, когда отверг сообщение (например, из-за
+// «<» при parse_mode: HTML). Без лога такое уведомление просто не приходит.
+function logUndelivered(id: number, r: { ok?: boolean; description?: string } | undefined) {
+  if (!r?.ok) console.error('[telegram] сообщение админу не доставлено', id, r?.description)
+}
+
 export async function notifyAdmins(text: string) {
   const ids = await getAdminIds()
-  for (const id of ids) await sendMessage(id, text).catch(() => {})
+  for (const id of ids) {
+    const r = await sendMessage(id, text).catch((e: unknown) => ({ ok: false, description: String(e) }))
+    logUndelivered(id, r)
+  }
 }
 
 export async function notifyAdminsWithKeyboard(text: string, keyboard: InlineKeyboard) {
   const ids = await getAdminIds()
-  for (const id of ids) await sendMessage(id, text, keyboard).catch(() => {})
+  for (const id of ids) {
+    const r = await sendMessage(id, text, keyboard).catch((e: unknown) => ({ ok: false, description: String(e) }))
+    logUndelivered(id, r)
+  }
 }
 
 function voiceLog(step: string, data?: Record<string, unknown>) {
