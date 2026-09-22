@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Faq, Gallery, LandingCard, LeadSection, LightModes, Materials, PriceFactors, Steps, TrustBar } from "@/components/blocks";
+import { Faq, Gallery, LandingCard, LeadSection, LightModes, Materials, PriceFactors, Steps, TrustBar, YandexReviews } from "@/components/blocks";
 import { ButtonLink, Container, JsonLd, SectionTitle } from "@/components/ui";
 import { getLanding, landingsByCluster } from "@/content/landings";
 import { PHOTOS } from "@/content/photos";
@@ -122,6 +122,23 @@ export default function HomePage() {
               танцевальных залов, серии зеркал для салонов красоты. Для дизайнеров и мебельщиков режем полотна по спецификации.
             </p>
           </div>
+        </Container>
+      </section>
+
+      <section className="py-10 sm:py-14">
+        <Container className="grid gap-6 lg:grid-cols-[1fr_1.4fr] lg:items-center">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Что о нас пишут</h2>
+            <p className="mt-3 leading-relaxed text-muted">
+              Живые отзывы с нашей карточки на Яндекс Картах — их оставляют клиенты после установки, мы их не редактируем.
+            </p>
+            <div className="mt-5">
+              <ButtonLink href="/otzyvy" variant="light">
+                Все отзывы
+              </ButtonLink>
+            </div>
+          </div>
+          <YandexReviews compact />
         </Container>
       </section>
 
