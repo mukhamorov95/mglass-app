@@ -2,15 +2,9 @@
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs'
 import path from 'node:path'
+import { loadEnvLocal } from './lib/envLocal.mjs'
 
-const env = Object.fromEntries(
-  fs.readFileSync('.env.local', 'utf8')
-    .split('\n').filter(l => l && !l.startsWith('#'))
-    .map(l => {
-      const i = l.indexOf('=')
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()]
-    })
-)
+const env = loadEnvLocal()
 
 const url = env.NEXT_PUBLIC_SUPABASE_URL
 const key = env.SUPABASE_SERVICE_ROLE_KEY

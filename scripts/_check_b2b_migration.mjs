@@ -3,13 +3,9 @@
 // names a missing column. We probe each column individually so partial states
 // are visible.
 import { createClient } from '@supabase/supabase-js'
-import fs from 'node:fs'
+import { loadEnvLocal } from './lib/envLocal.mjs'
 
-const env = Object.fromEntries(
-  fs.readFileSync('.env.local', 'utf8')
-    .split('\n').filter(l => l && !l.startsWith('#'))
-    .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i+1).trim()] })
-)
+const env = loadEnvLocal()
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 })

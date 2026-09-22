@@ -20,14 +20,10 @@
 //   node scripts/import-dds-book.mjs --from 2026-07-01 --to 2026-08-25 --replace
 
 import { createClient } from '@supabase/supabase-js'
-import { readFileSync } from 'node:fs'
+import { loadEnvLocal } from './lib/envLocal.mjs'
 import { parseCsv, dateColumns, buildLayout, collectEntries, round2 } from './lib/ddsBookParse.mjs'
 
-const env = Object.fromEntries(
-  readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
-    .split('\n').filter(l => l.includes('=') && !l.startsWith('#'))
-    .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])
-)
+const env = loadEnvLocal()
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
 
 const SHEET_ID = arg('sheet', '1QL9x9qqH8iHmNNKV1nVm7IVfhl5mMyEwqe3xKRyNqWw')

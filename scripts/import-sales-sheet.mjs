@@ -11,14 +11,10 @@
 //   node scripts/import-sales-sheet.mjs --since 2026-07
 
 import { createClient } from '@supabase/supabase-js'
-import { readFileSync } from 'node:fs'
+import { loadEnvLocal } from './lib/envLocal.mjs'
 import { parseTab, parseTabList, parseTabMonth } from './lib/salesSheetParse.mjs'
 
-const env = Object.fromEntries(
-  readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
-    .split('\n').filter(l => l.includes('=') && !l.startsWith('#'))
-    .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])
-)
+const env = loadEnvLocal()
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
 
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i > -1 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : d }
