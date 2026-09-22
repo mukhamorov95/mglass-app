@@ -223,6 +223,7 @@ const ADMIN_B2B: NavEntry[] = [
   { href: '/b2b-growth',             label: 'Развитие B2B',      icon: '🚀' },
   { href: '/admin/b2b-clients',      label: 'Клиенты',           icon: '🏢' },
   { href: '/admin/b2b-services',     label: 'Услуги',            icon: '🔧' },
+  { href: '/admin/sandblast-cost',   label: 'Себест. пескоструя', icon: '🪨', indent: true },
   { href: '/admin/b2b-materials',    label: 'Материалы',         icon: '🪟' },
   { href: '/admin/cutting-settings', label: 'Настройки раскроя', icon: '✂️' },
   { href: '/admin/margin-audit',     label: 'Аудит маржи',       icon: '📉' },
@@ -416,7 +417,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services', '/admin/quote-quality'])) open.push('system')
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
-    if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
+    if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/sandblast-cost', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
     if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
   }
   return open
