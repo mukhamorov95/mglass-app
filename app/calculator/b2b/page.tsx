@@ -1919,9 +1919,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                               <div key={i} className="flex justify-between text-[11px]">
                                 <span className="text-[#6b6b66] truncate mr-2">
                                   {l.name}
-                                  {l.price != null && l.price > 0 && !(l.qty === 1 && l.unit === '₽')
+                                  {l.qty !== 1 && l.price != null && l.price > 0
                                     ? <span className="text-[#b0b0aa]"> · {l.qty} {l.unit} × {Math.round(l.price).toLocaleString('ru-RU')} ₽</span>
-                                    : (l.qty > 1 ? ` × ${l.qty} ${l.unit}` : '')}
+                                    : (l.qty !== 1 ? ` × ${l.qty} ${l.unit}` : '')}
                                 </span>
                                 <span className="font-mono text-[#111110] shrink-0">{l.total.toLocaleString('ru-RU')} ₽</span>
                               </div>
@@ -2653,9 +2653,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                                       <div key={i} className="flex justify-between text-[12px]">
                                         <span className="text-[#6b6b66] truncate mr-3">
                                           {l.name}
-                                          {l.price != null && l.price > 0 && !(l.qty === 1 && l.unit === '₽')
+                                          {/* Количество × цену показываем, только когда их больше одного:
+                                              «1 % × 395 ₽» у резерва брака — шум, итог строки и так виден. */}
+                                          {l.qty !== 1 && l.price != null && l.price > 0
                                             ? <span className="text-[#b0b0aa]"> · {l.qty} {l.unit} × {Math.round(l.price).toLocaleString('ru-RU')} ₽</span>
-                                            : (l.qty > 1 ? <span className="text-[#b0b0aa]"> · {l.qty} {l.unit}</span> : '')}
+                                            : (l.qty !== 1 ? <span className="text-[#b0b0aa]"> · {l.qty} {l.unit}</span> : '')}
                                         </span>
                                         <span className="font-mono text-[#111110] shrink-0">{Math.round(l.total).toLocaleString('ru-RU')} ₽</span>
                                       </div>
