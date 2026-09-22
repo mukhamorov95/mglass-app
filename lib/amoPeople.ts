@@ -25,7 +25,7 @@ export async function getAmoPeople(): Promise<AmoPerson[]> {
     .not('amo_user_id', 'is', null)
   if (error) console.error('[amoPeople] не прочитать имена сотрудников:', error.message)
   // Служебное имя учётки («Администратор») человека не называет — тогда оставляем имя из amo
-  const GENERIC = /^(админ|administrator|admin|менеджер|user|пользователь)\b/i
+  const GENERIC = /^(админ|administrator|admin|менеджер|user|пользователь)/i
   const appByAmo = new Map<number, string>()
   for (const u of data ?? []) {
     if (!u.amo_user_id || !u.name || GENERIC.test(String(u.name).trim())) continue
