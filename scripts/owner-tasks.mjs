@@ -7,14 +7,10 @@
 //   node scripts/owner-tasks.mjs done 5 "что"   — закрыть
 //   node scripts/owner-tasks.mjs cancel 5       — отменить
 import { createClient } from '@supabase/supabase-js'
-import { readFileSync } from 'node:fs'
 import { hostname } from 'node:os'
+import { loadEnvLocal } from './lib/envLocal.mjs'
 
-const env = Object.fromEntries(
-  readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
-    .split('\n').filter(l => l.includes('=') && !l.startsWith('#'))
-    .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])
-)
+const env = loadEnvLocal()
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
 const WORKER = hostname()
 
