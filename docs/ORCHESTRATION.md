@@ -27,6 +27,7 @@
 | **Кабинет менеджера (B2C, MGlass)** | `/calculator/quick`, `/calculations`, `/kp`, `/contracts`, `/clients`, новая `deals` | b2b-quote-price-adjustment | 🟢 идёт (шаг 1) |
 | Кабинет менеджера (B2B) | `b2b-quotes`, `b2b-orders`, `b2b-invoices`, `b2b-crm`, `lib/b2b/**`, `calculator/b2b` | b2b-quote-price-adjustment | 🟢 идёт |
 | Кабинет менеджера (Amo) | `/manager`, `/manager-dashboard` | не занят | ⚪ |
+| **Лидогенерация B2C/B2B** | `docs/LEADGEN_ROUTE.md`, `/commercial/channels`, `lib/leadgen/**`, `lib/funnelZones.ts` | leadgen (21.09) | 🟢 Л1 сделан; Л5-виджет → Сайт+3D |
 | **Backbone (ядро)** | ниже | **оркестратор** | 🟢 |
 
 ### ⚠️ Заряженная мина: себестоимость фурнитуры душевой в бюджетном тире

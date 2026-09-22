@@ -55,12 +55,13 @@ export async function amoGetAll<T>(
   path: string,
   params: Record<string, string>,
   embedded_key: string,
+  revalidate?: number,
 ): Promise<T[]> {
   const results: T[] = []
   let page = 1
   while (true) {
     const data = await amoGet<{ _embedded: Record<string, T[]>; _links?: { next?: unknown } }>(
-      path, { ...params, page: String(page), limit: '250' },
+      path, { ...params, page: String(page), limit: '250' }, revalidate,
     )
     const items = data?._embedded?.[embedded_key] ?? []
     results.push(...items)

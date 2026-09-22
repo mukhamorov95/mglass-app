@@ -5,6 +5,7 @@ import {
   getUsers, getPipelines, getLeads, getEvents, getLeadNotes,
   type AmoUser, type AmoEvent, type AmoNote, type AmoLead,
 } from '@/lib/amocrm'
+import { amoStageZone as stageZone } from '@/lib/funnelZones'
 
 // ── Moscow timezone helper ─────────────────────────────────────────────────────
 // Vercel servers run UTC. todayStart must be 00:00:00 Europe/Moscow, not UTC.
@@ -46,44 +47,6 @@ function noteBelongsToManager(
     return leadMap.get(note.entity_id)?.responsible_user_id === managerId
   }
   return false
-}
-
-// ── Stage → zone mapping (воронка "Продажи", точные названия этапов) ──────────
-// Зона 1 — квалификация:  Получена новая заявка … Готов купить
-// Зона 2 — продажа:       Замер назначен … Счёт выставлен — ждём оплату
-// Зона 3 — производство:  Оплата сделана … Оплата дизайнером
-
-function stageZone(name: string): 1 | 2 | 3 | null {
-  const n = name.toLowerCase()
-
-  // Зона 1: квалификация / прогрев
-  if (n.includes('новая заявка')       ||
-      n.includes('назначен ответственный') ||
-      n.includes('проработка')         ||
-      n.includes('разговор состоялся') ||
-      n.includes('долгострой')         ||
-      n.includes('готов купить')) return 1
-
-  // Зона 2: замер → чертежи → кп → счёт
-  if (n.includes('замер')              ||
-      n.includes('согласование')       ||
-      n.includes('чертежи в работу')   ||
-      n.startsWith('кп')              ||
-      n.includes('счёт выставлен')    || n.includes('счет выставлен') ||
-      n.includes('ждём оплату')       || n.includes('ждем оплату')) return 2
-
-  // Зона 3: производство / монтаж / оплаты
-  if (n.includes('оплата сделана')     ||
-      n.includes('оплата получена')    ||
-      n.includes('счёт оплачен')      || n.includes('счет оплачен') ||
-      n.includes('заказ в работе')     ||
-      n.includes('к монтажу')          ||
-      n.includes('монтаж')             ||
-      n.includes('рекламация')         ||
-      n.includes('оплата остатка')     ||
-      n.includes('оплата дизайнером')) return 3
-
-  return null
 }
 
 // ── Activity window helpers ────────────────────────────────────────────────────
