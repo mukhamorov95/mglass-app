@@ -30,7 +30,7 @@ describe('сводка АТС', () => {
       call({ uuid: 'd', clientPhone: '9000000003', ext: '103' }),
     ], new Map([['102', 11127302], ['103', 8272804]]), new Set(['d']), T + 86400)
     expect(s).toMatchObject({ inbound: 3, inboundAnswered: 1, inboundMissed: 2, missedClients: 2, missedCalledBack2h: 1, missedNeverCalledBack: 1, notInAmo: 1 })
-    expect(s.missedNotCalledBackList).toEqual([{ at: T, phone: '9000000002', attempts: 1 }])
+    expect(s.missedNotCalledBackList).toEqual([{ at: T, firstAt: T, phone: '9000000002', attempts: 1, exts: [] }])
     expect(s.byUser.find(u => u.ext === '103')).toMatchObject({ userId: 8272804, inboundAnswered: 1 })
   })
   it('три звонка подряд без ответа — один клиент с тремя попытками', () => {
@@ -44,8 +44,8 @@ describe('сводка АТС', () => {
     ], new Map(), new Set(), T + 86400)
     expect(s).toMatchObject({ inboundMissed: 5, missedClients: 3, missedCalledBack2h: 0, missedNeverCalledBack: 2 })
     expect(s.missedNotCalledBackList).toEqual([
-      { at: T + 20000, phone: '9650002381', attempts: 1 },
-      { at: T + 300, phone: '9264393479', attempts: 3 },
+      { at: T + 20000, firstAt: T + 20000, phone: '9650002381', attempts: 1, exts: ['103'] },
+      { at: T + 300, firstAt: T, phone: '9264393479', attempts: 3, exts: ['103'] },
     ])
   })
 
