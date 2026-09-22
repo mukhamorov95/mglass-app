@@ -32,14 +32,20 @@ async function getAccessToken(): Promise<string> {
   return json.access_token as string
 }
 
+export type AmoParams = Record<string, string | string[]>
+
 export async function amoGet<T = unknown>(
   path: string,
-  params: Record<string, string> = {},
+  params: AmoParams = {},
   revalidate?: number,   // сек; задать для редко меняющихся справочников (users/pipelines)
 ): Promise<T | null> {
   const token = await getAccessToken()
   const url   = new URL(`https://${domain()}/api/v4${path}`)
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
+  for (const [k, v] of Object.entries(params)) {
+    // массив — фильтр по нескольким значениям: filter[id][]=1&filter[id][]=2
+    if (Array.isArray(v)) v.forEach(x => url.searchParams.append(k, x))
+    else url.searchParams.set(k, v)
+  }
 
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
@@ -53,7 +59,7 @@ export async function amoGet<T = unknown>(
 
 export async function amoGetAll<T>(
   path: string,
-  params: Record<string, string>,
+  params: AmoParams,
   embedded_key: string,
 ): Promise<T[]> {
   const results: T[] = []
