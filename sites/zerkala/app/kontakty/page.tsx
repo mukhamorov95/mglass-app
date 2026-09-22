@@ -30,7 +30,7 @@ export default function ContactsPage() {
           <div className="rounded-2xl border border-line bg-card p-6">
             <div className="text-sm text-muted">Где работаем</div>
             <div className="mt-1 text-lg font-semibold">{SITE.serviceArea}</div>
-            <p className="mt-2 text-sm text-muted">Замер, изготовление, доставка и монтаж зеркал.</p>
+            <p className="mt-2 text-sm text-muted">Замер, изготовление, доставка и монтаж зеркал. {SITE.shipping}.</p>
           </div>
           <div className="rounded-2xl border border-line bg-card p-6">
             <div className="text-sm text-muted">Компания</div>

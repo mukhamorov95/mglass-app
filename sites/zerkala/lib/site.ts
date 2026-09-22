@@ -16,8 +16,8 @@ function siteUrl(): string {
 export const FACTS = {
   phone: {
     value: { display: "+7 (495) 148-65-78", href: "tel:+74951486578" },
-    source: "mglass.pro, блок контактов (21.09.2026); на сайте ещё +7 (931) 109-75-35, в договорах (lib/companyRequisites.ts) +7 (925) 933-50-33",
-    confirmed: false,
+    source: "слова владельца 22.09.2026: «+7 (495) 148-65-78 — этот»",
+    confirmed: true,
   },
   foundedYear: {
     value: 2019,
@@ -61,8 +61,13 @@ export const FACTS = {
   },
   serviceArea: {
     value: "Москва и Московская область",
-    source: "mglass.pro, объекты в Москве и МО; производство в Москве (слова владельца 17.09.2026)",
-    confirmed: false,
+    source: "слова владельца 22.09.2026",
+    confirmed: true,
+  },
+  shipping: {
+    value: "Доставка транспортной компанией в любой регион",
+    source: "слова владельца 22.09.2026: «либо доставка транспортной компанией в любой регион»",
+    confirmed: true,
   },
 } satisfies Record<string, Fact<unknown>>;
 
@@ -82,9 +87,20 @@ export const SITE = {
   warrantyMonths: FACTS.warrantyMonths.value,
   measure: FACTS.measure.value,
   serviceArea: FACTS.serviceArea.value,
+  shipping: FACTS.shipping.value,
   // Приём заявок — публичный маршрут mglass-app (site_leads + Telegram владельцу).
   // Локально по умолчанию выключен: иначе проверка формы будит владельца.
   leadEndpoint: process.env.NEXT_PUBLIC_LEAD_ENDPOINT || (process.env.VERCEL ? "https://mglass-app.vercel.app/api/configurator/lead" : ""),
+  // Заявки идут в AmoCRM родной формой amoCRM (владелец 22.09.2026): лид создаёт виджет
+  // amoCRM в браузере посетителя, наш код в CRM не пишет. Форма «Сайт зеркал —
+  // mglass-zerkala.ru», воронка «Продажи» → «Неразобранное», тег «сайт-зеркала».
+  // id и hash — публичные, они и так видны в коде любой страницы с формой.
+  amoForm: {
+    id: "1747238",
+    hash: "2600451b11da58393f828487c0dbbe0e",
+    src: "https://forms.amocrm.ru/forms/assets/js/amoforms.js?1790069110",
+  },
+  productionDomain: "mglass-zerkala.ru",
   metrikaId: process.env.NEXT_PUBLIC_YM_ID || "",
   yandexVerification: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION || "",
   // Дата последней правки текстов — идёт в lastmod карты сайта. Меняется руками

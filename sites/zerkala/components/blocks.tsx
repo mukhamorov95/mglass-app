@@ -4,6 +4,7 @@ import { FRAMES, LIGHT_MODES, LIGHT_TECH, MATERIALS, PRICE_FACTORS, STEPS, TRUST
 import { PHOTOS, type PhotoKey } from "@/content/photos";
 import type { BlockKey, Landing, Section } from "@/content/types";
 import { SITE } from "@/lib/site";
+import { AmoForm } from "./AmoForm";
 import { LeadForm } from "./LeadForm";
 import { Container, SectionTitle } from "./ui";
 
@@ -301,7 +302,19 @@ export function LeadSection({ title = "Рассчитаем зеркало по 
             </a>
           </div>
           <div className="rounded-2xl bg-paper p-5 text-ink sm:p-6">
-            <LeadForm endpoint={SITE.leadEndpoint} phone={SITE.phone} metrikaId={SITE.metrikaId} product={product} />
+            {SITE.amoForm.id ? (
+              <>
+                <AmoForm id={SITE.amoForm.id} hash={SITE.amoForm.hash} src={SITE.amoForm.src} phone={SITE.phone} />
+                <p className="mt-3 text-xs text-muted">
+                  Отправляя форму, вы соглашаетесь на обработку персональных данных по{" "}
+                  <Link href="/politika-konfidencialnosti" className="underline hover:text-ink">
+                    политике конфиденциальности
+                  </Link>
+                </p>
+              </>
+            ) : (
+              <LeadForm endpoint={SITE.leadEndpoint} phone={SITE.phone} metrikaId={SITE.metrikaId} product={product} />
+            )}
           </div>
         </div>
       </Container>
