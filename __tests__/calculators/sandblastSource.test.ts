@@ -12,7 +12,7 @@ const base = {
   width: 1000, height: 1000, shape: 'rectangle' as const,
   mirrorMaterial: mat({ id: 10, name: 'Зеркало Осветлённое 4 мм', cost_price: 1000 }),
   mirrorCostPriceCostRow: null,
-  hasLighting: false, voltage: 12, lightingLengthM: 0,
+  hasLighting: false, voltage: 12 as const, lightingLengthM: 0,
   frame: null, ledStrip: null, powerSupply: null, diffuser: null,
   buttonType: 'none' as const, hasSandblast: true,
   hasSubstrate: false, substratePrice: 0,
