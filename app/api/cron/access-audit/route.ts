@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
-import { auditAccess, countBySeverity, formatReport, type AccessSnapshot, type Finding } from '@/lib/security/accessAudit'
+import { auditAccess, countBySeverity, escapeHtml, formatReport, type AccessSnapshot, type Finding } from '@/lib/security/accessAudit'
 
 // Ежемесячный прогон «кто что видит» (решение владельца 22.09.2026).
 // Снимок прав берёт SQL-функция, выводы делает lib/security/accessAudit.
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 
     const { data: snap, error } = await sb.rpc('security_access_snapshot')
     if (error || !snap) {
-      await notifyAdmins(`⚠️ Прогон доступов не выполнился: ${error?.message ?? 'пустой снимок'}`)
+      await notifyAdmins(`⚠️ Прогон доступов не выполнился: ${escapeHtml(error?.message ?? 'пустой снимок')}`)
       return NextResponse.json({ error: error?.message ?? 'no snapshot' }, { status: 500 })
     }
 
@@ -30,15 +30,18 @@ export async function GET(req: Request) {
       .select('findings').order('created_at', { ascending: false }).limit(1).maybeSingle()
     const prev = (prevRow?.findings ?? null) as Finding[] | null
 
-    await sb.from('security_audit_runs').insert({
+    const { error: insErr } = await sb.from('security_audit_runs').insert({
       findings, ...counts, snapshot: snap,
     })
+    // Supabase не бросает: без этой проверки прогон «прошёл», а в админке пусто.
+    const saveNote = insErr ? `\n\n⚠️ Результат не сохранился в базе: ${escapeHtml(insErr.message)}` : ''
 
-    await notifyAdmins(formatReport(findings, prev))
+    await notifyAdmins(formatReport(findings, prev) + saveNote)
+    if (insErr) return NextResponse.json({ error: insErr.message, ...counts }, { status: 500 })
     return NextResponse.json({ ok: true, ...counts, total: findings.length })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    await notifyAdmins(`⚠️ Прогон доступов упал: ${msg}`).catch(() => {})
+    await notifyAdmins(`⚠️ Прогон доступов упал: ${escapeHtml(msg)}`).catch(() => {})
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
