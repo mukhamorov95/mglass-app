@@ -174,6 +174,7 @@ export default function AmoActivityPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState<number | null>(null)
   const [schedules, setSchedules] = useState<ManagerSchedule[]>([])
+  const [resultsOn, setResultsOn] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -182,7 +183,7 @@ export default function AmoActivityPage() {
       .then(async res => {
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? `Ошибка ${res.status}`)
-        if (!cancelled) { setData(json as ActivityResponse); setError(null) }
+        if (!cancelled) { setData(json as ActivityResponse); setError(null); setResultsOn(true) }
       })
       .catch(e => { if (!cancelled) { setError(e instanceof Error ? e.message : String(e)); setData(null) } })
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -353,8 +354,17 @@ export default function AmoActivityPage() {
               )
             })()}
 
-            <ResultsBlock />
 
+          </>
+        )}
+
+        {/* Результат не зависит от периода таблицы: монтируется один раз после первой загрузки и
+            не пересчитывается при смене периода — иначе каждый клик заново тянет 90 дней из amo
+            параллельно с таблицей, и amo рвёт соединения */}
+        {resultsOn && <ResultsBlock />}
+
+        {data && !loading && (
+          <>
             <PbxBlock from={r.from} to={r.to} names={names} />
 
             <Card
