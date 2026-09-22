@@ -17,6 +17,29 @@ export function Tracking({ metrikaId }: { metrikaId: string }) {
     captureUtm();
   }, []);
 
+  // Цели Метрики. Форма amoCRM живёт в iframe с forms.amocrm.ru, и об успешной
+  // отправке сообщает только сообщением amoformsSuccessSubmit — других сигналов
+  // у страницы нет. Телефон стоит в десятке мест, поэтому клик ловим делегированием.
+  useEffect(() => {
+    if (!metrikaId) return;
+    const goal = (name: string) => (window as unknown as { ym?: Ym }).ym?.(Number(metrikaId), "reachGoal", name);
+    const onClick = (e: MouseEvent) => {
+      if ((e.target as Element | null)?.closest?.('a[href^="tel:"]')) goal("phone_click");
+    };
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== "https://forms.amocrm.ru" || typeof e.data !== "string") return;
+      try {
+        if (JSON.parse(e.data)?.func === "amoformsSuccessSubmit") goal("lead_form");
+      } catch {}
+    };
+    document.addEventListener("click", onClick);
+    window.addEventListener("message", onMessage);
+    return () => {
+      document.removeEventListener("click", onClick);
+      window.removeEventListener("message", onMessage);
+    };
+  }, [metrikaId]);
+
   // Первый просмотр отправляет init. Дальше Next.js меняет страницы без перезагрузки,
   // и Метрика о переходе не узнает, если не сообщить ей самим.
   useEffect(() => {

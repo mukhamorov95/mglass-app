@@ -40,6 +40,14 @@ export function organizationSchema() {
     taxID: SITE.inn,
     url: SITE.url,
     telephone: SITE.phone.display,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: SITE.address.street,
+      addressLocality: SITE.address.locality,
+      addressRegion: SITE.address.region,
+      addressCountry: "RU",
+    },
+    sameAs: [SITE.address.mapsUrl],
     foundingDate: String(SITE.foundedYear),
     areaServed: [
       { "@type": "City", name: "Москва" },

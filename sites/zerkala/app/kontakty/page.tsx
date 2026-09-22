@@ -5,7 +5,7 @@ import { breadcrumbSchema, pageMetadata } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 
 const TITLE = "Контакты — зеркала на заказ в Москве | M-Glass";
-const DESCRIPTION = `Телефон для расчёта и заказа зеркал по вашим размерам: ${SITE.phone.display}. Замер, изготовление и монтаж — ${SITE.serviceArea}.`;
+const DESCRIPTION = `Телефон для расчёта и заказа зеркал по вашим размерам: ${SITE.phone.display}. Адрес: ${SITE.address.full}. Замер, изготовление и монтаж — ${SITE.serviceArea}.`;
 
 export const metadata = pageMetadata({ path: "/kontakty", title: TITLE, description: DESCRIPTION });
 
@@ -20,11 +20,18 @@ export default function ContactsPage() {
       <Container>
         <Breadcrumbs items={crumbs} />
         <h1 className="mt-6 text-3xl font-bold tracking-tight sm:text-5xl">Контакты</h1>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl border border-line bg-card p-6">
             <div className="text-sm text-muted">Телефон</div>
             <a href={SITE.phone.href} className="mt-1 block text-2xl font-semibold">
               {SITE.phone.display}
+            </a>
+          </div>
+          <div className="rounded-2xl border border-line bg-card p-6">
+            <div className="text-sm text-muted">Адрес</div>
+            <div className="mt-1 text-lg font-semibold">{SITE.address.full}</div>
+            <a href={SITE.address.mapsUrl} target="_blank" rel="noopener" className="mt-2 inline-block text-sm underline hover:text-ink">
+              Мы на Яндекс Картах
             </a>
           </div>
           <div className="rounded-2xl border border-line bg-card p-6">
