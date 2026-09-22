@@ -1,3 +1,12 @@
+## Параллельная задача (22.09): подпись быстрых расчётов в списках
+- На главной менеджера («Последние расчёты») строки quick показывались как «quick undefined×undefined мм»,
+  у build в /calculations — «undefined×undefined мм» (размеры build лежат в input_data.dims, modelId нет).
+- СДЕЛАНО: lib/calcLabel.ts — calcTypeLabel / calcDetail / calcCaption (+14 тестов __tests__/calcLabel.test.ts):
+  quick/build — название из cart[0].title, несколько изделий — «N изд.» («Быстрый расчёт (N изд.)» одной строкой),
+  пустая корзина — title формы / модель+dims, нет размеров — пусто. Подключено: app/page.tsx, getDesc в
+  /calculations, запасная ветка типа в /clients/[phone], /admin/dashboard, /cfo, /cfo/margins, /cfo/unit,
+  /ai-sales, /kp-generator; cron followup и agent-revenue (с экранированием HTML для Telegram).
+
 ## Параллельная задача (21.09): сайт зеркал под SEO
 Маршрут `docs/site-zerkala/ZERKALA_SITE_ROUTE.md` (С0–С8), разбор 5 конкурентов — `COMPETITORS.md` рядом.
 - С0, С1 СДЕЛАНО: отдельный статический Next.js-проект `sites/zerkala/` (не внутри приложения — корневой
