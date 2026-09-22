@@ -1742,10 +1742,27 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                           if (!(c > 0)) warn.push(`Фацет ${fmFacetMm} мм: себестоимость не заведена`)
                         }
                         if (warn.length === 0) return null
+                        // Сказать «заведи цену в справочнике» мало: владелец спросил, где
+                        // этот справочник. Даём ссылку и точное имя строки, которую ищет
+                        // расчёт (поиск по вхождению слова «Пескоструй» в названии).
                         return (
                           <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2">
                             {warn.map((w, i) => <p key={i} className="text-[11px] text-red-700">{w}</p>)}
                             <p className="text-[11px] text-red-700 font-medium mt-1">Маржа по этой обработке считается от нуля — заведи цену в справочнике до отправки клиенту.</p>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                              {fmSandblast && (
+                                <a href="/admin/materials" target="_blank" rel="noreferrer"
+                                  className="text-[11px] font-semibold text-red-700 underline underline-offset-2 hover:text-red-900">
+                                  Справочник материалов → строка «Пескоструй», м², себестоимость ₽/м²
+                                </a>
+                              )}
+                              {fmFacetMm != null && (
+                                <a href="/admin/facet" target="_blank" rel="noreferrer"
+                                  className="text-[11px] font-semibold text-red-700 underline underline-offset-2 hover:text-red-900">
+                                  Справочник фацета → {fmFacetMm} мм
+                                </a>
+                              )}
+                            </div>
                           </div>
                         )
                       })()}
