@@ -42,7 +42,8 @@ export function describeMissedClient(input: {
   for (const id of input.amoRang) if (id) add(name(id))
   for (const ext of item.exts) {
     const uid = input.extToUser.get(ext)
-    add(uid ? name(uid) : `вн. ${ext}`)
+    // Внутренний без человека (5200) — общая линия/группа: такой пропуск amo не записывает вовсе
+    add(uid ? name(uid) : `общая линия (вн. ${ext})`)
   }
 
   let owner: MissedClient['owner'] = { kind: 'none' }
