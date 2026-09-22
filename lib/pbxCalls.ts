@@ -56,9 +56,10 @@ export type PbxSummary = {
   inbound: number
   inboundAnswered: number
   inboundMissed: number
+  missedClients: number
   missedCalledBack2h: number
   missedNeverCalledBack: number
-  missedNotCalledBackList: { at: number; phone: string }[]
+  missedNotCalledBackList: { at: number; phone: string; attempts: number }[]
   notInAmo: number
   byUser: { userId: number | null; ext: string; inboundAnswered: number; outbound: number; outboundAnswered: number; talkSec: number }[]
 }
@@ -71,12 +72,26 @@ export function summarizePbx(calls: PbxCall[], extToUser: Map<string, number>, a
   const missed = inbound.filter(c => !c.answered)
   const contactAfter = (c: PbxCall) => external.find(x =>
     x.clientPhone === c.clientPhone && x.startedAt > c.startedAt && (x.direction === 'out' || x.answered))
+  // Клиент, не дозвонившись, звонит снова — это один случай, а не три. Случай — от первого
+  // пропущенного до ближайшего контакта с этим номером; пропущенные внутри — попытки.
   let cb2h = 0, never = 0
-  const list: { at: number; phone: string }[] = []
+  const list: { at: number; phone: string; attempts: number }[] = []
+  const episodeUntil = new Map<string, number>()
+  const episodes: { first: PbxCall; last: PbxCall; attempts: number; next: PbxCall | undefined }[] = []
   for (const m of missed) {
+    if (m.startedAt < (episodeUntil.get(m.clientPhone) ?? -1)) {
+      const ep = episodes.findLast(e => e.first.clientPhone === m.clientPhone)!
+      ep.attempts++
+      ep.last = m
+      continue
+    }
     const next = contactAfter(m)
-    if (next && next.startedAt - m.startedAt <= 2 * 3600) cb2h++
-    if (!next) { never++; list.push({ at: m.startedAt, phone: m.clientPhone }) }
+    episodes.push({ first: m, last: m, attempts: 1, next })
+    episodeUntil.set(m.clientPhone, next ? next.startedAt : Infinity)
+  }
+  for (const ep of episodes) {
+    if (ep.next && ep.next.startedAt - ep.first.startedAt <= 2 * 3600) cb2h++
+    if (!ep.next) { never++; list.push({ at: ep.last.startedAt, phone: ep.first.clientPhone, attempts: ep.attempts }) }
   }
   const byExt = new Map<string, PbxSummary['byUser'][number]>()
   for (const c of external) {
@@ -92,10 +107,10 @@ export function summarizePbx(calls: PbxCall[], extToUser: Map<string, number>, a
     inbound: inbound.length,
     inboundAnswered: inbound.length - missed.length,
     inboundMissed: missed.length,
+    missedClients: episodes.length,
     missedCalledBack2h: cb2h,
     missedNeverCalledBack: never,
-    // Свежие пропущенные ещё могут перезвонить — список показываем, но это «ждут», не «потеряны»
-    missedNotCalledBackList: list.filter(x => x.at < to).slice(-30).reverse(),
+    missedNotCalledBackList: list.filter(x => x.at < to).sort((a, b) => b.at - a.at).slice(0, 30),
     notInAmo: external.filter(c => c.answered && !amoUniqs.has(c.uuid)).length,
     byUser: [...byExt.values()].sort((a, b) => b.inboundAnswered + b.outbound - a.inboundAnswered - a.outbound),
   }
