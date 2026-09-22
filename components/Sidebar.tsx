@@ -251,6 +251,7 @@ const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/admin/referral-stats', label: 'Партнёры — сводка', icon: '📊' },
   { href: '/admin/security',       label: 'Безопасность',    icon: '🛡️' },
   { href: '/admin/activity',       label: 'Активность',      icon: '⏱️' },
+  { href: '/commercial/activity',  label: 'Рабочий день менеджеров (AMO)', icon: '🕘' },
 ]
 
 // ─── Production mode (admin viewMode) ────────────────────────────────────────
@@ -419,7 +420,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/sandblast-cost', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
+    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity', '/commercial/activity'])) open.push('operations')
   }
   return open
 }
