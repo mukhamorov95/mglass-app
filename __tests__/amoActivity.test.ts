@@ -147,3 +147,24 @@ describe('ответ клиенту', () => {
     expect(median([])).toBeNull()
   })
 })
+
+describe('клиент остался ждать', () => {
+  it('написал в будний вечер после последнего действия ответственного — ждал до утра', () => {
+    const r = build([
+      ev('task_completed', ALINA, at(16, 15)),
+      chat('incoming_chat_message', 0, at(17, 15), 9),
+      chat('outgoing_chat_message', 0, at(9 + 24, 30), 9),
+      chat('incoming_chat_message', 0, at(12, 0), 10),
+      chat('outgoing_chat_message', ALINA, at(12, 5), 10),
+    ])
+    expect(r.managers[0].days[0].leftWaiting).toBe(1)
+  })
+  it('ответили тем же вечером — не ждал', () => {
+    const r = build([
+      ev('task_completed', ALINA, at(16, 15)),
+      chat('incoming_chat_message', 0, at(17, 15), 9),
+      chat('outgoing_chat_message', 0, at(18, 0), 9),
+    ])
+    expect(r.managers[0].days[0].leftWaiting).toBe(0)
+  })
+})

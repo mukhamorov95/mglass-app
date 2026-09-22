@@ -11,6 +11,7 @@ import { Card, Num, fmtWait, isWeekend, nowTs, shortDay, weekday } from './ui'
 import ResultsBlock from './ResultsBlock'
 import PbxBlock from './PbxBlock'
 import SchedulesBlock from './SchedulesBlock'
+import CoachingPreview from './CoachingPreview'
 
 // Рабочий день менеджеров по AmoCRM. Команда общается с клиентами только через amo,
 // поэтому след в amo — это и есть рабочий день. Ноль здесь — повод спросить, а не
@@ -362,6 +363,8 @@ export default function AmoActivityPage() {
             не пересчитывается при смене периода — иначе каждый клик заново тянет 90 дней из amo
             параллельно с таблицей, и amo рвёт соединения */}
         {resultsOn && <ResultsBlock />}
+
+        {resultsOn && <CoachingPreview />}
 
         {data && !loading && (
           <>
