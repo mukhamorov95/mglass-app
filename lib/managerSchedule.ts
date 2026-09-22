@@ -11,6 +11,7 @@ export type ManagerSchedule = {
   work_to: string | null
   work_days: number[]        // 1 = пн … 7 = вс
   note: string | null
+  is_seller?: boolean        // не продавец B2C — норму не считаем, в медиану команды не берём
 }
 
 export type DayCheck = {

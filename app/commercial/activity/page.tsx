@@ -208,6 +208,8 @@ export default function AmoActivityPage() {
   const chooseDay = (v: string) => { if (v && v !== day) { setDay(v); setLoading(true) } }
 
   const scheduleOf = (id: number) => schedules.find(s => s.amo_user_id === id)
+  // Не продавец (владелец, сопровождение, офис) не мерится воронкой B2C — он справочно, внизу
+  const notSeller = (id: number) => scheduleOf(id)?.is_seller === false
   const active = (data?.managers ?? []).filter(m => m.total.actions > 0 || m.total.messagesNoAuthor > 0)
   const now = nowTs()
   const missing = data
@@ -216,7 +218,9 @@ export default function AmoActivityPage() {
       .map(s => absentee(s, data.days))
       .filter(m => checkPeriod(m.days, scheduleOf(m.userId), now).expectedDays > 0)
     : []
-  const managers = [...active, ...missing]
+  const everyone = [...active, ...missing]
+  const managers = everyone.filter(m => !notSeller(m.userId))
+  const others = everyone.filter(m => notSeller(m.userId))
   const single = (data?.days.length ?? 0) === 1
   const firstStarter = single
     ? active.filter(m => m.days[0].firstAt !== null).sort((a, b) => a.days[0].firstAt! - b.days[0].firstAt!)[0]
@@ -291,7 +295,7 @@ export default function AmoActivityPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {managers.map(m => {
+                  {managers.concat().map(m => {
                     const d0 = m.days[0]
                     const s = scheduleOf(m.userId)
                     return (
@@ -332,6 +336,41 @@ export default function AmoActivityPage() {
               </table>
             </div>
 
+            {others.length > 0 && (
+              <details className="bg-white border border-[#e4e4e0] rounded-xl p-4 mb-4">
+                <summary className="cursor-pointer text-[13px] font-medium text-[#111110]">
+                  Не продавцы — справочно: {others.map(m => m.name).join(', ')}
+                </summary>
+                <p className="text-[11px] text-[#9a9a95] mt-1 mb-2">
+                  Их работа в amo не измеряется воронкой B2C: нормы, подсказки «Мой день» и медиана команды считаются только по продавцам.
+                </p>
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="text-[11px] text-[#9a9a95] text-left border-b border-[#e4e4e0]">
+                      <th className="py-1.5 pr-2 font-normal">Кто</th>
+                      <th className="py-1.5 px-2 font-normal text-right">Начало</th>
+                      <th className="py-1.5 px-2 font-normal text-right">Конец</th>
+                      <th className="py-1.5 px-2 font-normal text-right">Действий</th>
+                      <th className="py-1.5 px-2 font-normal text-right">Задачи закрыто</th>
+                      <th className="py-1.5 pl-2 font-normal text-right">Карточек передвинуто</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {others.map(m => (
+                      <tr key={m.userId} className="border-b border-[#f0f0ec]">
+                        <td className="py-1.5 pr-2 text-[#111110]">{m.name}</td>
+                        <td className="py-1.5 px-2 text-right"><Num v={single ? fmtTime(m.days[0].firstAt) : fmtMinuteOfDay(m.medianStartMin)} /></td>
+                        <td className="py-1.5 px-2 text-right"><Num v={single ? fmtTime(m.days[0].lastAt) : fmtMinuteOfDay(m.medianEndMin)} /></td>
+                        <td className="py-1.5 px-2 text-right"><Num v={m.total.actions} /></td>
+                        <td className="py-1.5 px-2 text-right"><Num v={m.total.tasksCompleted} /></td>
+                        <td className="py-1.5 pl-2 text-right"><Num v={m.total.cardsMoved} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            )}
+
             {schedules.length > 0 && (() => {
               const sats = saturdayDuty(data.days, managers, new Set(schedules.map(x => x.amo_user_id)))
               if (sats.length === 0) return null
@@ -362,7 +401,7 @@ export default function AmoActivityPage() {
         {/* Результат не зависит от периода таблицы: монтируется один раз после первой загрузки и
             не пересчитывается при смене периода — иначе каждый клик заново тянет 90 дней из amo
             параллельно с таблицей, и amo рвёт соединения */}
-        {resultsOn && <ResultsBlock />}
+        {resultsOn && <ResultsBlock notSellers={new Set(schedules.filter(x => x.is_seller === false).map(x => x.amo_user_id))} />}
 
         {resultsOn && <CoachingPreview />}
 
