@@ -6,6 +6,7 @@ import { ORDER_STATUS_LABELS } from '@/lib/types'
 import type { OrderStatus } from '@/lib/types'
 import { phoneKey, formatPhone, extractPhone } from '@/lib/b2c/phoneKey'
 import NewCalcButtons from './NewCalcButtons'
+import { calcTypeLabel } from '@/lib/calcLabel'
 
 // М1: единая карточка сделки B2C. Раньше здесь были только заказы и расчёты, и
 // сопоставлялись они точным равенством строки телефона — «8(915)129-12-77» и
@@ -129,7 +130,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
   const timeline: { at: string; icon: string; text: string }[] = [
     ...leads.map(l => ({ at: String(l.created_at), icon: '📥', text: `Заявка${l.source ? ` · ${l.source}` : ''}${l.product ? ` · ${l.product}` : ''}` })),
     ...measures.map(m => ({ at: String(m.scheduled_at ?? m.created_at), icon: '📐', text: `Замер · ${m.status ?? ''}${m.measurer_name ? ` · ${m.measurer_name}` : ''}` })),
-    ...calcs.map(c => ({ at: String(c.created_at), icon: '🧮', text: `Расчёт ${PRODUCT_LABELS[String(c.product_type)]?.label ?? c.product_type} · ${fmt(n(c.final_price))}` })),
+    ...calcs.map(c => ({ at: String(c.created_at), icon: '🧮', text: `Расчёт ${PRODUCT_LABELS[String(c.product_type)]?.label ?? calcTypeLabel(String(c.product_type))} · ${fmt(n(c.final_price))}` })),
     ...contracts.map(c => ({ at: String(c.date ?? c.created_at), icon: '📃', text: `Договор № ${c.number} · ${fmt(n(c.total))}` })),
     ...orders.map(o => ({ at: String(o.created_at), icon: '📦', text: `Заказ ${o.number} · ${fmt(n(o.total_sale_price))}` })),
     ...installs.map(i => ({ at: String(i.scheduled_date ?? i.created_at), icon: '🔧', text: `Монтаж${i.status ? ` · ${i.status}` : ''}` })),
@@ -250,7 +251,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
           <Card title="Расчёты" count={calcs.length}>
             <div className="divide-y divide-[#f0f0ec]">
               {calcs.map(c => {
-                const prod = PRODUCT_LABELS[String(c.product_type)] ?? { label: String(c.product_type), emoji: '📋' }
+                const prod = PRODUCT_LABELS[String(c.product_type)] ?? { label: calcTypeLabel(String(c.product_type)), emoji: '📋' }
                 return (
                   <Link key={String(c.id)} href={`/calculations/${c.id}`}
                     className="flex items-center justify-between px-5 py-3.5 hover:bg-[#fafaf9] transition-colors">

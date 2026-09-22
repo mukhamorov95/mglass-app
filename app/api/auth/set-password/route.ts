@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
   await markSetupTokenUsed(token)
-  // Больше не храним пароль открытым текстом — чистим password_plain.
-  await admin.from('users').update({ password_plain: null }).eq('id', userId).then(() => {}, () => {})
+  // Пароль хранится только в Supabase Auth: колонка password_plain удалена
+  // миграцией 20260922_drop_plain_passwords.
   return NextResponse.json({ ok: true })
 }

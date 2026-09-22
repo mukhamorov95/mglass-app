@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import { calcTypeLabel } from '@/lib/calcLabel'
 
 type Calc = {
   id: number
@@ -194,7 +195,7 @@ export default function MarginsPage() {
                         <td className="px-3 py-2 text-[#6b6b66] whitespace-nowrap">
                           {new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}
                         </td>
-                        <td className="px-3 py-2 font-medium">{PRODUCT_LABEL[c.product_type ?? ''] ?? c.product_type ?? '—'}</td>
+                        <td className="px-3 py-2 font-medium">{PRODUCT_LABEL[c.product_type ?? ''] ?? (c.product_type ? calcTypeLabel(c.product_type) : '—')}</td>
                         <td className="px-3 py-2 text-[#6b6b66]">{c.creator?.name?.split(' ')[0] ?? '—'}</td>
                         <td className="px-3 py-2 text-[#6b6b66] max-w-[120px] truncate">{c.client_name || '—'}</td>
                         <td className="px-3 py-2 font-mono font-medium whitespace-nowrap">{fmt(c.final_price ?? 0)}</td>

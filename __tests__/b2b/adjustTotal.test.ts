@@ -58,3 +58,47 @@ describe('пересчёт заказа под новую сумму', () => {
     expect(r[0].materialName).toBe('Стекло A')
   })
 })
+
+// Разъезд базы масштабирования: коэффициент считался от итога ПОСЛЕ скидки и
+// договорных цен, а умножался на прайсовую saleIncVat. В проде так вышли
+// отрицательные позиции в заказах 05024, 05097, 05338.
+describe('масштабируем то, из чего сложен старый итог', () => {
+  const list = [
+    { saleIncVat: 3000, costExVat: 1000 },
+    { saleIncVat: 3000, costExVat: 1000 },
+    { saleIncVat: 3000, costExVat: 1000 },
+  ]
+
+  it('со скидкой 20% позиции растут одинаково, а не «две вверх, одна вниз»', () => {
+    const r = rescaleItemsToTotal(list, 7200, 7500, 20)
+    expect(sum(r)).toBe(7500)
+    const vals = r.map(i => Number(i.saleIncVat))
+    expect(Math.max(...vals) - Math.min(...vals)).toBeLessThanOrEqual(2)
+  })
+
+  it('ни одна позиция не уходит в ноль и в минус', () => {
+    for (const n of [5, 7, 10]) {
+      const many = Array.from({ length: n }, () => ({ saleIncVat: 3000, costExVat: 1000 }))
+      const r = rescaleItemsToTotal(many, Math.round(3000 * n * 0.8), Math.round(3000 * n * 0.85), 20)
+      for (const it of r) expect(Number(it.saleIncVat)).toBeGreaterThan(0)
+    }
+  })
+
+  it('договорные цены позиций — тоже база: масштабируются они, а не прайс', () => {
+    const withManual = [
+      { saleIncVat: 100_000, manualTotal: 30_000, costExVat: 10_000 },
+      { saleIncVat: 100_000, manualTotal: 20_000, costExVat: 10_000 },
+    ]
+    const r = rescaleItemsToTotal(withManual, 50_000, 95_000)
+    expect(sum(r)).toBe(95_000)
+    // 30:20 → 57:38 тысяч, а не «190 тысяч первой и минус 95 второй»
+    expect(Number(r[0].saleIncVat)).toBeGreaterThan(Number(r[1].saleIncVat))
+    expect(Number(r[1].saleIncVat)).toBeGreaterThan(0)
+  })
+
+  it('старый итог без скидки и договорных — поведение прежнее', () => {
+    const r = rescaleItemsToTotal(items, OLD, 355_000, 0)
+    expect(sum(r)).toBe(355_000)
+    expect(Number(r[0].saleIncVat)).toBeGreaterThan(100_000)
+  })
+})

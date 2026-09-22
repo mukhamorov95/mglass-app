@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { PRODUCTION_DAYS, matchProductionDays } from '@/lib/kp/importCheck'
+import type { KpSourceFile } from '@/lib/kp/sourceFile'
 
 interface ISpeechRecognition extends EventTarget {
   lang: string; continuous: boolean; interimResults: boolean
@@ -26,6 +28,9 @@ type Form = {
   spec_note: string; vat_label: string; vat_note: string
   production_days: string; warranty: string; vat: string
   photo_url: string | null
+  // Исходник, из которого собрано это КП (старый файл клиента). Лежит в content,
+  // поэтому доезжает до истории и обратно в форму при правке.
+  source_file?: KpSourceFile | null
 }
 
 type HistoryRow = {
@@ -56,6 +61,7 @@ function emptyForm(): Form {
     spec_note: 'Стекло закалённое и безопасное: при повреждении рассыпается на мелкие неострые фрагменты. Кромка полируется по всему периметру.',
     vat_label: 'НДС 5% ВКЛЮЧЁН', vat_note: '', production_days: '15 раб. дней', warranty: 'Изделие + монтаж', vat: '5% включён',
     photo_url: null,
+    source_file: null,
   }
 }
 
@@ -100,6 +106,14 @@ export default function KpPage() {
   const [canDelete, setCanDelete] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [interimText, setInterimText] = useState('')
+  // Черновик, подставленный из быстрого расчёта: пока КП не сохранено, он живёт
+  // в sessionStorage и переживает перезагрузку и уход на другой экран.
+  const [fromQuick, setFromQuick] = useState(false)
+  // Импорт старого КП из файла: имя источника, предупреждения разбора, ошибка.
+  const [importing, setImporting] = useState(false)
+  const [importedFrom, setImportedFrom] = useState<string | null>(null)
+  const [importWarnings, setImportWarnings] = useState<string[]>([])
+  const [importError, setImportError] = useState<string | null>(null)
   const [speechSupported, setSpeechSupported] = useState(true)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const transcriptRef = useRef('')
@@ -115,12 +129,15 @@ export default function KpPage() {
     try {
       const raw = sessionStorage.getItem('mglass_kp_prefill')
       if (!raw) return
-      sessionStorage.removeItem('mglass_kp_prefill')
+      // Раньше ключ стирался при чтении: перезагрузка страницы или возврат на неё
+      // оставляли пустую форму, и КП, который менеджер уже считал сделанным,
+      // исчезал. Стираем только после сохранения или явной очистки.
       const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number; deal_id?: number; client_name?: string; client_phone?: string; client_address?: string }
       // Из карточки сделки: клиент и связь уже подставлены — менеджер их не вводит заново.
       if (typeof p.deal_id === 'number') dealIdRef.current = p.deal_id
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTab('new')
+      setFromQuick(true)
       setForm(f => ({
         ...f,
         title: p.title ?? f.title,
@@ -217,12 +234,41 @@ export default function KpPage() {
     } catch { setBusy('Ошибка разбора') } finally { setTimeout(() => setBusy(null), 800) }
   }
 
+  // Старое КП (PDF/фото) → наша структура. Разбор не сохраняет ничего сам:
+  // менеджер правит форму и жмёт «Сохранить КП», как и в остальных случаях.
+  async function importKp(file: File) {
+    setImporting(true); setImportError(null); setImportWarnings([]); setImportedFrom(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/ai/kp-import', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.kp) {
+        setImportError(data.detail || data.error || `Не удалось разобрать файл (${res.status})`)
+        return
+      }
+      applyKp(data.kp)
+      // Форма больше не черновик быстрого расчёта — иначе наверху остаётся
+      // подсказка про расчёт, которого в этой форме уже нет.
+      dropDraft()
+      if (data.source?.path) setForm(f => ({ ...f, source_file: data.source as KpSourceFile }))
+      setImportedFrom(file.name)
+      setImportWarnings(Array.isArray(data.warnings) ? data.warnings : [])
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : 'Ошибка сети')
+    } finally { setImporting(false) }
+  }
+
   function applyKp(kp: Record<string, unknown>) {
     setForm(f => {
       const next = { ...f }
       const s = (k: keyof Form, v: unknown) => { if (v != null && v !== '') (next as Record<string, unknown>)[k] = String(v) }
       s('title', kp.title); s('subtitle', kp.subtitle); s('client_name', kp.client_name); s('client_phone', kp.client_phone)
       s('warranty', kp.warranty); s('valid_until', kp.valid_until); s('spec_note', kp.spec_note)
+      // Срок — список: берём только то, что в нём есть, остальное менеджер выберет сам
+      // (о несовпадении он узнает из замечаний разбора, а не из молча оставшегося «15»).
+      const days = matchProductionDays(kp.production_days)
+      if (days) next.production_days = days
       if (Array.isArray(kp.spec) && kp.spec.length) next.spec = (kp.spec as Spec[]).map(x => ({ label: String(x.label ?? ''), value: String(x.value ?? ''), accent: x.accent }))
       if (Array.isArray(kp.items) && kp.items.length) next.items = (kp.items as Record<string, unknown>[]).map(x => ({
         name: String(x.name ?? ''), desc: x.desc ? String(x.desc) : '',
@@ -286,12 +332,13 @@ export default function KpPage() {
       if (editingId) {
         const res = await fetch('/api/kp', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingId, content }) })
         const data = await res.json().catch(() => ({}))
-        if (res.ok) setSavedId(editingId)
+        if (res.ok) { dropDraft(); setSavedId(editingId) }
         else setSaveError(data.error || `Ошибка ${res.status}`)
       } else {
         const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, ...(dealIdRef.current ? { deal_id: dealIdRef.current } : {}) }) })
         const data = await res.json().catch(() => ({}))
         if (res.ok && data.id) {
+          dropDraft()
           setEditingId(data.id)
           // setForm напрямую (не set — тот сбрасывает savedId)
           if (data.number && !form.number) setForm(f => ({ ...f, number: data.number }))
@@ -307,11 +354,26 @@ export default function KpPage() {
 
   function editRow(r: HistoryRow) {
     const c = r.content as Partial<Form>
-    setForm({ ...emptyForm(), ...c, spec: c.spec ?? [], items: c.items ?? [], photo_url: c.photo_url ?? null, number: r.number })
+    setForm({ ...emptyForm(), ...c, spec: c.spec ?? [], items: c.items ?? [], photo_url: c.photo_url ?? null, source_file: c.source_file ?? null, number: r.number })
     setEditingId(r.id); setSavedId(null); setTranscript(''); setTab('new')
   }
 
-  function newKp() { setForm(emptyForm()); setEditingId(null); setSavedId(null); setTranscript(''); setTab('new') }
+  // «Новое КП» выглядит как вкладка, но очищает форму. Пока КП не сохранено,
+  // этот клик стирал работу без предупреждения — теперь спрашивает.
+  const hasContent = (f: Form) => !!(f.items.length || f.spec.length || f.title.trim() || f.client_name.trim() || numOr(f.total) > 0)
+
+  function dropDraft() {
+    try { sessionStorage.removeItem('mglass_kp_prefill') } catch { /* ignore */ }
+    setFromQuick(false)
+    setImportedFrom(null); setImportWarnings([]); setImportError(null)
+  }
+
+  function newKp() {
+    if (tab === 'new' && !savedId && !editingId && hasContent(form)
+      && !confirm('Очистить форму? Это КП ещё не сохранено — оно пропадёт.')) return
+    dropDraft()
+    setForm(emptyForm()); setEditingId(null); setSavedId(null); setTranscript(''); setTab('new')
+  }
 
   // group history by month
   const groups = (() => {
@@ -341,6 +403,11 @@ export default function KpPage() {
 
         {tab === 'new' ? (
           <div className="space-y-4">
+            {fromQuick && !savedId && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[13px] text-amber-800">
+                Данные подставлены из быстрого расчёта. В историю КП попадёт только после кнопки «Сохранить КП» внизу.
+              </div>
+            )}
             {/* voice */}
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
               <div className="flex items-center gap-3 flex-wrap">
@@ -358,6 +425,37 @@ export default function KpPage() {
               {interimText && <p className="text-[12px] text-[#9a9a95] mt-1 italic">…{interimText}</p>}
               <button onClick={() => transcript.trim() && structure(transcript)} disabled={!transcript.trim() || !!busy}
                 className="mt-2 px-3 py-1.5 text-[12px] font-medium rounded-lg bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] disabled:opacity-50">Разобрать текст → структуру</button>
+            </div>
+
+            {/* старое КП из файла */}
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className={`px-4 py-2.5 rounded-lg text-[13px] font-semibold cursor-pointer ${importing ? 'bg-[#e8e8e4] text-[#9a9a95]' : 'bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
+                  {importing ? 'Читаю файл…' : '📄 Загрузить старое КП'}
+                  <input type="file" accept=".pdf,image/*" className="hidden" disabled={importing}
+                    onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importKp(f) }} />
+                </label>
+                {importedFrom && <span className="text-[12px] text-[#6b6b66]">из файла «{importedFrom}»</span>}
+              </div>
+              {form.source_file?.path && (
+                <div className="mt-3 flex items-center gap-3 flex-wrap bg-[#f5f5f3] border border-[#e4e4e0] rounded-lg px-3 py-2">
+                  <span className="text-[12px] text-[#6b6b66]">📎 Исходник сохранится вместе с КП:</span>
+                  <a href={`/api/kp/source?path=${encodeURIComponent(form.source_file.path)}`} target="_blank" rel="noreferrer"
+                    className="text-[12px] font-medium text-[#111110] underline underline-offset-2">{form.source_file.name}</a>
+                  <button onClick={() => set({ source_file: null })} className="text-[12px] text-[#9a9a95] hover:text-red-500">убрать</button>
+                </div>
+              )}
+              <p className="text-[12px] text-[#9a9a95] mt-2">
+                КП, сделанное по старому шаблону (PDF или фото), разберётся в нашу структуру — дальше правьте строки и сохраняйте как обычно.
+                Word или Excel сохраните в PDF. Цены переносятся как есть, ничего не пересчитывается.
+              </p>
+              {importError && <p className="text-[12px] text-red-600 mt-2">{importError}</p>}
+              {importWarnings.length > 0 && (
+                <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
+                  <p className="text-[12px] font-semibold text-amber-800">Проверьте перед отправкой:</p>
+                  {importWarnings.map((w, i) => <p key={i} className="text-[12px] text-amber-800">— {w}</p>)}
+                </div>
+              )}
             </div>
 
             {/* header fields */}
@@ -426,7 +524,7 @@ export default function KpPage() {
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 grid grid-cols-3 gap-3">
               <div><label className={L}>Срок изготовления</label>
                 <select className={I} value={form.production_days} onChange={e => set({ production_days: e.target.value })}>
-                  {['10 раб. дней', '12 раб. дней', '15 раб. дней', '20 раб. дней', '25 раб. дней'].map(o => <option key={o} value={o}>{o}</option>)}
+                  {PRODUCTION_DAYS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div><label className={L}>Гарантия</label><input className={I} value={form.warranty} onChange={e => set({ warranty: e.target.value })} /></div>
@@ -505,6 +603,13 @@ export default function KpPage() {
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>
                             <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">✏️</button>
+                            {(() => {
+                              const src = r.content?.source_file as KpSourceFile | undefined
+                              return src?.path ? (
+                                <a href={`/api/kp/source?path=${encodeURIComponent(src.path)}`} target="_blank" rel="noreferrer"
+                                  title={`Исходный файл: ${src.name}`} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">📎</a>
+                              ) : null
+                            })()}
                             <a href={`/kp/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">PDF</a>
                             {canDelete && <button onClick={e => deleteKp(r.id, e)} className="text-[12px] text-red-400 hover:text-red-600" title="Удалить (только админ)">🗑</button>}
                           </div>

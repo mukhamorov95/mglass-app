@@ -19,7 +19,7 @@ export async function GET() {
   // Try with new columns first; fall back to base columns if migration not run yet
   const full = await db
     .from('users')
-    .select('id,email,name,role,active,manager_code,password_plain,see_all_orders,can_view_all_clients,can_view_all_deals,amo_user_id,max_discount_percent,can_delete,permissions,production_stations,can_view_money,bonus_eligible,hired_at,created_at')
+    .select('id,email,name,role,active,manager_code,see_all_orders,can_view_all_clients,can_view_all_deals,amo_user_id,max_discount_percent,can_delete,permissions,production_stations,can_view_money,bonus_eligible,hired_at,created_at')
     .order('created_at', { ascending: true })
 
   // Привязка к Telegram-боту: без неё уведомления менеджеру (А14) никуда не уходят,
@@ -35,7 +35,7 @@ export async function GET() {
 
   const base = await db
     .from('users')
-    .select('id,email,name,role,active,manager_code,password_plain,see_all_orders,created_at')
+    .select('id,email,name,role,active,manager_code,see_all_orders,created_at')
     .order('created_at', { ascending: true })
 
   if (base.error) return NextResponse.json({ error: base.error.message }, { status: 500 })
@@ -46,15 +46,17 @@ export async function PATCH(req: NextRequest) {
   const guard = await requireOwner()
   if (guard instanceof NextResponse) return guard
 
-  const { id, password_plain, permissions, ...fields } = await req.json()
+  // Пароль принимаем как `password_plain` (так его шлёт экран), но НЕ храним:
+  // колонка удалена 22.09.2026, пароль живёт только в Supabase Auth.
+  const { id, password_plain: newPassword, permissions, ...fields } = await req.json()
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
 
   const db = adminClient()
 
   // Password change — update Supabase Auth too
-  if (password_plain) {
-    await db.auth.admin.updateUserById(id, { password: password_plain })
-    fields.password_plain = password_plain
+  if (newPassword) {
+    const { error: pwErr } = await db.auth.admin.updateUserById(id, { password: newPassword })
+    if (pwErr) return NextResponse.json({ error: pwErr.message }, { status: 500 })
     await writeLogForCurrentUser('user.password_change', { entityType: 'user', entityId: id })
   }
 
@@ -72,7 +74,7 @@ export async function PATCH(req: NextRequest) {
     const { error } = await db.from('users').update(fields).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    if (!password_plain && permissions === undefined) {
+    if (!newPassword && permissions === undefined) {
       await writeLogForCurrentUser('user.update', {
         entityType: 'user',
         entityId: id,

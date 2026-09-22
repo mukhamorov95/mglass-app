@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import { calcTypeLabel } from '@/lib/calcLabel'
 
 const MARGIN_RED    = 25
 const MARGIN_AMBER  = 35
@@ -65,7 +66,7 @@ export default async function CfoDashboardPage() {
   // Product type revenue (approved)
   const byProduct: Record<string, number> = {}
   for (const c of approved) {
-    const t = PRODUCT_LABEL[c.product_type ?? ''] ?? c.product_type ?? 'Другое'
+    const t = PRODUCT_LABEL[c.product_type ?? ''] ?? (c.product_type ? calcTypeLabel(c.product_type) : 'Другое')
     byProduct[t] = (byProduct[t] ?? 0) + (c.final_price ?? 0)
   }
 
@@ -155,7 +156,7 @@ export default async function CfoDashboardPage() {
                 {recent.map(c => (
                   <tr key={c.id} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
                     <td className="px-3 py-2 text-[#9a9a95] font-mono">{c.id}</td>
-                    <td className="px-3 py-2">{PRODUCT_LABEL[c.product_type ?? ''] ?? c.product_type}</td>
+                    <td className="px-3 py-2">{PRODUCT_LABEL[c.product_type ?? ''] ?? calcTypeLabel(c.product_type)}</td>
                     <td className="px-3 py-2 text-[#6b6b66] max-w-[120px] truncate">{c.client_name || '—'}</td>
                     <td className="px-3 py-2 font-mono font-medium">{fmtMoney(c.final_price ?? 0)}</td>
                     <td className="px-3 py-2">
