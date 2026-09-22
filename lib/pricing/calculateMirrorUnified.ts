@@ -61,6 +61,11 @@ export type CalculateMirrorUnifiedInputs = {
 
   buttonType:   'none' | 'sensor' | 'wave'
   hasSandblast: boolean
+  // Ставка пескоструя ₽/м² (себестоимость) с названием работы. Приходит из
+  // справочника услуг B2B, где пескоструй и заведён: «по трафарету» и «полное
+  // матирование» стоят по-разному. Раньше цену искали только среди materials,
+  // где строки «Пескоструй» нет вовсе, — и обработка молча считалась в ноль.
+  sandblastRate?: { name: string; costPerM2: number } | null
   hasSubstrate: boolean
   substratePrice: number   // already cost in UI
   hasFacet:       boolean
@@ -280,16 +285,21 @@ export function calculateMirrorUnified(
     lines.push({ name: dn(assembly), qty: 1, unit: 'шт', price: assembly.cost_price, total: assembly.cost_price })
   }
 
-  // 6. Sandblasting — no 1200 fallback.
+  // 6. Пескоструй. Сначала явная ставка из справочника услуг (её передаёт
+  // калькулятор), потом строка в materials — если её кто-то заведёт. Ничего
+  // не нашли — строки нет, и экран об этом предупреждает: выдуманной цены тут
+  // быть не должно.
   if (inputs.hasSandblast) {
-    const sb = findMat(materials, 'Пескоструй')
-    if (sb) {
+    const rate = inputs.sandblastRate && inputs.sandblastRate.costPerM2 > 0
+      ? { name: inputs.sandblastRate.name, price: inputs.sandblastRate.costPerM2 }
+      : (() => { const sb = findMat(materials, 'Пескоструй'); return sb ? { name: dn(sb), price: sb.cost_price } : null })()
+    if (rate) {
       lines.push({
-        name:  dn(sb),
+        name:  rate.name,
         qty:   Number(area.toFixed(3)),
         unit:  'м²',
-        price: sb.cost_price,
-        total: Math.round(area * sb.cost_price),
+        price: rate.price,
+        total: Math.round(area * rate.price),
       })
     }
   }

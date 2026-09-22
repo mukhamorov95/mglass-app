@@ -37,8 +37,14 @@ type RawComponent = {
   power_per_meter: number | null; max_power: number | null; cost_price: number; unit: string; active?: boolean
 }
 
+export type SandblastMode = 'none' | 'stencil' | 'full'
+export type SandblastRate = { mode: Exclude<SandblastMode, 'none'>; name: string; costPerM2: number }
+
 export type FactoryData = {
   retailMaterials: Material[]
+  // Пескоструй заведён в справочнике услуг B2B двумя строками: по трафарету и
+  // полное матирование. Расчёт зеркала берёт цену оттуда, а не из materials.
+  sandblastRates: SandblastRate[]
   retailServices: Service[]
   finSettings: FinancialSettings | null
   components: RawComponent[]
@@ -65,7 +71,7 @@ function rowToCfg(r: Record<string, unknown> | null): PricingCfg {
 
 // Ленивая загрузка розничных справочников (нужна только при выборе изделия).
 export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> {
-  const [mats, svcs, fins, comps, mx, cfgs, lrs, mfr] = await Promise.all([
+  const [mats, svcs, fins, comps, mx, cfgs, lrs, mfr, sandRows] = await Promise.all([
     sb.from('materials').select('*').eq('active', true),
     sb.from('services').select('*').eq('active', true),
     sb.from('financial_settings').select('*'),
@@ -74,8 +80,18 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
     sb.from('pricing_model_config_v2').select('*').in('product_category', ['mirror', 'loft']),
     sb.from('loft_rates').select('key, value'),
     sb.from('mirror_frame_rates').select('key, value'),   // ставки металлической рамы (таблица может ещё не быть — тогда data=null)
+    sb.from('b2b_services').select('id, name, cost_price, type, active').ilike('name', '%пескостру%').eq('active', true),
   ])
   let retailMaterials = (mats.data ?? []) as Material[]
+  const sandblastRates: SandblastRate[] = []
+  for (const r of (sandRows.data ?? []) as { name: string; cost_price: number | null; type: string }[]) {
+    if (r.type !== 'per_m2') continue
+    const cost = Number(r.cost_price) || 0
+    if (!(cost > 0)) continue
+    // «по трафарету / рисунок / частичное» — трафарет, остальное считаем сплошным.
+    const mode: SandblastRate['mode'] = /трафарет|рисун|частичн/i.test(r.name) ? 'stencil' : 'full'
+    if (!sandblastRates.some(x => x.mode === mode)) sandblastRates.push({ mode, name: r.name, costPerM2: cost })
+  }
   const finRows = (fins.data ?? []) as FinancialSettings[]
   const matrix = (mx.data ?? []) as GlassMatrixRow[]
   const cfgRows = (cfgs.data ?? []) as Record<string, unknown>[]
@@ -105,6 +121,7 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
 
   return {
     retailMaterials,
+    sandblastRates,
     retailServices: (svcs.data ?? []) as Service[],
     finSettings: finRows.find(s => s.product_type === 'loft') ?? finRows.find(s => s.tier === 'standard') ?? finRows[0] ?? null,
     components: (comps.data ?? []) as RawComponent[],
@@ -176,6 +193,7 @@ export function calcFactoryMirror(
     lightSides?: LightSides   // какие стороны подсвечены; не задано = весь периметр
     // Фацет и пескоструй — РАЗНЫЕ обработки, а не одна «декоративка».
     sandblast?: boolean          // пескоструй по зеркалу
+    sandblastMode?: SandblastMode   // какой именно: по трафарету или сплошной
     facetTypeMm?: number | null  // фацет: ширина фаски, мм; null = без фацета
     facetCostPerM?: number       // себестоимость фацета, ₽/пог.м (из facet_prices)
     ledId?: number | null      // лента (температура) из справочника; null = авто
@@ -218,6 +236,10 @@ export function calcFactoryMirror(
     powerSupply: p.hasLighting ? (psu ? toLC(psu) : null) : null,
     diffuser:    p.hasLighting ? (diffuser ? toLC(diffuser) : null) : null,
     buttonType: p.buttonType, hasSandblast: !!p.sandblast,
+    sandblastRate: p.sandblast
+      ? (d.sandblastRates.find(r => r.mode === (p.sandblastMode === 'full' ? 'full' : 'stencil'))
+         ?? d.sandblastRates[0] ?? null)
+      : null,
     hasSubstrate: underlay > 0, substratePrice: underlay,
     hasFacet: p.facetTypeMm != null && p.facetTypeMm > 0,
     facetTypeMm: p.facetTypeMm ?? null,
