@@ -5,6 +5,7 @@ import { BLOCKS, Faq, Gallery, Highlights, LandingCard, LeadSection, SectionsVie
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { LANDINGS, getLanding } from "@/content/landings";
 import { PHOTOS } from "@/content/photos";
+import { questionsForLanding } from "@/content/questions";
 import { CLUSTERS } from "@/content/types";
 import { breadcrumbSchema, faqSchema, pageMetadata, serviceSchema } from "@/lib/seo";
 import { SITE } from "@/lib/site";
@@ -35,6 +36,7 @@ export default async function LandingPage({ params }: { params: Promise<{ slug: 
   const photo = PHOTOS[l.photo];
   const related = l.related.map(getLanding).filter((x): x is NonNullable<typeof x> => Boolean(x));
   const siblings = LANDINGS.filter((x) => x.cluster === l.cluster && x.slug !== l.slug);
+  const questions = questionsForLanding(l.slug);
 
   return (
     <>
@@ -94,6 +96,22 @@ export default async function LandingPage({ params }: { params: Promise<{ slug: 
 
       <Gallery keys={l.gallery} />
       <Faq items={l.faq} />
+
+      {questions.length > 0 && (
+        <section className="pb-4">
+          <Container className="max-w-3xl">
+            <h2 className="mb-4 text-xl font-semibold tracking-tight">Разбираем подробно</h2>
+            <div className="divide-y divide-line rounded-2xl border border-line bg-card">
+              {questions.map((q) => (
+                <Link key={q.slug} href={`/vopros/${q.slug}`} className="flex items-start justify-between gap-4 px-5 py-4 hover:bg-paper">
+                  <span className="font-semibold">{q.h1}</span>
+                  <span aria-hidden="true" className="mt-0.5 text-brass">→</span>
+                </Link>
+              ))}
+            </div>
+          </Container>
+        </section>
+      )}
 
       {related.length > 0 && (
         <section className="py-12 sm:py-16">
