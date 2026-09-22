@@ -6,6 +6,7 @@ import { clientPriceFrom, type Tier } from '@/lib/configurator/pricing'
 import { resolveTierData } from '@/lib/configurator/priceVersion'
 import { buildWithVariant, type QuoteRequest, type QuoteResponse, type PriceProvenance } from '@/lib/configurator/quoteContract'
 import { withCors, corsPreflight } from '@/lib/configurator/cors'
+import { canSeeKitCost } from '@/lib/configurator/costAccess'
 
 // Серверный расчёт цены визуализатора по КОМПЛЕКТУ модели. Себестоимость и ставки не
 // уходят в браузер: неавторизованному (публичный embed) — только сумма «от N ₽»,
@@ -33,8 +34,18 @@ export async function POST(req: NextRequest) {
     ? { version: version.id, label: version.label, publishedAt: version.publishedAt, validUntil }
     : null
 
-  const { data: { user } } = await (await createClient()).auth.getUser()
-  const res: QuoteResponse = user
+  // Полная разбивка (себестоимость стекла и фурнитуры, маржа, налог, строки
+  // комплекта) — только внутренним ролям. Раньше развилка стояла на «вошёл или
+  // нет», и партнёр со своей сессией получал нашу себестоимость с того самого
+  // маршрута, который написан, чтобы её не отдавать.
+  const sb = await createClient()
+  const { data: { user } } = await sb.auth.getUser()
+  let full = false
+  if (user) {
+    const { data: prof } = await sb.from('users').select('role').eq('id', user.id).maybeSingle()
+    full = canSeeKitCost(prof?.role as string | null | undefined)
+  }
+  const res: QuoteResponse = full
     ? { full: true, price, provenance }
     : { full: false, total: price.total, clientFrom: clientPriceFrom(price.total), complete: price.complete, provenance }
   return withCors(res)
