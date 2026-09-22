@@ -112,7 +112,11 @@ export const SITE = {
     hash: "2600451b11da58393f828487c0dbbe0e",
     src: "https://forms.amocrm.ru/forms/assets/js/amoforms.js?1790069110",
   },
-  productionDomain: "mglass-zerkala.ru",
+  // Главный адрес — с www (22.09.2026). Голое имя mglass-zerkala.ru у части пользователей
+  // с VPN (российские сайты идут мимо туннеля через провайдера) режется фильтром по точному
+  // имени, а www проходит; к тому же www привязан к Vercel через CNAME, без ручных IP.
+  // Голое имя только переадресует на www (настройка доменов в Vercel).
+  productionDomain: "www.mglass-zerkala.ru",
   metrikaId: process.env.NEXT_PUBLIC_YM_ID || "",
   yandexVerification: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION || "",
   // Дата последней правки текстов — идёт в lastmod карты сайта. Меняется руками
