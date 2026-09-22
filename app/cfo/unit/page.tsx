@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import { calcTypeLabel } from '@/lib/calcLabel'
 
 type ServiceLine = { name: string; total: number }
 
@@ -132,7 +133,7 @@ export default function UnitEconomicsPage() {
                       </span>
                     </div>
                     <div className={`text-xs font-medium mt-0.5 ${isActive ? 'text-white' : 'text-[#111110]'}`}>
-                      {PRODUCT_LABEL[calc.product_type ?? ''] ?? calc.product_type}
+                      {PRODUCT_LABEL[calc.product_type ?? ''] ?? calcTypeLabel(calc.product_type)}
                     </div>
                     <div className={`text-[10px] mt-0.5 ${isActive ? 'text-white/70' : 'text-[#9a9a95]'}`}>
                       {calc.client_name || '—'} · {(calc.final_price ?? 0).toLocaleString('ru-RU')} ₽

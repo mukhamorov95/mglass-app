@@ -124,7 +124,7 @@ export function Footer() {
       </Container>
       <Container className="flex flex-col gap-3 border-t border-line py-6 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
         <div>
-          © {SITE.foundedYear}–{year} {SITE.brand}. {SITE.legalName}
+          © {SITE.foundedYear}–{year} {SITE.brand}. {SITE.legalName}, ИНН {SITE.inn}, ОГРНИП {SITE.ogrnip}
         </div>
         <div className="flex flex-wrap gap-4">
           {clusters.slice(3).flatMap((c) => c.items).map((l) => (

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
+import { calcTypeLabel } from '@/lib/calcLabel'
 
 type DashData = {
   revenueToday:    number
@@ -340,7 +341,7 @@ export default function DashboardPage() {
               return (
                 <div key={p.type}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12px] font-medium text-[#111110]">{PRODUCT_LABELS[p.type] ?? p.type}</span>
+                    <span className="text-[12px] font-medium text-[#111110]">{PRODUCT_LABELS[p.type] ?? calcTypeLabel(p.type)}</span>
                     <span className="text-[11px] text-[#6b6b66] font-mono">{fmt(p.revenue, true)}</span>
                   </div>
                   <div className="h-2 bg-[#f0f0ec] rounded-full overflow-hidden">
@@ -396,7 +397,7 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] text-[#c4c4be] font-mono">#{c.id}</span>
-                      <span className="text-[11px] text-[#9a9a95]">{PRODUCT_LABELS[c.type] ?? c.type}</span>
+                      <span className="text-[11px] text-[#9a9a95]">{PRODUCT_LABELS[c.type] ?? calcTypeLabel(c.type)}</span>
                       {c.manager && <span className="text-[10px] text-[#b4b4b0] truncate">{c.manager}</span>}
                     </div>
                     <p className="text-[11px] text-[#9a9a95]">

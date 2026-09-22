@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { calcTypeLabel } from '@/lib/calcLabel'
 
 type Calculation = {
   id: number
@@ -78,7 +79,7 @@ export default function KPGeneratorPage() {
             <option value="">— Без расчёта (универсальный шаблон)</option>
             {calculations.map(c => (
               <option key={c.id} value={c.id}>
-                #{c.id} · {PRODUCT_LABELS[c.product_type] ?? c.product_type} · {c.final_price.toLocaleString('ru-RU')} ₽ · {new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
+                #{c.id} · {PRODUCT_LABELS[c.product_type] ?? calcTypeLabel(c.product_type)} · {c.final_price.toLocaleString('ru-RU')} ₽ · {new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
               </option>
             ))}
           </select>

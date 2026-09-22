@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Faq, Gallery, LandingCard, LeadSection, LightModes, Materials, PriceFactors, Steps } from "@/components/blocks";
+import { Faq, Gallery, LandingCard, LeadSection, LightModes, Materials, PriceFactors, Steps, TrustBar } from "@/components/blocks";
 import { ButtonLink, Container, JsonLd, SectionTitle } from "@/components/ui";
 import { getLanding, landingsByCluster } from "@/content/landings";
 import { PHOTOS } from "@/content/photos";
@@ -20,7 +20,9 @@ const HUB_FAQ = [
   { q: "Можно ли заказать зеркало нестандартного размера?", a: "Да, мы и делаем зеркала только по размерам: режем полотно под вашу тумбу, нишу или стену, а не подбираем ближайший стандарт." },
   { q: "Какие виды подсветки бывают?", a: "Аура — свечение за зеркалом на стену; фронтальная — свет на лицо через матовую пескоструйную полосу; и оба контура вместе. Управление кнопкой или сенсором." },
   { q: "Из какого зеркала вы делаете?", a: "Серебро 4, 5 и 6 мм, осветлённое 4 и 6 мм, бронза и графит 4 и 6 мм, состаренное 4 мм." },
-  { q: "Вы устанавливаете зеркала?", a: `Да, делаем замер, доставку и монтаж. Работаем: ${SITE.serviceArea}.` },
+  { q: "Сколько делается зеркало на заказ?", a: `Производство — ${SITE.leadTime.regular}. Срочные заказы — ${SITE.leadTime.urgent}, зеркала с LED-подсветкой срочно — ${SITE.leadTime.urgentLed}.` },
+  { q: "Какая гарантия на зеркала?", a: `${SITE.warrantyMonths} месяцев, прописываем в договоре.` },
+  { q: "Вы устанавливаете зеркала?", a: `Да: выезжаем на замер, привозим и монтируем. Работаем: ${SITE.serviceArea}.` },
   { q: "Работаете с дизайнерами и юрлицами?", a: "Да. Режем серии полотен по спецификации, делаем зеркальные стены для залов и серии зеркал для салонов, работаем по договору и счёту." },
 ];
 
@@ -54,24 +56,16 @@ export default function HomePage() {
                 {SITE.phone.display}
               </ButtonLink>
             </div>
-            <dl className="mt-10 grid max-w-xl grid-cols-3 gap-4 border-t border-line pt-6">
-              <div>
-                <dt className="text-xs text-muted">Работаем</dt>
-                <dd className="mt-1 text-xl font-bold">с {SITE.foundedYear}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Проектов из стекла и зеркал</dt>
-                <dd className="mt-1 text-xl font-bold">{SITE.projects}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Видов зеркала</dt>
-                <dd className="mt-1 text-xl font-bold">5</dd>
-              </div>
-            </dl>
           </div>
           <div className="relative aspect-[4/5] overflow-hidden rounded-3xl">
             <Image src={hero.img} alt={hero.alt} fill priority sizes="(max-width: 1024px) 100vw, 45vw" className="object-cover" placeholder="blur" />
           </div>
+        </Container>
+      </section>
+
+      <section className="pb-4">
+        <Container>
+          <TrustBar />
         </Container>
       </section>
 

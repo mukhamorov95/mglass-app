@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef, Suspense } from 'react'
+import { Fragment, useEffect, useState, useMemo, useRef, Suspense } from 'react'
 import { normalizeHoles, totalHoles, type HoleGroup } from '@/lib/production/holes'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { TreatToggle } from './TreatToggle'
@@ -12,6 +12,7 @@ import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
 import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
+import { itemCostPanel } from '@/lib/b2b/itemCostPanel'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
@@ -201,6 +202,8 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [items, setItems]           = useState<B2BOrderItem[]>([])
   // Инлайн-редактирование «Итого» позиции (договорная цена): localId редактируемой строки
   const [editTotalId, setEditTotalId] = useState<string | null>(null)
+  // Раскрытая себестоимость позиции: состав изделия или статьи стекла.
+  const [costOpenId, setCostOpenId] = useState<string | null>(null)
   // Мультивыбор позиций + массовая смена материала/толщины/типа.
   const [selIds, setSelIds]           = useState<Set<string>>(new Set())
   const [bulkMatId, setBulkMatId]     = useState<number | null>(null)
@@ -1916,9 +1919,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                               <div key={i} className="flex justify-between text-[11px]">
                                 <span className="text-[#6b6b66] truncate mr-2">
                                   {l.name}
-                                  {l.price != null && l.price > 0 && !(l.qty === 1 && l.unit === '₽')
+                                  {l.qty !== 1 && l.price != null && l.price > 0
                                     ? <span className="text-[#b0b0aa]"> · {l.qty} {l.unit} × {Math.round(l.price).toLocaleString('ru-RU')} ₽</span>
-                                    : (l.qty > 1 ? ` × ${l.qty} ${l.unit}` : '')}
+                                    : (l.qty !== 1 ? ` × ${l.qty} ${l.unit}` : '')}
                                 </span>
                                 <span className="font-mono text-[#111110] shrink-0">{l.total.toLocaleString('ru-RU')} ₽</span>
                               </div>
@@ -2514,7 +2517,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                         <th className="px-3 py-2.5 text-right w-20">Цена/м²</th>
                         <th className="px-3 py-2.5 text-right w-14">Скид.%</th>
                         <th className="px-3 py-2.5 text-right w-24 text-[#111110]">Итого</th>
-                        <th className="px-3 py-2.5 text-right w-24 text-[#9a9a95]">Себест.</th>
+                        <th className="px-3 py-2.5 text-right w-24 text-[#9a9a95]" title="Нажмите на число — покажем, из чего оно сложилось">Себест.</th>
                         <th className="px-3 py-2.5 text-right w-16">Маржа</th>
                         <th className="px-3 py-2.5 text-left min-w-[80px]">Комм.</th>
                         <th className="w-20"></th>
@@ -2524,8 +2527,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       {itemsAuto.map((item, idx) => {
                         const itemAfterDiscount = Math.round(item.saleIncVat * (1 - discount / 100))
                         const em = itemMarginPct(item, discount)
+                        const costPanel = itemCostPanel(item)
                         return (
-                          <tr key={item.localId} onClick={() => openEdit(item)}
+                          <Fragment key={item.localId}>
+                          <tr onClick={() => openEdit(item)}
                             title="Нажмите, чтобы изменить позицию"
                             className={`transition-colors cursor-pointer ${selIds.has(item.localId) ? 'bg-[#f0f4ff] hover:bg-[#e7eeff]' : 'hover:bg-[#f0f0ec]'}`}>
                             <td className="pl-3 pr-1 py-2.5 text-center" onClick={e => e.stopPropagation()}>
@@ -2605,7 +2610,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                                 : <>{itemAfterDiscount.toLocaleString('ru-RU')} ₽</>
                               }
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap">{item.costExVat.toLocaleString('ru-RU')} ₽</td>
+                            <td onClick={e => { e.stopPropagation(); setCostOpenId(id => id === item.localId ? null : item.localId) }}
+                              title="Из чего сложилась себестоимость"
+                              className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap cursor-pointer hover:text-[#111110] hover:bg-[#f0f0ec]">
+                              {costPanel && <span className="text-[9px] mr-1 text-[#c4c4be]">{costOpenId === item.localId ? '▾' : '▸'}</span>}
+                              {item.costExVat.toLocaleString('ru-RU')} ₽
+                            </td>
                             <td className="px-3 py-2.5 text-right">
                               <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(em)}`}>
                                 {em}%
@@ -2629,6 +2639,52 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                               </div>
                             </td>
                           </tr>
+                          {costOpenId === item.localId && (
+                            <tr className="bg-[#fafaf9]">
+                              <td colSpan={18} className="px-6 py-3">
+                                {!costPanel ? (
+                                  <p className="text-[12px] text-[#9a9a95]">Состав себестоимости по этой позиции не сохранён.</p>
+                                ) : (
+                                  <div className="max-w-[560px] space-y-1">
+                                    <p className="text-[11px] font-semibold text-[#6b6b66] uppercase tracking-wide">
+                                      {costPanel.kind === 'product' ? 'Из чего собрано изделие' : 'Из чего сложилась себестоимость'}
+                                    </p>
+                                    {costPanel.lines.map((l, i) => (
+                                      <div key={i} className="flex justify-between text-[12px]">
+                                        <span className="text-[#6b6b66] truncate mr-3">
+                                          {l.name}
+                                          {/* Количество × цену показываем, только когда их больше одного:
+                                              «1 % × 395 ₽» у резерва брака — шум, итог строки и так виден. */}
+                                          {l.qty !== 1 && l.price != null && l.price > 0
+                                            ? <span className="text-[#b0b0aa]"> · {l.qty} {l.unit} × {Math.round(l.price).toLocaleString('ru-RU')} ₽</span>
+                                            : (l.qty !== 1 ? <span className="text-[#b0b0aa]"> · {l.qty} {l.unit}</span> : '')}
+                                        </span>
+                                        <span className="font-mono text-[#111110] shrink-0">{Math.round(l.total).toLocaleString('ru-RU')} ₽</span>
+                                      </div>
+                                    ))}
+                                    <div className="flex justify-between text-[12px] font-semibold border-t border-[#e4e4e0] pt-1">
+                                      <span className="text-[#111110]">Итого с НДС</span>
+                                      <span className="font-mono text-[#111110]">{costPanel.sum.toLocaleString('ru-RU')} ₽</span>
+                                    </div>
+                                    <div className="flex justify-between text-[12px]">
+                                      <span className="text-[#6b6b66]">НДС к вычету</span>
+                                      <span className="font-mono text-[#6b6b66]">−{costPanel.vat.toLocaleString('ru-RU')} ₽</span>
+                                    </div>
+                                    <div className="flex justify-between text-[12px] font-semibold">
+                                      <span className="text-[#111110]">Себестоимость без НДС <span className="text-[10px] font-normal text-[#9a9a95]">(в колонке)</span></span>
+                                      <span className="font-mono text-[#111110]">{costPanel.exVat.toLocaleString('ru-RU')} ₽</span>
+                                    </div>
+                                    {!costPanel.reconciles && (
+                                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                        Сумма строк {costPanel.sum.toLocaleString('ru-RU')} ₽ не сходится с себестоимостью позиции {costPanel.stored.toLocaleString('ru-RU')} ₽ — разница {Math.abs(costPanel.stored - costPanel.sum).toLocaleString('ru-RU')} ₽. Пересчитайте позицию.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
                         )
                       })}
                     </tbody>

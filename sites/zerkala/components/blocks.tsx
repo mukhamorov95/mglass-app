@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { FRAMES, LIGHT_MODES, LIGHT_TECH, MATERIALS, PRICE_FACTORS, STEPS } from "@/content/knowledge";
+import { FRAMES, LIGHT_MODES, LIGHT_TECH, MATERIALS, PRICE_FACTORS, STEPS, TRUST } from "@/content/knowledge";
 import { PHOTOS, type PhotoKey } from "@/content/photos";
 import type { BlockKey, Landing, Section } from "@/content/types";
 import { SITE } from "@/lib/site";
@@ -240,6 +240,19 @@ export function SectionsView({ sections }: { sections: Section[] }) {
         </section>
       ))}
     </>
+  );
+}
+
+export function TrustBar() {
+  return (
+    <ul className="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+      {TRUST.map((t) => (
+        <li key={t.title} className="bg-brass-soft/60 p-4">
+          <div className="font-semibold">{t.title}</div>
+          <div className="mt-1 text-sm text-muted">{t.text}</div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
