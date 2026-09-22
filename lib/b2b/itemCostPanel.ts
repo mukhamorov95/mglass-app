@@ -66,13 +66,23 @@ export function itemCostPanel(item: CostPanelItem): CostPanel | null {
     }
   }
 
-  // Услуги считаются отдельно от материала и в bom изделия не попадают.
-  const services = n(item.servicesCost)
-  if (services) {
+  // Услуги: в позиции сохранена их ЦЕНА ПРОДАЖИ (servicesCost идёт в saleIncVat),
+  // а в себестоимость вошла закупка (servicesCostPrice, lib/b2bCalculator.ts:287).
+  // Ставить сюда продажу нельзя — это завышало бы себестоимость на маржу услуги
+  // и зажигало ложное «строки не сходятся». Закупки в сохранённой позиции нет,
+  // поэтому выводим её остатком: что не объяснено статьями, то и есть услуги.
+  // Только для стекла: у изделия состав (bom) обязан быть полным, и расхождение
+  // там — настоящая находка, её нельзя закрывать строкой «прочее».
+  const known = lines.reduce((s, l) => s + l.total, 0)
+  const rest = bom.length ? 0 : Math.round(withVat - known)
+  if (rest !== 0 && (n(item.servicesCost) > 0 || Math.abs(rest) > 1)) {
     const names = Array.isArray(item.services)
       ? (item.services as { name?: unknown }[]).map(s => String(s?.name ?? '').trim()).filter(Boolean)
       : []
-    lines.push({ name: names.length ? `Услуги: ${names.join(', ')}` : 'Доп. услуги', qty: 1, unit: '₽', total: services })
+    const label = n(item.servicesCost) > 0
+      ? (names.length ? `Услуги (себестоимость): ${names.join(', ')}` : 'Услуги (себестоимость)')
+      : 'Прочее в себестоимости'
+    lines.push({ name: label, qty: 1, unit: '₽', total: rest })
   }
 
   if (!lines.length) return null
