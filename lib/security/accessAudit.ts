@@ -44,6 +44,14 @@ const PUBLIC_BY_DESIGN = new Set([
   'shower_models', 'shower_model_images', 'mirror_lighting_tabs', 'partner_types',
 ])
 
+// Здесь публичное ЧТЕНИЕ разрешено осознанно (контент витрины), но запись —
+// нет: правила про запись для этих таблиц продолжают работать. Разделение
+// важно: иначе, добавив таблицу в исключения, мы заодно перестали бы замечать
+// открытую на ней запись.
+const PUBLIC_READ_OK = new Set([
+  'site_work_photos',   // фото работ для сайта, отдаются только approved = true
+])
+
 const WRITE_PRIVILEGES = new Set(['INSERT', 'UPDATE', 'DELETE'])
 
 const isPublicRole = (roles: string[]) => roles.some(r => r === 'PUBLIC' || r === 'anon')
@@ -93,6 +101,7 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
     if (READ_CMDS.has(p.cmd)) openRead.add(p.table)
     if (WRITE_CMDS.has(p.cmd)) openWrite.add(p.table)
     const writes = p.cmd !== 'r'
+    if (!writes && PUBLIC_READ_OK.has(p.table)) continue
     const sensitive = SENSITIVE_TABLES.has(p.table)
     out.push({
       severity: writes || sensitive ? 'high' : 'medium',

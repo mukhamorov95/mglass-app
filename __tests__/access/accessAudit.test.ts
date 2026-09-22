@@ -164,10 +164,11 @@ describe('отчёт владельцу', () => {
 // Ошибки первого живого прогона — теперь тесты.
 describe('чего прогон НЕ должен говорить', () => {
   it('публичное чтение не делает таблицу открытой на запись', () => {
+    // берём таблицу, для которой публичность НЕ объявлена замыслом
     const f = auditAccess({
       ...empty,
-      policies: [{ table: 'site_work_photos', policy: 'read', cmd: 'r', roles: ['anon', 'authenticated'], using: '(approved = true)' }],
-      grants: ['INSERT', 'UPDATE', 'DELETE'].map(privilege => ({ table: 'site_work_photos', grantee: 'anon', privilege })),
+      policies: [{ table: 'some_catalog', policy: 'read', cmd: 'r', roles: ['anon', 'authenticated'], using: '(approved = true)' }],
+      grants: ['INSERT', 'UPDATE', 'DELETE'].map(privilege => ({ table: 'some_catalog', grantee: 'anon', privilege })),
     })
     expect(f.filter(x => x.code === 'anon_write_open')).toHaveLength(0)
     expect(f.map(x => x.code)).toContain('public_read_policy')
@@ -196,5 +197,25 @@ describe('чего прогон НЕ должен говорить', () => {
     })
     expect(f.filter(x => x.code === 'anon_write_open')).toHaveLength(0)
     expect(f.filter(x => x.code === 'public_read_policy')).toHaveLength(1)
+  })
+})
+
+describe('витрина, где чтение публично осознанно', () => {
+  it('публичное чтение фото работ не считается находкой', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [{ table: 'site_work_photos', policy: 'read', cmd: 'r', roles: ['anon'], using: '(approved = true)' }],
+    })
+    expect(f).toEqual([])
+  })
+
+  it('но открытая ЗАПИСЬ на той же таблице — по-прежнему находка', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [{ table: 'site_work_photos', policy: 'all', cmd: '*', roles: ['anon'], using: 'true' }],
+      grants: [{ table: 'site_work_photos', grantee: 'anon', privilege: 'INSERT' }],
+    })
+    expect(f.map(x => x.code)).toContain('public_write_policy')
+    expect(f.map(x => x.code)).toContain('anon_write_open')
   })
 })
