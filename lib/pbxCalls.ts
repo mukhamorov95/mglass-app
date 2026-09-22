@@ -59,7 +59,7 @@ export type PbxSummary = {
   missedClients: number
   missedCalledBack2h: number
   missedNeverCalledBack: number
-  missedNotCalledBackList: { at: number; phone: string; attempts: number }[]
+  missedNotCalledBackList: { at: number; firstAt: number; phone: string; attempts: number; exts: string[] }[]
   notInAmo: number
   byUser: { userId: number | null; ext: string; inboundAnswered: number; outbound: number; outboundAnswered: number; talkSec: number }[]
 }
@@ -75,23 +75,24 @@ export function summarizePbx(calls: PbxCall[], extToUser: Map<string, number>, a
   // Клиент, не дозвонившись, звонит снова — это один случай, а не три. Случай — от первого
   // пропущенного до ближайшего контакта с этим номером; пропущенные внутри — попытки.
   let cb2h = 0, never = 0
-  const list: { at: number; phone: string; attempts: number }[] = []
+  const list: PbxSummary['missedNotCalledBackList'] = []
   const episodeUntil = new Map<string, number>()
-  const episodes: { first: PbxCall; last: PbxCall; attempts: number; next: PbxCall | undefined }[] = []
+  const episodes: { first: PbxCall; last: PbxCall; attempts: number; exts: Set<string>; next: PbxCall | undefined }[] = []
   for (const m of missed) {
     if (m.startedAt < (episodeUntil.get(m.clientPhone) ?? -1)) {
       const ep = episodes.findLast(e => e.first.clientPhone === m.clientPhone)!
       ep.attempts++
       ep.last = m
+      if (m.ext) ep.exts.add(m.ext)
       continue
     }
     const next = contactAfter(m)
-    episodes.push({ first: m, last: m, attempts: 1, next })
+    episodes.push({ first: m, last: m, attempts: 1, exts: new Set(m.ext ? [m.ext] : []), next })
     episodeUntil.set(m.clientPhone, next ? next.startedAt : Infinity)
   }
   for (const ep of episodes) {
     if (ep.next && ep.next.startedAt - ep.first.startedAt <= 2 * 3600) cb2h++
-    if (!ep.next) { never++; list.push({ at: ep.last.startedAt, phone: ep.first.clientPhone, attempts: ep.attempts }) }
+    if (!ep.next) { never++; list.push({ at: ep.last.startedAt, firstAt: ep.first.startedAt, phone: ep.first.clientPhone, attempts: ep.attempts, exts: [...ep.exts] }) }
   }
   const byExt = new Map<string, PbxSummary['byUser'][number]>()
   for (const c of external) {

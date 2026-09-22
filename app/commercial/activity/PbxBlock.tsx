@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { PbxReport } from '@/lib/pbxCallsFetch'
+import type { MissedClient } from '@/lib/missedClients'
 import { fmtTime, mskDay } from '@/lib/amoActivity'
 import { Card, Num, fmtPhone, shortDay } from './ui'
 
@@ -79,22 +80,68 @@ export default function PbxBlock({ from, to, names }: { from: string; to: string
             <p className="text-[12px] text-[#6b6b66] mb-2">
               Разговоров, которых нет в карточках amo: <b>{data.summary.notInAmo}</b> — звонили с номера или на номер, не заведённый в amo.
             </p>
-            {data.summary.missedNotCalledBackList.length > 0 && (
-              <details>
-                <summary className="cursor-pointer text-[12px] text-red-700">Клиенты, которым не перезвонили — {data.summary.missedNotCalledBackList.length}</summary>
-                <ul className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 text-[12px] text-[#111110]">
-                  {data.summary.missedNotCalledBackList.map(m => (
-                    <li key={`${m.at}-${m.phone}`} className="py-0.5">
-                      {fmtPhone(m.phone)} — последний звонок {shortDay(mskDay(m.at))} {fmtTime(m.at)}
-                      {m.attempts > 1 && <span className="text-red-700"> · звонил {m.attempts} {m.attempts % 10 >= 2 && m.attempts % 10 <= 4 && (m.attempts < 10 || m.attempts > 20) ? 'раза' : 'раз'}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+            {data.missed.length > 0 && <MissedList missed={data.missed} />}
           </>
         )
       )}
     </Card>
+  )
+}
+
+const plural = (n: number) => (n % 10 >= 2 && n % 10 <= 4 && (n < 10 || n > 20) ? 'раза' : 'раз')
+
+// Чьи клиенты остались без перезвона: чья сделка, на чей телефон шёл звонок, было ли касание после
+function MissedList({ missed }: { missed: MissedClient[] }) {
+  const byOwner = new Map<string, number>()
+  let fresh = 0, none = 0
+  for (const m of missed) {
+    if (m.owner.kind === 'none') none++
+    else if (m.owner.autoCreated) fresh++
+    else byOwner.set(m.owner.responsible, (byOwner.get(m.owner.responsible) ?? 0) + 1)
+  }
+  const freshTo = [...new Set(missed.filter(m => m.owner.kind !== 'none' && m.owner.autoCreated).flatMap(m => m.rangTo))]
+  return (
+    <details open={missed.length <= 10}>
+      <summary className="cursor-pointer text-[12px] text-red-700">Клиенты, которым не перезвонили — {missed.length}</summary>
+      <p className="text-[12px] text-[#6b6b66] mt-2">
+        {byOwner.size > 0 && <>Клиенты из сделок: {[...byOwner].map(([n, c]) => `${n} ${c}`).join(', ')}. </>}
+        {fresh > 0 && <>Новые номера: {fresh}{freshTo.length > 0 && ` — звонок уходил на ${freshTo.join(', ')}`}. </>}
+        {none > 0 && <>Номера нет в amo: {none} — этот звонок видит только АТС.</>}
+      </p>
+      <ul className="mt-2 space-y-2">
+        {missed.map(m => (
+          <li key={`${m.at}-${m.phone}`} className="text-[12px] border-l-2 border-red-200 pl-3">
+            <div className="text-[#111110]">
+              <b className="font-medium">{fmtPhone(m.phone)}</b>
+              <span className="text-[#6b6b66]"> · последний звонок {shortDay(mskDay(m.at))} {fmtTime(m.at)}</span>
+              {m.attempts > 1 && <span className="text-red-700"> · звонил {m.attempts} {plural(m.attempts)}</span>}
+              {m.rangTo.length > 0 && <span className="text-[#6b6b66]"> · звонило у: {m.rangTo.join(', ')}</span>}
+            </div>
+            <div className="text-[#6b6b66]">
+              {m.owner.kind === 'deal' && (
+                <>
+                  {m.owner.autoCreated ? 'Новый номер, amo завёл сделку' : 'Сделка'}{' '}
+                  <a href={m.owner.url} target="_blank" rel="noreferrer" className="text-[#111110] underline decoration-[#e4e4e0] hover:decoration-[#111110]">«{m.owner.leadName}»</a>
+                  {' · '}ответственный <b className="font-medium text-[#111110]">{m.owner.responsible}</b> · {m.owner.stage}
+                </>
+              )}
+              {m.owner.kind === 'contact' && (
+                <>
+                  {m.owner.autoCreated ? 'Новый номер, amo завёл контакт без сделки' : 'Контакт без сделки'}{' '}
+                  <a href={m.owner.url} target="_blank" rel="noreferrer" className="text-[#111110] underline decoration-[#e4e4e0] hover:decoration-[#111110]">«{m.owner.contactName}»</a>
+                  {' · '}ответственный <b className="font-medium text-[#111110]">{m.owner.responsible}</b>
+                </>
+              )}
+              {m.owner.kind === 'none' && <span className="text-amber-700">Номера нет в amo — клиент не заведён, звонок видит только АТС</span>}
+            </div>
+            <div className={m.after ? 'text-[#6b6b66]' : 'text-red-700'}>
+              {m.after
+                ? `После звонка: ${m.after.what} ${shortDay(mskDay(m.after.at))} ${fmtTime(m.after.at)}${m.after.by === 'без автора' ? ' (без автора — с телефона или автоответ)' : ` — ${m.after.by}`}`
+                : 'После звонка никто не связался — ни звонка, ни сообщения'}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
