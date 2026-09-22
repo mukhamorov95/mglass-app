@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { fetchAmoActivity } from '@/lib/amoActivityFetch'
 import { mskDay, mskDayStart } from '@/lib/amoActivity'
+import { createServiceClient } from '@/lib/supabase-service'
+import { summarizeWazzupOutgoing, type WazzupOutRow } from '@/lib/wazzupOutgoing'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -29,8 +31,22 @@ export async function GET(req: Request) {
   if (to <= from) return NextResponse.json({ error: 'Этот день ещё не начался' }, { status: 400 })
 
   try {
-    return NextResponse.json(await fetchAmoActivity(from, to))
+    const [report, wazzup] = await Promise.all([fetchAmoActivity(from, to), wazzupAuthors(from, to)])
+    return NextResponse.json({ ...report, wazzup })
   } catch (e) {
     return NextResponse.json({ error: `AmoCRM не ответил: ${e instanceof Error ? e.message : String(e)}` }, { status: 502 })
   }
+}
+
+// Исходящие Wazzup с автором копятся с 22.09.2026 — до этого их не сохраняли
+async function wazzupAuthors(from: number, to: number) {
+  const sb = createServiceClient()
+  const [rows, first] = await Promise.all([
+    sb.from('wazzup_outgoing_messages').select('author_name, sent_at')
+      .gte('sent_at', new Date(from * 1000).toISOString()).lt('sent_at', new Date(to * 1000).toISOString())
+      .limit(20000),
+    sb.from('wazzup_outgoing_messages').select('received_at').order('received_at').limit(1).maybeSingle(),
+  ])
+  if (rows.error || first.error) return { error: (rows.error ?? first.error)!.message }
+  return { since: first.data?.received_at ?? null, ...summarizeWazzupOutgoing((rows.data ?? []) as WazzupOutRow[]) }
 }

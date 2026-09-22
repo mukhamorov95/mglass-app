@@ -61,6 +61,35 @@ function isOutgoing(msg: Record<string, unknown>): boolean {
   )
 }
 
+// Кто написал клиенту. В AmoCRM больше половины исходящих приходят без автора —
+// отправлены из приложения Wazzup или с телефона. Wazzup сообщает автора сам, поэтому
+// сохраняем исходящее с ним (без текста и контакта клиента). Сбой записи приём не ломает.
+async function saveOutgoing(supabase: ReturnType<typeof db>, msg: Record<string, unknown>) {
+  const id = msg.messageId ?? msg.id
+  if (!id) return
+  const str = (v: unknown) => (v === undefined || v === null || v === '' ? null : String(v))
+  const bool = (v: unknown) => (typeof v === 'boolean' ? v : null)
+  const sentAt = str(msg.dateTime)
+  try {
+    const { error } = await supabase.from('wazzup_outgoing_messages').upsert({
+      wazzup_message_id: String(id),
+      channel_id:        str(msg.channelId),
+      chat_id:           str(msg.chatId),
+      chat_type:         str(msg.chatType),
+      author_id:         str(msg.authorId),
+      author_name:       str(msg.authorName),
+      is_echo:           bool(msg.isEcho),
+      sent_from_app:     bool(msg.sentFromApp),
+      message_type:      str(msg.type),
+      sent_at:           sentAt && !Number.isNaN(Date.parse(sentAt)) ? sentAt : new Date().toISOString(),
+      payload_keys:      Object.keys(msg),
+    }, { onConflict: 'wazzup_message_id', ignoreDuplicates: true })
+    if (error) console.error('[wazzup-webhook] outgoing save failed', error.message)
+  } catch (e) {
+    console.error('[wazzup-webhook] outgoing save threw', e)
+  }
+}
+
 export async function POST(req: Request) {
   // Опциональный секрет вебхука. Пока WAZZUP_WEBHOOK_SECRET не задан — приём
   // работает как раньше (Wazzup вызовы не подписывает). Когда владелец задаст env
@@ -94,6 +123,7 @@ export async function POST(req: Request) {
 
       // Outgoing echo: check if it's a human manager writing (not our bot's own echo)
       if (isOutgoing(msg)) {
+        await saveOutgoing(supabase, msg)
         const chatId = String(msg.chatId ?? '')
         if (chatId) {
           const { data: chat } = await supabase

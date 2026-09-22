@@ -37,6 +37,7 @@ export const SENSITIVE_TABLES = new Set([
   'supplier_price_rows', 'glass_price_matrix', 'purchase_orders', 'calculations',
   'commercial_proposals', 'deals', 'deal_payments', 'payments', 'manager_stats_daily',
   'manager_stats_monthly', 'coefficients', 'process_cost_inputs', 'production_settings',
+  'manager_schedules', 'wazzup_outgoing_messages',
 ])
 
 // Таблицы витрины: их публичность — замысел, а не упущение.
