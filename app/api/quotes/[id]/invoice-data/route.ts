@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
-import { isOwnerRole } from '@/lib/getRole'
+import { isOwnerRole, canAccessRoute } from '@/lib/getRole'
+import { writeLogForCurrentUser } from '@/lib/activityLog'
 
 // Данные для «Счёт-спецификации»: заказ + юрлица покупателя (b2b_client_legal_entities).
 // Одному клиенту можно завести несколько юрлиц; при счёте выбирается одно.
@@ -20,18 +21,42 @@ async function loadOrderWithAccess(id: string) {
     .single()
   if (error || !order) return { status: 404 as const, error: 'Not found' }
 
-  const { data: profile } = await sb.from('users').select('role,see_all_orders').eq('id', user.id).maybeSingle()
+  const { data: profile } = await sb.from('users').select('role,see_all_orders,permissions').eq('id', user.id).maybeSingle()
+
+  // Роль решается ТОЙ ЖЕ калиткой, что и страница счёта (/b2b-quotes): здесь
+  // отдаются и правятся банковские реквизиты покупателя, и раньше роль не
+  // проверялась вовсе — проходили цех, замерщик, закупщик, бухгалтерия.
+  const perms = (profile?.permissions ?? null) as { b2b_client_scope?: unknown } | null
+  const b2bScope = typeof perms?.b2b_client_scope === 'string' ? perms.b2b_client_scope : null
+  if (!canAccessRoute(profile?.role, '/b2b-quotes', { b2bScope })) {
+    return { status: 403 as const, error: 'Forbidden' }
+  }
+
+  // Заказы до 30.06 автора не имеют (4 275 из 5 258). Раньше это открывало их
+  // КАЖДОМУ вошедшему: условие `created_by === null` стояло рядом с «это мой
+  // заказ». Оставляем его только тем, кто и так видит чужие заказы.
+  const seesOthers = isOwnerRole(profile?.role) || (profile?.see_all_orders ?? false)
   const canAccess =
-    isOwnerRole(profile?.role) ||
-    (profile?.see_all_orders ?? false) ||
+    seesOthers ||
     order.created_by === user.id ||
-    order.created_by === null ||
+    (order.created_by === null && legacyOrdersAllowed(profile?.role)) ||
     (order.client_id != null &&
       (await sb.from('b2b_clients').select('id').eq('id', order.client_id).eq('user_id', user.id).maybeSingle()).data != null)
   if (!canAccess) return { status: 403 as const, error: 'Forbidden' }
 
-  return { status: 200 as const, sb, order }
+  return { status: 200 as const, sb, order, user, role: profile?.role ?? null }
 }
+
+// Менеджеру нужны старые заказы без автора — иначе 81% счетов ему недоступны.
+// Закупщику и остальным ролям они не нужны: их работа — свои заказы.
+const LEGACY_ROLES = new Set(['manager', 'commercial', 'accountant', 'cfo'])
+function legacyOrdersAllowed(role: string | null | undefined): boolean {
+  return !!role && LEGACY_ROLES.has(role)
+}
+
+// Менять банковские реквизиты покупателя — отдельное право: это прямой путь
+// увести оплату по счёту на чужой счёт. Смотреть их может тот, кто делает счёт.
+const REQUISITE_WRITERS = new Set(['admin', 'ceo', 'manager', 'accountant', 'cfo'])
 
 const ENTITY_COLS = 'id,client_id,full_name,inn,kpp,ogrn,legal_address,bank_account,bank_name,bik,corr_account,supply_contract_no,supply_contract_date,is_default,active'
 
@@ -87,12 +112,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params
   const res = await loadOrderWithAccess(id)
   if (res.status !== 200) return NextResponse.json({ error: res.error }, { status: res.status })
-  const { order } = res
+  const { order, role } = res
+  if (!role || !REQUISITE_WRITERS.has(role)) {
+    return NextResponse.json({ error: 'Менять реквизиты покупателя может менеджер, бухгалтерия или владелец' }, { status: 403 })
+  }
   if (order.client_id == null) return NextResponse.json({ error: 'Заказ без клиента' }, { status: 400 })
   const clientId = order.client_id as number
 
   const body = await req.json().catch(() => ({})) as Record<string, unknown>
   const svc = createServiceClient()
+
+  // Запись в журнал: подмена расчётного счёта в счёте — самый дешёвый способ
+  // увести оплату, и по ней должно остаться имя того, кто её сделал.
+  const logRequisites = (fields: Record<string, unknown>, entityId: number | null) =>
+    writeLogForCurrentUser('order.update', {
+      entityType: 'b2b_client_requisites',
+      entityId: String(clientId),
+      details: { order_id: order.id, entity_id: entityId, fields: Object.keys(fields) },
+    })
 
   if (body && typeof body.entity === 'object' && body.entity !== null) {
     const ent = body.entity as Record<string, unknown>
@@ -120,6 +157,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       savedId = (ins?.id as number | null) ?? null
     }
     if (isDefault) await svc.from('b2b_clients').update(fields).eq('id', clientId)
+    await logRequisites(fields, savedId)
     return NextResponse.json({ ok: true, entity_id: savedId, is_default: isDefault })
   }
 
@@ -129,5 +167,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { error } = await svc.from('b2b_clients').update(patch).eq('id', clientId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   await svc.from('b2b_client_legal_entities').update(patch).eq('client_id', clientId).eq('is_default', true)
+  await logRequisites(patch, null)
   return NextResponse.json({ ok: true, client_id: clientId })
 }
