@@ -5,6 +5,8 @@ import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { calcItem, effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { MGLASS_CLIENT_IDS } from '@/lib/b2bScope'
 import { calcMirrorQuote, normalizeLightMode, type MirrorComponent, type MirrorQuoteInput } from '@/lib/mirror/mirrorQuote'
+import { mirrorFinanceProductType } from '@/lib/mirror/mirrorFinance'
+import { pickFinance, type FinanceRow } from '@/lib/pricing/pickFinance'
 import type { B2BMaterial } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +33,7 @@ export async function POST(req: NextRequest) {
   const qty = Math.max(1, Number(b.quantity) || 1)
   const svc = createServiceClient()
 
-  const [{ data: mats }, { data: matrix }, { data: mgClient }, { data: comps }, { data: rates }] = await Promise.all([
+  const [{ data: mats }, { data: matrix }, { data: mgClient }, { data: comps }, { data: rates }, { data: fins }] = await Promise.all([
     svc.from('b2b_materials').select('*').eq('active', true),
     svc.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
     svc.from('b2b_clients').select('id,discount_percent').in('id', [...MGLASS_CLIENT_IDS]).maybeSingle(),
@@ -39,6 +41,7 @@ export async function POST(req: NextRequest) {
       .select('id, component_type, name, voltage, power_per_meter, max_power, cost_price, unit, pack_length_m, sort_order')
       .eq('active', true),
     svc.from('mirror_frame_rates').select('key, value'),
+    svc.from('financial_settings').select('tier, product_type, tax_percent, default_margin, min_margin'),
   ])
 
   // Зеркало: ищем строго среди зеркал — под одним именем в справочнике живут
@@ -67,10 +70,14 @@ export async function POST(req: NextRequest) {
   const frameRates: Record<string, number> = {}
   for (const r of (rates ?? []) as { key: string; value: number }[]) frameRates[r.key] = Number(r.value) || 0
 
+  const lightMode = normalizeLightMode(b)
+  // Маржа и налог по умолчанию — из financial_settings (не себестоимость, отдавать можно).
+  const finance = pickFinance((fins ?? []) as FinanceRow[], mirrorFinanceProductType(lightMode), 'standard')
+
   const quote = calcMirrorQuote({
     width: b.width, height: b.height,
     shape: b.shape ?? 'rect',
-    lightMode: normalizeLightMode(b),
+    lightMode,
     sides: b.sides ?? { top: true, bottom: false, left: false, right: false },
     voltage: b.voltage === 24 ? 24 : 12,
     control: b.control ?? 'none',
@@ -90,5 +97,6 @@ export async function POST(req: NextRequest) {
       mirrorSource: mat ? `${mat.name}, ${Math.round(mat.thickness)} мм` : null,
       quantity: qty,
     },
+    finance,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }

@@ -12,6 +12,7 @@ import {
   DEFAULT_SHOWER_GLASS, type GlassMatrixMap,
 } from './pricing/showerInputs'
 import { hardwareCostFromVisualizer } from './configurator/hardwareCost'
+import { mirrorFinanceProductType } from './mirror/mirrorFinance'
 
 // Raw row from public.mirror_lighting_components (server-side read)
 type LightingRow = {
@@ -168,10 +169,10 @@ export async function quickCalc(
   const { materials, services, settings, glassMatrix, lightingComponents } = await loadAll()
 
   if (type === 'mirror') {
-    // Always use 'mirror' financial_settings (margin=40) regardless of hasLighting —
-    // matches /calculator/mirror which reads margin from owner_strategy.target_margin=40,
-    // not from mirror_light (margin=50). hasLighting affects components and label only.
-    const mirrorSettingsType = 'mirror'
+    // Строка financial_settings для зеркал — одна на все экраны (lib/mirror/mirrorFinance):
+    // владелец 22.09.2026 — 40% для всех зеркал, mirror_light в расчёт не идёт.
+    // hasLighting влияет только на комплектующие и подпись.
+    const mirrorSettingsType = mirrorFinanceProductType(options.hasLighting ? 'aura' : 'none')
     const cfg = pickSettings(settings, mirrorSettingsType)
 
     const allMirrorMats = materials.filter(m => m.category === 'зеркало')

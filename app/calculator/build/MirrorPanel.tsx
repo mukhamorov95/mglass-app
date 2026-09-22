@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { FINANCE_FALLBACK, type Finance } from '@/lib/pricing/pickFinance'
 import { Mirror3DView } from '@/components/mirror/Mirror3DView'
 import { SINK_MAX_MIRROR_H } from '@/components/mirror/Mirror3D'
 
@@ -68,8 +69,15 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
   const [control, setControl] = useState<'none' | 'button' | 'sensor'>('none')
   const [frame, setFrame] = useState<FrameKind>('none')
 
-  const [margin, setMargin] = useState('40')
-  const [tax, setTax] = useState('12')
+  // Маржа и налог по умолчанию приходят с сервера из financial_settings (строка
+  // зеркала). Пока менеджер не правил поле руками, оно следует за настройками.
+  const [margin, setMargin] = useState(String(FINANCE_FALLBACK.marginPct))
+  const [tax, setTax] = useState(String(FINANCE_FALLBACK.taxPct))
+  const [financeSource, setFinanceSource] = useState(FINANCE_FALLBACK.source)
+  // Ref, а не state: ответ может прийти после ручной правки, и замкнутый в эффекте
+  // флаг перезаписал бы число менеджера.
+  const marginTouched = useRef(false)
+  const taxTouched = useRef(false)
   const [install, setInstall] = useState('0')
   const [delivery, setDelivery] = useState('5000')
   const [lift, setLift] = useState('')
@@ -100,7 +108,13 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         signal: ctrl.signal, body: JSON.stringify(params),
       }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-        .then((res: { full?: boolean; price?: Quote }) => {
+        .then((res: { full?: boolean; price?: Quote; finance?: Finance }) => {
+          if (res.finance) {
+            const f = res.finance
+            if (!marginTouched.current) setMargin(String(f.marginPct))
+            if (!taxTouched.current) setTax(String(f.taxPct))
+            setFinanceSource(f.source)
+          }
           if (res.full && res.price) { setQuote(res.price); setPricedKey(key); setState('idle') }
           else { setQuote(null); setState('error') }
         })
@@ -287,13 +301,14 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
           </div>
 
           <div className="grid grid-cols-3 gap-2 pt-1">
-            <div><label className={lbl}>Маржа, %</label><input type="number" className={fld} value={margin} onChange={e => setMargin(e.target.value)} /></div>
-            <div><label className={lbl}>Налог, %</label><input type="number" className={fld} value={tax} onChange={e => setTax(e.target.value)} /></div>
+            <div><label className={lbl}>Маржа, %</label><input type="number" className={fld} value={margin} onChange={e => { marginTouched.current = true; setMargin(e.target.value) }} /></div>
+            <div><label className={lbl}>Налог, %</label><input type="number" className={fld} value={tax} onChange={e => { taxTouched.current = true; setTax(e.target.value) }} /></div>
             <div><label className={lbl}>Монтаж</label><input type="number" className={fld} value={install} onChange={e => setInstall(e.target.value)} /></div>
             <div><label className={lbl}>Доставка</label><input type="number" className={fld} value={delivery} onChange={e => setDelivery(e.target.value)} /></div>
             <div><label className={lbl}>Подъём</label><input type="number" className={fld} value={lift} onChange={e => setLift(e.target.value)} placeholder="0" /></div>
             <div><label className={lbl}>Скидка, %</label><input type="number" className={fld} value={discount} onChange={e => setDiscount(e.target.value)} /></div>
           </div>
+          <div className="text-[11px] text-[#9a9a95]">Маржа и налог по умолчанию: {financeSource}</div>
 
           {usable && <div className="flex justify-between"><span className="text-[#6b6b66]">Цена изделия</span><span className="font-mono font-semibold">{RUB(productPrice)}</span></div>}
           {installN > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Монтаж</span><span className="font-mono">{RUB(installN)}</span></div>}
