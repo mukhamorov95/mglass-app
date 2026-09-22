@@ -486,7 +486,15 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       // Load an existing order into the calculator
       ;(async () => {
         const sb = createClient()
-        const { data } = await sb.from('b2b_orders').select('client_id,items,custom_number,client_order_number,notes').eq('id', orderIdParam).single()
+        const { data, error } = await sb.from('b2b_orders')
+          .select('client_id,items,custom_number,client_order_number,notes,discount_percent').eq('id', orderIdParam).single()
+        // Раньше ошибка глоталась: экран открывался пустым, менеджер набирал
+        // просчёт заново и сохранял — появлялась вторая строка, исходная жила
+        // дальше своей жизнью.
+        if (error || !data) {
+          setSaveError(`Не удалось открыть просчёт №${orderIdParam}${error?.message ? `: ${error.message}` : ''}. Он мог быть удалён или принадлежать другому менеджеру.`)
+          return
+        }
         if (data) {
           setEditingOrderId(Number(orderIdParam))
           if (data.client_id) setClientId(data.client_id)
@@ -874,6 +882,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     })
     setItems(prev => [...prev, ...added])
     setParsed([])
+    setSavedOrderId(null)   // состав изменился — просчёт снова можно сохранить
   }
 
   function handleAddItem() {
@@ -1177,7 +1186,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       dismissedSurcharges: eDismissedSurcharges,
     }, { facetPrices, surchargeRules })
     setItems(prev => prev.map(i => i.localId === editingLocalId
-      ? { ...calc, localId: editingLocalId }
+      // Договорную цену позиции сохраняем: менеджер согласовал её с клиентом,
+      // а правка комментария или количества её молча откатывала к расчётной.
+      ? { ...calc, localId: editingLocalId, manualTotal: i.manualTotal ?? null }
       : i))
     setEditingLocalId(null)
     setSavedOrderId(null)
@@ -1220,9 +1231,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     try { localStorage.removeItem(DRAFT_KEY) } catch {}
   }
 
+  // Крестик — «скрыть подсказку», а не «уничтожить черновик»: раньше один промах
+  // мыши стирал вчерашний просчёт навсегда. Черновик остаётся и перезапишется
+  // первой же позицией нового просчёта.
   function dismissDraft() {
     setDraftToast(null)
-    try { localStorage.removeItem(DRAFT_KEY) } catch {}
   }
 
   // Себестоимость и маржа — по АВТОМАТИЧЕСКОМУ расходу из раскроя, а не по
@@ -1408,14 +1421,18 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     const authorName = managerName ?? managerEmail ?? null
     const editing = editingOrderId != null
     const baseNotes = editing ? { ...editOrigNotesRef.current } : {}
-    const orderNotes = JSON.stringify({
-      ...baseNotes,   // при редактировании сохраняем status/status_history/payment_status/launched_at и т.д.
+    // Поля notes, которые принадлежат калькулятору. При редактировании пишем
+    // ТОЛЬКО их, точечным патчем (patch_order_notes_shallow), а не всю колонку:
+    // пока менеджер правит просчёт, туда могли записать ссылку на КП, оплату
+    // или согласование цены — запись целиком из старого снимка их стирала.
+    const notesPatch = {
       status: editing ? (baseNotes.status === 'pending_approval' ? 'quote' : (baseNotes.status ?? 'quote')) : 'quote',
       quote_date: editing ? (baseNotes.quote_date ?? new Date().toISOString()) : new Date().toISOString(),
       production_days: fProductionDays,
       user_notes: notes || null,
       manager_name: editing ? (baseNotes.manager_name ?? authorName) : authorName,
-    })
+    }
+    const orderNotes = JSON.stringify({ ...baseNotes, ...notesPatch })
 
     const commonFields = {
       client_id: clientId,
@@ -1437,13 +1454,18 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     let savedId: number | null = null
     if (editing) {
       // Редактирование той же строки: НЕ трогаем created_by (сохраняем автора), фиксируем правку.
+      const { notes: _wholeNotes, ...fieldsWithoutNotes } = commonFields
       const { error } = await sb.from('b2b_orders').update({
-        ...commonFields,
+        ...fieldsWithoutNotes,
         updated_by_user_id: managerId ?? null,
         updated_by_name: authorName,
         updated_at: new Date().toISOString(),
       }).eq('id', editingOrderId)
       if (error) { console.error('B2B update error:', error); setSaveError(error.message); setSaving(false); return }
+      const { error: notesErr } = await sb.rpc('patch_order_notes_shallow', {
+        p_order_id: editingOrderId, p_patch: notesPatch,
+      })
+      if (notesErr) { console.error('B2B notes patch error:', notesErr); setSaveError(notesErr.message); setSaving(false); return }
       savedId = editingOrderId
     } else {
       const { data: saved, error } = await sb.from('b2b_orders').insert({
@@ -1461,18 +1483,27 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         const safeName = attachFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
         const path = `${savedId}/${Date.now()}_${safeName}`
         const { error: uploadErr } = await sb.storage.from('b2b-attachments').upload(path, attachFile)
-        if (!uploadErr) {
+        // Молчать тут нельзя: просчёт сохранён, а цех получит заказ без чертежа
+        // клиента — и выяснится это на запуске, когда менеджер уже не вспомнит,
+        // какой файл прикладывал.
+        if (uploadErr) {
+          setSaveError(`Просчёт сохранён, но чертёж «${attachFile.name}» не загрузился: ${uploadErr.message}. Приложите его ещё раз в карточке просчёта.`)
+        } else {
           // Bucket приватный — храним ПУТЬ; отдаётся через /api/b2b/attachments/[id] (signed URL).
-          await sb.from('b2b_calculation_attachments').insert({
+          const { error: linkErr } = await sb.from('b2b_calculation_attachments').insert({
             order_id: savedId,
             file_name: attachFile.name,
             file_url: path,
             file_type: attachFile.type || attachFile.name.split('.').pop() || '',
             file_size: attachFile.size,
           })
+          if (linkErr) setSaveError(`Просчёт сохранён, но чертёж «${attachFile.name}» к нему не привязался: ${linkErr.message}.`)
         }
       }
       setSavedOrderId(savedId)
+      // Дальше правим ту же строку: без этого следующая правка + «Сохранить»
+      // создавали второй просчёт-дубль на ту же сделку.
+      setEditingOrderId(savedId)
       setSavedAsPending(false)
     }
     setSaving(false)
@@ -1561,7 +1592,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               <select
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
                   value={clientId ?? ''}
-                  onChange={e => setClientId(e.target.value ? Number(e.target.value) : null)}>
+                  onChange={e => { setClientId(e.target.value ? Number(e.target.value) : null); setSavedOrderId(null) }}>
                   <option value="">— Выберите клиента —</option>
                 {clients.map(c => (
                   <option key={c.id} value={c.id}>
@@ -2486,7 +2517,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 {items.length > 0 && (
                   <div className="flex items-center gap-3">
                     <span className="text-[11px] text-[#9a9a95] hidden sm:inline">✎ нажмите на позицию, чтобы изменить</span>
-                    <button onClick={() => { setItems([]); clearSel() }} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
+                    <button onClick={() => { if (confirm(`Очистить все позиции (${items.length})? Отменить это нельзя.`)) { setItems([]); clearSel() } }} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
                       Очистить всё
                     </button>
                   </div>
@@ -2659,6 +2690,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                                       ? { ...x, manualTotal: v != null && isFinite(v) && v > 0 ? v : null }
                                       : x))
                                     setEditTotalId(null)
+                                    setSavedOrderId(null)   // цена изменилась — просчёт снова можно сохранить
                                   }}
                                   className="w-24 border border-amber-400 rounded-lg px-2 py-1 text-right font-mono text-[12px] outline-none bg-white" />
                               ) : item.manualTotal != null ? (
