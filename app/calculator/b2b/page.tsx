@@ -21,6 +21,11 @@ import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
+// 12 мм убрано из просчётов решением владельца 22.09.2026: цены продажи на эту
+// толщину нет ни в справочнике (notes.sale_price пуст), ни в матрице (колонка t12
+// в запрос вообще не входит), поэтому позиция уходила в КП по 0 ₽ при
+// себестоимости 5 700–10 300 ₽/м². Появится цена — убрать отсюда.
+const EXCLUDED_THICKNESS = [12]
 
 const MATERIAL_ORDER = [
   'Прозрачное М1',
@@ -570,7 +575,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
 
   const superCatDef      = SUPER_CATS.find(s => s.value === fSuperCat) ?? SUPER_CATS[0]
   const categoryMaterials  = useMemo(() => materials.filter(m => (superCatDef.cats as readonly string[]).includes(m.category)), [materials, fSuperCat])
-  const availableThickness = useMemo(() => [...new Set(categoryMaterials.map(m => m.thickness))].sort((a, b) => a - b), [categoryMaterials])
+  const availableThickness = useMemo(
+    () => [...new Set(categoryMaterials.map(m => m.thickness))].filter(t => !EXCLUDED_THICKNESS.includes(t)).sort((a, b) => a - b),
+    [categoryMaterials])
   const thicknessMaterials = useMemo(() => sortByPriority(categoryMaterials.filter(m => m.thickness === fThickness)), [categoryMaterials, fThickness])
 
   function handleSuperCatChange(sc: SuperCat) {
@@ -941,6 +948,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         mat = matchDrawingMaterial(materials, th, '', it.is_mirror)
       }
       if (!mat) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: материал не найден — добавьте вручную`); continue }
+      // 12 мм не просчитываем: цены продажи на эту толщину нет, позиция ушла бы по 0 ₽.
+      if (EXCLUDED_THICKNESS.includes(Number(mat.thickness))) {
+        skipped++
+        warnings.push(`«${it.label ?? 'деталь'}»: ${mat.thickness} мм — эта толщина не просчитывается, цены нет в справочнике`)
+        continue
+      }
       const cutW = Math.max(w, Number(it.cut_width_mm) || 0)
       const cutH = Math.max(h, Number(it.cut_height_mm) || 0)
       const isShaped = (!!it.shape && it.shape !== 'rectangle') || cutW > w + 1 || cutH > h + 1
@@ -1014,6 +1027,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   // списку, но не заставляют отвечать на вопрос про толщину заранее.
   const bulkMaterialGroups = useMemo(
     () => [...new Set(materials.map(m => m.thickness))]
+      .filter(t => !EXCLUDED_THICKNESS.includes(t))
       .sort((a, b) => a - b)
       .map(thickness => ({ thickness, materials: sortByPriority(materials.filter(m => m.thickness === thickness)) }))
       .filter(g => g.materials.length > 0),
@@ -1062,6 +1076,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   function applyBulkMaterial() {
     const mat = materials.find(m => m.id === bulkMatId)
     if (!mat || selIds.size === 0) return
+    // Массовая смена материала — второй путь, которым 12 мм попадала в просчёт.
+    if (EXCLUDED_THICKNESS.includes(Number(mat.thickness))) {
+      setSaveError(`${mat.thickness} мм не просчитывается: цены продажи на эту толщину нет в справочнике`)
+      return
+    }
     setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeItem(i, mat) : i))
     setSavedOrderId(null)
     // Селекцию НЕ сбрасываем — владелец правит выбранные итеративно (как с количеством).
@@ -1927,6 +1946,21 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       <span className="text-[#6b6b66]">Себестоимость производства</span>
                       <span className="font-mono text-[#111110]">{factoryQuote.factoryCostPiece.toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
+                    {(() => {
+                      // Откуда маржа: строка конфига, финнастройки или константа кода.
+                      // Раньше у лофта конфига не было, и 40% из кода выдавались за
+                      // настройку владельца, хотя в финнастройках у него 50%.
+                      const src = factoryData?.cfgSource?.[fKind === 'floft' ? 'loft' : 'mirror']
+                      if (src === 'code') return (
+                        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                          Маржа и налог взяты из констант кода: ни строки в модели ценообразования, ни финнастроек для этой категории нет.
+                        </p>
+                      )
+                      if (src === 'financial_settings') return (
+                        <p className="text-[11px] text-[#9a9a95]">Маржа и налог — из финнастроек: строки в модели ценообразования для этой категории нет.</p>
+                      )
+                      return null
+                    })()}
                     <div className="flex justify-between text-[12px]">
                       <span className="text-[#6b6b66]">Наценка производства <span className="text-[10px] text-[#9a9a95]">(маржа {factoryQuote.marginPercent}% от цены, налог включён)</span></span>
                       <span className="font-mono text-[#111110]">+{(factoryQuote.prodPricePiece - factoryQuote.factoryCostPiece).toLocaleString('ru-RU')} ₽/шт</span>
@@ -2280,9 +2314,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                             className="w-3 h-3 rounded accent-[#111110] flex-shrink-0" />
                           <span className="text-[12px] text-[#111110] flex-1 leading-tight">{s.name}</span>
                           <span className="text-[11px] text-[#9a9a95] flex-shrink-0 font-mono">
+                            {/* Единицу берём из ТИПА услуги, а не из подписи в базе:
+                                у трёх услуг per_m2 там стояло «₽/шт», и менеджер на
+                                детали 3 м² ждал одну цену, а клиент получал втрое. */}
                             {s.type === 'percent' ? `${s.value}%`
                               : s.type === 'film' ? (selectedFilm ? `${selectedFilm.sale_price_per_m2.toLocaleString('ru-RU')} ₽/м²` : '—')
-                              : `${(displayPrice ?? s.value).toLocaleString('ru-RU')} ₽`}
+                              : `${(displayPrice ?? s.value).toLocaleString('ru-RU')} ${s.type === 'per_m2' ? '₽/м²' : '₽/шт'}`}
                           </span>
                         </label>
                         {checked && s.type === 'film' && (
@@ -2997,7 +3034,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                     {/* Разбор себестоимости: из чего складывается (компоненты с НДС из calcItem) */}
                     {(() => {
                       const sum = (f: (i: B2BOrderItem) => number | undefined) => Math.round(items.reduce((s, i) => s + (f(i) ?? 0), 0))
-                      const rows: [string, number][] = [
+                      const named: [string, number][] = [
                         ['Материал (с отходом на раскрой)', sum(i => i.costMaterial)],
                         ['Закалка', sum(i => i.costTempering)],
                         ['Транспорт на закалку', sum(i => i.costTransport)],
@@ -3006,6 +3043,14 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                         ['Триплекс', sum(i => i.costTriplex)],
                         ['Упаковка', sum(i => i.costPackaging)],
                       ]
+                      // Услуги в этих строках не значились, а в итог входили —
+                      // сумма строк не сходилась с итогом в каждом шестом просчёте.
+                      // Выводим их остатком: в позиции хранится цена продажи услуг,
+                      // а в себестоимость вошла закупка, её оттуда не достать.
+                      const rest = Math.round(totals.totalCostWithVat - named.reduce((s, [, v]) => s + v, 0))
+                      const rows: [string, number][] = rest !== 0
+                        ? [...named, ['Услуги (себестоимость)', rest]]
+                        : named
                       return (
                         <div className="rounded-lg bg-[#fafaf9] border border-[#f0f0ec] px-3 py-2 mb-2">
                           <p className="text-[10px] font-medium text-[#9a9a95] mb-1.5">Из чего складывается себестоимость</p>
@@ -3050,15 +3095,15 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       <span className="font-mono text-[#111110]">{fmt(totals.totalCostExVat)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-[#6b6b66]">Продажа без НДС</span>
-                      <span className="font-mono text-[#111110]">{fmt(totals.totalSaleExVat)}</span>
+                      <span className="text-[#6b6b66]">Продажа без НДС <span className="text-[10px] text-[#9a9a95]">(после скидки)</span></span>
+                      <span className="font-mono text-[#111110]">{fmt(totals.totalSaleExVatAfterDiscount)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#6b6b66]">НДС к уплате в бюджет</span>
                       <span className="font-mono text-[#111110]">{fmt(totals.vatToState)}</span>
                     </div>
                     <div className="flex justify-between font-semibold border-t border-[#f0f0ec] pt-1.5 mt-1.5">
-                      <span className="text-[#111110]">Прибыль (ориент.)</span>
+                      <span className="text-[#111110]">Прибыль <span className="text-[10px] font-normal text-[#9a9a95]">= продажа без НДС − себестоимость без НДС</span></span>
                       <span className={`font-mono ${totals.profit > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt(totals.profit)}</span>
                     </div>
                   </div>

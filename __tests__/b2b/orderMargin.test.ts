@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { orderMarginPct, itemMarginPct, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { orderMarginPct, itemMarginPct, calcTotals, type B2BOrderItem } from '@/lib/b2bCalculator'
 
 // Маржа заказа должна быть взвешенной по выручке: мелкая дорогая позиция не должна
 // вытягивать общую цифру вверх (аудит итогов, A3 — «три разные маржи под одним словом»).
@@ -30,5 +30,34 @@ describe('маржа заказа — одна цифра на систему', 
   it('пустой заказ — 0, без деления на ноль', () => {
     expect(orderMarginPct([], 10)).toBe(0)
     expect(orderMarginPct([item(0, 0)], 10)).toBe(0)
+  })
+})
+
+// Прибыль и НДС на экране заказа: обе величины считаются от суммы после скидки
+// и в одной базе — без НДС. Владелец 22.09: «прибыль завышена ровно на НДС».
+describe('прибыль заказа не включает НДС к уплате', () => {
+  const items = [{
+    saleIncVat: 3000, saleExVat: 2459, outputVat: 541,
+    costWithVat: 1430, costExVat: 1172, inputVat: 258,
+    totalAreaNet: 1, totalWeight: 10, quantity: 1,
+  }]
+
+  it('прибыль = продажа без НДС − себестоимость без НДС', () => {
+    const t = calcTotals(items as never, 0)
+    expect(t.totalSaleExVatAfterDiscount).toBe(2459)
+    expect(t.profit).toBe(2459 - 1172)
+  })
+
+  it('на экране прибыль и НДС к уплате больше не задваиваются', () => {
+    const t = calcTotals(items as never, 0)
+    // итог с НДС = прибыль + себестоимость без НДС + НДС к уплате + входной НДС
+    expect(t.profit + t.totalCostExVat + t.vatToState + t.totalInputVat).toBe(t.totalAfterDiscount)
+  })
+
+  it('скидка уменьшает и прибыль, и НДС к уплате', () => {
+    const full = calcTotals(items as never, 0)
+    const disc = calcTotals(items as never, 20)
+    expect(disc.profit).toBeLessThan(full.profit)
+    expect(disc.vatToState).toBeLessThan(full.vatToState)
   })
 })

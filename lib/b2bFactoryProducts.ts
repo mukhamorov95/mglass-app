@@ -45,6 +45,9 @@ export type FactoryData = {
   // Пескоструй заведён в справочнике услуг B2B двумя строками: по трафарету и
   // полное матирование. Расчёт зеркала берёт цену оттуда, а не из materials.
   sandblastRates: SandblastRate[]
+  // Откуда взялись маржа и налог категории: строка конфига, финнастройки или
+  // константы кода. Нужно, чтобы экран не выдавал код за справочник.
+  cfgSource: { mirror: 'config' | 'financial_settings' | 'code'; loft: 'config' | 'financial_settings' | 'code' }
   retailServices: Service[]
   finSettings: FinancialSettings | null
   components: RawComponent[]
@@ -95,7 +98,27 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
   const finRows = (fins.data ?? []) as FinancialSettings[]
   const matrix = (mx.data ?? []) as GlassMatrixRow[]
   const cfgRows = (cfgs.data ?? []) as Record<string, unknown>[]
-  const cfgFor = (cat: string) => rowToCfg(cfgRows.find(r => r.product_category === cat && r.active !== false) ?? null)
+  // Конфиг категории. Если строки в pricing_model_config_v2 нет (у лофта её нет
+  // до сих пор), маржу и налог берём из financial_settings — там владелец их и
+  // задаёт: у лофта 50%, а зашитая в коде константа давала 40%. Остальные
+  // величины остаются запасными из кода, и экран об этом говорит (cfgSource).
+  const finFor = (pt: string) => finRows.find(r => (r as unknown as Record<string, unknown>).product_type === pt) ?? null
+  const cfgFor = (cat: string) => {
+    const row = cfgRows.find(r => r.product_category === cat && r.active !== false) ?? null
+    const cfg = rowToCfg(row)
+    if (row) return cfg
+    const fin = finFor(cat) as unknown as Record<string, unknown> | null
+    if (!fin) return cfg
+    return {
+      ...cfg,
+      productionMarginPercent: Number(fin.default_margin ?? cfg.productionMarginPercent),
+      productionTaxPercent:    Number(fin.tax_percent    ?? cfg.productionTaxPercent),
+    }
+  }
+  const cfgSource = (cat: string): 'config' | 'financial_settings' | 'code' => {
+    if (cfgRows.some(r => r.product_category === cat && r.active !== false)) return 'config'
+    return finFor(cat) ? 'financial_settings' : 'code'
+  }
 
   // Стекло для лофта: в розничном справочнике materials стекла нет — синтезируем из
   // glass_price_matrix (COST-строки, 4 мм), как это делает /calculator/loft.
@@ -122,6 +145,7 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
   return {
     retailMaterials,
     sandblastRates,
+    cfgSource: { mirror: cfgSource('mirror'), loft: cfgSource('loft') },
     retailServices: (svcs.data ?? []) as Service[],
     finSettings: finRows.find(s => s.product_type === 'loft') ?? finRows.find(s => s.tier === 'standard') ?? finRows[0] ?? null,
     components: (comps.data ?? []) as RawComponent[],

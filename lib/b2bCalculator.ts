@@ -198,6 +198,7 @@ export type B2BOrderTotals = {
   totalAfterDiscount: number
   vatToState: number
   profit: number
+  totalSaleExVatAfterDiscount: number
 }
 
 export function calcItem(
@@ -377,14 +378,21 @@ export function calcTotals(items: B2BOrderItem[], discountPercent: number): B2BO
   const totalAfterDiscount = perItemTotals
     ? items.reduce((s, i) => s + effectiveItemTotal(i, discountPercent), 0)
     : Math.round(totalSaleIncVat * (1 - discountPercent / 100))
-  const vatToState         = totalOutputVat - totalInputVat
-  const profit             = totalAfterDiscount - totalCostWithVat
+  // Прибыль и НДС считаем от суммы, которую клиент реально платит (после скидки
+  // и договорных цен), и в ОДНОЙ базе — без НДС. Раньше прибыль была
+  // «итог с НДС минус себестоимость с НДС», то есть включала НДС к уплате:
+  // на экране она стояла ровно на эту величину выше правды, а строкой выше
+  // тот же НДС был напечатан отдельно.
+  const totalSaleExVatAfterDiscount = Math.round(totalAfterDiscount * 100 / (100 + VAT))
+  const outputVatAfterDiscount      = totalAfterDiscount - totalSaleExVatAfterDiscount
+  const vatToState         = outputVatAfterDiscount - totalInputVat
+  const profit             = totalSaleExVatAfterDiscount - totalCostExVat
 
   return {
     totalAreaNet, totalWeight,
     totalCostExVat, totalInputVat, totalCostWithVat,
     totalSaleExVat, totalOutputVat, totalSaleIncVat,
-    totalAfterDiscount, vatToState, profit,
+    totalAfterDiscount, totalSaleExVatAfterDiscount, vatToState, profit,
   }
 }
 
