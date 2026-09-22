@@ -14,7 +14,7 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard
   const { data, error } = await createServiceClient()
     .from('manager_schedules')
-    .select('amo_user_id, name, starts_on, work_from, work_to, work_days, note')
+    .select('amo_user_id, name, starts_on, work_from, work_to, work_days, note, is_seller')
     .order('name')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ schedules: data ?? [] })
@@ -32,6 +32,7 @@ export async function PUT(req: Request) {
   const workTo = b?.work_to ? String(b.work_to) : null
   const workDays = Array.isArray(b?.work_days) ? [...new Set(b.work_days.map(Number))].sort() : [1, 2, 3, 4, 5]
   const note = typeof b?.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null
+  const isSeller = b?.is_seller === undefined ? true : Boolean(b.is_seller)
 
   if (!Number.isInteger(amoUserId) || amoUserId <= 0 || !name) return NextResponse.json({ error: 'Нужны amo_user_id и имя' }, { status: 400 })
   if (startsOn && !DAY_RE.test(startsOn)) return NextResponse.json({ error: 'Дата выхода — ГГГГ-ММ-ДД' }, { status: 400 })
@@ -42,7 +43,7 @@ export async function PUT(req: Request) {
   const { data: { user } } = await (await createClient()).auth.getUser()
   const { error } = await createServiceClient().from('manager_schedules').upsert({
     amo_user_id: amoUserId, name, starts_on: startsOn, work_from: workFrom, work_to: workTo,
-    work_days: workDays, note, updated_at: new Date().toISOString(), updated_by: user?.id ?? null,
+    work_days: workDays, note, is_seller: isSeller, updated_at: new Date().toISOString(), updated_by: user?.id ?? null,
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

@@ -9,7 +9,8 @@ import { collectCoaching } from '@/lib/coaching/collect'
 export const TEAM_ROW = 0   // строка 0 — общие пропущенные, у которых нет хозяина
 
 export async function refreshCoaching(sb: SupabaseClient) {
-  const { data: schedules, error } = await sb.from('manager_schedules').select('amo_user_id, name')
+  // только продавцы B2C: остальных (владелец, сопровождение, офис) воронкой B2C не мерим
+  const { data: schedules, error } = await sb.from('manager_schedules').select('amo_user_id, name').eq('is_seller', true)
   if (error) throw new Error(`Не прочитать графики: ${error.message}`)
   const managers = (schedules ?? []).map(s => ({ id: Number(s.amo_user_id), name: String(s.name) }))
   if (managers.length === 0) return { managers: 0, computedAt: null }
