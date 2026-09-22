@@ -9,7 +9,8 @@ import { sandblastCost } from '@/lib/pricing/sandblastCost'
 // Помощник по себестоимости пескоструя. Владелец: «точной суммы у меня нет,
 // не знаю, как её посчитать». Считает не экран, а lib/pricing/sandblastCost.ts;
 // здесь только поля процесса и честный список того, чего не хватает.
-// Ничего не записывает: в конце показывает, какие три числа вписать в услугу.
+// Сохраняются ТОЛЬКО исходные числа процесса (process_cost_inputs); цены услуг
+// экран не трогает — в конце показывает, какие три числа вписать в услугу.
 
 const L = 'block text-[11px] font-medium text-[#6b6b66] mb-1'
 const I = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] bg-white font-mono'
@@ -23,16 +24,16 @@ export default function SandblastCostPage() {
   const [ps, setPs] = useState<ProductionSettings>(DEFAULT_PRODUCTION_SETTINGS)
   const [svcs, setSvcs] = useState<Svc[]>([])
 
-  // Известное от владельца: рулон оракала 50 м ≈ 8 000 ₽. Ширину он не называл —
-  // поле пустое, и пока оно пустое, плёнка в себестоимость не попадает.
+  // Числа живут в базе (process_cost_inputs): владелец собирает их не за один раз —
+  // ширину рулона и вес мешка назвал сразу, расход песка и время меряют в цеху позже.
   const [rollPrice, setRollPrice] = useState('8000')
   const [rollLen, setRollLen] = useState('50')
-  const [rollWidth, setRollWidth] = useState('')
+  const [rollWidth, setRollWidth] = useState('1')
   const [layers, setLayers] = useState('1')
   const [waste, setWaste] = useState('10')
 
   const [bagPrice, setBagPrice] = useState('')
-  const [bagKg, setBagKg] = useState('')
+  const [bagKg, setBagKg] = useState('25')
   const [kgPerM2, setKgPerM2] = useState('')
 
   const [minutes, setMinutes] = useState('')
@@ -41,14 +42,25 @@ export default function SandblastCostPage() {
   const [eqYears, setEqYears] = useState('5')
   const [eqM2, setEqM2] = useState('')
 
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<string | null>(null)
+
   useEffect(() => {
     (async () => {
-      const [{ data: p }, { data: s }] = await Promise.all([
+      const [{ data: p }, { data: s }, { data: saved }] = await Promise.all([
         supabase.from('production_settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('b2b_services').select('id, name, cost_price, value, unit_label, time_minutes, consumables_cost_rub, equipment_depr_rub').ilike('name', '%пескостру%').order('id'),
+        supabase.from('process_cost_inputs').select('inputs, updated_at').eq('process', 'sandblast').maybeSingle(),
       ])
       if (p) setPs(p as ProductionSettings)
       setSvcs((s ?? []) as Svc[])
+      const v = (saved?.inputs ?? {}) as Record<string, unknown>
+      const put = (k: string, f: (x: string) => void) => { if (v[k] != null && v[k] !== '') f(String(v[k])) }
+      put('rollPrice', setRollPrice); put('rollLen', setRollLen); put('rollWidth', setRollWidth)
+      put('layers', setLayers); put('waste', setWaste)
+      put('bagPrice', setBagPrice); put('bagKg', setBagKg); put('kgPerM2', setKgPerM2)
+      put('minutes', setMinutes); put('eqPrice', setEqPrice); put('eqYears', setEqYears); put('eqM2', setEqM2)
+      if (saved?.updated_at) setSavedAt(saved.updated_at as string)
     })()
   }, [supabase])
 
@@ -69,17 +81,35 @@ export default function SandblastCostPage() {
     overheadPct: ps.overhead_percent,
   }), [rollPrice, rollLen, rollWidth, layers, waste, bagPrice, bagKg, kgPerM2, minutes, minuteRate, eqPrice, eqYears, eqM2, ps.overhead_percent])
 
+  async function save() {
+    setSaving(true)
+    const inputs = { rollPrice, rollLen, rollWidth, layers, waste, bagPrice, bagKg, kgPerM2, minutes, eqPrice, eqYears, eqM2 }
+    const { error } = await supabase.from('process_cost_inputs')
+      .upsert({ process: 'sandblast', inputs, updated_at: new Date().toISOString() })
+    setSaving(false)
+    if (!error) setSavedAt(new Date().toISOString())
+  }
+
   const consumables = res.lines.filter(l => l.name.startsWith('Плёнка') || l.name.startsWith('Песок')).reduce((s, l) => s + l.rubPerM2, 0)
   const equipment = res.lines.find(l => l.name.startsWith('Амортизация'))?.rubPerM2 ?? 0
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-6">
       <div className="max-w-3xl mx-auto space-y-4">
-        <div>
-          <h1 className="text-[18px] font-semibold text-[#111110]">Себестоимость пескоструя</h1>
-          <p className="text-[12px] text-[#9a9a95] mt-0.5">
-            Заполните, что известно по процессу. Пустое поле не подставляется — оно попадает в список «чего не хватает».
-          </p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-[18px] font-semibold text-[#111110]">Себестоимость пескоструя</h1>
+            <p className="text-[12px] text-[#9a9a95] mt-0.5">
+              Заполните, что известно по процессу. Пустое поле не подставляется — оно попадает в список «чего не хватает».
+            </p>
+          </div>
+          <div className="text-right">
+            <button onClick={save} disabled={saving}
+              className="px-4 py-2 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-50">
+              {saving ? 'Сохраняю…' : 'Сохранить числа'}
+            </button>
+            {savedAt && <p className="text-[11px] text-[#9a9a95] mt-1">сохранено {new Date(savedAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>}
+          </div>
         </div>
 
         <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 space-y-3">
