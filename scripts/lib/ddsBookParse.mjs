@@ -26,6 +26,20 @@ export function parseCsv(text) {
   return rows
 }
 
+// Ответ gviz ?tqx=out:json&headers=0 → те же строки, что у parseCsv, но с сырыми числами.
+// CSV отдаёт ячейку так, как она отформатирована: в листе «ИП ДДС» формат без копеек,
+// и 172 057,90 приходило как 172058 — догон 25.08 так и записал июль–август.
+// Строка 0 — заголовок: там нужен вид «дд.мм», а не порядковый номер даты.
+export function rowsFromGviz(text) {
+  const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
+  if (json.status !== 'ok') throw new Error('gviz: ' + (json.errors?.[0]?.detailed_message ?? json.status))
+  return json.table.rows.map((r, ri) => (r.c ?? []).map((c) => {
+    if (!c || c.v === null || c.v === undefined) return ''
+    if (ri === 0 && c.f) return c.f
+    return typeof c.v === 'number' ? String(c.v) : String(c.f ?? c.v)
+  }))
+}
+
 // Колонки-дни: год наращивается на переходе через январь.
 export function dateColumns(header, startYear = BOOK_START_YEAR) {
   const cols = []

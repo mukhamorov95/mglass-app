@@ -116,3 +116,43 @@ describe('захват соседа распознаётся только по �
     expect(warnings).toContainEqual(expect.objectContaining({ date: '2026-04-10', amount: 67500, neighbourBlock: 52500 }))
   })
 })
+
+describe('книга читается сырыми числами, а не в формате ячейки', () => {
+  const rowsFromGviz = dds.rowsFromGviz as (text: string) => string[][]
+  const INCOME: Fund[] = [{ id: 1, name: 'Поступления', fund_class: 'income', sort: 1 }]
+  const INCOME_SUBS: Sub[] = [{ id: 1, fund_id: 1, name: 'Наличные расчет' }, { id: 2, fund_id: 1, name: 'Безналичный расчет' }]
+  // Форма ответа gviz ?tqx=out:json&headers=0 для листа «ИП ДДС», 06.07.2026: у строки фонда формат
+  // с копейками, у подстроки — без, и CSV давал 154 722,10 − 154 722 = фантомные 0,10 ₽ на фонд.
+  const gviz = (status = 'ok') => '/*O_o*/\ngoogle.visualization.Query.setResponse(' + JSON.stringify({
+    status,
+    errors: status === 'ok' ? undefined : [{ detailed_message: 'Лист не найден' }],
+    table: {
+      rows: [
+        { c: [null, null, null, null, { v: 46209, f: '06.07' }] },
+        { c: [{ v: 'Поступления' }, null, { v: 62573534.55, f: '62573534.55' }, null, { v: 154722.1, f: '154722.10' }] },
+        { c: [{ v: 'Наличные расчет' }, null, null, null, null] },
+        { c: [{ v: 'Безналичный расчет' }, null, null, null, { v: 154722.1, f: '154722' }] },
+      ],
+    },
+  }) + ');'
+
+  it('заголовок — «дд.мм», число — со всеми копейками, пустая ячейка — пустая строка', () => {
+    const rows = rowsFromGviz(gviz())
+    expect(rows[0][4]).toBe('06.07')
+    expect(rows[3][4]).toBe('154722.1')
+    expect(rows[2][4]).toBe('')
+    expect(dds.num(rows[3][4])).toBe(154722.1)
+  })
+
+  it('06.07.2026: безнал 154 722,10 ₽ и никакой записи на сам фонд', () => {
+    const rows = rowsFromGviz(gviz())
+    const { layout } = buildLayout(rows, INCOME, INCOME_SUBS)
+    const cols = dateColumns(rows[0]).map(c => ({ i: c.i, date: '2026-07-06' }))
+    const { entries } = collectEntries({ unit: 'ip', rows, cols, layout })
+    expect(entries).toEqual([expect.objectContaining({ fund_id: 1, subfund_id: 2, kind: 'in', amount: 154722.1 })])
+  })
+
+  it('ошибка листа — исключение, а не пустая книга', () => {
+    expect(() => rowsFromGviz(gviz('error'))).toThrow('Лист не найден')
+  })
+})

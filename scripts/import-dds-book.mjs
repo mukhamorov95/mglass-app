@@ -18,10 +18,13 @@
 //   node scripts/import-dds-book.mjs --from 2026-07-01 --to 2026-08-25 --dry
 //   node scripts/import-dds-book.mjs --from 2026-07-01 --to 2026-08-25
 //   node scripts/import-dds-book.mjs --from 2026-07-01 --to 2026-08-25 --replace
+//   node scripts/import-dds-book.mjs --from 2025-06-01 --to 2026-08-25 --compare --days
+// --compare ничего не пишет: книга против базы по фонду/подфонду; --days раскладывает
+// каждое расхождение по дням с id записей; --tol — допуск в рублях (по умолчанию копейка).
 
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
-import { parseCsv, dateColumns, buildLayout, collectEntries, round2 } from './lib/ddsBookParse.mjs'
+import { rowsFromGviz, dateColumns, buildLayout, collectEntries, round2 } from './lib/ddsBookParse.mjs'
 
 const env = Object.fromEntries(
   readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
@@ -48,11 +51,12 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(FROM) || !/^\d{4}-\d{2}-\d{2}$/.test(TO)) {
   process.exit(1)
 }
 
+// JSON, а не CSV: CSV отдаёт значения в формате ячейки и режет копейки (rowsFromGviz)
 async function fetchTab(tab) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=0&sheet=${encodeURIComponent(tab)}`
   const r = await fetch(url)
   if (!r.ok) throw new Error(`Лист «${tab}»: HTTP ${r.status} — книга должна быть доступна по ссылке`)
-  return parseCsv(await r.text())
+  return rowsFromGviz(await r.text())
 }
 
 async function collect(unit, tab) {
@@ -93,6 +97,7 @@ for (const { unit, tab } of TABS) {
 }
 
 function fmt(n) { return Math.round(n).toLocaleString('ru-RU') + ' ₽' }
+function money(n) { return round2(n).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽' }
 
 const batches = [...new Set(all.map(e => e.import_batch))]
 
@@ -102,15 +107,25 @@ if (has('compare')) {
   const db = []
   for (let from = 0; ; from += 1000) {
     const { data, error } = await sb.from('cashflow_entries')
-      .select('unit,kind,fund_id,subfund_id,amount').gte('entry_date', FROM).lte('entry_date', TO)
+      .select('id,entry_date,unit,kind,fund_id,subfund_id,amount').gte('entry_date', FROM).lte('entry_date', TO)
       .order('id').range(from, from + 999)
     if (error) { console.error('Не удалось прочитать базу:', error.message); process.exit(1) }
     db.push(...data)
     if (data.length < 1000) break
   }
+  const TOL = Number(arg('tol', '0.005'))
   const key = (e) => `${e.unit}|${e.fund_id}|${e.subfund_id ?? 0}|${e.kind}`
   const roll = (rows) => rows.reduce((m, e) => m.set(key(e), (m.get(key(e)) ?? 0) + Number(e.amount)), new Map())
   const book = roll(all), base = roll(db)
+  // по дням: сумма за месяц может совпасть, а дни разойтись — и наоборот
+  const dayRoll = (rows, withIds) => rows.reduce((m, e) => {
+    const k = key(e) + '|' + e.entry_date
+    const v = m.get(k) ?? { sum: 0, ids: [] }
+    v.sum += Number(e.amount)
+    if (withIds) v.ids.push(e.id)
+    return m.set(k, v)
+  }, new Map())
+  const bookDays = dayRoll(all, false), baseDays = dayRoll(db, true)
   const names = new Map()
   for (const unit of ['ip', 'ooo']) {
     const [{ data: f }, { data: s }] = await Promise.all([
@@ -122,14 +137,23 @@ if (has('compare')) {
   }
   console.log('\n=== книга vs база, ' + FROM + '…' + TO + ' ===')
   let same = 0
+  const dayKeys = [...new Set([...bookDays.keys(), ...baseDays.keys()])].sort()
   for (const k of new Set([...book.keys(), ...base.keys()].sort())) {
     const b = round2(book.get(k) ?? 0), d = round2(base.get(k) ?? 0)
-    if (Math.abs(b - d) < 0.5) { same++; continue }
+    const days = has('days')
+      ? dayKeys.filter(dk => dk.startsWith(k + '|')).map(dk => {
+          const bd = round2(bookDays.get(dk)?.sum ?? 0), dd = round2(baseDays.get(dk)?.sum ?? 0)
+          return { date: dk.slice(k.length + 1), bd, dd, ids: baseDays.get(dk)?.ids ?? [] }
+        }).filter(x => Math.abs(x.bd - x.dd) >= TOL)
+      : []
+    if (Math.abs(b - d) < TOL && !days.length) { same++; continue }
     const [unit, fid, sid, kind] = k.split('|')
     const label = names.get('f' + fid) + (sid !== '0' ? ' → ' + names.get('s' + sid) : '')
-    console.log(`  ${unit} ${kind} ${label}: книга ${fmt(b)} / база ${fmt(d)} / разница ${fmt(b - d)}`)
+    console.log(`  ${unit} ${kind} ${label}: книга ${money(b)} / база ${money(d)} / разница ${money(b - d)}`)
+    for (const x of days)
+      console.log(`      ${x.date}: книга ${money(x.bd)} / база ${money(x.dd)} / ${money(x.bd - x.dd)}${x.ids.length ? '  id ' + x.ids.join(', ') : '  записи нет'}`)
   }
-  console.log(`  совпало строк: ${same}`)
+  console.log(`  совпало строк: ${same} (допуск ${TOL} ₽)`)
   process.exit(0)
 }
 
