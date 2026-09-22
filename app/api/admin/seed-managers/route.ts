@@ -53,7 +53,6 @@ export async function POST() {
       name: m.name,
       role: 'manager',
       manager_code: m.manager_code,
-      password_plain: password,
       active: true,
     }).eq('id', data.user.id)
 
