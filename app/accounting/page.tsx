@@ -17,6 +17,7 @@ import { PayrollTab } from '@/components/accounting/PayrollTab'
 import { TaxesTab } from '@/components/accounting/TaxesTab'
 import { CounterpartiesTab } from '@/components/accounting/CounterpartiesTab'
 import { AuditTab } from '@/components/accounting/AuditTab'
+import { signedSums, share } from '@/lib/accounting/fundSign'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -24,6 +25,7 @@ type Account = { id: number; unit: string; name: string; sort: number }
 type Entry = { id: number; entry_date: string; unit: string; kind: string; fund_id: number; subfund_id: number | null; amount: number; account: string | null; counterparty: string | null; comment: string | null; entered_by_name: string | null; attachment_path: string | null }
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
+const PCT = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%'
 const CLASS_LABEL: Record<string, string> = { variable: 'Переменные расходы', fixed: 'Постоянные расходы', fund: 'Фонды' }
 const monthLabel = (ym: string) => {
   const [y, m] = ym.split('-').map(Number)
@@ -145,8 +147,10 @@ export default function AccountingPage() {
   const isBuyer = myRole === 'buyer'
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
   const unitEntries = useMemo(() => entries.filter(e => e.unit === unit), [entries, unit])
-  const sumFund = useCallback((fundId: number) => unitEntries.filter(e => e.fund_id === fundId).reduce((s, e) => s + Number(e.amount), 0), [unitEntries])
-  const sumSub = useCallback((subId: number) => unitEntries.filter(e => e.subfund_id === subId).reduce((s, e) => s + Number(e.amount), 0), [unitEntries])
+  // Со знаком: возврат клиенту вычитается из поступлений, приход на расходный фонд — из расхода
+  const signed = useMemo(() => signedSums(unitEntries, unitFunds), [unitEntries, unitFunds])
+  const sumFund = useCallback((fundId: number) => signed.byFund.get(fundId) ?? 0, [signed])
+  const sumSub = useCallback((subId: number) => signed.bySub.get(subId) ?? 0, [signed])
 
   const income = unitFunds.filter(f => f.fund_class === 'income').reduce((s, f) => s + sumFund(f.id), 0)
   const variable = unitFunds.filter(f => f.fund_class === 'variable').reduce((s, f) => s + sumFund(f.id), 0)
@@ -233,13 +237,20 @@ export default function AccountingPage() {
     const isOpen = open.has(f.id)
     const isVar = f.fund_class === 'variable'
     const bg = f.fund_class === 'income' ? 'bg-emerald-50 border-emerald-200' : isVar ? 'bg-amber-50 border-amber-200' : 'bg-white border-[#e4e4e0]'
+    // Доли — факт месяца: жёлтым от поступлений, зелёным (у суммы) от маржи после переменных.
+    // Норматив фонда из справочника (он наполняет фонды в «Финнеделе») — в подсказке.
+    const shown = f.fund_class !== 'income' && Math.abs(total) >= 0.5
+    const ofIncome = shown ? share(total, income) : null
+    const ofMargin = shown && (f.fund_class === 'fixed' || f.fund_class === 'fund') ? share(total, margin) : null
+    const norm = f.percent != null ? `Норматив фонда: ${f.percent}%` : undefined
     return (
       <div key={f.id}>
         <button onClick={() => setOpen(prev => { const n = new Set(prev); if (n.has(f.id)) n.delete(f.id); else n.add(f.id); return n })}
           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border ${bg} mb-1`}>
           <span className="text-[13px] font-semibold text-[#111110]">{isOpen ? '▾' : '▸'} {f.name}</span>
-          <span className="text-[13px] font-mono text-[#4b4b47]">
-            {f.percent != null && <span className="text-[#9a9a95] mr-2">{f.percent}%</span>}
+          <span className="text-[13px] font-mono text-[#4b4b47]" title={norm}>
+            {ofIncome != null && <span className="text-amber-700 mr-2">{PCT(ofIncome)}</span>}
+            {ofMargin != null && <span className="text-emerald-700 mr-2">{PCT(ofMargin)}</span>}
             {RUB(total)}
           </span>
         </button>
@@ -325,7 +336,10 @@ export default function AccountingPage() {
 
             {unitFunds.filter(f => f.fund_class === 'income').map(fundRow)}
 
-            <p className="text-[11px] uppercase tracking-widest text-[#9a9a95] mt-4 mb-1.5">{CLASS_LABEL.variable}</p>
+            <div className="flex items-baseline justify-between mt-4 mb-1.5">
+              <p className="text-[11px] uppercase tracking-widest text-[#9a9a95]">{CLASS_LABEL.variable}</p>
+              <p className="text-[11px] text-amber-700">% от поступлений</p>
+            </div>
             {unitFunds.filter(f => f.fund_class === 'variable').map(fundRow)}
 
             <div className="flex justify-between px-3 py-2.5 my-2 border-y border-[#d8d8d3] text-[13px]">
@@ -333,11 +347,15 @@ export default function AccountingPage() {
               <span className="font-mono font-semibold text-blue-700">{RUB(margin)}{income > 0 && ` · ${Math.round(margin / income * 100)}%`}</span>
             </div>
 
-            <p className="text-[11px] uppercase tracking-widest text-[#9a9a95] mt-4 mb-1.5">{CLASS_LABEL.fixed}</p>
-            {unitFunds.filter(f => f.fund_class === 'fixed').map(fundRow)}
-
-            <p className="text-[11px] uppercase tracking-widest text-[#9a9a95] mt-4 mb-1.5">{CLASS_LABEL.fund}</p>
-            {unitFunds.filter(f => f.fund_class === 'fund').map(fundRow)}
+            {(['fixed', 'fund'] as const).map(cls => (
+              <div key={cls}>
+                <div className="flex items-baseline justify-between mt-4 mb-1.5">
+                  <p className="text-[11px] uppercase tracking-widest text-[#9a9a95]">{CLASS_LABEL[cls]}</p>
+                  <p className="text-[11px]"><span className="text-amber-700">% от поступлений</span> · <span className="text-emerald-700">% от маржи</span></p>
+                </div>
+                {unitFunds.filter(f => f.fund_class === cls).map(fundRow)}
+              </div>
+            ))}
 
             <div className="flex justify-between px-3 py-2.5 mt-3 rounded-lg bg-[#111110] text-white text-[13px]">
               <span className="font-semibold">Остаток за месяц</span>

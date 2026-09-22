@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createServiceClient } from '@/lib/supabase-service'
+import { signedAmount } from '@/lib/accounting/fundSign'
 
 // Б13: взаиморасчёты с поставщиками. Закупки живут своим контуром
 // (purchase_orders + purchase_order_payments), деньги — в ДДС, заявки — третьим
@@ -33,15 +34,17 @@ export async function GET(req: NextRequest) {
   const from = url.searchParams.get('from') ?? '2026-01-01'
 
   const svc = createServiceClient()
-  const [{ data: pos }, { data: pops }, { data: entries }, { data: reqs }] = await Promise.all([
+  const [{ data: pos }, { data: pops }, { data: entries }, { data: reqs }, { data: funds }] = await Promise.all([
     svc.from('purchase_orders').select('id,supplier_name,amount,status,created_at').limit(2000),
     svc.from('purchase_order_payments').select('purchase_order_id,amount,payment_date').limit(4000),
-    svc.from('cashflow_entries').select('counterparty,amount,entry_date')
-      .eq('unit', unit).eq('kind', 'out').gte('entry_date', from)
+    svc.from('cashflow_entries').select('counterparty,amount,entry_date,kind,fund_id')
+      .eq('unit', unit).gte('entry_date', from)
       .not('counterparty', 'is', null).limit(4000),
     svc.from('payment_requests').select('counterparty,amount,status')
       .eq('unit', unit).in('status', ['pending', 'approved']).limit(500),
+    svc.from('cashflow_funds').select('id,fund_class').eq('unit', unit),
   ])
+  const classOf = new Map((funds ?? []).map(f => [Number(f.id), String(f.fund_class)]))
 
   const paidByPo = new Map<number, number>()
   for (const p of pops ?? []) {
@@ -65,8 +68,12 @@ export async function GET(req: NextRequest) {
     r.paidPurchase += paidByPo.get(Number(po.id)) ?? 0
   }
   for (const e of entries ?? []) {
+    // Оплачено контрагенту: расходы минус его возвраты нам (приход на расходный фонд).
+    // Поступление от клиента на «Поступления» — не оплата ему, мимо; возврат клиенту — оплата.
+    const cls = classOf.get(Number(e.fund_id)) ?? 'variable'
+    if (cls === 'income' && e.kind === 'in') continue
     const r = touch(e.counterparty as string)
-    r.paidCash += Number(e.amount)
+    r.paidCash += cls === 'income' ? Number(e.amount) : signedAmount({ kind: String(e.kind), amount: Number(e.amount) }, cls)
     const d = e.entry_date as string
     if (!r.lastOp || d > r.lastOp) r.lastOp = d
   }
