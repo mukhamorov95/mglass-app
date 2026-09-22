@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import * as tg from '@/lib/telegram'
+import { calcTypeLabel, calcDetail } from '@/lib/calcLabel'
 import { readMemory, writeMemory, writeLog, startRun, finishRun, failRun } from '@/lib/agentMemory'
 
 export const runtime = 'nodejs'
@@ -12,6 +13,9 @@ const PRODUCT_LABELS: Record<string, string> = {
   shower: 'Душевая', shower_standard: 'Душевая', shower_budget: 'Душевая',
 }
 
+// Названия изделий быстрого расчёта — пользовательский текст, а сообщение уходит с parse_mode HTML.
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
 function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
@@ -21,9 +25,8 @@ function db() {
 
 async function generateMessage(calc: Record<string, unknown>): Promise<string> {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-  const product = PRODUCT_LABELS[calc.product_type as string] ?? String(calc.product_type)
-  const inputData = (calc.input_data as Record<string, unknown>) ?? {}
-  const dims = inputData.width ? `${inputData.width}×${inputData.height} мм` : ''
+  const product = PRODUCT_LABELS[calc.product_type as string] ?? calcTypeLabel(calc.product_type as string)
+  const dims = calcDetail(calc.product_type as string, calc.input_data as Record<string, unknown>) ?? ''
   const price = ((calc.final_price as number) ?? 0).toLocaleString('ru-RU')
   const name = (calc.client_name as string | null)?.split(' ')[0] ?? ''
 
@@ -103,9 +106,8 @@ export async function GET(req: Request) {
         await supabase.from('calculations')
           .update({ followup_sent_at: new Date().toISOString() }).eq('id', calc.id)
 
-        const product = PRODUCT_LABELS[calc.product_type] ?? calc.product_type
-        const inputData = (calc.input_data as Record<string, unknown>) ?? {}
-        const dims = inputData.width ? `${inputData.width}×${inputData.height}` : ''
+        const product = PRODUCT_LABELS[calc.product_type] ?? calcTypeLabel(calc.product_type)
+        const dims = calcDetail(calc.product_type, calc.input_data as Record<string, unknown>) ?? ''
         const displayName = calc.client_name || calc.client_phone || `#${calc.id}`
 
         await writeLog('revenue', 'success',
@@ -115,7 +117,7 @@ export async function GET(req: Request) {
         const chatId = calc.created_by ? tgMap[calc.created_by] : null
         const tgMsg = [
           `✍️ <b>Черновик фоллоу-апа клиенту</b> (расчёт #${calc.id})`,
-          `${product} ${dims} · ${displayName} · ${calc.client_phone}`,
+          `${product} ${esc(dims)} · ${displayName} · ${calc.client_phone}`,
           '',
           'Скопируй и отправь в WhatsApp, если уместно:',
           `<i>${message}</i>`,

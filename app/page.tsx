@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { mskDayKey } from '@/lib/time'
+import { calcTypeLabel, calcDetail } from '@/lib/calcLabel'
 import { redirect } from 'next/navigation'
 import { getRole, ROLE_HOME } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
@@ -41,11 +42,6 @@ const STATUS_LABELS: Record<string, string> = {
   launched: 'Запущено',
   rejected: 'Отказ',
 }
-const PRODUCT_LABELS: Record<string, string> = {
-  mirror: 'Зеркало', loft: 'Лофт',
-  shower: 'Душевая', shower_standard: 'Душевая', shower_budget: 'Душевая',
-}
-
 const OWNER_CENTER = [
   { href: '/admin/dashboard',      emoji: '📊', label: 'Дашборд',        desc: 'Выручка, маржа, конверсия' },
   { href: '/admin/pnl',            emoji: '📈', label: 'P&L',            desc: 'Доходы, расходы, прибыль' },
@@ -165,13 +161,10 @@ export default async function Home() {
           </div>
           <div className="space-y-2">
             {recent.map(c => {
-              const prodLabel = PRODUCT_LABELS[c.product_type] ?? c.product_type
+              const prodLabel = calcTypeLabel(c.product_type)
               const st = STATUS_LABELS[c.status] ?? 'Черновик'
               const stColor = STATUS_COLORS[c.status] ?? STATUS_COLORS.draft
-              const d = c.input_data as Record<string, unknown>
-              const dim = c.product_type === 'loft' || c.product_type === 'mirror'
-                ? `${d.width}×${d.height} мм`
-                : d.dimStr ?? `${d.width}×${d.height} мм`
+              const dim = calcDetail(c.product_type, c.input_data as Record<string, unknown> | null)
               return (
                 <Link key={c.id} href={`/calculations/${c.id}`}
                   className="flex items-center gap-3 bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 hover:border-[#c4c4be] hover:shadow-sm transition-all">
@@ -184,7 +177,7 @@ export default async function Home() {
                         <span className="text-[11px] text-[#9a9a95]">{prodLabel}</span>
                       )}
                       {dim && (
-                        <span className="text-[11px] text-[#9a9a95]">{String(dim)}</span>
+                        <span className="text-[11px] text-[#9a9a95] max-w-full truncate" title={dim}>{dim}</span>
                       )}
                     </div>
                     <p className="text-[12px] text-[#9a9a95] mt-0.5">

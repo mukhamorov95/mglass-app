@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server'
 import { notifyAdmins } from '@/lib/telegram'
 import { createClient } from '@supabase/supabase-js'
+import { calcCaption } from '@/lib/calcLabel'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-const PRODUCT_LABELS: Record<string, string> = {
-  mirror: 'Зеркало',
-  loft:   'Лофт',
-  shower: 'Душевая',
-  shower_standard: 'Душевая',
-  shower_budget:   'Душевая',
-}
+// Названия изделий быстрого расчёта — пользовательский текст, а сообщение уходит с parse_mode HTML.
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 function db() {
   return createClient(
@@ -68,16 +64,15 @@ export async function GET(req: Request) {
       for (const tu of (tgUsers ?? [])) tgMap[tu.user_id] = tu.telegram_id
 
       for (const calc of calcs) {
-        const product = PRODUCT_LABELS[calc.product_type] ?? calc.product_type
+        const caption = esc(calcCaption(calc.product_type, calc.input_data))
         const price   = (calc.final_price as number).toLocaleString('ru-RU')
-        const dims    = calc.input_data ? `${calc.input_data.width ?? ''}×${calc.input_data.height ?? ''} мм` : ''
         const chatId  = calc.created_by ? tgMap[calc.created_by] : null
 
         if (chatId) {
           const msg = [
             `⏰ <b>Напоминание: ${stage.title}</b>`,
             ``,
-            `Расчёт #${calc.id} — ${product} ${dims}`,
+            `Расчёт #${calc.id} — ${caption}`,
             `Сумма: <b>${price} ₽</b>`,
             ``,
             stage.days >= 7
@@ -94,7 +89,7 @@ export async function GET(req: Request) {
         if (stage.escalate) {
           await notifyAdmins([
             `🟠 <b>КП неделю без ответа — нужна помощь РОП</b>`,
-            `Расчёт #${calc.id} — ${product} ${dims} · ${price} ₽`,
+            `Расчёт #${calc.id} — ${caption} · ${price} ₽`,
             chatId ? `Менеджеру напоминание отправлено.` : `⚠️ У менеджера не привязан Telegram.`,
           ].join('\n')).catch(() => {})
           escalated++

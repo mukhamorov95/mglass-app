@@ -7,6 +7,7 @@ import LaunchOrderModal from '@/components/LaunchOrderModal'
 import type { LaunchOrderPayload } from '@/components/LaunchOrderModal'
 import type { FinancialSettings } from '@/lib/types'
 import { computeMarginStatus, MARGIN_STATUS_LABELS } from '@/lib/types'
+import { calcDetail } from '@/lib/calcLabel'
 
 type Calc = {
   id: number
@@ -104,15 +105,7 @@ function getDesc(c: Calc): string {
     const tier = d.tier === 'budget' ? ' · Бюджет' : ''
     return dims + tier
   }
-  if (c.product_type === 'quick') {
-    const cart = Array.isArray(d.cart) ? d.cart as { title?: string }[] : []
-    if (cart.length > 1) return `${cart.length} изделий`
-    return (cart[0]?.title as string) || (d.title as string) || 'быстрый расчёт'
-  }
-  if (c.product_type === 'build') {
-    const dims = d.width2 ? `${d.width}×${d.width2}×${d.height}` : `${d.width}×${d.height}`
-    return `${(d.modelId as string) ?? ''} ${dims} мм`.trim()
-  }
+  if (c.product_type === 'quick' || c.product_type === 'build') return calcDetail(c.product_type, d) ?? ''
   return ''
 }
 
