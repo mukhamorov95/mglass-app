@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { DEVICE_CLASS_LABELS, type DeviceClass } from '@/lib/deviceClass'
+import type { Finding } from '@/lib/security/accessAudit'
 
 // Безопасность: активные устройства по каждому сотруднику + журнал событий
 // входа. Политика: 1 телефон + 1 ПК на аккаунт; вход на новом устройстве
@@ -79,6 +80,8 @@ export default function SecurityPage() {
       <div className="max-w-[1100px]">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Безопасность</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5 mb-5">Устройства сотрудников и журнал входов · правило: 1 телефон + 1 ПК на аккаунт</p>
+
+        <AccessAudit />
 
         {errors.length > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[13px] text-amber-800 mb-4">
@@ -174,6 +177,65 @@ export default function SecurityPage() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Прогон «кто что видит» — раз в месяц кроном, результат сюда. Сам прогон
+// описан в lib/security/accessAudit.ts: он читает права из базы и говорит,
+// где ворота шире, чем думали.
+function AccessAudit() {
+  const [run, setRun] = useState<{ created_at: string; findings: Finding[]; high: number; medium: number; low: number } | null>(null)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    (async () => {
+      const { createClient } = await import('@/lib/supabase-browser')
+      const { data } = await createClient()
+        .from('security_audit_runs')
+        .select('created_at, findings, high, medium, low')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (data) setRun(data as { created_at: string; findings: Finding[]; high: number; medium: number; low: number })
+    })()
+  }, [])
+
+  if (!run) return (
+    <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 text-[13px] text-[#9a9a95] mb-4">
+      Прогон доступов ещё не запускался. Он идёт первого числа каждого месяца, отчёт приходит в телеграм.
+    </div>
+  )
+
+  const tone = run.high > 0 ? 'bg-red-50 border-red-200 text-red-800'
+    : run.medium > 0 ? 'bg-amber-50 border-amber-200 text-amber-800'
+    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+  const sev = (s: string) => s === 'high' ? 'bg-red-100 text-red-700' : s === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-[#f0f0ec] text-[#6b6b66]'
+
+  return (
+    <div className={`border rounded-xl px-4 py-3 mb-4 ${tone}`}>
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-[13px] font-semibold">Прогон доступов · {new Date(run.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</span>
+        <span className="text-[12px]">{run.high} важных · {run.medium} средних · {run.low} мелких</span>
+        {run.findings.length > 0 && (
+          <button onClick={() => setOpen(v => !v)} className="text-[12px] font-medium underline underline-offset-2 ml-auto">
+            {open ? 'свернуть' : 'показать находки'}
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="mt-3 space-y-1.5">
+          {run.findings.map((f, i) => (
+            <div key={i} className="bg-white/70 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] font-semibold px-1.5 py-px rounded-full ${sev(f.severity)}`}>
+                  {f.severity === 'high' ? 'важно' : f.severity === 'medium' ? 'среднее' : 'мелочь'}
+                </span>
+                <span className="text-[12px] font-medium text-[#111110]">{f.title}</span>
+              </div>
+              <p className="text-[11px] text-[#6b6b66] mt-0.5">{f.detail}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
