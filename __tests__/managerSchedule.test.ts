@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkDay, checkPeriod, type ManagerSchedule } from '@/lib/managerSchedule'
+import { checkDay, checkPeriod, saturdayDuty, type ManagerSchedule } from '@/lib/managerSchedule'
 import { mskDayStart, type DayActivity } from '@/lib/amoActivity'
 
 const day = (d: string, first: string | null, last: string | null): DayActivity => {
@@ -53,5 +53,22 @@ describe('график', () => {
       day('2026-09-12', null, null),
     ], alina, later)
     expect(p).toEqual({ expectedDays: 3, absentDays: ['2026-09-11'], lateDays: 2, earlyDays: 2 })
+  })
+})
+
+describe('субботнее дежурство', () => {
+  const yana = { userId: 1593673, name: 'Яна', days: [day('2026-09-19', '10:25', '17:29'), day('2026-09-12', null, null), day('2026-09-18', '10:12', '18:54')] }
+  const owner = { userId: 8352283, name: 'Владислав', days: [day('2026-09-12', '12:00', '12:05')] }
+  it('дежурный — менеджер с графиком, работавший в субботу; владелец дежурным не считается', () => {
+    const r = saturdayDuty(['2026-09-12', '2026-09-18', '2026-09-19'], [yana, owner], new Set([1593673]))
+    expect(r.map(x => x.day)).toEqual(['2026-09-12', '2026-09-19'])
+    expect(r[0].onDuty).toEqual([])
+    expect(r[1].onDuty[0]).toMatchObject({ name: 'Яна', actions: 10 })
+  })
+  it('суббота без единого человека в отчёте всё равно видна', () => {
+    expect(saturdayDuty(['2026-09-12'], [], new Set([1]))).toEqual([{ day: '2026-09-12', onDuty: [] }])
+  })
+  it('суббота по графику пн–пт — не рабочий день и не пропуск', () => {
+    expect(checkDay(day('2026-09-12', null, null), alina, later)).toMatchObject({ expected: false, absent: false })
   })
 })

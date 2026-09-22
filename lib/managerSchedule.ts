@@ -28,7 +28,8 @@ export type PeriodCheck = {
   earlyDays: number
 }
 
-// Опоздание на пару минут — не опоздание: первое действие не совпадает с приходом.
+// Первое действие в amo — не приход на работу: прочитать чаты и подумать можно без следа.
+// Поэтому это «начал в amo позже нормы», а не «опоздал», и допуск 15 минут.
 export const GRACE_MIN = 15
 
 const toMin = (t: string | null) => {
@@ -76,3 +77,24 @@ export function checkPeriod(days: DayActivity[], s: ManagerSchedule | undefined,
 }
 
 export const fmtHm = (t: string | null) => (t ? t.slice(0, 5) : '')
+
+// Суббота по графику — выходной у всех, работает дежурный (со слов владельца 22.09.2026).
+// Дежурный — тот из менеджеров с графиком, кто в субботу что-то делал в amo.
+export type SaturdayDuty = { day: string; onDuty: { userId: number; name: string; firstAt: number; lastAt: number; actions: number }[] }
+
+// Субботы берём из дней периода, а не из людей: в субботу без дежурного людей в отчёте нет вовсе.
+export function saturdayDuty(
+  periodDays: string[],
+  managers: { userId: number; name: string; days: DayActivity[] }[],
+  scheduled: Set<number>,
+): SaturdayDuty[] {
+  return periodDays.filter(d => isoWeekday(d) === 6).map(day => ({
+    day,
+    onDuty: managers
+      .filter(m => scheduled.has(m.userId))
+      .map(m => ({ m, d: m.days.find(x => x.day === day) }))
+      .filter(x => x.d && x.d.firstAt !== null)
+      .map(({ m, d }) => ({ userId: m.userId, name: m.name, firstAt: d!.firstAt!, lastAt: d!.lastAt!, actions: d!.actions }))
+      .sort((a, b) => b.actions - a.actions),
+  }))
+}

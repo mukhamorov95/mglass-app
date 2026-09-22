@@ -5,7 +5,7 @@ import {
   COUNT_KEYS, emptyDay, fmtMinuteOfDay, fmtTime, median, mskDay,
   type AmoActivityReport, type DayActivity, type ManagerActivity,
 } from '@/lib/amoActivity'
-import { checkDay, checkPeriod, fmtHm, type ManagerSchedule } from '@/lib/managerSchedule'
+import { checkDay, checkPeriod, fmtHm, saturdayDuty, type ManagerSchedule } from '@/lib/managerSchedule'
 import { sameName, type WazzupAuthors } from '@/lib/wazzupOutgoing'
 import { Card, Num, fmtWait, isWeekend, nowTs, shortDay, weekday } from './ui'
 import ResultsBlock from './ResultsBlock'
@@ -57,10 +57,17 @@ function HourStrip({ d, off }: { d: DayActivity; off: boolean }) {
 function DayNorm({ d, s }: { d: DayActivity; s?: ManagerSchedule }) {
   const c = checkDay(d, s, nowTs())
   if (c.notStarted) return <span className="text-[#9a9a95]">ещё не работал(а)</span>
-  if (!c.expected) return <span className="text-[#9a9a95]">{s ? 'выходной' : '—'}</span>
-  if (c.absent) return <span className="text-red-600">пропуск</span>
-  const parts = [c.lateMin !== null && `опоздание ${fmtWait(c.lateMin)}`, c.earlyMin !== null && `ушёл(ла) раньше на ${fmtWait(c.earlyMin)}`].filter(Boolean)
-  return parts.length ? <span className="text-amber-700">{parts.join(', ')}</span> : <span className="text-green-700">по графику</span>
+  if (!c.expected) {
+    if (s && d.firstAt !== null && new Date(`${d.day}T12:00:00Z`).getUTCDay() === 6) return <span className="text-[#111110]">дежурство</span>
+    return <span className="text-[#9a9a95]">{s ? 'выходной' : '—'}</span>
+  }
+  if (c.absent) return <span className="text-red-600">нет в amo весь день</span>
+  // первое действие в amo — не приход: подписываем тем, что измерено
+  const parts = [
+    c.lateMin !== null && `начал(а) в amo на ${fmtWait(c.lateMin)} позже`,
+    c.earlyMin !== null && `закончил(а) на ${fmtWait(c.earlyMin)} раньше`,
+  ].filter(Boolean)
+  return parts.length ? <span className="text-amber-700">{parts.join(', ')}</span> : <span className="text-green-700">в рамках графика</span>
 }
 
 function PeriodNorm({ m, s }: { m: ManagerActivity; s?: ManagerSchedule }) {
@@ -70,8 +77,8 @@ function PeriodNorm({ m, s }: { m: ManagerActivity; s?: ManagerSchedule }) {
   const bad = p.absentDays.length + p.lateDays + p.earlyDays
   return (
     <span className={bad ? 'text-amber-700' : 'text-green-700'} title={p.absentDays.length ? `Пропуски: ${p.absentDays.map(shortDay).join(', ')}` : undefined}>
-      {bad ? `пропуск ${p.absentDays.length} · опозд. ${p.lateDays} · раньше ${p.earlyDays}` : 'по графику'}
-      <span className="text-[#9a9a95]"> из {p.expectedDays}</span>
+      {bad ? `поздний старт ${p.lateDays} · ранний финиш ${p.earlyDays} · пустых ${p.absentDays.length}` : 'в рамках графика'}
+      <span className="text-[#9a9a95]"> из {p.expectedDays} дн.</span>
     </span>
   )
 }
@@ -323,6 +330,29 @@ export default function AmoActivityPage() {
               </table>
             </div>
 
+            {schedules.length > 0 && (() => {
+              const sats = saturdayDuty(data.days, managers, new Set(schedules.map(x => x.amo_user_id)))
+              if (sats.length === 0) return null
+              return (
+                <Card title="Суббота — дежурный" hint="По графику суббота — выходной, работает дежурный. Дежурный — менеджер, который в субботу что-то делал в amo.">
+                  <ul className="text-[13px] space-y-1">
+                    {sats.map(x => (
+                      <li key={x.day}>
+                        <span className="text-[#9a9a95]">{shortDay(x.day)} сб — </span>
+                        {x.onDuty.length === 0
+                          ? <span className="text-red-600 font-medium">дежурного не было: ни одного действия в amo</span>
+                          : x.onDuty.map((d, i) => (
+                            <span key={d.userId} className="text-[#111110]">
+                              {i > 0 && ', '}{d.name} <span className="text-[#9a9a95]">{fmtTime(d.firstAt)}–{fmtTime(d.lastAt)} · {d.actions} действ.</span>
+                            </span>
+                          ))}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )
+            })()}
+
             <ResultsBlock />
 
             <PbxBlock from={r.from} to={r.to} names={names} />
@@ -370,7 +400,8 @@ export default function AmoActivityPage() {
               <ul className="mt-2 space-y-1.5 list-disc pl-5">
                 <li><b>Действие</b> — всё, что человек сделал в amo под своим именем: сообщение, звонок, задача, заметка, смена этапа, правка полей. Не считаются: сообщения клиентов, пропущенные звонки и связки «сделка ↔ контакт» — их ставит интеграция заявок, в том числе ночью.</li>
                 <li><b>Начало и конец</b> — первое и последнее действие за день. Для периода — медиана по дням, в которые были действия.</li>
-                <li><b>По графику</b> — сравнение с графиком ниже: опоздание и ранний уход — больше чем на 15 минут; пропуск — рабочий по графику день без единого действия. До даты выхода дни не в вину. Нет графика — нет и нарушений.</li>
+                <li><b>По графику</b> — сравнение с графиком ниже (менеджеры: 9:00–18:00, пн–пт; в субботу — дежурный). «Поздний старт» — первое действие в amo позже начала смены больше чем на 15 минут; это не время прихода: читать чаты можно без следа в amo. «Ранний финиш» — последнее действие раньше конца смены больше чем на 15 минут. «Пустой день» — рабочий по графику день без единого действия. До даты выхода дни не в вину. Нет графика — нет и оценки.</li>
+                <li><b>Суббота</b> — выходной по графику; кто работал — отмечен «дежурство». Суббота, в которую никто из менеджеров ничего не сделал в amo, — «дежурного не было».</li>
                 <li><b>Сообщения «+N»</b> — отправлены без автора: с телефона или из приложения Wazzup, мимо интерфейса amo. amo не знает, кто их отправил, поэтому они засчитаны ответственному по сделке отдельно и рабочее окно не двигают. Кто писал на самом деле — блок «Кто писал из Wazzup».{data.noAuthorUnassigned > 0 && ` Не удалось привязать к сделке: ${data.noAuthorUnassigned}.`}</li>
                 <li><b>Ответ клиенту</b> — от первого сообщения клиента до первого нашего ответа в той же беседе, от кого бы он ни пришёл. Берутся только сообщения, пришедшие с 9 до 19.</li>
                 <li><b>Звонки</b> в таблице — по заметкам amo (onlinePBX): «дозвонился» и «принято» — разговор состоялся. Звонки мимо карточек и пропущенные на общей линии — в блоке «Телефония».</li>
