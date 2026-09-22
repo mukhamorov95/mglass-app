@@ -50,8 +50,9 @@ describe('прогон доступов ловит то, что нашлось �
   it('три права на одну таблицу — одна строка, а не три', () => {
     const f = auditAccess({
       ...empty,
-      policies: [{ table: 'task_queue', policy: 'read', cmd: 'r', roles: ['PUBLIC'], using: '(NOT is_partner())' }],
-      grants: ['INSERT', 'UPDATE', 'DELETE'].map(privilege => ({ table: 'task_queue', grantee: 'anon', privilege })),
+      // политика на ВСЕ действия без проверки сессии — вот это открытая запись
+      policies: [{ table: 'materials', policy: 'anon_all', cmd: '*', roles: ['PUBLIC'], using: '(NOT is_partner())' }],
+      grants: ['INSERT', 'UPDATE', 'DELETE'].map(privilege => ({ table: 'materials', grantee: 'anon', privilege })),
     })
     const writes = f.filter(x => x.code === 'anon_write_open')
     expect(writes).toHaveLength(1)
@@ -157,5 +158,43 @@ describe('отчёт владельцу', () => {
   it('со вторым прогоном видно, что нового', () => {
     expect(formatReport(f, f)).toContain('Новых с прошлого раза нет')
     expect(formatReport(f, [])).toContain('Новых с прошлого раза: 1')
+  })
+})
+
+// Ошибки первого живого прогона — теперь тесты.
+describe('чего прогон НЕ должен говорить', () => {
+  it('публичное чтение не делает таблицу открытой на запись', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [{ table: 'site_work_photos', policy: 'read', cmd: 'r', roles: ['anon', 'authenticated'], using: '(approved = true)' }],
+      grants: ['INSERT', 'UPDATE', 'DELETE'].map(privilege => ({ table: 'site_work_photos', grantee: 'anon', privilege })),
+    })
+    expect(f.filter(x => x.code === 'anon_write_open')).toHaveLength(0)
+    expect(f.map(x => x.code)).toContain('public_read_policy')
+  })
+
+  it('у политики INSERT условие в check — это проверка сессии', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [{
+        table: 'user_activity_days', policy: 'activity_ins_own', cmd: 'a', roles: ['PUBLIC'],
+        using: null, check: '((SELECT auth.uid()) = user_id)',
+      }],
+      grants: [{ table: 'user_activity_days', grantee: 'anon', privilege: 'INSERT' }],
+    })
+    expect(f.filter(x => x.severity === 'high')).toHaveLength(0)
+  })
+
+  it('владельческая политика на запись не открывает запись анониму', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [
+        { table: 'task_queue', policy: 'owner_write', cmd: '*', roles: ['PUBLIC'], using: 'is_owner()', check: 'is_owner()' },
+        { table: 'task_queue', policy: 'read', cmd: 'r', roles: ['PUBLIC'], using: '(NOT is_partner())' },
+      ],
+      grants: [{ table: 'task_queue', grantee: 'anon', privilege: 'UPDATE' }],
+    })
+    expect(f.filter(x => x.code === 'anon_write_open')).toHaveLength(0)
+    expect(f.filter(x => x.code === 'public_read_policy')).toHaveLength(1)
   })
 })
