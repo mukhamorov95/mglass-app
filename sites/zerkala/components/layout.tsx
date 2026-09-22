@@ -108,6 +108,7 @@ export function Footer() {
           <a href={SITE.phone.href} className="mt-4 block text-lg font-semibold">
             {SITE.phone.display}
           </a>
+          <p className="mt-2 text-sm text-muted">{SITE.address.full}</p>
         </div>
         {clusters.slice(0, 3).map((c) => (
           <div key={c.key}>

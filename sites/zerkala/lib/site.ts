@@ -64,6 +64,17 @@ export const FACTS = {
     source: "слова владельца 22.09.2026",
     confirmed: true,
   },
+  address: {
+    value: {
+      street: "1-й Силикатный пер., 12Б/1",
+      locality: "Мытищи",
+      region: "Московская область",
+      full: "Московская обл., г. Мытищи, 1-й Силикатный пер., 12Б/1",
+      mapsUrl: "https://yandex.ru/maps/org/mglass_ru/160929264216/",
+    },
+    source: "карточка «MGlass.ru» на Яндекс Картах (org 160929264216) + слова владельца 22.09.2026: «адрес в мытищах да»",
+    confirmed: true,
+  },
   shipping: {
     value: "Доставка транспортной компанией в любой регион",
     source: "слова владельца 22.09.2026: «либо доставка транспортной компанией в любой регион»",
@@ -88,6 +99,7 @@ export const SITE = {
   measure: FACTS.measure.value,
   serviceArea: FACTS.serviceArea.value,
   shipping: FACTS.shipping.value,
+  address: FACTS.address.value,
   // Приём заявок — публичный маршрут mglass-app (site_leads + Telegram владельцу).
   // Локально по умолчанию выключен: иначе проверка формы будит владельца.
   leadEndpoint: process.env.NEXT_PUBLIC_LEAD_ENDPOINT || (process.env.VERCEL ? "https://mglass-app.vercel.app/api/configurator/lead" : ""),
@@ -105,7 +117,7 @@ export const SITE = {
   yandexVerification: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION || "",
   // Дата последней правки текстов — идёт в lastmod карты сайта. Меняется руками
   // вместе с текстами: «сегодня» на каждой сборке Яндекс быстро перестаёт читать.
-  contentUpdated: "2026-09-21",
+  contentUpdated: "2026-09-22",
 };
 
 export function unconfirmedFacts(): string[] {
