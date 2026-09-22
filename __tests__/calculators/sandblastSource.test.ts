@@ -47,3 +47,29 @@ describe('пескоструй в расчёте изделия', () => {
     expect(res.costLines.some(l => l.name === 'Сборка зеркала с пескоструем')).toBe(true)
   })
 })
+
+describe('ставка пескоструя из справочника услуг', () => {
+  it('явная ставка ₽/м² побеждает поиск среди материалов', () => {
+    const res = calculateMirrorUnified({
+      ...base,
+      sandblastRate: { name: 'Пескоструй по трафарету (рисунок/частичное)', costPerM2: 1674 },
+    }, [base.mirrorMaterial], [])!
+    const sb = sandblastLine(res.costLines)
+    expect(sb!.name).toBe('Пескоструй по трафарету (рисунок/частичное)')
+    expect(sb!.total).toBe(1674)   // 1 м²
+  })
+
+  it('сплошное матирование дешевле трафарета — считается своя ставка', () => {
+    const full = calculateMirrorUnified({
+      ...base, sandblastRate: { name: 'Пескоструй — полное матирование (весь лист)', costPerM2: 300 },
+    }, [base.mirrorMaterial], [])!
+    expect(sandblastLine(full.costLines)!.total).toBe(300)
+  })
+
+  it('ставка нулевая — строку не выдумываем', () => {
+    const res = calculateMirrorUnified({
+      ...base, sandblastRate: { name: 'Пескоструй', costPerM2: 0 },
+    }, [base.mirrorMaterial], [])!
+    expect(sandblastLine(res.costLines)).toBeNull()
+  })
+})

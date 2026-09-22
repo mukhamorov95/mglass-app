@@ -228,6 +228,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [fmSides, setFmSides] = useState<LightSides>({ ...ALL_SIDES })
   // Фацет и пескоструй — разные обработки, каждая со своей себестоимостью.
   const [fmSandblast, setFmSandblast] = useState(false)
+  // Пескоструй бывает двух видов и стоит по-разному: по трафарету (рисунок,
+  // полосы под свет) и сплошное матирование. Цены — в справочнике услуг B2B.
+  const [fmSandblastMode, setFmSandblastMode] = useState<'stencil' | 'full'>('stencil')
   const [fmFacetMm, setFmFacetMm]     = useState<number | null>(null)
   const [fmLedId, setFmLedId]     = useState<number | null>(null)
   const [fmFrameId, setFmFrameId] = useState<number | null>(null)
@@ -720,7 +723,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         ledId: fmLedId, frameId: fmFrameId, curved: fmCurved,
         underlayCost: Number(fmUnderlay) || 0, metalFrame: fmFrame,
         lightSides: fmSides,
-        sandblast: fmSandblast,
+        sandblast: fmSandblast, sandblastMode: fmSandblast ? fmSandblastMode : 'none',
         facetTypeMm: fmFacetMm,
         facetCostPerM: (() => {
           const f = facetPrices.find(x => x.type_mm === fmFacetMm && x.active !== false)
@@ -1714,10 +1717,19 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       <p className="text-[11px] font-medium text-[#6e6e73]">Обработка</p>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <label className="flex items-center gap-2 text-[12px] text-[#6b6b66] cursor-pointer">
-                          <input type="checkbox" checked={fmSandblast} onChange={e => setFmSandblast(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                          Пескоструй
-                        </label>
+                        <span className="text-[12px] text-[#6b6b66]">Пескоструй:</span>
+                        <select
+                          value={fmSandblast ? fmSandblastMode : 'none'}
+                          onChange={e => {
+                            const v = e.target.value
+                            setFmSandblast(v !== 'none')
+                            if (v === 'stencil' || v === 'full') setFmSandblastMode(v)
+                          }}
+                          className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110]">
+                          <option value="none">нет</option>
+                          <option value="stencil">по трафарету (рисунок)</option>
+                          <option value="full">сплошное матирование</option>
+                        </select>
                         <span className="w-px h-4 bg-[#e4e4e0]" />
                         <span className="text-[12px] text-[#6b6b66]">Фацет:</span>
                         <select value={fmFacetMm ?? ''} onChange={e => setFmFacetMm(e.target.value ? Number(e.target.value) : null)}
@@ -1732,9 +1744,13 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       {(() => {
                         const warn: string[] = []
                         if (fmSandblast) {
-                          const sb = factoryData?.retailMaterials.find(m => m.name.toLowerCase().includes('пескоструй'))
-                          if (!sb) warn.push('Пескоструй: позиции нет в справочнике материалов')
-                          else if (!(Number(sb.cost_price) > 0)) warn.push('Пескоструй: себестоимость не заведена')
+                          const rate = factoryData?.sandblastRates.find(r => r.mode === fmSandblastMode)
+                            ?? factoryData?.retailMaterials.find(m => m.name.toLowerCase().includes('пескоструй'))
+                          if (!rate) {
+                            warn.push(fmSandblastMode === 'stencil'
+                              ? 'Пескоструй по трафарету: себестоимость не заведена в услугах B2B'
+                              : 'Пескоструй, сплошное матирование: себестоимость не заведена в услугах B2B')
+                          }
                         }
                         if (fmFacetMm != null) {
                           const f = facetPrices.find(x => x.type_mm === fmFacetMm && x.active !== false)
@@ -1751,9 +1767,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                             <p className="text-[11px] text-red-700 font-medium mt-1">Маржа по этой обработке считается от нуля — заведи цену в справочнике до отправки клиенту.</p>
                             <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
                               {fmSandblast && (
-                                <a href="/admin/materials" target="_blank" rel="noreferrer"
+                                <a href="/admin/b2b-services" target="_blank" rel="noreferrer"
                                   className="text-[11px] font-semibold text-red-700 underline underline-offset-2 hover:text-red-900">
-                                  Справочник материалов → строка «Пескоструй», м², себестоимость ₽/м²
+                                  Услуги B2B → строка пескоструя, себестоимость ₽/м²
                                 </a>
                               )}
                               {fmFacetMm != null && (
