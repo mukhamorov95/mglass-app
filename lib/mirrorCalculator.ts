@@ -221,8 +221,12 @@ export function calculateMirror(
   // Sandblasting
   if (inputs.hasSandblast) {
     const sb = findMat(materials, 'Пескоструй')
+    // Запасные 1 200 ₽/м² — не цена из справочника, а число в коде. Цифру не
+    // трогаем (менять цену молча нельзя), но в названии строки говорим, откуда
+    // она: иначе в разбивке она неотличима от заведённой себестоимости.
+    // B2B-расчёт (calculateMirrorUnified) такой строки вообще не ставит.
     const sbPrice = sb ? sb.cost_price : 1200
-    const sbName  = sb ? dn(sb) : 'Пескоструйный рисунок'
+    const sbName  = sb ? dn(sb) : 'Пескоструйный рисунок (цена по умолчанию — нет в справочнике)'
     lines.push({ name: sbName, qty: Number(area.toFixed(3)), unit: 'м²', price: sbPrice, total: Math.round(area * sbPrice) })
   }
 
