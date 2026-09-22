@@ -154,6 +154,7 @@ const ADMIN_VLADISLAV: NavItem[] = [
   { href: '/vladislav/calls',         label: 'Анализ звонков',       icon: '📞' },
   { href: '/ai-stats',                label: 'Статистика бота',      icon: '📊' },
   { href: '/vladislav/manager-stats', label: 'Аналитика менеджеров', icon: '👥' },
+  { href: '/commercial/activity',     label: 'Рабочий день (AMO)',   icon: '⏱️' },
   { href: '/amo-analysis',            label: 'Воронка AMO',          icon: '🔍' },
   { href: '/vladislav/tasks',         label: 'Задачи AI',            icon: '🗂️' },
   { href: '/admin/integrations',      label: 'Avito / AMO Monitor',  icon: '🔗' },
@@ -841,6 +842,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-indigo-600">Коммерческий</div>
         <div className="space-y-px">
           {navItem({ href: '/commercial', label: 'Аналитика менеджеров', icon: '📈' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/commercial/activity', label: 'Рабочий день (AMO)', icon: '⏱️' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/commercial/churn', label: 'Отток клиентов',  icon: '📉' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/sales',      label: 'Реестр продаж и оплат',         icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/ceo',        label: 'CEO Обзор',            icon: '👑' }, 'bg-indigo-50 text-indigo-700 font-medium')}
