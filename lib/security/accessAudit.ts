@@ -107,12 +107,18 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
   // в шум. Их считаем одной строкой.
   const openOrNoRls = (t: string) => openTables.has(t) || rlsOff.has(t)
   const anonWrites = (s.grants ?? []).filter(g => g.grantee === 'anon' && WRITE_PRIVILEGES.has(g.privilege) && !PUBLIC_BY_DESIGN.has(g.table))
+  // Одна строка на таблицу, а не на каждое право: INSERT/UPDATE/DELETE по одной
+  // таблице — это одна и та же дыра, и тремя строками она только топит остальное.
+  const byTable = new Map<string, string[]>()
   for (const g of anonWrites) {
     if (!openOrNoRls(g.table)) continue
+    byTable.set(g.table, [...(byTable.get(g.table) ?? []), g.privilege])
+  }
+  for (const [table, privs] of byTable) {
     out.push({
-      severity: 'high', code: 'anon_write_open', table: g.table,
-      title: `Аноним может писать в ${g.table}`,
-      detail: `Право ${g.privilege} у anon и при этом ворота открыты (политика без проверки сессии или выключенный RLS). Снять грант и закрыть политику.`,
+      severity: 'high', code: 'anon_write_open', table,
+      title: `Аноним может писать в ${table}`,
+      detail: `Права ${privs.sort().join(', ')} у anon, и ворота открыты (политика без проверки сессии или выключенный RLS). Снять грант и закрыть политику.`,
     })
   }
   const dormant = new Set(anonWrites.filter(g => !openOrNoRls(g.table)).map(g => g.table))

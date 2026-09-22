@@ -47,6 +47,17 @@ describe('прогон доступов ловит то, что нашлось �
     expect(f.map(x => x.code)).toContain('anon_read_sensitive')
   })
 
+  it('три права на одну таблицу — одна строка, а не три', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [{ table: 'task_queue', policy: 'read', cmd: 'r', roles: ['PUBLIC'], using: '(NOT is_partner())' }],
+      grants: ['INSERT', 'UPDATE', 'DELETE'].map(privilege => ({ table: 'task_queue', grantee: 'anon', privilege })),
+    })
+    const writes = f.filter(x => x.code === 'anon_write_open')
+    expect(writes).toHaveLength(1)
+    expect(writes[0].detail).toContain('DELETE, INSERT, UPDATE')
+  })
+
   it('грант при закрытой политике — одна строка «спящих», а не сотня находок', () => {
     const f = auditAccess({
       ...empty,
