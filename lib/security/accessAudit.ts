@@ -12,7 +12,9 @@
 //   • RLS вообще выключен на таблице с деньгами или людьми;
 //   • пароль/секрет хранится колонкой.
 
-export type SnapshotPolicy = { table: string; policy: string; cmd: string; roles: string[]; using: string | null }
+// У политик INSERT условие живёт в check, а не в using: первый прогон из-за
+// этого объявил «запись без входа» там, где проверка была.
+export type SnapshotPolicy = { table: string; policy: string; cmd: string; roles: string[]; using: string | null; check?: string | null }
 export type SnapshotGrant = { table: string; grantee: string; privilege: string }
 export type SnapshotRls = { table: string; enabled: boolean; policies: number }
 export type SnapshotColumn = { table: string; column: string }
@@ -57,6 +59,16 @@ export function requiresSession(expr: string | null | undefined): boolean {
   return SESSION_BOUND.test(expr ?? '')
 }
 
+// Политика проверяет сессию, если это видно хотя бы в одном из двух условий:
+// USING (что видно) или WITH CHECK (что можно записать).
+export function policyChecksSession(p: SnapshotPolicy): boolean {
+  return requiresSession(p.using) || requiresSession(p.check)
+}
+
+// Читает — r и *; пишет — *, w (update), a (insert), d (delete).
+const READ_CMDS = new Set(['r', '*'])
+const WRITE_CMDS = new Set(['*', 'w', 'a', 'd'])
+
 export function auditAccess(s: AccessSnapshot): Finding[] {
   const out: Finding[] = []
 
@@ -70,11 +82,16 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
   }
 
   // 2. Политики, выданные PUBLIC/anon, условие которых не требует сессии.
-  const openTables = new Set<string>()
+  // Открытость на чтение и на запись считаем ОТДЕЛЬНО: публичная витрина с
+  // read-политикой не значит, что в таблицу можно писать (на этом прогон
+  // ошибся в первый раз и обвинил site_work_photos и task_queue в записи).
+  const openRead = new Set<string>()
+  const openWrite = new Set<string>()
   for (const p of s.policies ?? []) {
     if (PUBLIC_BY_DESIGN.has(p.table) || !isPublicRole(p.roles)) continue
-    if (requiresSession(p.using)) continue
-    openTables.add(p.table)
+    if (policyChecksSession(p)) continue
+    if (READ_CMDS.has(p.cmd)) openRead.add(p.table)
+    if (WRITE_CMDS.has(p.cmd)) openWrite.add(p.table)
     const writes = p.cmd !== 'r'
     const sensitive = SENSITIVE_TABLES.has(p.table)
     out.push({
@@ -105,13 +122,14 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
   // проверки сессии или выключенный RLS. Сами по себе гранты — вторая линия:
   // в базе их сотни (дефолт Supabase), и поимённый список превратил бы отчёт
   // в шум. Их считаем одной строкой.
-  const openOrNoRls = (t: string) => openTables.has(t) || rlsOff.has(t)
+  const writeOpen = (t: string) => openWrite.has(t) || rlsOff.has(t)
+  const readOpen  = (t: string) => openRead.has(t) || rlsOff.has(t)
   const anonWrites = (s.grants ?? []).filter(g => g.grantee === 'anon' && WRITE_PRIVILEGES.has(g.privilege) && !PUBLIC_BY_DESIGN.has(g.table))
   // Одна строка на таблицу, а не на каждое право: INSERT/UPDATE/DELETE по одной
   // таблице — это одна и та же дыра, и тремя строками она только топит остальное.
   const byTable = new Map<string, string[]>()
   for (const g of anonWrites) {
-    if (!openOrNoRls(g.table)) continue
+    if (!writeOpen(g.table)) continue
     byTable.set(g.table, [...(byTable.get(g.table) ?? []), g.privilege])
   }
   for (const [table, privs] of byTable) {
@@ -121,7 +139,7 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
       detail: `Права ${privs.sort().join(', ')} у anon, и ворота открыты (политика без проверки сессии или выключенный RLS). Снять грант и закрыть политику.`,
     })
   }
-  const dormant = new Set(anonWrites.filter(g => !openOrNoRls(g.table)).map(g => g.table))
+  const dormant = new Set(anonWrites.filter(g => !writeOpen(g.table)).map(g => g.table))
   if (dormant.size > 0) {
     out.push({
       severity: 'low', code: 'anon_write_grants_dormant', table: '—',
@@ -132,7 +150,7 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
 
   for (const g of s.grants ?? []) {
     if (g.grantee !== 'anon' || g.privilege !== 'SELECT') continue
-    if (!SENSITIVE_TABLES.has(g.table) || !openOrNoRls(g.table)) continue
+    if (!SENSITIVE_TABLES.has(g.table) || !readOpen(g.table)) continue
     out.push({
       severity: 'high', code: 'anon_read_sensitive', table: g.table,
       title: `Аноним может читать ${g.table}`,
