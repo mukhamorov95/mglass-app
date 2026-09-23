@@ -1,6 +1,7 @@
 import type { B2BMaterial, B2BService } from '../types'
 import { calcItem, calcTotals, type FacetPrice, type B2BOrderItem, type B2BOrderTotals } from '../b2bCalculator'
 import { surchargeServicesFor, type SurchargeRule } from '../surcharges'
+import type { B2BRates } from './rates'
 
 // ЕДИНАЯ точка расчёта B2B-позиции. Её зовут ОБА калькулятора:
 //   • менеджерский  app/calculator/b2b/page.tsx
@@ -38,6 +39,7 @@ export type QuoteItemInput = {
 export type QuoteRefData = {
   facetPrices: FacetPrice[]
   surchargeRules: SurchargeRule[]
+  rates: B2BRates        // справочник b2b_rates: оба калькулятора обязаны считать по одной таблице
 }
 
 export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit<B2BOrderItem, 'localId'> {
@@ -66,6 +68,7 @@ export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit
     input.triplexPrice ?? null,
     input.hasTriplex ? (input.triplexExtraGlasses ?? []) : [],
     input.applyMinPrice ?? true,
+    ref.rates,
   )
 
   // А12: материал с индивидуальной ценой клиента помечает позицию — скидка к такой

@@ -3,6 +3,7 @@ import { computeQuoteItem, computeQuoteTotals, type QuoteItemInput } from '@/lib
 import type { B2BOrderItem, FacetPrice } from '@/lib/b2bCalculator'
 import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial } from '@/lib/types'
+import { DEFAULT_B2B_RATES } from '@/lib/b2b/rates'
 
 // ФАЗЗ-ПАРИТЕТ (офлайн, без БД — гоняется в CI всегда). Доказывает объективно:
 //   1. computeQuoteItem — ЧИСТАЯ детерминированная функция входа: один и тот же
@@ -46,7 +47,7 @@ const SURCHARGES: SurchargeRule[] = [
   { id: 2, axis: 'length', min_mm: 2600, max_mm: null, surcharge_percent: 30, label: '>2600мм', shape_filter: null, active: true, sort_order: 2 },
   { id: 3, axis: 'shape', min_mm: 0, max_mm: null, surcharge_percent: 20, label: 'радиус', shape_filter: 'curved', active: true, sort_order: 3 },
 ]
-const REF = { facetPrices: FACETS, surchargeRules: SURCHARGES }
+const REF = { facetPrices: FACETS, surchargeRules: SURCHARGES, rates: DEFAULT_B2B_RATES }
 
 function randomSpec(rng: () => number): QuoteItemInput {
   const facetMm = [10, 15, 20][Math.floor(rng() * 3)]
@@ -83,7 +84,7 @@ describe('Фазз-паритет движка B2B-цены (офлайн)', () 
     const mat = makeMaterial(rng)
     const base = { material: mat, height: 1000, quantity: 1, applyMinPrice: false } as const
     const small = computeQuoteItem({ ...base, width: 1000 }, REF)          // без надбавки
-    const bigNoRule = computeQuoteItem({ ...base, width: 2500 }, { facetPrices: FACETS, surchargeRules: [] })
+    const bigNoRule = computeQuoteItem({ ...base, width: 2500 }, { facetPrices: FACETS, surchargeRules: [], rates: DEFAULT_B2B_RATES })
     const bigWithRule = computeQuoteItem({ ...base, width: 2500 }, REF)    // длинная сторона 2500 → +15%
     // При включённом правиле большая панель дороже такой же панели без правил.
     expect(bigWithRule.saleIncVat).toBeGreaterThan(bigNoRule.saleIncVat)

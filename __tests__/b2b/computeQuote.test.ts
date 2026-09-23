@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
 import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial } from '@/lib/types'
+import { DEFAULT_B2B_RATES } from '@/lib/b2b/rates'
 
 // Гарантия идентичности: кабинет клиента и менеджер считают через один модуль.
 // Ключевой регресс — авто-надбавка за габариты должна применяться в обоих
@@ -20,8 +21,8 @@ const RULES: SurchargeRule[] = [
 describe('computeQuoteItem — единый расчёт клиент/менеджер', () => {
   it('применяет надбавку за габариты к крупной детали', () => {
     const dims = { material: MAT, width: 600, height: 2700, quantity: 1, applyMinPrice: false }
-    const withRule = computeQuoteItem(dims, { facetPrices: [], surchargeRules: RULES })
-    const noRule   = computeQuoteItem(dims, { facetPrices: [], surchargeRules: [] })
+    const withRule = computeQuoteItem(dims, { facetPrices: [], surchargeRules: RULES, rates: DEFAULT_B2B_RATES })
+    const noRule   = computeQuoteItem(dims, { facetPrices: [], surchargeRules: [], rates: DEFAULT_B2B_RATES })
 
     expect(withRule.saleIncVat).toBeGreaterThan(noRule.saleIncVat)   // надбавка реально применилась
     expect(withRule.saleIncVat / noRule.saleIncVat).toBeCloseTo(1.2, 1) // ≈ +20%
@@ -30,8 +31,8 @@ describe('computeQuoteItem — единый расчёт клиент/менед
 
   it('для мелкой детали надбавок нет — цены совпадают', () => {
     const dims = { material: MAT, width: 500, height: 800, quantity: 1, applyMinPrice: false }
-    const withRules = computeQuoteItem(dims, { facetPrices: [], surchargeRules: RULES })
-    const noRules   = computeQuoteItem(dims, { facetPrices: [], surchargeRules: [] })
+    const withRules = computeQuoteItem(dims, { facetPrices: [], surchargeRules: RULES, rates: DEFAULT_B2B_RATES })
+    const noRules   = computeQuoteItem(dims, { facetPrices: [], surchargeRules: [], rates: DEFAULT_B2B_RATES })
     expect(withRules.saleIncVat).toBe(noRules.saleIncVat)
   })
 })
