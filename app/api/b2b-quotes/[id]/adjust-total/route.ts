@@ -4,8 +4,9 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import type { B2BOrderItem } from '@/lib/b2bCalculator'
 import {
   distributeTargetTotal, clearAutoOverride, orderMarginPercent,
-  MIN_MARGIN_PERCENT, type OverrideMeta, type PriceApproval,
+  type OverrideMeta, type PriceApproval,
 } from '@/lib/b2b/priceOverride'
+import { loadB2BRates } from '@/lib/b2b/rates'
 
 // Ручная корректировка итоговой суммы ПРОСЧЁТА (до запуска в работу).
 // POST { newTotal } — раскидать сумму по позициям и зафиксировать скидку.
@@ -113,7 +114,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // А11: тонкая маржа не блокирует цену, но ставит её на согласование владельцу.
   // Пока не согласовано — просчёт виден владельцу в отдельной вкладке, у менеджера
   // горит бейдж. Ушли выше порога — заявка снимается сама.
-  const approval: PriceApproval | undefined = marginPercent < MIN_MARGIN_PERCENT
+  // Порог — справочник b2b_rates (тот же, что красит маржу на экранах).
+  const { rates } = await loadB2BRates(sb)
+  const approval: PriceApproval | undefined = marginPercent < rates.marginMin
     ? {
         needed: true, margin: marginPercent, total: res.appliedTotal,
         by: userId, by_name: actorName, at: override.at, resolution: null,

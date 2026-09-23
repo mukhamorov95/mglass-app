@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { B2B_RATE_SPECS } from '@/lib/b2b/rates'
 
 // Внутренние ставки B2B-калькулятора (закалка, кромка, доставка на закалку, упаковка,
-// минимальные цены позиции). Читает lib/b2b/rates.ts — у менеджера в /calculator/b2b,
+// минимальные цены позиции, пороги маржи). Читает lib/b2b/rates.ts — у менеджера в /calculator/b2b,
 // в кабинете партнёра, в «Расчёте» душевых и зеркал. Маршрут:
 // docs/pricing/RATES_DIRECTORY_ROUTE.md.
 
@@ -16,6 +16,7 @@ const GROUPS: { title: string; note: string; match: (key: string) => boolean }[]
   { title: 'Закалка', note: 'Себестоимость: подрядчик, ₽ за м² детали по толщине стекла.', match: k => k.startsWith('tempering_') },
   { title: 'Обработка и логистика', note: 'Себестоимость каждой позиции.', match: k => ['edge_per_m', 'transport_per_piece', 'packaging_per_m2'].includes(k) },
   { title: 'Минимальная цена позиции', note: 'Цена клиента, а не себестоимость: позиция дешевле этой суммы за штуку поднимается до неё.', match: k => k.startsWith('min_') },
+  { title: 'Пороги маржи', note: 'Маржа без НДС. Ниже нижнего порога — красный, и правка итога уходит вам на согласование; до цели — жёлтый; от цели — зелёный.', match: k => k.startsWith('margin_') },
 ]
 
 const fmtWhen = (iso: string | null) =>
@@ -55,6 +56,13 @@ export default function B2BRatesPage() {
       setStatus(s => ({ ...s, [key]: { kind: 'error', text: 'Нужно число не меньше нуля' } }))
       return
     }
+    const other = (k: string) => rows.find(r => r.key === k)?.value
+    const target = key === 'margin_target' ? value : other('margin_target')
+    const min = key === 'margin_min' ? value : other('margin_min')
+    if (key.startsWith('margin_') && target != null && min != null && min > target) {
+      setStatus(s => ({ ...s, [key]: { kind: 'error', text: `Нижний порог (${min}%) выше цели (${target}%) — жёлтой зоны не останется` } }))
+      return
+    }
     setSavingKey(key)
     // .select() обязателен: без права на правку RLS не даёт ошибку, а молча обновляет 0 строк.
     const { data, error } = await sb.from('b2b_rates').update({ value, updated_by: email }).eq('key', key)
@@ -88,9 +96,9 @@ export default function B2BRatesPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Стекло — ставки и минимальные цены</h1>
+        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Стекло — ставки, минимальные цены, пороги маржи</h1>
         <p className="text-[12px] text-[#9a9a95] mt-0.5 max-w-[720px]">
-          По ним B2B-калькулятор считает себестоимость и минимальную цену позиции — у менеджера, в кабинете
+          По ним B2B-калькулятор считает себестоимость и минимальную цену позиции и красит маржу — у менеджера, в кабинете
           партнёра и в «Расчёте» душевых и зеркал. Новое значение действует в следующем просчёте; уже
           сохранённые просчёты свои суммы не меняют.
         </p>
@@ -130,7 +138,7 @@ export default function B2BRatesPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] text-[#111110]">{r.label}</p>
                           <p className="text-[11px] text-[#9a9a95]">
-                            {r.unit}{r.updated_at ? ` · правил ${r.updated_by ?? '—'}, ${fmtWhen(r.updated_at)}` : ''}
+                            {r.unit}{r.updated_at ? ` · изменено ${fmtWhen(r.updated_at)}${r.updated_by ? ` — ${r.updated_by}` : ''}` : ''}
                           </p>
                         </div>
                         <input inputMode="decimal" value={shown}
