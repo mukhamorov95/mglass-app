@@ -6,6 +6,7 @@ import type { MVariant } from '@/components/configurator/scene/assembly'
 import { resolveTierData } from '@/lib/configurator/priceVersion'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { calcItem, effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { loadB2BRates } from '@/lib/b2b/rates'
 import { MGLASS_CLIENT_IDS } from '@/lib/b2bScope'
 import type { B2BMaterial } from '@/lib/types'
 
@@ -35,10 +36,11 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
   const model = getModel(body.model)
 
   // ── Стекло: цена по B2B-калькулятору, пер-панельно ──────────────────────────
-  const [{ data: mats }, { data: matrix }, { data: mgClient }] = await Promise.all([
+  const [{ data: mats }, { data: matrix }, { data: mgClient }, loadedRates] = await Promise.all([
     svc.from('b2b_materials').select('*').eq('active', true),
     svc.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
     svc.from('b2b_clients').select('id,discount_percent').in('id', [...MGLASS_CLIENT_IDS]).maybeSingle(),
+    loadB2BRates(svc),
   ])
   const priced = prepPricedMaterials((mats ?? []) as B2BMaterial[], (matrix ?? []) as Array<Record<string, unknown>>)
   const glassName = body.glassType?.trim() || DEFAULT_GLASS
@@ -71,7 +73,7 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
       const h = Math.round(g.size[1] * 1000)
       if (w <= 0 || h <= 0) return
       // Душевое стекло — всегда закалённое (hasTempering=true), иначе занижение.
-      const item = calcItem(glassMat, w, h, 1, glassMat.waste_percent, true)
+      const item = calcItem(glassMat, w, h, 1, glassMat.waste_percent, true, [], false, null, [], false, 2, null, [], true, loadedRates.rates)
       const total = effectiveItemTotal(item as B2BOrderItem, mgDiscount)
       glassCost += total
       glassLines.push({
@@ -87,6 +89,7 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
   } else {
     glassMissing.push('стекло: материал не найден в справочнике')
   }
+  for (const label of loadedRates.missing) glassMissing.push(`ставка «${label}»: нет в справочнике, взята заводская`)
 
   // ── Фурнитура + количества + цена — движок конфигуратора ─────────────────────
   const { data: { library, rates, kits }, finance } = await resolveTierData('budget')

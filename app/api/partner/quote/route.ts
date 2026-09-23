@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { computeQuoteItem, computeQuoteTotals } from '@/lib/b2b/computeQuote'
+import { loadB2BRates } from '@/lib/b2b/rates'
 import type { FacetPrice, B2BOrderItem } from '@/lib/b2bCalculator'
 import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial, B2BService } from '@/lib/types'
@@ -52,13 +53,16 @@ export async function POST(req: NextRequest) {
   if (specs.length > 200) return NextResponse.json({ error: 'Слишком много позиций' }, { status: 400 })
 
   // Все справочники — те же таблицы и активные строки, что и у менеджера.
-  const [{ data: mats }, { data: matrix }, { data: facets }, { data: surcharges }, { data: services }] = await Promise.all([
+  const [{ data: mats }, { data: matrix }, { data: facets }, { data: surcharges }, { data: services }, loadedRates] = await Promise.all([
     svc.from('b2b_materials').select('*').eq('active', true),
     svc.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
     svc.from('facet_prices').select('*').eq('active', true),
     svc.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
     svc.from('b2b_services').select('*').eq('active', true),
+    // Ставки (мин. цена позиции меняет цену партнёра) — та же таблица, что у менеджера.
+    loadB2BRates(svc),
   ])
+  if (loadedRates.missing.length) console.error('[partner/quote] b2b_rates: нет ставок —', loadedRates.missing.join(', '))
   // А12: индивидуальный прайс клиента поверх общего — кабинет партнёра обязан
   // считать по тем же ценам, что менеджер, иначе цифры разойдутся.
   const clientPrices = await loadClientPrices(svc, client.id)
@@ -104,7 +108,7 @@ export async function POST(req: NextRequest) {
         comment: typeof s.comment === 'string' ? s.comment.slice(0, 120) : undefined,
         // resolvedServices: [] — доп-услуги в кабинете пилота не выбираются; надбавки за габариты применяются автоматически
       },
-      { facetPrices, surchargeRules },
+      { facetPrices, surchargeRules, rates: loadedRates.rates },
     )
     items.push({ ...calc, localId: `p${items.length}` })
   }

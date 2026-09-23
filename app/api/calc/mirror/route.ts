@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { calcItem, effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { loadB2BRates } from '@/lib/b2b/rates'
 import { MGLASS_CLIENT_IDS } from '@/lib/b2bScope'
 import { calcMirrorQuote, normalizeLightMode, type MirrorComponent, type MirrorQuoteInput } from '@/lib/mirror/mirrorQuote'
 import { mirrorFinanceProductType } from '@/lib/mirror/mirrorFinance'
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
   const qty = Math.max(1, Number(b.quantity) || 1)
   const svc = createServiceClient()
 
-  const [{ data: mats }, { data: matrix }, { data: mgClient }, { data: comps }, { data: rates }, { data: fins }] = await Promise.all([
+  const [{ data: mats }, { data: matrix }, { data: mgClient }, { data: comps }, { data: rates }, { data: fins }, glassRates] = await Promise.all([
     svc.from('b2b_materials').select('*').eq('active', true),
     svc.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
     svc.from('b2b_clients').select('id,discount_percent').in('id', [...MGLASS_CLIENT_IDS]).maybeSingle(),
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
       .eq('active', true),
     svc.from('mirror_frame_rates').select('key, value'),
     svc.from('financial_settings').select('tier, product_type, tax_percent, default_margin, min_margin'),
+    loadB2BRates(svc),
   ])
 
   // Зеркало: ищем строго среди зеркал — под одним именем в справочнике живут
@@ -58,11 +60,12 @@ export async function POST(req: NextRequest) {
   const glassMissing: { role: string; label: string; reason: 'нет цены' }[] = []
   if (mat) {
     const mgDiscount = Number(mgClient?.discount_percent) || 0
-    const item = calcItem(mat, Math.round(b.width), Math.round(b.height), qty, mat.waste_percent, false)
+    const item = calcItem(mat, Math.round(b.width), Math.round(b.height), qty, mat.waste_percent, false, [], false, null, [], false, 2, null, [], true, glassRates.rates)
     glassCost = effectiveItemTotal(item as B2BOrderItem, mgDiscount)
   } else {
     glassMissing.push({ role: 'mirror', label: `зеркало ${thickness} мм: нет в справочнике`, reason: 'нет цены' })
   }
+  for (const label of glassRates.missing) glassMissing.push({ role: 'rates', label: `ставка «${label}»: нет в справочнике, взята заводская`, reason: 'нет цены' })
 
   // П-образный профиль садится только на 6 мм — это конструктив, а не пожелание.
   const frameConflict = b.frame === 'ushape' && thickness !== 6

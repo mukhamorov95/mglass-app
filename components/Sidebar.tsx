@@ -196,6 +196,7 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
   { groupLabel: 'Стекло и зеркала' },
   { href: '/admin/glass-prices',    label: 'Стекло',           icon: '🔷', indent: true },
   { href: '/admin/facet',           label: 'Фацет',            icon: '💎', indent: true },
+  { href: '/admin/b2b-rates',       label: 'Стекло — ставки',  icon: '🧮', indent: true },
   { href: '/admin/mirror-pricing',  label: 'Себестоимость зеркал', icon: '💡', indent: true },
   { href: '/admin/mirror-lighting', label: 'Компоненты подсветки', icon: '🔌', indent: true },
   { href: '/admin/mirror-frames',   label: 'Рамки зеркал',     icon: '🖼️', indent: true },
@@ -418,7 +419,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services', '/admin/quote-quality'])) open.push('system')
   } else {
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/b2b-rates', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/sandblast-cost', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
     if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity', '/commercial/activity'])) open.push('operations')
   }

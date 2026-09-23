@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BMaterial, B2B_CATEGORIES, type PatternDirection } from '@/lib/types'
-import { TEMPERING_COST } from '@/lib/b2bCalculator'
+import { DEFAULT_B2B_RATES, ratesFromRows, type RateRow } from '@/lib/b2b/rates'
 
 const VAT = 22
 
@@ -52,17 +52,17 @@ function parseNotes(m: B2BMaterial): B2BMaterial {
 }
 
 // Себестоимость на 1 м² нетто: закупка с отходом + закалка (для не-зеркал)
-function calcCostPerM2(m: B2BMaterial): number {
+function calcCostPerM2(m: B2BMaterial, temperingPerM2: Record<number, number>): number {
   const waste = m.passthrough ? 10 : m.waste_percent
   const material = m.cost_price * (1 + waste / 100)
-  const tempering = m.category !== 'зеркало' ? (TEMPERING_COST[m.thickness] ?? 0) : 0
+  const tempering = m.category !== 'зеркало' ? (temperingPerM2[m.thickness] ?? 0) : 0
   return material + tempering
 }
 
-function calcMargin(m: B2BMaterial): { pct: number; rub: number } | null {
+function calcMargin(m: B2BMaterial, temperingPerM2: Record<number, number>): { pct: number; rub: number } | null {
   const sp = m.sale_price ?? 0
   if (sp <= 0 || m.cost_price <= 0) return null
-  const cost = calcCostPerM2(m)
+  const cost = calcCostPerM2(m, temperingPerM2)
   const pct = Math.round((sp - cost) / sp * 100)
   const rub = Math.round((sp - cost) / (1 + VAT / 100))
   return { pct, rub }
@@ -80,6 +80,8 @@ export default function B2BMaterialsPage() {
   const [filterCat, setFilterCat] = useState<string>('all')
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [sheetVariants, setSheetVariants] = useState<Record<number, SheetVariant[]>>({})
+  // Закалка по толщине — из справочника b2b_rates, как в калькуляторе.
+  const [temperingPerM2, setTemperingPerM2] = useState<Record<number, number>>(DEFAULT_B2B_RATES.temperingPerM2)
   const [newVariantWidth, setNewVariantWidth] = useState(3210)
   const [newVariantHeight, setNewVariantHeight] = useState(2250)
 
@@ -97,10 +99,12 @@ export default function B2BMaterialsPage() {
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const [{ data, error }, { data: varData }] = await Promise.all([
+    const [{ data, error }, { data: varData }, rateRes] = await Promise.all([
       supabase.from('b2b_materials').select('*').order('name').order('thickness'),
       supabase.from('b2b_material_sheet_variants').select('*').order('sort_order').order('id'),
+      supabase.from('b2b_rates').select('key, value'),
     ])
+    setTemperingPerM2(ratesFromRows(rateRes.error ? null : (rateRes.data as RateRow[] | null)).rates.temperingPerM2)
     if (error) setError(error.message)
     else {
       setItems((data ?? []).map(parseNotes))
@@ -533,10 +537,10 @@ export default function B2BMaterialsPage() {
             <tbody>
               {filtered.map((m, idx) => {
                 const cat = B2B_CATEGORIES.find(c => c.value === m.category)
-                const margin = calcMargin(m)
-                const costPerM2 = Math.round(calcCostPerM2(m))
+                const margin = calcMargin(m, temperingPerM2)
+                const costPerM2 = Math.round(calcCostPerM2(m, temperingPerM2))
                 const marginColor = margin === null ? '' : margin.pct >= 30 ? 'text-emerald-600' : margin.pct >= 15 ? 'text-yellow-600' : 'text-red-500'
-                const tempering = m.category !== 'зеркало' ? (TEMPERING_COST[m.thickness] ?? 0) : 0
+                const tempering = m.category !== 'зеркало' ? (temperingPerM2[m.thickness] ?? 0) : 0
                 // Разделитель между разными наименованиями
                 const prevName = idx > 0 ? filtered[idx - 1].name : null
                 const isNewName = prevName !== m.name

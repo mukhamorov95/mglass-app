@@ -6,6 +6,7 @@ import { computeQuoteItem, computeQuoteTotals } from '@/lib/b2b/computeQuote'
 import type { B2BOrderItem, FacetPrice } from '@/lib/b2bCalculator'
 import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial, B2BService } from '@/lib/types'
+import { loadB2BRates } from '@/lib/b2b/rates'
 
 // АУДИТ ПАРИТЕТА (live). Берём все просчёты, созданные через кабинет (source=partner),
 // пересчитываем НАШИМ движком computeQuoteItem (тот же, что у менеджера) и сверяем с
@@ -35,6 +36,7 @@ describe('Аудит паритета: цена клиента == движок',
     if (!url || !key) { console.log('⚠ нет ключей Supabase — аудит пропущен'); return }
 
     const svc = createClient(url, key)
+    const { rates } = await loadB2BRates(svc)   // те же ставки, что у партнёрского маршрута
     const [{ data: mats }, { data: matrix }, { data: facets }, { data: surch }, { data: services }] = await Promise.all([
       svc.from('b2b_materials').select('*').eq('active', true),
       svc.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
@@ -76,7 +78,7 @@ describe('Аудит паритета: цена клиента == движок',
           hasHoles: !!it.hasHoles, shape: it.shape === 'curved' ? 'curved' : 'rect',
           hasTriplex: !!it.hasTriplex, triplexLayers: Number(it.triplexLayers) === 3 ? 3 : 2, triplexPrice, triplexExtraGlasses: tg,
           applyMinPrice: it.applyMinPrice !== false,
-        }, { facetPrices, surchargeRules })
+        }, { facetPrices, surchargeRules, rates })
         recomputed.push({ ...calc, localId: 'x' })
 
         const storedSale = Number(it.saleIncVat) || 0

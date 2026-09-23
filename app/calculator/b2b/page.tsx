@@ -11,6 +11,7 @@ import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
+import { DEFAULT_B2B_RATES, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
 import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
 import { itemCostPanel } from '@/lib/b2b/itemCostPanel'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
@@ -65,7 +66,7 @@ const SUPER_CATS = [
 ] as const
 type SuperCat = typeof SUPER_CATS[number]['value']
 import {
-  calcItem, calcTotals, effectiveItemTotal, itemMarginPct, orderMarginPct, TEMPERING_COST, VAT,
+  calcItem, calcTotals, effectiveItemTotal, itemMarginPct, orderMarginPct, VAT,
   type B2BOrderItem, type B2BOrderTotals, type FacetPrice, type MinPriceReason,
 } from '@/lib/b2bCalculator'
 import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
@@ -321,6 +322,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
 
   // Авто-надбавки за габариты/сложность. Снятые вручную правила — в dismissed-сете.
   const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([])
+  // Внутренние ставки (закалка, кромка, транспорт, упаковка, мин. цены) — справочник
+  // b2b_rates. До загрузки и при пропуске строки — заводские, и экран об этом говорит.
+  const [rates, setRates] = useState<B2BRates>(DEFAULT_B2B_RATES)
+  const [ratesMissing, setRatesMissing] = useState<string[]>([])
   const [fDismissedSurcharges, setFDismissedSurcharges] = useState<Set<number>>(new Set())
   const [eDismissedSurcharges, setEDismissedSurcharges] = useState<Set<number>>(new Set())
 
@@ -373,7 +378,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         setManagerCode(userManagerCode)
         setMglassOnly(userMGlassOnly)
 
-        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }] = await Promise.all([
+        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }, rateRes] = await Promise.all([
           sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
@@ -384,7 +389,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
           sb.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
           sb.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
+          sb.from('b2b_rates').select('key, value'),
         ])
+        const loadedRates = ratesFromRows(rateRes.error ? null : (rateRes.data as RateRow[] | null))
+        setRates(loadedRates.rates)
+        setRatesMissing(loadedRates.missing)
         // Форматы листов по материалу (для раскроя): дефолт первым.
         const formatsByMat = new Map<number, { width: number; height: number }[]>()
         for (const v of (sheetVariants ?? []) as { material_id: number; sheet_width: number; sheet_height: number }[]) {
@@ -705,9 +714,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         services: it.services.map(s => ({ name: s.name, type: s.type, value: s.value, cost_price: s.costPrice })),
       }]
     })
-    const issues = checkQuoteBom(bomItems, { facetPrices, ...(pricedMaterials ? { pricedMaterials } : {}) })
+    const issues = checkQuoteBom(bomItems, { facetPrices, temperingPerM2: rates.temperingPerM2, ...(pricedMaterials ? { pricedMaterials } : {}) })
     return issues.map(iss => ({ ...iss, itemIndex: sourceIdx[iss.itemIndex] ?? iss.itemIndex }))
-  }, [items, baseMaterials, facetPrices, pricedMaterials])
+  }, [items, baseMaterials, facetPrices, pricedMaterials, rates])
 
   const bomSummary = useMemo(() => summarizeIssues(bomIssues), [bomIssues])
 
@@ -877,7 +886,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         applyMinPrice: fMinPrice,
         comment: [p.label, p.comment, p.needsReview ? 'проверить размер' : ''].filter(Boolean).join(' · ') || undefined,
         dismissedSurcharges: new Set<number>(),
-      }, { facetPrices, surchargeRules })
+      }, { facetPrices, surchargeRules, rates })
       return { ...calc, localId: crypto.randomUUID() }
     })
     setItems(prev => [...prev, ...added])
@@ -902,7 +911,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
       dismissedSurcharges: fDismissedSurcharges,
-    }, { facetPrices, surchargeRules })
+    }, { facetPrices, surchargeRules, rates })
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID() }])
     setFWidth('')
     setFHeight('')
@@ -970,7 +979,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       const q = Math.max(1, Number(it.quantity) || 1)
       const temp = !!it.tempering
       const waste = mat.passthrough ? 10 : mat.waste_percent
-      const calc = calcItem(mat, cutW, cutH, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices)
+      const calc = calcItem(mat, cutW, cutH, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices, false, 2, null, [], true, rates)
       const hh = Number(it.holes) || 0
       const cc = Number(it.cutouts) || 0
       holes += hh * q
@@ -1078,7 +1087,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         : [],
       applyMinPrice: item.applyMinPrice !== false, comment: item.comment || undefined,
       dismissedSurcharges: new Set<number>(),
-    }, { facetPrices, surchargeRules })
+    }, { facetPrices, surchargeRules, rates })
     return { ...calc, localId: item.localId, manualTotal: item.manualTotal ?? null }
   }
 
@@ -1184,7 +1193,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
       dismissedSurcharges: eDismissedSurcharges,
-    }, { facetPrices, surchargeRules })
+    }, { facetPrices, surchargeRules, rates })
     setItems(prev => prev.map(i => i.localId === editingLocalId
       // Договорную цену позиции сохраняем: менеджер согласовал её с клиентом,
       // а правка комментария или количества её молча откатывала к расчётной.
@@ -2137,6 +2146,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   label={fMinPrice ? 'Учитывать' : 'Чистый расчёт'} />
               </div>
             </div>
+            {ratesMissing.length > 0 && (
+              <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                {ratesMissingNote(ratesMissing)}
+              </p>
+            )}
 
             {/* Обработка. Собрана в один блок, потому что все эти признаки делают одно:
                 строят маршрут изделия по цеху. Не отметил — этап не создастся, и человек
@@ -3380,7 +3394,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             triplexExtraGlasses: eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
             applyMinPrice: eMinPrice,
             dismissedSurcharges: eDismissedSurcharges,
-          }, { facetPrices, surchargeRules }), localId: '' }
+          }, { facetPrices, surchargeRules, rates }), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
       const ePreviewMargin = ePreviewItem ? itemMarginPct(ePreviewItem, discount) : null
