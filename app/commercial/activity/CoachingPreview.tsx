@@ -7,7 +7,7 @@ import { Card } from './ui'
 // Владельцу — ровно то, что видит менеджер у себя на главной. Пересчёт по кнопке:
 // утренний снимок к вечеру устаревает, а полный сбор — около минуты запросов к amo.
 
-type Row = { amo_user_id: number; name: string; computed_at: string }
+type Row = { amo_user_id: number; name: string; computed_at: string; effect: { items: number; done: number; days: number } | null }
 
 export default function CoachingPreview() {
   const [rows, setRows] = useState<Row[]>([])
@@ -52,6 +52,13 @@ export default function CoachingPreview() {
       }
     >
       {state !== 'idle' && state !== 'busy' && <p className="text-[13px] text-red-700 mb-2">{state}</p>}
+      {rows.some(r => r.effect && r.effect.items > 0) && (
+        <p className="text-[12px] text-[#6b6b66] mb-2">
+          Закрываемость поводов:{' '}
+          {rows.filter(r => r.effect && r.effect.items > 0).map(r =>
+            `${r.name} — ${Math.round((r.effect!.done / r.effect!.items) * 100)}% (${r.effect!.done} из ${r.effect!.items} за ${r.effect!.days} дн.)`).join(' · ')}
+        </p>
+      )}
       {rows.length === 0 && state !== 'busy'
         ? <p className="text-[13px] text-[#9a9a95]">Снимка ещё нет — нажми «Пересчитать» (около минуты).</p>
         : who && <MyDay key={`${who}-${nonce}`} amoUserId={who} />}

@@ -23,20 +23,27 @@ const fmtWhen = (iso: string) => {
 }
 
 export default function MyDay({ amoUserId }: { amoUserId?: number }) {
-  const [data, setData] = useState<{ coaching: Coaching | null; computedAt?: string; reason?: string } | null>(null)
+  type Effect = { last: { day: string; items: number; done: number }; days: number; items: number; done: number } | null
+  const [data, setData] = useState<{ coaching: Coaching | null; computedAt?: string; reason?: string; liveAt?: number; effect?: Effect } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [live, setLive] = useState(0)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/manager/coaching${amoUserId ? `?amo_user_id=${amoUserId}` : ''}`)
+    const q = new URLSearchParams()
+    if (amoUserId) q.set('amo_user_id', String(amoUserId))
+    if (live) q.set('live', '1')
+    fetch(`/api/manager/coaching${q.toString() ? `?${q}` : ''}`)
       .then(async res => {
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? `Ошибка ${res.status}`)
         if (!cancelled) { setData(json); setError(null) }
       })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (!cancelled) setBusy(false) })
     return () => { cancelled = true }
-  }, [amoUserId])
+  }, [amoUserId, live])
 
   if (error) return <Shell><p className="text-[13px] text-red-700">{error}</p></Shell>
   if (!data) return <Shell><p className="text-[13px] text-[#9a9a95]">Загружаю…</p></Shell>
@@ -44,7 +51,13 @@ export default function MyDay({ amoUserId }: { amoUserId?: number }) {
 
   const c = data.coaching
   return (
-    <Shell computedAt={data.computedAt} name={amoUserId ? c.name : undefined}>
+    <Shell
+      computedAt={data.computedAt}
+      liveAt={data.liveAt}
+      name={amoUserId ? c.name : undefined}
+      onRefresh={() => { setBusy(true); setLive(n => n + 1) }}
+      busy={busy}
+    >
       {c.focus.length === 0 ? (
         <p className="text-[14px] text-[#111110]">Ни одного зависшего клиента — всё разобрано. Отличный день, чтобы вернуться к сделкам, где давно не было касаний.</p>
       ) : (
@@ -90,6 +103,13 @@ export default function MyDay({ amoUserId }: { amoUserId?: number }) {
         </div>
       )}
 
+      {data.effect && data.effect.last.items > 0 && (
+        <p className="text-[12px] text-[#6b6b66] mt-3">
+          {data.effect.last.day === new Date().toISOString().slice(0, 10) ? 'Сегодня' : 'В прошлый раз'} закрыто{' '}
+          <b className="font-medium text-[#111110]">{data.effect.last.done} из {data.effect.last.items}</b> поводов
+          {data.effect.days > 1 && data.effect.items > 0 && ` · за ${data.effect.days} дн. — ${Math.round((data.effect.done / data.effect.items) * 100)}%`}
+        </p>
+      )}
       <p className="text-[12px] text-[#9a9a95] mt-3">
         За {c.results.days} дней: заявок {c.results.leads} · до оплаты {c.results.paidDeals}
         {c.results.per100 !== null && ` (${String(c.results.per100).replace('.', ',')} на 100)`}
@@ -99,12 +119,27 @@ export default function MyDay({ amoUserId }: { amoUserId?: number }) {
   )
 }
 
-function Shell({ children, computedAt, name }: { children: React.ReactNode; computedAt?: string; name?: string }) {
+function Shell({ children, computedAt, liveAt, name, onRefresh, busy }: {
+  children: React.ReactNode; computedAt?: string; liveAt?: number; name?: string
+  onRefresh?: () => void; busy?: boolean
+}) {
   return (
     <section className="bg-white border border-[#e4e4e0] rounded-2xl p-4">
       <div className="flex items-baseline justify-between gap-2 mb-2">
         <h2 className="text-[15px] font-bold text-[#111110]">Мой день{name ? ` — ${name}` : ''}</h2>
-        {computedAt && <span className="text-[11px] text-[#9a9a95]">обновлено {fmtWhen(computedAt)}</span>}
+        <span className="flex items-baseline gap-2">
+          {(liveAt || computedAt) && (
+            <span className="text-[11px] text-[#9a9a95]">
+              {liveAt ? `список на ${fmtWhen(new Date(liveAt * 1000).toISOString())}` : `обновлено ${fmtWhen(computedAt!)}`}
+            </span>
+          )}
+          {onRefresh && (
+            <button onClick={onRefresh} disabled={busy}
+              className="text-[11px] px-2 py-1 rounded-md border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] disabled:opacity-50">
+              {busy ? 'Считаю…' : 'Обновить'}
+            </button>
+          )}
+        </span>
       </div>
       {children}
     </section>
