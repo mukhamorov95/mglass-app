@@ -98,6 +98,21 @@ const NOT_OWN_ACTION = new Set([
   'entity_linked', 'entity_unlinked',
 ])
 
+// Что считается действием человека — одно правило на счётчик в таблице и на ленту
+// «что именно он делал» (lib/amoTimeline.ts): иначе число и список разойдутся.
+export function isOwnAction(e: AmoActivityEvent, missedCallNoteIds: Set<number>): boolean {
+  if (!e.created_by || NOT_OWN_ACTION.has(e.type)) return false
+  if (e.type === 'incoming_call' && missedCallNoteIds.has(e.value_after?.[0]?.note?.id ?? -1)) return false
+  return true
+}
+
+// Заметки о непринятых входящих: их события amo пишет на менеджера, но это не его действие
+export function missedCallNoteIds(notes: AmoCallNote[]): Set<number> {
+  const out = new Set<number>()
+  for (const n of notes) if (n.created_by && callKind(n) === 'in_missed') out.add(n.id)
+  return out
+}
+
 export const mskDay = (ts: number) => new Date((ts + MSK) * 1000).toISOString().slice(0, 10)
 export const mskHour = (ts: number) => new Date((ts + MSK) * 1000).getUTCHours()
 export const mskMinuteOfDay = (ts: number) => Math.floor(((ts + MSK) % 86400) / 60)
@@ -226,8 +241,7 @@ export function buildAmoActivity(input: {
       if (owner) cell(owner, e.created_at).clientMessages++
       continue
     }
-    if (!e.created_by || NOT_OWN_ACTION.has(e.type)) continue
-    if (e.type === 'incoming_call' && missedCallNotes.has(e.value_after?.[0]?.note?.id ?? -1)) continue
+    if (!isOwnAction(e, missedCallNotes)) continue
     const c = cell(e.created_by, e.created_at)
     if (e.type === 'outgoing_chat_message') c.messagesOwn++
     if (e.type === 'task_completed') c.tasksCompleted++
