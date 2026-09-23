@@ -12,6 +12,7 @@ import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
 import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
+import { FINANCE_FALLBACK, pickFinance, type Finance, type FinanceRow } from '@/lib/pricing/pickFinance'
 import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
 import { itemCostPanel } from '@/lib/b2b/itemCostPanel'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
@@ -171,8 +172,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   // Правая панель быстрого расчёта (только variant='mglass'): B2B даёт себестоимость
   // без НДС → здесь наценка+налог → цена изделия + монтаж/доставка/подъём. Маржа/налог
   // редактируемы, но НЕ сохраняются как умолчание: на новом просчёте снова 40/12.
-  const [mgMargin, setMgMargin]     = useState('40')
-  const [mgTax, setMgTax]           = useState('12')
+  const [mgMargin, setMgMargin]     = useState(String(FINANCE_FALLBACK.marginPct))
+  const [mgTax, setMgTax]           = useState(String(FINANCE_FALLBACK.taxPct))
+  // Умолчания маржи/налога — общая строка financial_settings (тариф standard), та же,
+  // что правится в «Настройках»; до загрузки — FINANCE_FALLBACK.
+  const [mgFinance, setMgFinance]   = useState<Finance>(FINANCE_FALLBACK)
   // Монтаж 6500/секц и доставка 5000 подставлены сразу (владелец: не заставлять
   // менеджера помнить число), редактируемы; на новом просчёте возвращаются к умолчанию.
   const [mgPerSection, setMgPerSection] = useState('6500')
@@ -379,7 +383,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         setManagerCode(userManagerCode)
         setMglassOnly(userMGlassOnly)
 
-        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }, rateRes] = await Promise.all([
+        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }, rateRes, finRes] = await Promise.all([
           sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
@@ -391,7 +395,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           sb.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
           sb.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
           sb.from('b2b_rates').select('key, value'),
+          sb.from('financial_settings').select('tier, product_type, tax_percent, default_margin, min_margin'),
         ])
+        if (!finRes.error && finRes.data) setMgFinance(pickFinance(finRes.data as FinanceRow[], '', 'standard'))
         const loadedRates = ratesFromRows(rateRes.error ? null : (rateRes.data as RateRow[] | null))
         setRates(loadedRates.rates)
         setRatesMissing(loadedRates.missing)
@@ -551,13 +557,14 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     if (mg) setClientId(mg.id)
   }, [mglassOnly, clientId, clients])
 
-  // Новый просчёт (корзина пуста) → маржа/налог возвращаются к 40/12. Правка живёт
-  // внутри текущего просчёта, умолчанием не становится (требование владельца).
+  // Новый просчёт (корзина пуста) → маржа/налог возвращаются к умолчаниям из
+  // financial_settings. Правка живёт внутри текущего просчёта, умолчанием не становится
+  // (требование владельца).
   useEffect(() => {
     if (variant !== 'mglass' || items.length > 0) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMgMargin('40'); setMgTax('12'); setMgPerSection('6500'); setMgSections('1'); setMgDelivery('5000'); setMgLift('')
-  }, [variant, items.length])
+    setMgMargin(String(mgFinance.marginPct)); setMgTax(String(mgFinance.taxPct)); setMgPerSection('6500'); setMgSections('1'); setMgDelivery('5000'); setMgLift('')
+  }, [variant, items.length, mgFinance])
 
   // А12: прайс клиента подтягиваем при смене клиента. Уже набранные позиции
   // пересчитываем — иначе цена зависела бы от того, в каком порядке менеджер
@@ -2892,7 +2899,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   {/* Все числа — одной сеткой, узкими полями: маржа/налог трёхзначные,
                       остальное рядом. Иначе карточка растягивалась на два экрана. */}
                   <div className="grid grid-cols-3 gap-2">
-                    <div><label className={lbl}>Маржа, %</label>
+                    <div><label className={lbl} title={`Умолчание: ${mgFinance.source}`}>Маржа, %</label>
                       <input type="number" className={fldS} value={mgMargin} onChange={e => setMgMargin(e.target.value)} /></div>
                     <div><label className={lbl}>Налог, %</label>
                       <input type="number" className={fldS} value={mgTax} onChange={e => setMgTax(e.target.value)} /></div>
