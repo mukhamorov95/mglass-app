@@ -66,8 +66,11 @@ function describe(e: Ev, ctx: Ctx): { title: string; detail: string } {
     case 'task_result_added': return { title: 'Записал результат задачи', detail: '' }
     case 'task_deleted': return { title: 'Удалил задачу', detail: '' }
     case 'common_note_added': return { title: 'Написал заметку', detail: (note?.params?.text ?? '').slice(0, 160) }
-    case 'entity_responsible_changed':
-      return { title: 'Передал карточку', detail: after?.responsible_user ? `→ ${ctx.users.get(after.responsible_user.id) ?? 'другому'}` : '' }
+    case 'entity_responsible_changed': {
+      const to = after?.responsible_user?.id
+      if (to && to === e.created_by) return { title: 'Взял карточку на себя', detail: '' }
+      return { title: 'Передал карточку', detail: to ? (ctx.users.get(to) ?? 'другому сотруднику') : '' }
+    }
     case 'entity_tag_added': return { title: 'Поставил тег', detail: after?.tag?.name ?? '' }
     case 'entity_tag_deleted': return { title: 'Снял тег', detail: after?.tag?.name ?? '' }
     case 'name_field_changed': return { title: 'Переименовал карточку', detail: '' }
