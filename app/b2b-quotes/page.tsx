@@ -14,6 +14,7 @@ import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadl
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { checkSavedItems } from '@/lib/b2b/bomCheck'
+import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, type B2BRates, type RateRow } from '@/lib/b2b/rates'
 
 
 const PAGE_SIZE = 50
@@ -337,6 +338,12 @@ export default function B2BQuotesPage() {
   const [priceSaving, setPriceSaving]       = useState(false)
   // Второй клик по кнопке при тонкой марже: не запрещаем цену, но заставляем осознать доход.
   const [priceConfirmId, setPriceConfirmId] = useState<number | null>(null)
+  // Пороги маржи — справочник b2b_rates, тот же, по которому сервер ставит согласование.
+  const [marginRates, setMarginRates] = useState<Pick<B2BRates, 'marginTarget' | 'marginMin'>>(DEFAULT_B2B_RATES)
+  useEffect(() => {
+    createClient().from('b2b_rates').select('key, value').in('key', ['margin_target', 'margin_min'])
+      .then(({ data, error }) => { if (!error && data) setMarginRates(ratesFromRows(data as RateRow[]).rates) })
+  }, [])
   const totalInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -1300,7 +1307,7 @@ export default function B2BQuotesPage() {
                         {Math.round(discProfit).toLocaleString('ru-RU')} ₽
                       </span>
                       <span className="text-[#9a9a95]">Маржа</span>
-                      <span className={`font-mono text-right font-semibold ${discMargin < 25 ? 'text-red-500' : discMargin < 35 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      <span className={`font-mono text-right font-semibold ${{ green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-500' }[marginTone(discMargin, marginRates)]}`}>
                         {discMargin.toFixed(1)}%
                       </span>
                     </div>
@@ -1311,12 +1318,12 @@ export default function B2BQuotesPage() {
                           🚨 Осторожно: при цене {fmt(discNewTotal)} заказ уходит в убыток — минус {fmt(Math.abs(Math.round(discProfit)))}.
                           Это ниже себестоимости {fmt(discCost)}.
                         </p>
-                      ) : discMargin < 25 ? (
+                      ) : discMargin < marginRates.marginMin ? (
                         <p className="text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                           ⚠️ Осторожно: при цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%).
-                          Это ниже нормы 25% — цена уйдёт на согласование владельцу.
+                          Это ниже нормы {marginRates.marginMin}% — цена уйдёт на согласование владельцу.
                         </p>
-                      ) : discMargin < 35 ? (
+                      ) : discMargin < marginRates.marginTarget ? (
                         <p className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                           При цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%). Маржа тонковата.
                         </p>
@@ -1329,7 +1336,7 @@ export default function B2BQuotesPage() {
                     <div className="flex items-center gap-2">
                       {(() => {
                         // Тонкая маржа не блокирует цену — но требует второго, осознанного клика.
-                        const risky   = discNewTotal > 0 && (discProfit <= 0 || discMargin < 25)
+                        const risky   = discNewTotal > 0 && (discProfit <= 0 || discMargin < marginRates.marginMin)
                         const armed   = priceConfirmId === quote.id
                         const confirm = risky && !armed
                         return (

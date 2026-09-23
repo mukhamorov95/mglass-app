@@ -1,4 +1,5 @@
 import type { B2BMaterial, B2BService } from './types'
+import { DEFAULT_B2B_RATES, type B2BRates, type MinPriceReason } from './b2b/rates'
 
 export const VAT = 22  // ставка НДС, %
 
@@ -11,19 +12,9 @@ export type FacetPrice = {
   active?: boolean
 }
 
-// Закалка по толщине, ₽/м² (с НДС)
-export const TEMPERING_COST: Record<number, number> = {
-  4: 300,
-  5: 350,
-  6: 400,
-  8: 500,
-  10: 600,
-  12: 950,
-}
-
-export const EDGE_COST_PER_M    = 40   // кромка, ₽/м.п.
-export const TRANSPORT_PER_PIECE = 77  // доставка на закалку, ₽/шт
-export const PACKAGING_PER_M2   = 120  // гофракартон ₽/м²
+// Закалка, кромка, транспорт на закалку, упаковка и минимальные цены позиции —
+// справочник b2b_rates (lib/b2b/rates.ts). calcItem без ставок берёт заводские.
+export type { B2BRates, MinPriceReason } from './b2b/rates'
 
 export const WASTE_OPTIONS = [
   { value: 10, label: '10% — проходной' },
@@ -39,16 +30,6 @@ export const WASTE_OPTIONS = [
   { value: 50, label: '50% — специальный' },
 ]
 
-// Минимальная стоимость позиции за штуку (₽, вкл. НДС)
-export const MIN_LINE_PRICES = {
-  glass_tempering:     2500,
-  tinted_tempering:    3000,
-  mirror_no_tempering: 1500,
-  narrow_detail:       1500,
-} as const
-
-export type MinPriceReason = keyof typeof MIN_LINE_PRICES
-
 function isTintedOrSpecialMaterial(category: string): boolean {
   return ['тонированное', 'сатин', 'рифленое', 'декоративное'].includes(category)
 }
@@ -58,18 +39,19 @@ export function resolveMinLinePrice(
   width: number,
   height: number,
   hasTempering: boolean,
+  minLine: B2BRates['minLine'] = DEFAULT_B2B_RATES.minLine,
 ): { minPricePerPiece: number; reason: MinPriceReason } | null {
   if (Math.min(width, height) < 250) {
-    return { minPricePerPiece: MIN_LINE_PRICES.narrow_detail, reason: 'narrow_detail' }
+    return { minPricePerPiece: minLine.narrow_detail, reason: 'narrow_detail' }
   }
   if (hasTempering && isTintedOrSpecialMaterial(category)) {
-    return { minPricePerPiece: MIN_LINE_PRICES.tinted_tempering, reason: 'tinted_tempering' }
+    return { minPricePerPiece: minLine.tinted_tempering, reason: 'tinted_tempering' }
   }
   if (hasTempering) {
-    return { minPricePerPiece: MIN_LINE_PRICES.glass_tempering, reason: 'glass_tempering' }
+    return { minPricePerPiece: minLine.glass_tempering, reason: 'glass_tempering' }
   }
   if (category === 'зеркало') {
-    return { minPricePerPiece: MIN_LINE_PRICES.mirror_no_tempering, reason: 'mirror_no_tempering' }
+    return { minPricePerPiece: minLine.mirror_no_tempering, reason: 'mirror_no_tempering' }
   }
   return null
 }
@@ -217,6 +199,7 @@ export function calcItem(
   triplexPrice: { salePerM2: number; costPerM2: number } | null = null,
   triplexExtraGlasses: B2BMaterial[] = [],   // слои 2..N; пусто → те же стёкла, что основной
   applyMinPrice: boolean = true,             // false → мин. цену не применяем (чистый расчёт по м²)
+  rates: B2BRates = DEFAULT_B2B_RATES,       // из справочника b2b_rates; вызывающий загружает loadB2BRates
 ): Omit<B2BOrderItem, 'localId'> {
   const areaPiece       = r4(width * height / 1_000_000)
   const totalAreaNet    = r4(areaPiece * quantity)
@@ -235,7 +218,7 @@ export function calcItem(
   const thicknessSum  = allGlasses.reduce((s, g) => s + g.thickness, 0)
   const costPerM2Sum  = allGlasses.reduce((s, g) => s + g.cost_price, 0)
   const salePerM2Sum  = allGlasses.reduce((s, g) => s + (g.sale_price ?? 0), 0)
-  const temperPerM2   = allGlasses.reduce((s, g) => s + (TEMPERING_COST[g.thickness] ?? 0), 0)
+  const temperPerM2   = allGlasses.reduce((s, g) => s + (rates.temperingPerM2[g.thickness] ?? 0), 0)
 
   const weightPerM2 = thicknessSum * 2.5
   const totalWeight = r2(totalAreaNet * weightPerM2)
@@ -245,10 +228,10 @@ export function calcItem(
   const costTempering = hasTempering
     ? Math.round(totalAreaNet * temperPerM2)
     : 0
-  const costEdge      = Math.round(perimeterM * quantity * EDGE_COST_PER_M * layers)
+  const costEdge      = Math.round(perimeterM * quantity * rates.edgePerM * layers)
   // Доставка на закалку — только если деталь реально едет в печь; без закалки нет и рейса.
-  const costTransport = hasTempering ? Math.round(quantity * TRANSPORT_PER_PIECE) : 0
-  const costPackaging = Math.round(totalAreaNet * PACKAGING_PER_M2)
+  const costTransport = hasTempering ? Math.round(quantity * rates.transportPerPiece) : 0
+  const costPackaging = Math.round(totalAreaNet * rates.packagingPerM2)
   const costTriplex   = hasTriplex ? Math.round(totalAreaNet * (triplexPrice?.costPerM2 ?? 0)) : 0
   const saleTriplex   = hasTriplex ? Math.round(totalAreaNet * (triplexPrice?.salePerM2 ?? 0)) : 0
 
@@ -295,7 +278,7 @@ export function calcItem(
   let saleIncVat = baseSaleIncVat + servicesCost + saleFacet + saleTriplex
 
   // Применяем минимальную стоимость строки (per-piece × quantity)
-  const minResolved = resolveMinLinePrice(mat.category, width, height, hasTempering)
+  const minResolved = resolveMinLinePrice(mat.category, width, height, hasTempering, rates.minLine)
   let minPriceApplied: boolean | undefined
   let minPriceReason:  MinPriceReason | undefined
   let originalLinePrice: number | undefined

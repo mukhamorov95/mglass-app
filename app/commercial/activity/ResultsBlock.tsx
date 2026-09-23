@@ -9,7 +9,7 @@ import { Card, Num, fmtRub, fmtWait } from './ui'
 
 const PERIODS = [30, 90] as const
 
-export default function ResultsBlock() {
+export default function ResultsBlock({ notSellers }: { notSellers: Set<number> }) {
   const [days, setDays] = useState<(typeof PERIODS)[number]>(90)
   const [data, setData] = useState<AmoResultsReport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,7 +67,7 @@ export default function ResultsBlock() {
               </tr>
             </thead>
             <tbody>
-              {data.managers.map(m => {
+              {data.managers.filter(m => !notSellers.has(m.userId)).map(m => {
                 const per100 = m.leadsReceived ? Math.round((m.paidDeals / m.leadsReceived) * 1000) / 10 : null
                 return (
                   <tr key={m.userId} className="border-b border-[#f0f0ec]">
@@ -94,6 +94,11 @@ export default function ResultsBlock() {
               })}
             </tbody>
           </table>
+          {data.managers.some(m => notSellers.has(m.userId)) && (
+            <p className="text-[11px] text-[#9a9a95] mt-2">
+              Не показаны (не продавцы B2C): {data.managers.filter(m => notSellers.has(m.userId)).map(m => `${m.name} — заявок ${m.leadsReceived}, просрочено задач ${m.tasksOverdue}`).join('; ')}.
+            </p>
+          )}
           <p className="text-[11px] text-[#9a9a95] mt-2">
             Оплат у человека единицы в месяц — сравнивать людей надёжнее на 90 днях. «На 100 заявок» зависит и от того, какие заявки достаются: их распределяют вручную.
           </p>

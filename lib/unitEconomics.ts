@@ -1,4 +1,4 @@
-import { VAT, TEMPERING_COST, PACKAGING_PER_M2, TRANSPORT_PER_PIECE } from './b2bCalculator'
+import { VAT } from './b2bCalculator'
 
 // Единственное определение себестоимости и маржинального вклада B2B-заказа.
 // Все экраны, где показывается себестоимость или маржа заказа, берут цифры отсюда.
@@ -123,10 +123,17 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
     }
   }
 
+  // Ставку выводим из сохранённой суммы, а не из текущего справочника b2b_rates:
+  // после правки ставки у старого заказа «новая ставка × м²» перестала бы давать
+  // его сумму. Суммы округлялись по позициям — поэтому ставка тоже округлена.
   const oneThk = temperThk.size === 1 ? [...temperThk][0] : null
-  const temperHow = oneThk != null && TEMPERING_COST[oneThk]
-    ? `${TEMPERING_COST[oneThk]} ₽/м² × ${ru(temperedM2)} м² (${oneThk} мм)`
+  const temperHow = oneThk != null && tempering > 0 && temperedM2 > 0
+    ? `${r(tempering / temperedM2)} ₽/м² × ${ru(temperedM2)} м² (${oneThk} мм)`
     : `ставка по толщине × ${ru(temperedM2)} м²`
+  const transportHow = temperedPieces > 0
+    ? `${r(transport / temperedPieces)} ₽ × ${temperedPieces} дет.`
+    : 'только для деталей на закалку'
+  const packagingHow = netM2 > 0 ? `${r(packaging / netM2)} ₽/м² × ${ru(netM2)} м²` : ''
 
   const all: ContributionLine[] = [
     { key: 'product', label: 'Изделия производства',
@@ -139,9 +146,9 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
       amount: tempering, vatIn: vatPart(tempering, vatRate) },
     { key: 'services', label: 'Подрядные услуги', how: 'фацет, триплекс, пескоструй — по себестоимости услуги',
       amount: services, vatIn: vatPart(services, vatRate) },
-    { key: 'transport', label: 'Доставка на закалку', how: `${TRANSPORT_PER_PIECE} ₽ × ${temperedPieces} дет.`,
+    { key: 'transport', label: 'Доставка на закалку', how: transportHow,
       amount: transport, vatIn: 0 },
-    { key: 'packaging', label: 'Упаковка', how: `${PACKAGING_PER_M2} ₽/м² × ${ru(netM2)} м²`,
+    { key: 'packaging', label: 'Упаковка', how: packagingHow,
       amount: packaging, vatIn: 0 },
   ]
   // Пустые статьи не показываем. Исключение — материал: нулевой материал в заказе

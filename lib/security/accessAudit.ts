@@ -39,7 +39,15 @@ export const SENSITIVE_TABLES = new Set([
   'manager_stats_monthly', 'coefficients', 'process_cost_inputs', 'production_settings',
   'security_audit_runs',   // сам отчёт прогона — список дыр
   'manager_schedules', 'wazzup_outgoing_messages', 'manager_coaching',
+  'b2b_rates',        // закалка, кромка, мин. цены — себестоимость B2B
+  'coaching_effect',  // результат человека по дням
 ])
+
+// Новые таблицы без денег и людей — перечислены явно, с причиной. Тест
+// __tests__/access/newTablesClassified.test.ts требует, чтобы каждая таблица из
+// миграций с 23.09 стояла в одном из списков: «решили, что не чувствительная»
+// отличается от «забыли» только записью здесь.
+export const NOT_SENSITIVE_TABLES = new Set<string>([])
 
 // Таблицы витрины: их публичность — замысел, а не упущение.
 const PUBLIC_BY_DESIGN = new Set([
@@ -55,6 +63,11 @@ const PUBLIC_READ_OK = new Set([
 ])
 
 const WRITE_PRIVILEGES = new Set(['INSERT', 'UPDATE', 'DELETE'])
+
+export function isClassifiedTable(table: string): boolean {
+  return SENSITIVE_TABLES.has(table) || NOT_SENSITIVE_TABLES.has(table)
+    || PUBLIC_BY_DESIGN.has(table) || PUBLIC_READ_OK.has(table)
+}
 
 const isPublicRole = (roles: string[]) => roles.some(r => r === 'PUBLIC' || r === 'anon')
 

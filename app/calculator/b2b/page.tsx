@@ -6,11 +6,13 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { TreatToggle } from './TreatToggle'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from '@/lib/types'
+import { B2BClient, B2BMaterial, B2BService, B2BFilm } from '@/lib/types'
 import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
+import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
+import { FINANCE_FALLBACK, pickFinance, type Finance, type FinanceRow } from '@/lib/pricing/pickFinance'
 import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
 import { itemCostPanel } from '@/lib/b2b/itemCostPanel'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
@@ -65,7 +67,7 @@ const SUPER_CATS = [
 ] as const
 type SuperCat = typeof SUPER_CATS[number]['value']
 import {
-  calcItem, calcTotals, effectiveItemTotal, itemMarginPct, orderMarginPct, TEMPERING_COST, VAT,
+  calcItem, calcTotals, effectiveItemTotal, itemMarginPct, orderMarginPct, VAT,
   type B2BOrderItem, type B2BOrderTotals, type FacetPrice, type MinPriceReason,
 } from '@/lib/b2bCalculator'
 import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
@@ -73,10 +75,11 @@ import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
 const fmtN = (n: number, d = 3) => n.toLocaleString('ru-RU', { maximumFractionDigits: d })
 
-function marginBadgeClass(m: number): string {
-  const s = computeMarginStatus(m, { green_threshold: 35, yellow_threshold: 25, blocked_below: 0 })
-  if (s === 'green')  return 'bg-emerald-50 text-emerald-700'
-  if (s === 'yellow') return 'bg-amber-50 text-amber-700'
+// Пороги — справочник b2b_rates: красный = то, что уходит владельцу на согласование.
+function marginBadgeClass(m: number, rates: B2BRates): string {
+  const t = marginTone(m, rates)
+  if (t === 'green') return 'bg-emerald-50 text-emerald-700'
+  if (t === 'amber') return 'bg-amber-50 text-amber-700'
   return 'bg-red-50 text-red-600'
 }
 
@@ -169,8 +172,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   // Правая панель быстрого расчёта (только variant='mglass'): B2B даёт себестоимость
   // без НДС → здесь наценка+налог → цена изделия + монтаж/доставка/подъём. Маржа/налог
   // редактируемы, но НЕ сохраняются как умолчание: на новом просчёте снова 40/12.
-  const [mgMargin, setMgMargin]     = useState('40')
-  const [mgTax, setMgTax]           = useState('12')
+  const [mgMargin, setMgMargin]     = useState(String(FINANCE_FALLBACK.marginPct))
+  const [mgTax, setMgTax]           = useState(String(FINANCE_FALLBACK.taxPct))
+  // Умолчания маржи/налога — общая строка financial_settings (тариф standard), та же,
+  // что правится в «Настройках»; до загрузки — FINANCE_FALLBACK.
+  const [mgFinance, setMgFinance]   = useState<Finance>(FINANCE_FALLBACK)
   // Монтаж 6500/секц и доставка 5000 подставлены сразу (владелец: не заставлять
   // менеджера помнить число), редактируемы; на новом просчёте возвращаются к умолчанию.
   const [mgPerSection, setMgPerSection] = useState('6500')
@@ -321,6 +327,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
 
   // Авто-надбавки за габариты/сложность. Снятые вручную правила — в dismissed-сете.
   const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([])
+  // Внутренние ставки (закалка, кромка, транспорт, упаковка, мин. цены) — справочник
+  // b2b_rates. До загрузки и при пропуске строки — заводские, и экран об этом говорит.
+  const [rates, setRates] = useState<B2BRates>(DEFAULT_B2B_RATES)
+  const [ratesMissing, setRatesMissing] = useState<string[]>([])
   const [fDismissedSurcharges, setFDismissedSurcharges] = useState<Set<number>>(new Set())
   const [eDismissedSurcharges, setEDismissedSurcharges] = useState<Set<number>>(new Set())
 
@@ -373,7 +383,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         setManagerCode(userManagerCode)
         setMglassOnly(userMGlassOnly)
 
-        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }] = await Promise.all([
+        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }, rateRes, finRes] = await Promise.all([
           sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
@@ -384,7 +394,13 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
           sb.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
           sb.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
+          sb.from('b2b_rates').select('key, value'),
+          sb.from('financial_settings').select('tier, product_type, tax_percent, default_margin, min_margin'),
         ])
+        if (!finRes.error && finRes.data) setMgFinance(pickFinance(finRes.data as FinanceRow[], '', 'standard'))
+        const loadedRates = ratesFromRows(rateRes.error ? null : (rateRes.data as RateRow[] | null))
+        setRates(loadedRates.rates)
+        setRatesMissing(loadedRates.missing)
         // Форматы листов по материалу (для раскроя): дефолт первым.
         const formatsByMat = new Map<number, { width: number; height: number }[]>()
         for (const v of (sheetVariants ?? []) as { material_id: number; sheet_width: number; sheet_height: number }[]) {
@@ -541,13 +557,14 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     if (mg) setClientId(mg.id)
   }, [mglassOnly, clientId, clients])
 
-  // Новый просчёт (корзина пуста) → маржа/налог возвращаются к 40/12. Правка живёт
-  // внутри текущего просчёта, умолчанием не становится (требование владельца).
+  // Новый просчёт (корзина пуста) → маржа/налог возвращаются к умолчаниям из
+  // financial_settings. Правка живёт внутри текущего просчёта, умолчанием не становится
+  // (требование владельца).
   useEffect(() => {
     if (variant !== 'mglass' || items.length > 0) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMgMargin('40'); setMgTax('12'); setMgPerSection('6500'); setMgSections('1'); setMgDelivery('5000'); setMgLift('')
-  }, [variant, items.length])
+    setMgMargin(String(mgFinance.marginPct)); setMgTax(String(mgFinance.taxPct)); setMgPerSection('6500'); setMgSections('1'); setMgDelivery('5000'); setMgLift('')
+  }, [variant, items.length, mgFinance])
 
   // А12: прайс клиента подтягиваем при смене клиента. Уже набранные позиции
   // пересчитываем — иначе цена зависела бы от того, в каком порядке менеджер
@@ -705,9 +722,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         services: it.services.map(s => ({ name: s.name, type: s.type, value: s.value, cost_price: s.costPrice })),
       }]
     })
-    const issues = checkQuoteBom(bomItems, { facetPrices, ...(pricedMaterials ? { pricedMaterials } : {}) })
+    const issues = checkQuoteBom(bomItems, { facetPrices, temperingPerM2: rates.temperingPerM2, ...(pricedMaterials ? { pricedMaterials } : {}) })
     return issues.map(iss => ({ ...iss, itemIndex: sourceIdx[iss.itemIndex] ?? iss.itemIndex }))
-  }, [items, baseMaterials, facetPrices, pricedMaterials])
+  }, [items, baseMaterials, facetPrices, pricedMaterials, rates])
 
   const bomSummary = useMemo(() => summarizeIssues(bomIssues), [bomIssues])
 
@@ -877,7 +894,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         applyMinPrice: fMinPrice,
         comment: [p.label, p.comment, p.needsReview ? 'проверить размер' : ''].filter(Boolean).join(' · ') || undefined,
         dismissedSurcharges: new Set<number>(),
-      }, { facetPrices, surchargeRules })
+      }, { facetPrices, surchargeRules, rates })
       return { ...calc, localId: crypto.randomUUID() }
     })
     setItems(prev => [...prev, ...added])
@@ -902,7 +919,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
       dismissedSurcharges: fDismissedSurcharges,
-    }, { facetPrices, surchargeRules })
+    }, { facetPrices, surchargeRules, rates })
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID() }])
     setFWidth('')
     setFHeight('')
@@ -970,7 +987,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       const q = Math.max(1, Number(it.quantity) || 1)
       const temp = !!it.tempering
       const waste = mat.passthrough ? 10 : mat.waste_percent
-      const calc = calcItem(mat, cutW, cutH, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices)
+      const calc = calcItem(mat, cutW, cutH, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices, false, 2, null, [], true, rates)
       const hh = Number(it.holes) || 0
       const cc = Number(it.cutouts) || 0
       holes += hh * q
@@ -1078,7 +1095,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         : [],
       applyMinPrice: item.applyMinPrice !== false, comment: item.comment || undefined,
       dismissedSurcharges: new Set<number>(),
-    }, { facetPrices, surchargeRules })
+    }, { facetPrices, surchargeRules, rates })
     return { ...calc, localId: item.localId, manualTotal: item.manualTotal ?? null }
   }
 
@@ -1184,7 +1201,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
       dismissedSurcharges: eDismissedSurcharges,
-    }, { facetPrices, surchargeRules })
+    }, { facetPrices, surchargeRules, rates })
     setItems(prev => prev.map(i => i.localId === editingLocalId
       // Договорную цену позиции сохраняем: менеджер согласовал её с клиентом,
       // а правка комментария или количества её молча откатывала к расчётной.
@@ -2137,6 +2154,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   label={fMinPrice ? 'Учитывать' : 'Чистый расчёт'} />
               </div>
             </div>
+            {ratesMissing.length > 0 && (
+              <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                {ratesMissingNote(ratesMissing)}
+              </p>
+            )}
 
             {/* Обработка. Собрана в один блок, потому что все эти признаки делают одно:
                 строят маршрут изделия по цеху. Не отметил — этап не создастся, и человек
@@ -2719,7 +2741,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                               {item.costExVat.toLocaleString('ru-RU')} ₽
                             </td>
                             <td className="px-3 py-2.5 text-right">
-                              <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(em)}`}>
+                              <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(em, rates)}`}>
                                 {em}%
                               </span>
                             </td>
@@ -2810,7 +2832,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                           <td className="px-3 py-2.5 text-right">
                             {items.length > 0 && (() => {
                               const avg = orderMarginPct(itemsAuto, discount)
-                              return <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(avg)}`}>{avg}%</span>
+                              return <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(avg, rates)}`}>{avg}%</span>
                             })()}
                           </td>
                           <td></td>
@@ -2877,7 +2899,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   {/* Все числа — одной сеткой, узкими полями: маржа/налог трёхзначные,
                       остальное рядом. Иначе карточка растягивалась на два экрана. */}
                   <div className="grid grid-cols-3 gap-2">
-                    <div><label className={lbl}>Маржа, %</label>
+                    <div><label className={lbl} title={`Умолчание: ${mgFinance.source}`}>Маржа, %</label>
                       <input type="number" className={fldS} value={mgMargin} onChange={e => setMgMargin(e.target.value)} /></div>
                     <div><label className={lbl}>Налог, %</label>
                       <input type="number" className={fldS} value={mgTax} onChange={e => setMgTax(e.target.value)} /></div>
@@ -3004,7 +3026,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   const avgEm = orderMarginPct(itemsAuto, discount)
                   return (
                     <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[#f8f8f7] border border-[#f0f0ec]">
-                      <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm)}`}>{avgEm}%</span>
+                      <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm, rates)}`}>{avgEm}%</span>
                       <span className="text-[12px] text-[#6b6b66]">маржа заказа</span>
                       <span className="ml-auto text-[12px] font-semibold font-mono text-[#111110]">
                         {totals.profit > 0 ? '+' : ''}{fmt(totals.profit)}
@@ -3380,7 +3402,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             triplexExtraGlasses: eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
             applyMinPrice: eMinPrice,
             dismissedSurcharges: eDismissedSurcharges,
-          }, { facetPrices, surchargeRules }), localId: '' }
+          }, { facetPrices, surchargeRules, rates }), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
       const ePreviewMargin = ePreviewItem ? itemMarginPct(ePreviewItem, discount) : null
@@ -3674,7 +3696,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#f8f8f7] border border-[#e8e8e4]">
                   <span className="text-[10px] font-medium text-[#8a8a85]">Итого позиции{discount > 0 ? ` (−${discount}%)` : ''}</span>
                   <span className="flex items-center gap-2">
-                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(ePreviewMargin!)}`}>{ePreviewMargin}%</span>
+                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(ePreviewMargin!, rates)}`}>{ePreviewMargin}%</span>
                     <span className="text-[16px] font-bold font-mono text-[#111110]">{ePreviewTotal.toLocaleString('ru-RU')} ₽</span>
                   </span>
                 </div>

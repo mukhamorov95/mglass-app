@@ -1,5 +1,6 @@
 import type { B2BMaterial, B2BService } from '../types'
-import { TEMPERING_COST, type B2BOrderItem, type FacetPrice } from '../b2bCalculator'
+import type { B2BOrderItem, FacetPrice } from '../b2bCalculator'
+import { DEFAULT_B2B_RATES } from './rates'
 
 // Проверка спецификации до отправки просчёта: где позиция не сходится со справочником
 // (нет себестоимости) — там маржа считается от нуля, и изделие может уйти клиенту
@@ -36,6 +37,8 @@ export type BomCheckRef = {
   facetPrices: FacetPrice[]
   // ключи материалов, привязанных к прайсу поставщика: `${name}|${'glass'|'mirror'}`
   pricedMaterials?: Set<string>
+  // закалка по толщине из справочника b2b_rates — та же, по которой посчитана сумма
+  temperingPerM2?: Record<number, number>
 }
 
 // Категория b2b_materials → категория справочника «Стекло» (glass_price_matrix)
@@ -72,7 +75,7 @@ export function checkQuoteBom(items: BomCheckItem[], ref: BomCheckRef): BomIssue
       })
     }
 
-    if (item.hasTempering && !(TEMPERING_COST[mat.thickness] > 0)) {
+    if (item.hasTempering && !((ref.temperingPerM2 ?? DEFAULT_B2B_RATES.temperingPerM2)[mat.thickness] > 0)) {
       issues.push({
         itemIndex, code: 'tempering_no_cost', severity: 'block', subject: `закалка ${mat.thickness} мм`,
         detail: `Закалка ${mat.thickness} мм — нет тарифа: закалка посчитана бесплатно`,
