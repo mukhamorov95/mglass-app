@@ -12,6 +12,7 @@ import ResultsBlock from './ResultsBlock'
 import PbxBlock from './PbxBlock'
 import SchedulesBlock from './SchedulesBlock'
 import CoachingPreview from './CoachingPreview'
+import ActionTimeline from './ActionTimeline'
 
 // Рабочий день менеджеров по AmoCRM. Команда общается с клиентами только через amo,
 // поэтому след в amo — это и есть рабочий день. Ноль здесь — повод спросить, а не
@@ -84,7 +85,7 @@ function PeriodNorm({ m, s }: { m: ManagerActivity; s?: ManagerSchedule }) {
   )
 }
 
-function DayRows({ m, s }: { m: ManagerActivity; s?: ManagerSchedule }) {
+function DayRows({ m, s, onDay }: { m: ManagerActivity; s?: ManagerSchedule; onDay: (day: string) => void }) {
   return (
     <table className="w-full text-[12px]">
       <thead>
@@ -111,7 +112,11 @@ function DayRows({ m, s }: { m: ManagerActivity; s?: ManagerSchedule }) {
             <td className="py-1 pr-3"><DayNorm d={d} s={s} /></td>
             <td className="py-1 pr-3 text-right"><Num v={d.activeHours} /></td>
             <td className="py-1 pr-3 text-right"><Num v={d.firstAt === null ? '—' : fmtWait(d.longestPauseMin)} muted /></td>
-            <td className="py-1 pr-3 text-right"><Num v={d.actions} /></td>
+            <td className="py-1 pr-3 text-right">
+              {d.actions > 0
+                ? <button onClick={() => onDay(d.day)} className="underline decoration-dotted decoration-[#9a9a95] hover:text-[#111110]"><Num v={d.actions} /></button>
+                : <Num v={d.actions} />}
+            </td>
             <td className="py-1 pr-3 text-right"><Num v={d.messagesOwn} /> <span className="text-[#9a9a95]">+{d.messagesNoAuthor}</span></td>
             <td className="py-1 pr-3 text-right"><Num v={d.clientMessages} muted /></td>
             <td className="py-1 pr-3 text-right"><Num v={fmtWait(median(d.replyMinutes))} /></td>
@@ -174,6 +179,8 @@ export default function AmoActivityPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState<number | null>(null)
+  // какое число «Действий» раскрыто в ленту: чей день смотрим
+  const [tl, setTl] = useState<{ userId: number; day: string; name: string } | null>(null)
   const [schedules, setSchedules] = useState<ManagerSchedule[]>([])
   const [resultsOn, setResultsOn] = useState(false)
 
@@ -311,7 +318,14 @@ export default function AmoActivityPage() {
                           <td className="px-2 py-2 text-right"><Num v={single ? fmtTime(d0.lastAt) : fmtMinuteOfDay(m.medianEndMin)} /></td>
                           <td className="px-2 py-2 text-[12px] whitespace-nowrap">{single ? <DayNorm d={d0} s={s} /> : <PeriodNorm m={m} s={s} />}</td>
                           <td className="px-2 py-2 text-right"><Num v={single ? d0.activeHours : m.avgActiveHours} /></td>
-                          <td className="px-2 py-2 text-right"><Num v={m.total.actions} /></td>
+                          <td className="px-2 py-2 text-right">
+                            {m.total.actions > 0 && single
+                              ? <button
+                                title="Показать, что именно делал"
+                                onClick={e => { e.stopPropagation(); setOpen(m.userId); setTl({ userId: m.userId, day: data.days[0], name: m.name }) }}
+                                className="underline decoration-dotted decoration-[#9a9a95] hover:text-[#111110]"><Num v={m.total.actions} /></button>
+                              : <Num v={m.total.actions} />}
+                          </td>
                           <td className="px-2 py-2 text-right"><Num v={m.total.messagesOwn} /> <span className="text-[#9a9a95]">+{m.total.messagesNoAuthor}</span></td>
                           <td className="px-2 py-2 text-right"><Num v={m.total.clientMessages} muted /></td>
                           <td className="px-2 py-2 text-right"><Num v={fmtWait(m.medianReplyMin)} /></td>
@@ -323,7 +337,15 @@ export default function AmoActivityPage() {
                         </tr>
                         {open === m.userId && (
                           <tr className="border-b border-[#e4e4e0] bg-[#fafaf8]">
-                            <td colSpan={single ? 14 : 15} className="px-4 py-3"><DayRows m={m} s={s} /></td>
+                            <td colSpan={single ? 14 : 15} className="px-4 py-3">
+                              <DayRows m={m} s={s} onDay={day => setTl({ userId: m.userId, day, name: m.name })} />
+                              {tl && tl.userId === m.userId && (
+                                <div className="mt-3 pt-3 border-t border-[#e4e4e0]">
+                                  <button onClick={() => setTl(null)} className="text-[11px] text-[#9a9a95] hover:text-[#111110] mb-2">свернуть действия ✕</button>
+                                  <ActionTimeline key={`${tl.userId}-${tl.day}`} userId={tl.userId} day={tl.day} name={tl.name} />
+                                </div>
+                              )}
+                            </td>
                           </tr>
                         )}
                       </Fragment>
@@ -453,6 +475,7 @@ export default function AmoActivityPage() {
                 <li><b>Действие</b> — всё, что человек сделал в amo под своим именем: сообщение, звонок, задача, заметка, смена этапа, правка полей. Не считаются: сообщения клиентов, пропущенные звонки и связки «сделка ↔ контакт» — их ставит интеграция заявок, в том числе ночью.</li>
                 <li><b>Начало и конец</b> — первое и последнее действие за день. Для периода — медиана по дням, в которые были действия.</li>
                 <li><b>По графику</b> — сравнение с графиком ниже (менеджеры: 9:00–18:00, пн–пт; в субботу — дежурный). «Поздний старт» — первое действие в amo позже начала смены больше чем на 15 минут; это не время прихода: читать чаты можно без следа в amo. «Ранний финиш» — последнее действие раньше конца смены больше чем на 15 минут. «Пустой день» — рабочий по графику день без единого действия. До даты выхода дни не в вину. Нет графика — нет и оценки.</li>
+                <li><b>Что именно делал</b> — нажми на число в колонке «Действий»: развернётся лента за день, от первого действия до последнего. Число и лента считаются одним правилом, поэтому сходятся.</li>
                 <li><b>Имена</b> — из приложения (карточка сотрудника), а не из amo: учётки в amo переименовывали, и они расходятся (amo «Алина» — это Айжан, amo «Дима» — Дмитрий).</li>
                 <li><b>Суббота</b> — выходной по графику; кто работал — отмечен «дежурство». Суббота, в которую никто из менеджеров ничего не сделал в amo, — «дежурного не было».</li>
                 <li><b>Сообщения «+N»</b> — отправлены без автора: с телефона или из приложения Wazzup, мимо интерфейса amo. amo не знает, кто их отправил, поэтому они засчитаны ответственному по сделке отдельно и рабочее окно не двигают. Кто писал на самом деле — блок «Кто писал из Wazzup».{data.noAuthorUnassigned > 0 && ` Не удалось привязать к сделке: ${data.noAuthorUnassigned}.`}</li>
