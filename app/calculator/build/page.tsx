@@ -8,6 +8,7 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import type { MDims, GlassTint, HardwareChoice, MVariant } from '@/components/configurator/scene/assembly'
 import type { KitChoices } from '@/lib/configurator/kit'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { FINANCE_FALLBACK } from '@/lib/pricing/pickFinance'
 import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
 
 // Вкладка «Расчёт» — два экрана. Экран 1: только выбор модели. Экран 2: слева крупный
@@ -53,6 +54,7 @@ type Price = {
   glassCost: number; hardwareCost: number; sections: number; lines: KitLine[]
   glassLines?: GlassLine[]; glassSource?: string | null; glassThickness?: number; glassDiscountPct?: number
   missing: { label: string; reason: string }[]; complete: boolean
+  marginPct?: number; taxPct?: number; marginSource?: 'модель' | 'тариф'
 }
 type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number }
 
@@ -91,8 +93,16 @@ export default function BuildCalcPage() {
   const [pricedKey, setPricedKey] = useState('')
 
   // Правая панель — числа владельца. Сброс к умолчаниям на новом изделии.
-  const [margin, setMargin] = useState('40')
-  const [tax, setTax] = useState('12')
+  // Маржа и налог по умолчанию приходят с ценой из /api/calc/build (financial_settings,
+  // душевые «Бюджет»; своя маржа модели — если задана в прайсе душевых). Пока менеджер
+  // не правил поле руками, оно следует за настройками — как в MirrorPanel.
+  const [margin, setMargin] = useState(String(FINANCE_FALLBACK.marginPct))
+  const [tax, setTax] = useState(String(FINANCE_FALLBACK.taxPct))
+  const [financeSource, setFinanceSource] = useState<string | null>(null)
+  // Ref, а не state: ответ может прийти после ручной правки, и замкнутый в эффекте
+  // флаг перезаписал бы число менеджера.
+  const marginTouched = useRef(false)
+  const taxTouched = useRef(false)
   const [perSection, setPerSection] = useState('6500')
   const [delivery, setDelivery] = useState('5000')
   const [lift, setLift] = useState('')
@@ -135,7 +145,8 @@ export default function BuildCalcPage() {
 
   function pickModel(c: string) {
     setCode(c); setDims(defaultsFor(c)); setChoice({}); setQtyChoice({}); setKitChoices(null); setPrice(null)
-    setMargin('40'); setTax('12'); setPerSection('6500'); setDelivery('5000'); setLift(''); setDiscount('0')
+    marginTouched.current = false; taxTouched.current = false
+    setMargin(String(FINANCE_FALLBACK.marginPct)); setTax(String(FINANCE_FALLBACK.taxPct)); setPerSection('6500'); setDelivery('5000'); setLift(''); setDiscount('0')
     setProfileFrame('partial')
     setScreen('detail')
   }
@@ -192,6 +203,9 @@ export default function BuildCalcPage() {
       if (p.profileFrame === 'partial' || p.profileFrame === 'perimeter') setProfileFrame(p.profileFrame)
       if (p.choice && typeof p.choice === 'object') setChoice(p.choice as Record<string, string>)
       if (p.qtyChoice && typeof p.qtyChoice === 'object') setQtyChoice(p.qtyChoice as Record<string, number>)
+      // Сохранённые маржа и налог — решение по этому расчёту: настройки их не перебивают.
+      if (p.margin != null) marginTouched.current = true
+      if (p.tax != null) taxTouched.current = true
       s('margin', setMargin); s('tax', setTax); s('perSection', setPerSection); s('delivery', setDelivery); s('lift', setLift); s('discount', setDiscount)
       s('clientName', setClientName); s('clientPhone', setClientPhone); s('objectAddress', setObjectAddress)
       if (Array.isArray(p.cart)) setCart(p.cart as CartItem[])
@@ -242,7 +256,13 @@ export default function BuildCalcPage() {
       }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((res: { full?: boolean; price?: Price }) => {
           // Только последний запрос доживает (остальные оборваны abort), значит key актуален.
-          if (res.full && res.price) { setPrice(res.price); setPricedKey(key); setState('idle') }
+          if (res.full && res.price) {
+            const pr = res.price
+            if (pr.marginPct != null && !marginTouched.current) setMargin(String(pr.marginPct))
+            if (pr.taxPct != null && !taxTouched.current) setTax(String(pr.taxPct))
+            if (pr.marginSource) setFinanceSource(pr.marginSource === 'модель' ? 'маржа модели из прайса душевых, налог — финансовые настройки' : 'финансовые настройки, душевые «Бюджет»')
+            setPrice(pr); setPricedKey(key); setState('idle')
+          }
           else { setPrice(null); setState('error') }
         }).catch((e: unknown) => { if ((e as Error)?.name !== 'AbortError') { setPrice(null); setState('error') } })
     }, 400)
@@ -581,9 +601,10 @@ export default function BuildCalcPage() {
                 ))}
               </SpecRow>
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <div><label className={lbl}>Маржа, %</label><input type="number" className={fld} value={margin} onChange={e => setMargin(e.target.value)} /></div>
-                <div><label className={lbl}>Налог, %</label><input type="number" className={fld} value={tax} onChange={e => setTax(e.target.value)} /></div>
+                <div><label className={lbl}>Маржа, %</label><input type="number" className={fld} value={margin} onChange={e => { marginTouched.current = true; setMargin(e.target.value) }} /></div>
+                <div><label className={lbl}>Налог, %</label><input type="number" className={fld} value={tax} onChange={e => { taxTouched.current = true; setTax(e.target.value) }} /></div>
               </div>
+              {financeSource && <div className="text-[11px] text-[#9a9a95]">Маржа и налог по умолчанию: {financeSource}</div>}
               {denom > 0 && <div className="flex justify-between"><span className="text-[#6b6b66]">Цена изделия</span><span className="font-mono font-semibold">{RUB(productPrice)}</span></div>}
               <div className="grid grid-cols-2 gap-2">
                 <div><label className={lbl}>Монтаж/секц</label><input type="number" className={fld} value={perSection} onChange={e => setPerSection(e.target.value)} /></div>
