@@ -103,6 +103,14 @@
     {
       "path": "/api/cron/manager-coaching",
       "schedule": "30 4 * * 1-5"
+    },
+    {
+      "path": "/api/cron/coaching-effect",
+      "schedule": "30 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron/coaching-telegram",
+      "schedule": "40 4 * * 1-5"
     }
   ]
 }
