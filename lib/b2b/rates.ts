@@ -15,6 +15,10 @@ export type B2BRates = {
   transportPerPiece: number                // доставка на закалку, ₽/деталь
   packagingPerM2: number                   // упаковка, ₽/м²
   minLine: Record<MinPriceReason, number>  // минимальная цена позиции, ₽/шт с НДС
+  // Маржа B2B (без НДС): ниже marginMin — красный и правка итога уходит владельцу на
+  // согласование; от marginMin до marginTarget — жёлтый; от marginTarget — зелёный.
+  marginTarget: number
+  marginMin: number
 }
 
 export type RateSpec = { key: string; label: string; unit: string; sort: number; value: number }
@@ -39,6 +43,8 @@ export const B2B_RATE_SPECS: RateSpec[] = [
   { key: 'min_tinted_tempering', label: 'Мин. цена позиции — тонированное, сатин, рифлёное, декор с закалкой', unit: '₽/шт', sort: 61, value: 3000 },
   { key: 'min_mirror',           label: 'Мин. цена позиции — зеркало без закалки', unit: '₽/шт', sort: 62, value: 1500 },
   { key: 'min_narrow_detail',    label: 'Мин. цена позиции — узкая деталь (сторона < 250 мм)', unit: '₽/шт', sort: 63, value: 1500 },
+  { key: 'margin_target', label: 'Маржа — цель (зелёный от)', unit: '%', sort: 70, value: 35 },
+  { key: 'margin_min',    label: 'Маржа — нижний порог (ниже — красный и согласование цены)', unit: '%', sort: 71, value: 25 },
 ]
 
 const specOf = (key: string) => B2B_RATE_SPECS.find(s => s.key === key)!
@@ -54,6 +60,8 @@ export const DEFAULT_B2B_RATES: B2BRates = {
     mirror_no_tempering: specOf(MIN_LINE_KEYS.mirror_no_tempering).value,
     narrow_detail:       specOf(MIN_LINE_KEYS.narrow_detail).value,
   },
+  marginTarget: specOf('margin_target').value,
+  marginMin: specOf('margin_min').value,
 }
 
 export type RateRow = { key: string; value: number | string | null }
@@ -93,6 +101,8 @@ export function ratesFromRows(rows: RateRow[] | null | undefined): { rates: B2BR
       mirror_no_tempering: pick(MIN_LINE_KEYS.mirror_no_tempering),
       narrow_detail:       pick(MIN_LINE_KEYS.narrow_detail),
     },
+    marginTarget: pick('margin_target'),
+    marginMin: pick('margin_min'),
   }
   return { rates, missing }
 }
@@ -104,5 +114,14 @@ export async function loadB2BRates(sb: SupabaseClient): Promise<{ rates: B2BRate
 
 export function ratesMissingNote(missing: string[]): string | null {
   if (missing.length === 0) return null
-  return `Нет в справочнике ставок: ${missing.join(', ')} — взяты заводские значения. Проверьте «Ставки производства стекла».`
+  return `Нет в справочнике ставок: ${missing.join(', ')} — взяты заводские значения. Проверьте «Справочники → Стекло — ставки».`
+}
+
+export type MarginTone = 'green' | 'amber' | 'red'
+
+// Один порог на экран и на гейт: красный = то, что уходит на согласование.
+export function marginTone(marginPct: number, rates: Pick<B2BRates, 'marginTarget' | 'marginMin'>): MarginTone {
+  if (marginPct >= rates.marginTarget) return 'green'
+  if (marginPct >= rates.marginMin) return 'amber'
+  return 'red'
 }

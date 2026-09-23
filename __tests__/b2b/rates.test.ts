@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { B2B_RATE_SPECS, DEFAULT_B2B_RATES, ratesFromRows, ratesMissingNote, type B2BRates } from '@/lib/b2b/rates'
+import { B2B_RATE_SPECS, DEFAULT_B2B_RATES, marginTone, ratesFromRows, ratesMissingNote, type B2BRates } from '@/lib/b2b/rates'
 import { calcItem } from '@/lib/b2bCalculator'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
 import { checkQuoteBom } from '@/lib/b2b/bomCheck'
@@ -59,8 +59,9 @@ describe('ratesFromRows', () => {
 
 describe('сид миграции = заводские значения кода', () => {
   // Перенос места, не цены: иначе первая загрузка справочника молча сдвинет цены.
-  it('каждая строка 20260923_b2b_rates.sql совпадает со спецификацией', () => {
-    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20260923_b2b_rates.sql'), 'utf8')
+  it('каждая строка сидов b2b_rates совпадает со спецификацией', () => {
+    const dir = join(process.cwd(), 'supabase/migrations')
+    const sql = readdirSync(dir).filter(f => /_b2b_rates.*\.sql$/.test(f)).map(f => readFileSync(join(dir, f), 'utf8')).join('\n')
     const seeded = new Map<string, number>()
     for (const m of sql.matchAll(/\('([a-z0-9_]+)',\s*'[^']*',\s*'[^']*',\s*(\d+(?:\.\d+)?),/g)) seeded.set(m[1], Number(m[2]))
     expect(seeded.size).toBe(B2B_RATE_SPECS.length)
@@ -119,5 +120,21 @@ describe('проверка полноты смотрит ту же закалк�
     const ref = { facetPrices: [], temperingPerM2: DEFAULT_B2B_RATES.temperingPerM2 }
     const codes = checkQuoteBom([{ material: GLASS, hasTempering: true }], ref).map(i => i.code)
     expect(codes).not.toContain('tempering_no_cost')
+  })
+})
+
+describe('пороги маржи', () => {
+  it('красный ниже нижнего, жёлтый до цели, зелёный от цели — границы включительно', () => {
+    const t = { marginTarget: 35, marginMin: 25 }
+    expect(marginTone(24.9, t)).toBe('red')
+    expect(marginTone(25, t)).toBe('amber')
+    expect(marginTone(34.9, t)).toBe('amber')
+    expect(marginTone(35, t)).toBe('green')
+    expect(marginTone(-5, t)).toBe('red')
+  })
+  it('пороги берутся из справочника', () => {
+    const { rates } = ratesFromRows(SEED.map(r => r.key === 'margin_min' ? { ...r, value: 30 } : r))
+    expect(rates.marginMin).toBe(30)
+    expect(marginTone(28, rates)).toBe('red')
   })
 })

@@ -6,12 +6,12 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { TreatToggle } from './TreatToggle'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from '@/lib/types'
+import { B2BClient, B2BMaterial, B2BService, B2BFilm } from '@/lib/types'
 import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
-import { DEFAULT_B2B_RATES, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
+import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
 import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
 import { itemCostPanel } from '@/lib/b2b/itemCostPanel'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
@@ -74,10 +74,11 @@ import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
 const fmtN = (n: number, d = 3) => n.toLocaleString('ru-RU', { maximumFractionDigits: d })
 
-function marginBadgeClass(m: number): string {
-  const s = computeMarginStatus(m, { green_threshold: 35, yellow_threshold: 25, blocked_below: 0 })
-  if (s === 'green')  return 'bg-emerald-50 text-emerald-700'
-  if (s === 'yellow') return 'bg-amber-50 text-amber-700'
+// Пороги — справочник b2b_rates: красный = то, что уходит владельцу на согласование.
+function marginBadgeClass(m: number, rates: B2BRates): string {
+  const t = marginTone(m, rates)
+  if (t === 'green') return 'bg-emerald-50 text-emerald-700'
+  if (t === 'amber') return 'bg-amber-50 text-amber-700'
   return 'bg-red-50 text-red-600'
 }
 
@@ -2733,7 +2734,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                               {item.costExVat.toLocaleString('ru-RU')} ₽
                             </td>
                             <td className="px-3 py-2.5 text-right">
-                              <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(em)}`}>
+                              <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(em, rates)}`}>
                                 {em}%
                               </span>
                             </td>
@@ -2824,7 +2825,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                           <td className="px-3 py-2.5 text-right">
                             {items.length > 0 && (() => {
                               const avg = orderMarginPct(itemsAuto, discount)
-                              return <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(avg)}`}>{avg}%</span>
+                              return <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(avg, rates)}`}>{avg}%</span>
                             })()}
                           </td>
                           <td></td>
@@ -3018,7 +3019,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   const avgEm = orderMarginPct(itemsAuto, discount)
                   return (
                     <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[#f8f8f7] border border-[#f0f0ec]">
-                      <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm)}`}>{avgEm}%</span>
+                      <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm, rates)}`}>{avgEm}%</span>
                       <span className="text-[12px] text-[#6b6b66]">маржа заказа</span>
                       <span className="ml-auto text-[12px] font-semibold font-mono text-[#111110]">
                         {totals.profit > 0 ? '+' : ''}{fmt(totals.profit)}
@@ -3688,7 +3689,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#f8f8f7] border border-[#e8e8e4]">
                   <span className="text-[10px] font-medium text-[#8a8a85]">Итого позиции{discount > 0 ? ` (−${discount}%)` : ''}</span>
                   <span className="flex items-center gap-2">
-                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(ePreviewMargin!)}`}>{ePreviewMargin}%</span>
+                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(ePreviewMargin!, rates)}`}>{ePreviewMargin}%</span>
                     <span className="text-[16px] font-bold font-mono text-[#111110]">{ePreviewTotal.toLocaleString('ru-RU')} ₽</span>
                   </span>
                 </div>

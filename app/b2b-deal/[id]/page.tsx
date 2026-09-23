@@ -5,11 +5,14 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { finalTotalOf, type PriceApproval } from '@/lib/b2b/priceOverride'
 import { paidByOrder, remainderStatus } from '@/lib/b2b/orderPayments'
 import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { loadB2BRates, marginTone, type MarginTone } from '@/lib/b2b/rates'
 import { deadlineFor } from '@/lib/b2b/deadline'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { parseNotes } from '@/lib/b2b/publicQuote'
 import { isShipped } from '@/lib/b2b/todayPriorities'
 import { stageDayKey } from '@/lib/production/dayLists'
+
+const TONE_TEXT: Record<MarginTone, string> = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-500' }
 
 // А4: одна карточка сделки. Раньше просчёт и заказ жили в двух списках, документы
 // в третьем месте, деньги в четвёртом — менеджер собирал картину по вкладкам.
@@ -58,9 +61,10 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   // A23: оплата — из payments (не из notes). Прямые платежи по заказу + доля от
   // оплаченных счетов, куда заказ входит. Считаем на сервере — деньги наружу
   // без себестоимости.
-  const [{ data: pays }, { data: invs }] = await Promise.all([
+  const [{ data: pays }, { data: invs }, { rates }] = await Promise.all([
     sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').eq('b2b_order_id', dealId).is('voided_at', null),
     sb.from('invoices').select('id, order_ids, amount').overlaps('order_ids', [dealId]),
+    loadB2BRates(sb),
   ])
   let invPays: { amount: number; b2b_order_id: number | null; invoice_id: number | null; voided_at: string | null }[] = []
   const invIds = ((invs ?? []) as { id: number }[]).map(i => i.id)
@@ -102,7 +106,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           <p className="text-[26px] font-bold font-mono text-[#111110]">{fmt(total)}</p>
           {discount > 0 && <p className="text-[12px] text-emerald-600">скидка {discount}% от {fmt(Number(order.total_sale_inc_vat) || 0)}</p>}
           {owner && (Number(order.margin_percent) || 0) > 0 && (
-            <p className={`text-[12px] font-semibold ${Number(order.margin_percent) < 25 ? 'text-red-500' : Number(order.margin_percent) < 35 ? 'text-amber-600' : 'text-emerald-600'}`}>
+            <p className={`text-[12px] font-semibold ${TONE_TEXT[marginTone(Number(order.margin_percent), rates)]}`}>
               маржа {Number(order.margin_percent)}%
             </p>
           )}
