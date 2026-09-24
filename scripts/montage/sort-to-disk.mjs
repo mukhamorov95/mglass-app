@@ -1,7 +1,9 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
 import { classifyFrame, folderFor } from './classify.mjs'
+import { readToken, diskInfo, uploadFile, humanSize } from './disk.mjs'
 
 // Раскладывает архив «Монтажей» в дерево папок: изделие → тип → геометрия → трек.
 // Дата не отдельная папка, а часть имени файла: иначе получается триста папок-дат
@@ -18,8 +20,19 @@ const args = Object.fromEntries(
 )
 
 if (!args.from || (!args.dest && !args.dry)) {
-  console.error('нужно: --from <папка экспорта Telegram> --dest <папка Яндекс.Диска> [--limit N] [--dry]')
+  console.error('нужно: --from <папка экспорта Telegram> --dest <куда> [--limit N] [--dry]')
+  console.error('  --dest «disk:/MGLASS-Монтажи» — прямо на Яндекс.Диск по API')
+  console.error('  --dest «/путь/к/папке»        — в локальную папку (например, синхронизируемую)')
   process.exit(1)
+}
+
+// Два приёмника: облако по API и обычная папка. Дерево и имена в обоих одинаковые,
+// чтобы результат не зависел от того, каким путём владелец дал доступ.
+const toDisk = typeof args.dest === 'string' && args.dest.startsWith('disk:')
+const token  = toDisk && !args.dry ? readToken() : null
+if (token) {
+  const info = await diskInfo(token)
+  console.log(`Диск на связи: занято ${humanSize(info.used_space)} из ${humanSize(info.total_space)}, свободно ${humanSize(info.total_space - info.used_space)}`)
 }
 
 const IMG = /\.(jpe?g|png|webp|heic)$/i
@@ -97,9 +110,19 @@ for (const [i, file] of chosen.entries()) {
   const name  = [stamp, meta.order ?? null, seq].filter(Boolean).join('__') + '.' + ext
 
   if (!args.dry) {
-    const target = path.join(args.dest, folder)
-    fs.mkdirSync(target, { recursive: true })
-    fs.copyFileSync(file, path.join(target, name))
+    if (toDisk) {
+      const remote = `${args.dest.replace(/\/$/, '')}/${folder}/${name}`
+      try {
+        await uploadFile(token, file, remote)
+      } catch (e) {
+        failed++
+        console.error(`  ! не загрузилось ${name}: ${e.message.slice(0, 120)}`)
+      }
+    } else {
+      const target = path.join(args.dest, folder)
+      fs.mkdirSync(target, { recursive: true })
+      fs.copyFileSync(file, path.join(target, name))
+    }
   }
 
   rows.push([
@@ -117,8 +140,15 @@ const header = ['файл', 'дата', 'заказ', 'вид кадра', 'из
                 'подсветка', 'стадия', 'стоп-признаки', 'маркетинг', 'уверенность', 'модель', 'заметка', 'исходный путь']
 const csv = [header, ...rows].map(r => r.map(csvCell).join(';')).join('\n')
 if (!args.dry) {
-  fs.mkdirSync(args.dest, { recursive: true })
-  fs.writeFileSync(path.join(args.dest, 'реестр.csv'), '﻿' + csv, 'utf8')
+  // BOM — иначе Excel на Маке открывает кириллицу кракозябрами
+  const local = path.join(os.tmpdir(), 'реестр.csv')
+  fs.writeFileSync(local, '﻿' + csv, 'utf8')
+  if (toDisk) {
+    await uploadFile(token, local, `${args.dest.replace(/\/$/, '')}/реестр.csv`)
+  } else {
+    fs.mkdirSync(args.dest, { recursive: true })
+    fs.copyFileSync(local, path.join(args.dest, 'реестр.csv'))
+  }
 }
 
 const cost = tin / 1e6 * 1 + tout / 1e6 * 5
