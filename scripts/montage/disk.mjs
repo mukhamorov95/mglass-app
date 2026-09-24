@@ -75,7 +75,9 @@ export async function ensureFolder(token, remotePath) {
   }
 }
 
-export async function uploadFile(token, localPath, remotePath) {
+// source — путь к файлу или уже готовый Buffer: кадры приходят и из папки экспорта,
+// и прямо из нашего хранилища, класть их на диск ради загрузки незачем.
+export async function uploadFile(token, source, remotePath) {
   await ensureFolder(token, path.posix.dirname(remotePath))
 
   const { status, json } = await call(
@@ -85,7 +87,7 @@ export async function uploadFile(token, localPath, remotePath) {
     throw new Error(`не выдана ссылка на загрузку ${remotePath}: ${status}${json?.message ? ` ${json.message}` : ''}`)
   }
 
-  const body = fs.readFileSync(localPath)
+  const body = Buffer.isBuffer(source) ? source : fs.readFileSync(source)
   const put = await call(json.href, {
     token, method: 'PUT', body, raw: true,
     headers: { 'Content-Length': String(body.length) },
