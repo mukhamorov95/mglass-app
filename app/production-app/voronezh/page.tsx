@@ -8,6 +8,8 @@ import { useEffect, useMemo, useState } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { itemsWeight } from '@/lib/deliveryWeight'
+import { writeFailure } from '@/lib/rlsWrite'
+import { applyLoadDraft, withLoadDraft, dropShipmentDraft, loadKey, type LoadDraft } from '@/lib/shipmentLoadDraft'
 import { useCanViewMoney } from '@/lib/useCanViewMoney'
 
 const REGION = 'voronezh'
@@ -60,8 +62,9 @@ function parseNotes(raw: string | null): NotesData {
   try { return raw ? JSON.parse(raw) : {} } catch { return {} }
 }
 
-function ShipmentCard({ s, orders, clientNames, canMoney, onShipped, onDelete, onRemove, onLimit, onToggleLoad }: {
+function ShipmentCard({ s, orders, clientNames, canMoney, loadDraft, onShipped, onDelete, onRemove, onLimit, onToggleLoad }: {
   s: Shipment
+  loadDraft: LoadDraft
   orders: Order[]
   clientNames: Map<number, string>
   canMoney: boolean | null
@@ -165,6 +168,12 @@ function ShipmentCard({ s, orders, clientNames, canMoney, onShipped, onDelete, o
                     )}
                     <span className="font-mono">{orderNo(o)}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${o.ready.cls}`}>{o.ready.label}</span>
+                    {isDraft && loadDraft.has(loadKey(s.id, o.id)) && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800"
+                        title="База не приняла отметку: для отправки рейса она учитывается, после обновления страницы пропадёт">
+                        отметка не сохранена
+                      </span>
+                    )}
                     <span className="text-[#9a9a95] ml-auto font-mono">{orderPieces(o)} изд. · {KG(orderWeight(o))} кг · {RUB(orderSum(o))} ₽</span>
                     {isDraft && (
                       <button onClick={() => onRemove(s.id, o.id)} className="text-[#9a9a95] hover:text-red-600 px-1" title="Убрать из рейса">✕</button>
@@ -215,6 +224,7 @@ export default function VoronezhPage() {
   // История: ключ в toggled инвертирует дефолт раскрытия (текущий год/месяц открыты)
   const [toggled, setToggled] = useState<Set<string>>(new Set())
   const [err, setErr] = useState<string | null>(null)
+  const [loadDraft, setLoadDraft] = useState<LoadDraft>(new Map())
   const [search, setSearch] = useState('')
   const [newTripDate, setNewTripDate] = useState('')
   // Целевой рейс: отмеченные заказы добавляются в него
@@ -266,12 +276,18 @@ export default function VoronezhPage() {
     setShipments(((sh.data ?? []) as Omit<Shipment, 'orderIds' | 'loadedIds'>[]).map(s => ({
       ...s,
       orderIds: links.filter(l => l.shipment_id === s.id).map(l => l.order_id),
-      loadedIds: links.filter(l => l.shipment_id === s.id && l.loaded).map(l => l.order_id),
+      loadedIds: applyLoadDraft(
+        s.id,
+        links.filter(l => l.shipment_id === s.id).map(l => l.order_id),
+        links.filter(l => l.shipment_id === s.id && l.loaded).map(l => l.order_id),
+        loadDraft,
+      ),
     })))
     setLoading(false)
   }
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Загрузка один раз при открытии; дальше load() зовут действия экрана
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load() }, [])
 
   const vClients = useMemo(() => clients.filter(c => c.crm_city === CITY), [clients])
@@ -408,7 +424,10 @@ export default function VoronezhPage() {
       ? { ...sh, loadedIds: loaded ? [...new Set([...sh.loadedIds, orderId])] : sh.loadedIds.filter(x => x !== orderId) }
       : sh))
     const sb = createClient()
-    await sb.from('delivery_shipment_orders').update({ loaded }).eq('shipment_id', shipmentId).eq('order_id', orderId)
+    const failed = writeFailure(await sb.from('delivery_shipment_orders').update({ loaded })
+      .eq('shipment_id', shipmentId).eq('order_id', orderId).select('order_id'))
+    setLoadDraft(prev => withLoadDraft(prev, shipmentId, orderId, failed ? loaded : null))
+    if (failed) setErr(`${failed}: отметка «Загружен» осталась только на этом экране — для отправки рейса она учитывается, но после обновления страницы пропадёт.`)
   }
 
   // Отправить рейс: уезжают только ЗАГРУЖЕННЫЕ, незагруженные возвращаются в пул.
@@ -430,6 +449,7 @@ export default function VoronezhPage() {
     await sb.from('delivery_shipments')
       .update({ status: 'shipped', shipped_at: new Date().toISOString(), total_weight_kg: Math.round(weight * 10) / 10, total_amount: Math.round(amount) })
       .eq('id', s.id)
+    setLoadDraft(prev => dropShipmentDraft(prev, s.id))
     load()
   }
 
@@ -557,7 +577,7 @@ export default function VoronezhPage() {
                   Выберите дату и создайте рейс — затем отмечайте заказы ниже и добавляйте их в него.
                 </div>
               )}
-              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} canMoney={canMoney} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
+              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} canMoney={canMoney} loadDraft={loadDraft} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
             </div>
 
             {/* Пул заказов по клиентам */}
@@ -646,7 +666,7 @@ export default function VoronezhPage() {
                                 </button>
                                 {mOpen && (
                                   <div className="mt-2 space-y-2">
-                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} canMoney={canMoney} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
+                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} canMoney={canMoney} loadDraft={loadDraft} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
                                   </div>
                                 )}
                               </div>
