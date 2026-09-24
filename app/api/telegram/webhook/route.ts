@@ -393,6 +393,15 @@ async function handle(update: any, baseUrl: string) {
     return
   }
 
+  // Пересланный кадр в личке — так владелец добирает старый архив, пока Telegram
+  // держит суточную паузу на экспорт. Дата берётся из оригинала, иначе весь архив
+  // ляжет сегодняшним числом. Отвечаем коротко и не показываем меню.
+  if (msg?.forward_origin && (msg.photo || msg.video || msg.document)) {
+    const saved = await captureMontageMedia(msg)
+    if (saved === 'saved' && !msg.media_group_id) await sendMessage(chatId, '📥 в архив')
+    return
+  }
+
   if (msg?.text) {
     const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase()
     if (cmd === '/health') { await handleHealth(chatId); return }
