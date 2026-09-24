@@ -8,6 +8,7 @@ import {
 } from '@/lib/telegram'
 import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
 import { sendMessage as sendWA } from '@/lib/wazzup'
+import { captureMontageMedia } from '@/lib/montageMedia'
 
 export const maxDuration = 60
 
@@ -383,6 +384,14 @@ async function handle(update: any, baseUrl: string) {
 
   const tid    = (msg ?? cb.message).chat.id as number
   const chatId = tid
+
+  // Группы («Монтажи» и любые другие): забираем кадры и молчим. Раньше групповое
+  // сообщение уходило в ветку неавторизованного и бот отвечал в общий чат.
+  const chatType = (msg ?? cb.message).chat.type as string | undefined
+  if (chatType === 'group' || chatType === 'supergroup') {
+    if (msg) await captureMontageMedia(msg)
+    return
+  }
 
   if (msg?.text) {
     const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase()
