@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { writeFailure } from '@/lib/rlsWrite'
 import { HardwareItem } from '@/lib/types'
 
 const EMPTY: Omit<HardwareItem, 'id'> = { name: '', short_name: null, system_type: 'universal', unit: 'шт', cost_price: 0, active: true, comment: null }
@@ -38,6 +39,7 @@ export default function HardwareAdminPage() {
   const [editCell, setEditCell] = useState<{ model_id: string; color: string } | null>(null)
   const [editVal, setEditVal]   = useState('')
   const [kitsSaving, setKitsSaving] = useState(false)
+  const [kitsError, setKitsError] = useState<string | null>(null)
 
   useEffect(() => { load(); loadKits() }, [])
 
@@ -109,11 +111,18 @@ export default function HardwareAdminPage() {
     const supabase = createClient()
     const price = Number(editVal) || 0
     const existing = kits.find(k => k.model_id === editCell.model_id && k.color === editCell.color)
-    if (existing) {
-      await supabase.from('shower_hardware_kits').update({ cost_price: price }).eq('id', existing.id)
-    } else {
-      await supabase.from('shower_hardware_kits').insert({ model_id: editCell.model_id, color: editCell.color, cost_price: price })
+    const res = existing
+      ? await supabase.from('shower_hardware_kits').update({ cost_price: price }).eq('id', existing.id).select('id')
+      : await supabase.from('shower_hardware_kits').insert({ model_id: editCell.model_id, color: editCell.color, cost_price: price }).select('id')
+    const failed = writeFailure(res)
+    if (failed) {
+      // Ячейка остаётся открытой с введённым числом — его можно отправить ещё раз
+      const colorLabel = SHOWER_COLORS.find(c => c.value === editCell.color)?.label ?? editCell.color
+      setKitsError(`${failed} (${editCell.model_id}, ${colorLabel}) — в таблице прежняя цена.`)
+      setKitsSaving(false)
+      return
     }
+    setKitsError(null)
     setEditCell(null)
     await loadKits()
     setKitsSaving(false)
@@ -254,6 +263,8 @@ export default function HardwareAdminPage() {
           <h2 className="text-[18px] font-semibold text-[#111110] tracking-tight">Душевые перегородки — комплекты фурнитуры</h2>
           <p className="text-[13px] text-[#8a8a85] mt-0.5">Себестоимость фурнитурного комплекта по модели и цвету. Нажмите на ячейку чтобы изменить.</p>
         </div>
+
+        {kitsError && <p className="text-[13px] text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-3">{kitsError}</p>}
 
         {kitsLoading ? (
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-8 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
