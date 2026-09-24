@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { writeFailure } from '@/lib/rlsWrite'
 import type { Color, Supplier } from './CatalogTab'
 
 type CatItem = { id: number; name: string; category: string; unit: string; shower_types: string[] }
@@ -25,6 +26,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
   const [savingMan, setSavingMan] = useState(false)
   const [savedMan,  setSavedMan]  = useState(false)
   const [saveErr,   setSaveErr]   = useState('')
+  const [kitErr,    setKitErr]    = useState('')
 
   useEffect(() => {
     db.current.from('shower_catalog_items').select('id,name,category,unit,shower_types')
@@ -63,26 +65,43 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
 
   async function addItem(itemId: number) {
     if (kitRows.find(r => r.item_id === itemId)) return
-    const { data } = await db.current.from('shower_budget_kit_rows')
+    setKitErr('')
+    const { data, error } = await db.current.from('shower_budget_kit_rows')
       .insert({ model_id: model, item_id: itemId, supplier_id: null, sort_order: kitRows.length, qty: 1 })
       .select('*').single()
-    if (data) setKitRows(prev => [...prev, data as KitRow])
+    if (error || !data) { setKitErr(`Не добавлено в комплект ${model}: ${error?.message ?? 'нет прав на правку'}`); return }
+    setKitRows(prev => [...prev, data as KitRow])
     setShowAdd(false); setSearch('')
   }
 
+  const itemName = (rowId: number) => {
+    const row = kitRows.find(r => r.id === rowId)
+    return allItems.find(i => i.id === row?.item_id)?.name ?? `строка #${rowId}`
+  }
+
   async function removeRow(id: number) {
-    await db.current.from('shower_budget_kit_rows').delete().eq('id', id)
+    setKitErr('')
+    const failed = writeFailure(await db.current.from('shower_budget_kit_rows').delete().eq('id', id).select('id'), 'delete')
+    if (failed) { setKitErr(`${failed} — «${itemName(id)}» осталась в комплекте ${model}.`); return }
     setKitRows(prev => prev.filter(r => r.id !== id))
   }
 
   async function setSupplier(rowId: number, supplierId: number | null) {
-    await db.current.from('shower_budget_kit_rows').update({ supplier_id: supplierId }).eq('id', rowId)
+    setKitErr('')
+    const failed = writeFailure(await db.current.from('shower_budget_kit_rows').update({ supplier_id: supplierId }).eq('id', rowId).select('id'))
+    if (failed) {
+      const chosen = suppliers.find(s => s.id === supplierId)?.name ?? 'без поставщика'
+      setKitErr(`${failed} — у «${itemName(rowId)}» поставщик прежний (выбран был: ${chosen}).`)
+      return
+    }
     setKitRows(prev => prev.map(r => r.id === rowId ? { ...r, supplier_id: supplierId } : r))
   }
 
   async function setQty(rowId: number, qty: number) {
     const q = Math.max(1, qty || 1)
-    await db.current.from('shower_budget_kit_rows').update({ qty: q }).eq('id', rowId)
+    setKitErr('')
+    const failed = writeFailure(await db.current.from('shower_budget_kit_rows').update({ qty: q }).eq('id', rowId).select('id'))
+    if (failed) { setKitErr(`${failed} — у «${itemName(rowId)}» количество прежнее (введено: ${q}).`); return }
     setKitRows(prev => prev.map(r => r.id === rowId ? { ...r, qty: q } : r))
   }
 
@@ -95,10 +114,11 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
       const val = Number(manDraft[c.id]) || 0
       const existing = manual.find(m => m.color_id === c.id)
       if (existing?.id) {
-        const { error } = await db.current.from('shower_budget_manual_prices')
+        const failed = writeFailure(await db.current.from('shower_budget_manual_prices')
           .update({ price: val, updated_at: new Date().toISOString() })
           .eq('id', existing.id)
-        if (error) errors.push(`update ${c.id}: ${error.message}`)
+          .select('id'))
+        if (failed) errors.push(`${c.name}: ${failed}`)
       } else if (val > 0) {
         const { error } = await db.current.from('shower_budget_manual_prices')
           .insert({ model_id: model, color_id: c.id, price: val })
@@ -176,6 +196,13 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
             }`}>{m}</button>
         ))}
       </div>
+
+      {kitErr && (
+        <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg flex items-start justify-between gap-3">
+          <p className="text-[12px] text-red-700 font-medium leading-snug">{kitErr}</p>
+          <button onClick={() => setKitErr('')} className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex items-center gap-3">

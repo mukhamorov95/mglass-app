@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { writeFailure } from '@/lib/rlsWrite'
 
 type FacetRow = {
   id: number
@@ -72,12 +73,14 @@ export default function FacetPage() {
     setSaving(row.id)
     setError(null)
     const sb = createClient()
-    const { error: err } = await sb
+    const res = await sb
       .from('facet_prices')
       .update(edit)
       .eq('id', row.id)
-    if (err) {
-      setError(err.message)
+      .select('id')
+    const failed = writeFailure(res)
+    if (failed) {
+      setError(`${failed} (фацет ${row.type_mm} мм). Введённые значения остались в строке.`)
     } else {
       setEdits(prev => { const n = { ...prev }; delete n[row.id]; return n })
       await load()

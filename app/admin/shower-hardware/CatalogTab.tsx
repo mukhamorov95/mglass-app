@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { writeFailure } from '@/lib/rlsWrite'
 import { ImagePicker } from './ImagePicker'
 
 export const CATEGORIES = [
@@ -179,7 +180,7 @@ export function CatalogTab({
   const [formError,      setFormError]      = useState('')  // ошибка сохранения — над кнопками
   const [priceError,     setPriceError]     = useState('')  // ошибка дубля в таблице цен
   const [deletingId,     setDeletingId]     = useState<number | null>(null)
-  const [deleteError,    setDeleteError]    = useState('')
+  const [listError,      setListError]      = useState('')
   const [loadError,      setLoadError]      = useState<string | null>(null)
 
   // Filters
@@ -192,6 +193,8 @@ export function CatalogTab({
   const [editWebsite, setEditWebsite] = useState('')
   const [editDisc,    setEditDisc]    = useState('')
   const editRef = useRef<HTMLInputElement>(null)
+  // Цена, которую база не приняла: введённое остаётся, ячейка открывается с ним
+  const [priceFail, setPriceFail] = useState<{ itemId: number; supId: number; colId: number; website: string; disc: string; text: string } | null>(null)
 
   // Supplier quick-add (price matrix)
   const [supDropOpen, setSupDropOpen] = useState(false)
@@ -320,8 +323,8 @@ export function CatalogTab({
 
       let itemId: number | null = null
       if (editId !== null) {
-        const { error } = await db.current.from('shower_catalog_items').update(itemData).eq('id', editId)
-        if (error) throw error
+        const failed = writeFailure(await db.current.from('shower_catalog_items').update(itemData).eq('id', editId).select('id'))
+        if (failed) { setFormError(`${failed}. Позиция в справочнике прежняя, введённое осталось в форме.`); return }
         await db.current.from('shower_catalog_prices').delete().eq('item_id', editId)
         itemId = editId
       } else {
@@ -368,7 +371,13 @@ export function CatalogTab({
   }
 
   async function toggleActive(id: number, active: boolean) {
-    await db.current.from('shower_catalog_items').update({ active: !active }).eq('id', id)
+    setListError('')
+    const failed = writeFailure(await db.current.from('shower_catalog_items').update({ active: !active }).eq('id', id).select('id'))
+    if (failed) {
+      const name = items.find(i => i.id === id)?.name ?? `#${id}`
+      setListError(`${failed} — «${name}» осталась ${active ? 'активной' : 'скрытой'}.`)
+      return
+    }
     setItems(prev => prev.map(i => i.id === id ? { ...i, active: !active } : i))
   }
 
@@ -388,14 +397,16 @@ export function CatalogTab({
   async function deleteItem(item: Item) {
     if (!window.confirm(`Удалить «${item.name}»? Это действие нельзя отменить.`)) return
     setDeletingId(item.id)
-    setDeleteError('')
+    setListError('')
     try {
-      const { error } = await db.current.from('shower_catalog_items').delete().eq('id', item.id)
-      if (error) {
-        console.error('Delete shower catalog item failed:', error)
-        setDeleteError('Не удалось удалить позицию. Проверьте соединение или обратитесь к администратору.')
+      const res = await db.current.from('shower_catalog_items').delete().eq('id', item.id).select('id')
+      if (res.error) {
+        console.error('Delete shower catalog item failed:', res.error)
+        setListError('Не удалось удалить позицию. Проверьте соединение или обратитесь к администратору.')
         return
       }
+      const failed = writeFailure(res, 'delete')
+      if (failed) { setListError(`${failed} — «${item.name}» осталась в справочнике.`); return }
       setItems(prev => prev.filter(i => i.id !== item.id))
       if (editId === item.id) cancelForm()
     } finally {
@@ -406,8 +417,9 @@ export function CatalogTab({
   // ── Price matrix (expanded view) ────────────────────────────────────────────
   function startPriceEdit(supId: number, colId: number) {
     const p = prices.find(p => p.supplier_id === supId && p.color_id === colId)
-    setEditWebsite(p?.website_price ? String(p.website_price) : '')
-    setEditDisc(p?.discount_percent ? String(p.discount_percent) : '0')
+    const draft = priceFail && priceFail.itemId === expandedId && priceFail.supId === supId && priceFail.colId === colId ? priceFail : null
+    setEditWebsite(draft ? draft.website : p?.website_price ? String(p.website_price) : '')
+    setEditDisc(draft ? draft.disc : p?.discount_percent ? String(p.discount_percent) : '0')
     setEditing({ supId, colId })
   }
 
@@ -425,20 +437,29 @@ export function CatalogTab({
       website_price: website, discount_percent: discount, cost_price: cost,
       vat_included: existing?.vat_included ?? false,
     }
+    const before = prices
     setPrices(prev => [...prev.filter(p => !(p.supplier_id === supId && p.color_id === colId)), updated])
+    const fail = (text: string) => {
+      setPrices(before)
+      setPriceFail({ itemId: expandedId, supId, colId, website: editWebsite, disc: editDisc, text })
+    }
 
     if (existing?.id) {
-      await db.current.from('shower_catalog_prices')
+      const failed = writeFailure(await db.current.from('shower_catalog_prices')
         .update({ website_price: website, discount_percent: discount, cost_price: cost })
         .eq('id', existing.id)
+        .select('id'))
+      if (failed) { fail(failed); return }
     } else {
-      const { data } = await db.current.from('shower_catalog_prices')
+      const { data, error } = await db.current.from('shower_catalog_prices')
         .insert({ item_id: expandedId, supplier_id: supId, color_id: colId,
           website_price: website, discount_percent: discount, cost_price: cost, vat_included: false })
         .select('id').single()
-      if (data) setPrices(prev => prev.map(p =>
+      if (error || !data) { fail(`Не сохранено: ${error?.message ?? 'нет прав на правку'}`); return }
+      setPrices(prev => prev.map(p =>
         p.supplier_id === supId && p.color_id === colId ? { ...p, id: data.id } : p))
     }
+    setPriceFail(null)
   }
 
   async function addNewSupplier(forItemId: number) {
@@ -709,11 +730,11 @@ export function CatalogTab({
         ))}
       </div>
 
-      {/* Ошибка удаления */}
-      {deleteError && (
+      {/* Ошибка удаления или скрытия позиции */}
+      {listError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 flex items-center justify-between">
-          <p className="text-[12px] text-red-700 font-medium">{deleteError}</p>
-          <button onClick={() => setDeleteError('')} className="text-red-400 hover:text-red-600 text-lg leading-none ml-4">×</button>
+          <p className="text-[12px] text-red-700 font-medium">{listError}</p>
+          <button onClick={() => setListError('')} className="text-red-400 hover:text-red-600 text-lg leading-none ml-4">×</button>
         </div>
       )}
 
@@ -846,6 +867,17 @@ export function CatalogTab({
                     )}
                   </div>
                 </div>
+
+                {priceFail?.itemId === item.id && (
+                  <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-start justify-between gap-3">
+                    <p className="text-[12px] text-red-700 font-medium leading-snug">
+                      {priceFail.text}: {suppliers.find(s => s.id === priceFail.supId)?.name ?? 'поставщик'} ·{' '}
+                      {colors.find(c => c.id === priceFail.colId)?.name ?? 'цвет'} — в справочнике прежняя цена.
+                      Введённое ({priceFail.website || '0'} ₽, скидка {priceFail.disc || '0'}%) откроется, если нажать на ячейку.
+                    </p>
+                    <button onClick={() => setPriceFail(null)} className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+                  </div>
+                )}
 
                 {supplierIdsInMatrix.length === 0 ? (
                   <p className="text-[12px] text-[#b0b0ab] italic">Нажмите «+ поставщик» для добавления цен</p>
