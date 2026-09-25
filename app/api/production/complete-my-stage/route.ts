@@ -6,7 +6,7 @@ import { actorName, buildTaskUpdate } from '@/lib/production/executor'
 import { cascadePriorStages } from '@/lib/productionCascade'
 import { consumeCutting, loadCascadedTasks } from '@/lib/production/consumeBridge'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
-import { pickMyStageTasks, type StationTask } from '@/lib/production/completeMyStage'
+import { chooseStation, myStationGroups, pickMyStageTasks, type StationTask } from '@/lib/production/completeMyStage'
 
 // «Готово на моей станции» — закрыть СВОЙ этап по всем деталям заказа за одно нажатие.
 //
@@ -17,6 +17,10 @@ import { pickMyStageTasks, type StationTask } from '@/lib/production/completeMyS
 //
 // Границу задаёт СЕРВЕР по станциям в профиле, а не браузер: так рабочий физически
 // не может закрыть чужой этап, даже отправив запрос вручную.
+//
+// Одна кнопка — одна станция (владелец, 25.09.2026): body.station называет, какую
+// отметить. У кого станций несколько (Эльзат — резка и полировка), общая кнопка
+// закрывала все сразу: полировка числилась сделанной в секунду резки.
 
 const SHOP_ROLES = ['production', 'admin', 'ceo', 'buyer'] as const
 
@@ -45,7 +49,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'У вас не назначено ни одной станции' }, { status: 403 })
   }
 
-  const mine = pickMyStageTasks((rows ?? []) as StationTask[], stations, user.id)
+  const all = (rows ?? []) as StationTask[]
+  const choice = chooseStation(myStationGroups(all, stations, user.id), body.station, stations)
+  if ('error' in choice) return NextResponse.json({ error: choice.error }, { status: choice.status })
+  const mine = choice.station ? pickMyStageTasks(all, [choice.station], user.id) : []
   if (mine.length === 0) return NextResponse.json({ ok: true, closed: 0, cascaded: 0, already: true })
 
   const actor = { id: user.id, name: actorName(p?.name, user.email) }
