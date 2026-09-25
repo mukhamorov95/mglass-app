@@ -74,6 +74,21 @@ export async function reverseCascade(
 
 export type CascadeActor = { id?: string; name?: string | null; stage?: string }
 
+// Триплекс: у каждого стекла пакета своя цепочка «резка→…→закалка» (layer 1..N), склейка и
+// упаковка — на изделие (layer 0), см. productionRouting. Номер этапа сквозной: резка второго
+// стекла стоит ПОСЛЕ закалки первого. Каскад по одному номеру закрывал закалку первого стекла,
+// когда отмечали резку второго (05402 — 22.09; 5281, 5304, 5317 — в августе), и стекло могло
+// уйти на склейку незакалённым. Этап стекла закрывает предыдущие этапы только своего стекла,
+// этап изделия — всё, что до него. Строки без слоя — как раньше.
+export type CascadeCandidate = { id: number; stage_key: string; sequence_order: number; status: string; layer: number | null }
+
+export function pickCascadeTargets(tasks: CascadeCandidate[], sequenceOrder: number): CascadeCandidate[] {
+  const layer = tasks.find(t => t.sequence_order === sequenceOrder)?.layer ?? 0
+  return tasks.filter(t =>
+    t.sequence_order < sequenceOrder && t.status !== 'done' &&
+    (layer === 0 || !t.layer || t.layer === layer))
+}
+
 export async function cascadePriorStages(
   svc: SupabaseClient,
   orderId: number,
@@ -84,12 +99,11 @@ export async function cascadePriorStages(
 ): Promise<string[]> {
   const { data } = await svc
     .from('production_tasks')
-    .select('id, stage_key')
+    .select('id, stage_key, sequence_order, status, layer')
     .eq('order_id', orderId)
     .eq('item_index', itemIndex)
-    .lt('sequence_order', sequenceOrder)
-    .neq('status', 'done')
-  const prior = (data ?? []) as { id: number; stage_key: string }[]
+    .lte('sequence_order', sequenceOrder)
+  const prior = pickCascadeTargets((data ?? []) as CascadeCandidate[], sequenceOrder)
   if (prior.length === 0) return []
 
   const ids = prior.map(p => p.id)
