@@ -158,7 +158,13 @@
 - `node scripts/owner-tasks.mjs` и `scan-lessons.mjs` падали ENOENT в каждом worktree: .env.local не в git
   и лежит только в основной копии. СДЕЛАНО: scripts/lib/envLocal.mjs — сначала своя копия, потом основная
   (родитель `git rev-parse --git-common-dir`), иначе ясная ошибка со списком путей. Обход «запускать скрипт
-  основной копии по абсолютному пути» больше не нужен. Тот же шаблон чтения ещё в ~11 скриптах scripts/ — не трогали.
+  основной копии по абсолютному пути» больше не нужен (PR #606).
+- СДЕЛАНО следом: остальные 11 скриптов scripts/ тоже на loadEnvLocal — импорты (dds-book, manager-stats,
+  sales-sheet), mine-manager-replies, migrate-amo-to-crm, аудиты `_*` (читали .env.local от cwd — теперь
+  от своей копии, из любого каталога) и check-hardware-price.mts (был dotenv → process.env без перезаписи
+  заданных, разбор совпал с dotenv по всем 26 ключам). `grep -rln env.local scripts` = только lib/envLocal.mjs.
+- Попутно: `npx vitest run scripts/check-hardware-price.mts` из комментария не находит файл — vitest.config
+  берёт только `__tests__/**/*.test.ts`. Работает с отдельным конфигом (include на этот файл + алиас `@`).
 
 ## Параллельная задача (22.09): подпись быстрых расчётов в списках
 - На главной менеджера («Последние расчёты») строки quick показывались как «quick undefined×undefined мм»,

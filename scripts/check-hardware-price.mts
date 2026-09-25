@@ -1,7 +1,9 @@
 import { test, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
-import { config } from 'dotenv'
-config({ path: '.env.local' })
+import { loadEnvLocal } from './lib/envLocal.mjs'
+
+// как dotenv: уже заданные переменные окружения не перезаписываем
+for (const [k, v] of Object.entries(loadEnvLocal())) process.env[k] ??= v
 
 // Диагностика, не тест поведения: печатает себестоимость фурнитуры по прайсу
 // визуализатора рядом со старым флэтом и показывает, где в комплекте нет цены.
