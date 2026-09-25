@@ -57,7 +57,9 @@ export function isJunk(q) { return JUNK.test(q) }
 
 // Путь репозитория содержит кириллицу: import.meta.url приходит процентно-кодированным,
 // а process.argv[1] — нет, и обычная проверка «запущен напрямую» молча не срабатывает.
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+// argv[1] пуст при `node -e` и при импорте из другого модуля — без проверки
+// pathToFileURL бросает, и модуль нельзя даже импортировать.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const seeds = process.argv.slice(2)
   if (!seeds.length) { console.log('укажите семена: node scripts/seo/suggest.mjs "зеркало с подсветкой" ...'); process.exit(0) }
   const all = new Map()
