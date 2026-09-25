@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   isAttributable, planConsume, shouldConsume, shouldReverse, type CuttingMark,
 } from '@/lib/production/cuttingConsume'
-import { pickCascadeReversal } from '@/lib/productionCascade'
+import { pickCascadeReversal, pickCascadeTargets } from '@/lib/productionCascade'
 
 const mark = (over: Partial<CuttingMark> = {}): CuttingMark =>
   ({ orderId: 5269, itemIndex: 0, stageKey: 'cutting', source: 'worker', attempt: 0, ...over })
@@ -109,5 +109,39 @@ describe('pickCascadeReversal — метки времени мало, нужна
 
   it('без номера этапа ничего не трогаем — гадать нельзя', () => {
     expect(pickCascadeReversal([t(1, 'cutting', 1)], null)).toEqual([])
+  })
+})
+
+describe('pickCascadeTargets — каскад не переходит на чужое стекло триплекса', () => {
+  const t = (id: number, stage: string, seq: number, layer: number | null, status = 'queued') =>
+    ({ id, stage_key: stage, sequence_order: seq, status, layer })
+  // 05402: два стекла по «резка→полировка→сверловка→закалка», затем склейка и упаковка.
+  const triplex = [
+    t(1, 'cutting', 1, 1, 'done'), t(2, 'polishing', 2, 1), t(3, 'drilling', 3, 1), t(4, 'tempering', 4, 1),
+    t(5, 'cutting', 5, 2), t(6, 'polishing', 6, 2), t(7, 'drilling', 7, 2), t(8, 'tempering', 8, 2),
+    t(9, 'triplex', 9, 0), t(10, 'packaging', 10, 0),
+  ]
+  const keys = (seq: number) => pickCascadeTargets(triplex, seq).map(x => x.id)
+
+  it('резка второго стекла не закрывает сверловку и закалку первого', () => {
+    expect(keys(5)).toEqual([])
+  })
+
+  it('полировка второго стекла закрывает только его резку', () => {
+    expect(keys(6)).toEqual([5])
+  })
+
+  it('склейка закрывает оба стекла целиком', () => {
+    expect(keys(9)).toEqual([2, 3, 4, 5, 6, 7, 8])
+  })
+
+  it('обычная деталь (всё в слое 1) — как раньше', () => {
+    const plain = [t(1, 'cutting', 1, 1), t(2, 'polishing', 2, 1), t(3, 'tempering', 3, 1), t(4, 'packaging', 4, 1)]
+    expect(pickCascadeTargets(plain, 4).map(x => x.id)).toEqual([1, 2, 3])
+  })
+
+  it('строки без слоя — как раньше', () => {
+    const legacy = [t(1, 'cutting', 1, null), t(2, 'polishing', 2, null), t(3, 'tempering', 3, null)]
+    expect(pickCascadeTargets(legacy, 3).map(x => x.id)).toEqual([1, 2])
   })
 })

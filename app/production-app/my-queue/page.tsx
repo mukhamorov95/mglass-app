@@ -8,6 +8,7 @@ import { STAGE_LABELS, stageLabel, stageCountLabel, type DetailStageKey } from '
 import { holesFromComment, normalizeHoles, holesLabel } from '@/lib/production/holes'
 import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
 import { explainEmptyQueue } from '@/lib/production/completeOrder'
+import { myStationGroups, canCompleteWholeDetail, type StationGroup, type StationTask } from '@/lib/production/completeMyStage'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
 import { materialLabelShort } from '@/lib/materialLabel'
@@ -138,7 +139,8 @@ export default function MyQueuePage() {
   // нажав её, закроет и полировку, и закалку, и упаковку по всем деталям —
   // получится каша, за которую потом никто не отвечает (решение владельца 28.08).
   const canCloseOrder = myStations.includes('packaging')
-  const [confirmMine, setConfirmMine] = useState<number | null>(null)
+  // Какую станцию какого заказа подтверждаем: `${orderId}:${station}`. Одна кнопка — одна станция.
+  const [confirmMine, setConfirmMine] = useState<string | null>(null)
   // Заказ, найденный по номеру, но БЕЗ моих задач: менеджер не отметил признак,
   // и маршрут через мою станцию не построился. Рабочий видит пустоту и идёт к
   // владельцу — так 01.09 пришёл Адилет с четырьмя заказами сразу.
@@ -364,16 +366,17 @@ export default function MyQueuePage() {
     load()
   }
 
-  // «Готово на моей станции»: закрыть свой этап по ВСЕМ деталям заказа.
+  // «Готово: <станция>»: закрыть ОДНУ свою станцию по всем деталям заказа.
   // Резчик делает заказ разом, а не по детали — жать пятнадцать раз незачем.
-  // Границу считает сервер по станциям профиля: чужие этапы не закроются, даже
-  // если запрос отправить руками.
-  async function completeMyStage(orderId: number) {
+  // Но станция — одна за нажатие (владелец, 25.09): у Эльзата резка и полировка,
+  // и общая кнопка закрывала полировку в секунду резки. Нарезал — отметил резку,
+  // отполировал — отметил полировку. Границу проверяет сервер по станциям профиля.
+  async function completeMyStage(orderId: number, station: string) {
     setConfirmMine(null)
-    setTasks(prev => prev.filter(t => !(t.order_id === orderId && myStations.includes(t.station))))
+    setTasks(prev => prev.filter(t => !(t.order_id === orderId && t.station === station)))
     await fetch('/api/production/complete-my-stage', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId }),
+      body: JSON.stringify({ order_id: orderId, station }),
     }).catch(() => {})
     load()
   }
@@ -871,8 +874,8 @@ export default function MyQueuePage() {
                   isReady={isReady}
                   canCloseOrder={canCloseOrder}
                   onCompleteMyStage={completeMyStage}
-                  confirmingMine={confirmMine === id}
-                  onAskConfirmMine={() => setConfirmMine(confirmMine === id ? null : id)}
+                  confirmingStation={confirmMine?.startsWith(`${id}:`) ? confirmMine.slice(`${id}:`.length) : null}
+                  onAskConfirmMine={(st: string | null) => setConfirmMine(st && confirmMine !== `${id}:${st}` ? `${id}:${st}` : null)}
                   routes={routes}
                   myStations={myStations}
                   onCompleteItem={completeItem}
@@ -932,7 +935,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, canCloseOrder, onCompleteMyStage, confirmingMine, onAskConfirmMine, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, canCloseOrder, onCompleteMyStage, confirmingStation, onAskConfirmMine, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -941,9 +944,9 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
   onToggle: () => void
   isReady: (t: TaskRow) => boolean
   canCloseOrder: boolean
-  onCompleteMyStage: (orderId: number) => void
-  confirmingMine: boolean
-  onAskConfirmMine: () => void
+  onCompleteMyStage: (orderId: number, station: string) => void
+  confirmingStation: string | null
+  onAskConfirmMine: (station: string | null) => void
   routes: Map<string, RouteStage[]>
   myStations: string[]
   onCompleteItem: (orderId: number, itemIndex: number) => void
@@ -977,6 +980,11 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
   // Мои открытые с учётом проблемных: «Всё готово» на сервере закрывает и их,
   // и заказ, где осталась только проблема, кнопку терять не должен.
   const myOpen = tasks.filter(t => t.status !== 'done')
+  // Мои станции в этом заказе — по кнопке на каждую, в порядке маршрута. Очередь уже
+  // показывает только мои задачи, поэтому счётчик совпадает с тем, что закроет сервер.
+  const myGroups: StationGroup[] = myStationGroups(
+    myOpen.map(t => ({ ...t, started_at: null, assigned_to: null, started_by: null })) as StationTask[],
+    myStations)
   // Сколько закроется на самом деле: сервер закрывает ЗАКАЗ, а не мою долю в нём.
   const orderOpen = work ? work.reduce((s, w) => s + w.n, 0) : myOpen.length
   const emptyReason = explainEmptyQueue({ myOpen: myOpen.length, workLoaded, orderOpen })
@@ -1042,23 +1050,24 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
               )}
               {/* Свой этап по всему заказу — для тех, кто НЕ на упаковке. Закрывает
                   только мои станции: заказ целиком закрывает упаковщик. */}
-              {!canCloseOrder && myOpen.length > 0 && (
-                confirmingMine ? (
-                  <span className="flex items-center gap-1.5">
-                    <button onClick={() => onCompleteMyStage(orderId)}
+              {!canCloseOrder && myGroups.map(g => (
+                confirmingStation === g.station ? (
+                  <span key={g.station} className="flex items-center gap-1.5">
+                    <button onClick={() => onCompleteMyStage(orderId, g.station)}
                       className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-bold hover:opacity-90">
-                      Да, закрыть {myOpen.length}
+                      Да, закрыть: {stageLabel(g.station)} — {g.count}
                     </button>
-                    <button onClick={onAskConfirmMine}
+                    <button onClick={() => onAskConfirmMine(null)}
                       className="px-2.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
                   </span>
                 ) : (
-                  <button onClick={onAskConfirmMine} title="Закрыть мой этап по всем деталям этого заказа"
+                  <button key={g.station} onClick={() => onAskConfirmMine(g.station)}
+                    title={`Отметить «${stageLabel(g.station)}» по всем деталям заказа. Другие ваши этапы останутся открытыми.`}
                     className="px-3 py-2 rounded-lg border border-emerald-600 text-emerald-700 text-[12px] font-medium hover:bg-emerald-50">
-                    ✅ Готово на моей станции ({myOpen.length})
+                    ✅ Готово: {stageLabel(g.station)} ({g.count})
                   </button>
                 )
-              )}
+              ))}
               <button onClick={() => onNoMatOrder(orderId)} title={noMatOrder ? 'Материал пришёл' : 'Нет материала на весь заказ'}
                 className={`px-3 py-2 rounded-lg text-[12px] font-medium border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
                 {noMatOrder ? '✅ Пришёл' : '🛒 Нет мат.'}
@@ -1155,12 +1164,13 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
                 ✅ Всё готово ({orderOpen} задач)
               </button>
             )}
-            {!canCloseOrder && myOpen.length > 0 && (
-              <button onClick={() => onCompleteMyStage(orderId)}
+            {!canCloseOrder && myGroups.map(g => (
+              <button key={g.station} onClick={() => onCompleteMyStage(orderId, g.station)}
+                title={`Отметить «${stageLabel(g.station)}» по всем деталям заказа. Другие ваши этапы останутся открытыми.`}
                 className="flex-1 py-3 rounded-lg border border-emerald-600 text-emerald-700 text-[13px] font-semibold">
-                ✅ Готово на моей станции ({myOpen.length})
+                ✅ Готово: {stageLabel(g.station)} ({g.count})
               </button>
-            )}
+            ))}
             <button onClick={() => onNoMatOrder(orderId)}
               className={`flex-1 py-2 rounded-lg text-[13px] font-semibold border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
               {noMatOrder ? '✅ Материал пришёл' : '🛒 Нет материала на весь заказ'}
@@ -1285,8 +1295,12 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
                       // Счётчик — по ВСЕМУ маршруту детали, а не по моим задачам:
                       // закроется вся деталь, включая чужие станции. Кнопка,
                       // обещающая меньше, чем делает, у нас уже была.
-                      const openAll = (routes.get(`${orderId}:${idx}`) ?? []).filter(r => r.status !== 'done').length
-                      if (openAll < 2) return null
+                      const route = routes.get(`${orderId}:${idx}`) ?? []
+                      const openAll = route.filter(r => r.status !== 'done').length
+                      // Только если после моего первого открытого этапа идут одни мои станции
+                      // (закалка → упаковка). У резчика-полировщика дальше чужие станции —
+                      // кнопка закрыла бы за них закалку и упаковку.
+                      if (!canCompleteWholeDetail(route, myStations)) return null
                       return (
                         <button onClick={() => onCompleteItem(orderId, idx)}
                           className="mt-1.5 w-full py-2.5 rounded-lg border border-emerald-600 text-emerald-700 text-[12px] font-semibold hover:bg-emerald-50">

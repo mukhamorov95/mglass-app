@@ -41,6 +41,8 @@ export const SENSITIVE_TABLES = new Set([
   'manager_schedules', 'wazzup_outgoing_messages', 'manager_coaching',
   'b2b_rates',        // закалка, кромка, мин. цены — себестоимость B2B
   'coaching_effect',  // результат человека по дням
+  'montage_media',    // подписи бригадиров: адрес, квартира, телефон клиента
+  'review_requests',  // клиенты с телефонами для просьбы об отзыве
 ])
 
 // Новые таблицы без денег и людей — перечислены явно, с причиной. Тест
