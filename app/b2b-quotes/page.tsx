@@ -17,6 +17,7 @@ import { checkSavedItems } from '@/lib/b2b/bomCheck'
 import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, type B2BRates, type RateRow } from '@/lib/b2b/rates'
 import { toast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { promptDialog } from '@/lib/dialog'
+import { writeFailure } from '@/lib/rlsWrite'
 
 
 const PAGE_SIZE = 50
@@ -436,8 +437,8 @@ export default function B2BQuotesPage() {
     const newNotes = JSON.stringify({ ...parsed, status: newStatus, status_history: history, ...(revertToDraft ? { launched_at: undefined } : {}) })
     const meta = buildUpdateMeta()
     const patch = { notes: newNotes, ...meta, ...(revertToDraft ? { launched_at: null } : {}) }
-    const { error } = await createClient().from('b2b_orders').update(patch).eq('id', id)
-    if (error) { showError('Статус не изменён', error.message); return }
+    const fail = writeFailure(await createClient().from('b2b_orders').update(patch).eq('id', id).select('id'))
+    if (fail) { showError('Статус не изменён', fail); return }
     setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta, ...(revertToDraft ? { launched_at: null } : {}) } : x))
     showToast(`Статус → ${STATUS_META[newStatus as QuoteStatus]?.label ?? newStatus}`)
   }
@@ -467,8 +468,8 @@ export default function B2BQuotesPage() {
       status_history: history,
     })
     const meta = buildUpdateMeta()
-    const { error } = await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', pendingChange.quoteId)
-    if (error) { showError('Статус не изменён', `${error.message}. Комментарий остался в окне — нажмите ещё раз`); return }
+    const fail = writeFailure(await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', pendingChange.quoteId).select('id'))
+    if (fail) { showError('Статус не изменён', `${fail}. Комментарий остался в окне — нажмите ещё раз`); return }
     setQuotes(prev => prev.map(x => x.id === pendingChange.quoteId ? { ...x, notes: newNotes, ...meta } : x))
     showToast(`Статус → ${STATUS_META[pendingChange.status as QuoteStatus]?.label ?? pendingChange.status}`)
     setPendingChange(null)
@@ -523,8 +524,8 @@ export default function B2BQuotesPage() {
       converted_by_name:    currentUserName,
       ...(num ? { custom_number: num } : {}),
     }
-    const { error } = await createClient().from('b2b_orders').update(updateRow).eq('id', workDateId)
-    if (error) { showError('Заказ не запущен', `${error.message}. Данные остались в окне — нажмите ещё раз`); return }
+    const launchFail = writeFailure(await createClient().from('b2b_orders').update(updateRow).eq('id', workDateId).select('id'))
+    if (launchFail) { showError('Заказ не запущен', `${launchFail}. Данные остались в окне — нажмите ещё раз`); return }
     // Чертёж дописываем ВТОРЫМ свежим read-merge-write: параллельные RMW notes
     // (этапы/материал в /b2b-orders) могут затереть общий update (случай #4960)
     if (drawingUrl) {
@@ -752,9 +753,9 @@ export default function B2BQuotesPage() {
     const parsed = parseNotes(q.notes)
     const next = !isTemplate(q)
     const newNotes = JSON.stringify({ ...parsed, is_template: next || undefined })
-    const { error } = await createClient().from('b2b_orders')
-      .update({ notes: newNotes, ...buildUpdateMeta() }).eq('id', q.id)
-    if (error) { showError(next ? 'Не добавлено в шаблоны' : 'Не убрано из шаблонов', error.message); return }
+    const fail = writeFailure(await createClient().from('b2b_orders')
+      .update({ notes: newNotes, ...buildUpdateMeta() }).eq('id', q.id).select('id'))
+    if (fail) { showError(next ? 'Не добавлено в шаблоны' : 'Не убрано из шаблонов', fail); return }
     setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: newNotes } : x))
     showToast(next ? 'Добавлено в шаблоны' : 'Убрано из шаблонов')
   }
@@ -762,11 +763,13 @@ export default function B2BQuotesPage() {
   async function handleDelete() {
     if (!deletingId) return
     setDeleting(true)
-    const { error } = await createClient()
+    const archiveRes = await createClient()
       .from('b2b_orders')
       .update({ archived_at: new Date().toISOString() })
       .eq('id', deletingId)
-    if (error) { setDeleting(false); showError('Просчёт не архивирован', error.message); return }
+      .select('id')
+    const archiveFail = writeFailure(archiveRes)
+    if (archiveFail) { setDeleting(false); showError('Просчёт не архивирован', archiveFail); return }
     setQuotes(prev => prev.filter(q => q.id !== deletingId))
     setDeletingId(null)
     setDeleting(false)

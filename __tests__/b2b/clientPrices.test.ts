@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { clientPriceMap, applyClientPrices, discountForMaterial } from '@/lib/b2b/clientPrices'
+import { clientPriceMap, applyClientPrices, discountForMaterial, loadClientPrices, ClientPricesLoadError } from '@/lib/b2b/clientPrices'
 import type { B2BMaterial } from '@/lib/types'
 
 const mat = (id: number, sale: number) => ({ id, name: `М${id}`, category: 'стекло', thickness: 6, sale_price: sale } as unknown as B2BMaterial)
@@ -34,5 +34,24 @@ describe('прайс клиента', () => {
   it('пустой прайс не трогает материалы', () => {
     const list = [mat(1, 2200)]
     expect(applyClientPrices(list, new Map())).toBe(list)
+  })
+})
+
+describe('loadClientPrices — сбой не подменяется общим прайсом', () => {
+  const sbReturning = (res: unknown) => ({ from: () => ({ select: () => ({ eq: () => Promise.resolve(res) }) }) })
+  const sbThrowing = () => ({ from: () => ({ select: () => ({ eq: () => Promise.reject(new Error('fetch failed')) }) }) })
+
+  it('ошибка базы → исключение, а не пустой прайс', async () => {
+    await expect(loadClientPrices(sbReturning({ data: null, error: { message: 'timeout' } }), 5)).rejects.toBeInstanceOf(ClientPricesLoadError)
+  })
+  it('сеть упала → исключение', async () => {
+    await expect(loadClientPrices(sbThrowing(), 5)).rejects.toThrow('fetch failed')
+  })
+  it('нет клиента → пустой прайс без запроса', async () => {
+    expect((await loadClientPrices(sbThrowing(), null)).size).toBe(0)
+  })
+  it('данные есть → карта цен', async () => {
+    const m = await loadClientPrices(sbReturning({ data: [{ material_id: 3, sale_price: 1200, active: true }], error: null }), 5)
+    expect(m.get(3)).toBe(1200)
   })
 })

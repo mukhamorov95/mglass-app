@@ -65,7 +65,10 @@ export async function POST(req: NextRequest) {
   if (loadedRates.missing.length) console.error('[partner/quote] b2b_rates: нет ставок —', loadedRates.missing.join(', '))
   // А12: индивидуальный прайс клиента поверх общего — кабинет партнёра обязан
   // считать по тем же ценам, что менеджер, иначе цифры разойдутся.
-  const clientPrices = await loadClientPrices(svc, client.id)
+  // Без договорных цен расчёт ушёл бы партнёру по общему прайсу — лучше честная ошибка.
+  let clientPrices: Map<number, number>
+  try { clientPrices = await loadClientPrices(svc, client.id) }
+  catch { return NextResponse.json({ error: 'Не удалось загрузить ваши цены — расчёт не выполнен, попробуйте через минуту' }, { status: 503 }) }
   const priced = applyClientPrices(
     prepPricedMaterials((mats ?? []) as B2BMaterial[], (matrix ?? []) as Array<Record<string, unknown>>),
     clientPrices,

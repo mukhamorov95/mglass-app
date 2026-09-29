@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast, sendOrToast } from '@/lib/toast'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
@@ -333,15 +334,23 @@ export default function BuildCalcPage() {
       const newId = (res as { id: number }).id
       // Пришли из сделки → кладём расчёт прямо в неё. Иначе — общее правило:
       // новый телефон заводит сделку сам, совпавший оставляет решение человеку.
+      // Сбой привязки не отменяет сохранение, но человек должен знать, где теперь расчёт.
+      // Уведомление живёт в корневом layout и переживает переход в КП ниже.
       if (dealId) {
-        try { await fetch(`/api/deals/${dealId}/attach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId }) }) } catch { /* ignore */ }
+        await sendOrToast('Расчёт сохранён, но не попал в сделку', `/api/deals/${dealId}/attach`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId }) },
+          'Он лежит в «Расчётах» — привяжите его из карточки сделки')
       } else {
-        try { await fetch('/api/deals/ensure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }) }) } catch { /* ignore */ }
+        await sendOrToast('Расчёт сохранён, сделка не заведена', '/api/deals/ensure',
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }) },
+          'Он в «Мой день» → «Расчёты без клиента»')
       }
       // КП из этого расчёта: позиции корзины → префилл /kp.
       const items = list.map(i => ({ name: i.title, qty: 1, price: i.productPrice + i.install + i.delivery + i.lift, sum: i.total }))
       const content = { title: (clientName || 'Коммерческое предложение').toUpperCase(), items, subtotal: total, total, client_name: clientName, client_phone: clientPhone, client_address: objectAddress }
-      try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch { /* ignore */ }
+      try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch {
+        toast.error('КП откроется без позиций', { detail: 'Браузер не дал передать данные расчёта. Сам расчёт сохранён в «Расчётах» — откройте его оттуда и нажмите «Сделать КП».' })
+      }
       router.push('/kp')
     } finally { setSaving(false); setTimeout(() => setSaveMsg(null), 4000) }
   }
