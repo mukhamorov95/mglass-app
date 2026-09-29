@@ -1,0 +1,8 @@
+[Unit]
+Description=M-Glass: полная резервная копия базы
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mglass-backup
+TimeoutStartSec=30min

@@ -1,0 +1,7 @@
+[Unit]
+Description=M-Glass: проба доступности приложения из России
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mglass-probe
