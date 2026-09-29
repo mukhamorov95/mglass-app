@@ -595,7 +595,14 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     let cancelled = false
     ;(async () => {
       const sb = createClient()
-      const map = await loadClientPrices(sb, clientId)
+      let map = new Map<number, number>()
+      try {
+        map = await loadClientPrices(sb, clientId)
+      } catch (e) {
+        if (!cancelled) toast.error('Договорные цены клиента не загрузились', {
+          detail: `${(e as Error).message}. Сейчас считается по общему прайсу — цена может отличаться от договорной. Выберите клиента заново или обновите страницу.`,
+        })
+      }
       if (cancelled) return
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setClientPrices(map)

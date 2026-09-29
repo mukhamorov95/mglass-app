@@ -40,19 +40,25 @@ export function discountForMaterial(material: PricedMaterial | null | undefined,
   return material?.clientPriced ? 0 : clientDiscount
 }
 
-// Загрузка прайса клиента. Таблица появляется миграцией 20260828 — пока она не
-// применена, читаем пустой прайс и работаем на общем: фича не должна ломать расчёт.
+// Загрузка прайса клиента. Сбой чтения — исключение, а не пустой прайс: пустой
+// молча считал бы по общему прайсу, и клиент с договорной ценой получил бы другую
+// цену в КП (29.09, находка У1). Что показать человеку — решает вызывающий.
 // Клиент передаётся как есть (браузерный или серверный) — типы Supabase здесь не
 // разворачиваем, иначе дженерики схемы уходят в бесконечную глубину.
+export class ClientPricesLoadError extends Error {}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadClientPrices(sb: any, clientId: number | null | undefined): Promise<Map<number, number>> {
   if (!clientId) return new Map()
+  let res: { data: unknown; error: { message: string } | null }
   try {
-    const { data, error } = await sb
+    res = await sb
       .from('b2b_client_prices')
       .select('material_id, sale_price, active')
       .eq('client_id', clientId)
-    if (error) return new Map()
-    return clientPriceMap(data as ClientPriceRow[])
-  } catch { return new Map() }
+  } catch (e) {
+    throw new ClientPricesLoadError(e instanceof Error ? e.message : 'сеть недоступна')
+  }
+  if (res.error) throw new ClientPricesLoadError(res.error.message)
+  return clientPriceMap(res.data as ClientPriceRow[])
 }

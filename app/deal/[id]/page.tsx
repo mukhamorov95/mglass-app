@@ -395,6 +395,12 @@ export default function DealPage() {
     } finally { setPayingSave(false) }
   }
   async function deletePayment(pid: number) {
+    const p = payments?.find(x => x.id === pid)
+    if (!(await confirmDialog({
+      title: 'Удалить оплату?',
+      text: p ? `${Math.round(p.amount).toLocaleString('ru-RU')} ₽ от ${new Date(p.paid_at).toLocaleDateString('ru-RU')}. Остаток по сделке пересчитается.` : 'Остаток по сделке пересчитается.',
+      confirmLabel: 'Удалить', danger: true,
+    }))) return
     const r = await sendOrToast('Оплата не удалена', `/api/deals/${id}/payments`,
       { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_id: pid }) })
     if (r) { await loadPayments(); await loadInvoices() }
@@ -415,6 +421,12 @@ export default function DealPage() {
     if (r) { toast.success('Файл приложен к сделке', { detail: 'Он в блоке «Чертёж и файлы» на вкладке «Документы».' }); await loadFiles() }
   }
   async function deleteFile(fid: number) {
+    const f = files?.find(x => x.id === fid)
+    if (!(await confirmDialog({
+      title: 'Удалить файл?',
+      text: f?.name ? `«${f.name}» пропадёт из сделки.` : 'Файл пропадёт из сделки.',
+      confirmLabel: 'Удалить', danger: true,
+    }))) return
     const r = await sendOrToast('Файл не удалён', `/api/deals/${id}/files`,
       { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_id: fid }) })
     if (r) await loadFiles()

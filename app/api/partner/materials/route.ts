@@ -33,7 +33,11 @@ export async function GET() {
   // deny-by-default: наружу только безопасные поля
   // А12: в справочнике кабинета показываем цены этого клиента, если они заданы —
   // иначе партнёр увидел бы одну цену в списке, а в расчёте другую.
-  const withClientPrices = applyClientPrices(priced, await loadClientPrices(svc, client.id))
+  // Без договорных цен справочник показал бы партнёру общие — лучше честная ошибка.
+  let clientPrices: Map<number, number>
+  try { clientPrices = await loadClientPrices(svc, client.id) }
+  catch { return NextResponse.json({ error: 'Не удалось загрузить ваши цены — обновите страницу через минуту' }, { status: 503 }) }
+  const withClientPrices = applyClientPrices(priced, clientPrices)
   const materials = withClientPrices
     .filter(m => (m.sale_price ?? 0) > 0)          // без цены — клиенту не показываем
     .map(m => ({ id: m.id, name: m.name, category: m.category, thickness: m.thickness, salePrice: m.sale_price }))
