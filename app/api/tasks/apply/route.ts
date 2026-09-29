@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
+import { internalAppUrl } from '@/lib/appUrl'
 
 function db() {
   return createClient(
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   // For config tasks — call the cron endpoint logic inline
   if (task.type === 'config') {
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/cron/process-tasks`,
+      `${internalAppUrl()}/api/cron/process-tasks`,
       { method: 'POST', headers: {
         'Content-Type': 'application/json',
         ...(process.env.CRON_SECRET ? { Authorization: `Bearer ${process.env.CRON_SECRET}` } : {}),

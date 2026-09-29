@@ -4,6 +4,7 @@ import { mskDay } from '@/lib/amoActivity'
 import { sendMessage, notifyAdmins } from '@/lib/telegram'
 import { telegramDigest } from '@/lib/coaching/digest'
 import type { Coaching } from '@/lib/coaching/rules'
+import { appUrl as publicAppUrl } from '@/lib/appUrl'
 
 // Утреннее напоминание «открой Мой день» тем, кто привязал бота.
 // Крон не авторизован middleware — проверяет свой секрет сам.
@@ -15,7 +16,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
   const sb = createServiceClient()
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://mglass-app.vercel.app'
+  const appUrl = publicAppUrl()
 
   const [{ data: snaps, error }, { data: links }] = await Promise.all([
     sb.from('manager_coaching').select('amo_user_id, name, computed_at, payload').gt('amo_user_id', 0),

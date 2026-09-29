@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { redirectToStorage } from '@/lib/storageRedirect'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { isOwnSourcePath } from '@/lib/kp/sourceFile'
@@ -31,5 +32,5 @@ export async function GET(req: Request) {
   if (error || !data?.signedUrl) {
     return NextResponse.json({ error: error?.message ?? 'not found' }, { status: 404 })
   }
-  return NextResponse.redirect(data.signedUrl)
+  return redirectToStorage(data.signedUrl)
 }

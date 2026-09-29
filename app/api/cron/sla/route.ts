@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
+import { appUrl as publicAppUrl } from '@/lib/appUrl'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, alerts: 0 })
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://mglass-app.vercel.app'
+    const appUrl = publicAppUrl()
 
     const lines = stuckOrders.map(o => {
       const since = o.status === 'approved'

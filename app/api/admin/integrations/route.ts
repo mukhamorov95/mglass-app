@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
+import { internalAppUrl } from '@/lib/appUrl'
 
 function db() {
   return createServiceClient(
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
 
   if (body.action === 'run_processor') {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+      const baseUrl = internalAppUrl() ?? 'http://localhost:3000'
       const res = await fetch(`${baseUrl}/api/cron/process-queue`, {
         method: 'POST',
         headers: process.env.CRON_SECRET

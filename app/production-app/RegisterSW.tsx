@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { swUrl } from '@/lib/swUrl'
 
 // Регистрирует service worker, чтобы /production-app можно было «установить»
 // как отдельное приложение на планшет/телефон цеха. Плюс держит сессию живой:
@@ -10,7 +11,7 @@ import { createClient } from '@/lib/supabase-browser'
 export default function RegisterSW() {
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {})
+      navigator.serviceWorker.register(swUrl()).catch(() => {})
     }
     const wake = () => {
       if (document.visibilityState !== 'visible') return
