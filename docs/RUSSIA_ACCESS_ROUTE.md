@@ -54,6 +54,12 @@
 - Оттуда же прямой `mglass-app.vercel.app` — 0 байт, обрыв через 25 с.
 - check-host: 3 российских узла (Москва ×2, Санкт-Петербург) — 200 за 0,17–0,25 с. Из 37 зарубежных у двух (Румыния, Швеция) тайм-аут соединения. Для сотрудников в РФ это не важно, но вебхуки из-за рубежа (Telegram) оставить на vercel.app.
 
+**Проверено в браузере владельца после входа на app.mglass.pro, 29.09:**
+- Service worker: `https://app.mglass.pro/sw.js?sb=…`.
+- Экраны закупщика и цеха (`/purchasing`, `/production-app`, `/b2b-production`, `/b2b-cutting`, `/b2b-orders`, `/inventory`, `/orders`) — 200. Доска цеха — 364 КБ за 1,8 с, при отрисовке 89 запросов, все на app.mglass.pro, ошибок 0. На supabase.co напрямую — ни одного; наружу уходит только браузерный Sentry.
+- Чертёж заказа 5564 (`/api/b2b/drawing`) — PDF 131 КБ через `/supabase` на новом адресе.
+- Публичное фото КП по ссылке supabase.co перехвачено service worker'ом, отдано нашим nginx: 246 КБ за 0,6 с.
+
 **Осталось для переезда людей:**
 - env: `NEXT_PUBLIC_APP_URL`, `INTERNAL_APP_URL`;
 - адрес в Supabase Auth;
