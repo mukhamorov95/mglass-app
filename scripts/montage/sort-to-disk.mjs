@@ -16,7 +16,7 @@ import { readToken, diskInfo, uploadFile, humanSize } from './disk.mjs'
 // разбора и без дублей на Диске.
 //
 //   node scripts/montage/sort-to-disk.mjs status
-//   node scripts/montage/sort-to-disk.mjs ingest   --export <папка экспорта>
+//   node scripts/montage/sort-to-disk.mjs ingest   --export <папка экспорта> [--partial]
 //   node scripts/montage/sort-to-disk.mjs classify [--export <папка>] [--limit 100] [--concurrency 4]
 //   node scripts/montage/sort-to-disk.mjs classify --batch [--export <папка>] [--limit N]   — пакетом, вдвое дешевле
 //   node scripts/montage/sort-to-disk.mjs collect                                          — забрать готовые пакеты
@@ -99,23 +99,56 @@ function mediaOf(m) {
   return null
 }
 
-async function ingest(dir) {
+// Экспорт пишет result.json по ходу: шапка и сообщения, потом обрыв на полуслове. Всё, что
+// до обрыва, — окончательное: Telegram не переписывает прошлые сообщения, а id не меняются.
+// Поэтому разбор можно начать, не дожидаясь конца, а остаток довезти вторым ingest — уже
+// заведённые строки база узнает по паре чат + сообщение.
+function parsePartialExport(text) {
+  const head = {}
+  for (const k of ['name', 'type']) head[k] = (text.match(new RegExp(`^ "${k}": "([^"]*)"`, 'm')) ?? [])[1]
+  head.id = Number((text.match(/^ "id": (\d+)/m) ?? [])[1])
+  const start = text.indexOf('"messages": [')
+  if (start < 0 || !head.id) throw new Error('в result.json нет шапки или списка сообщений')
+  const messages = []
+  let depth = 0, inStr = false, esc = false, from = -1
+  for (let i = start + 13; i < text.length; i++) {
+    const ch = text[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (ch === '\\') esc = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') inStr = true
+    else if (ch === '{') { if (depth === 0) from = i; depth++ }
+    else if (ch === '}') {
+      depth--
+      if (depth === 0 && from >= 0) { messages.push(JSON.parse(text.slice(from, i + 1))); from = -1 }
+    }
+  }
+  return { ...head, messages }
+}
+
+async function ingest(dir, { partial = false } = {}) {
   const jsonPath = path.join(dir, 'result.json')
   if (!fs.existsSync(jsonPath)) throw new Error(`нет ${jsonPath} — это не папка экспорта в формате JSON`)
   let data
+  const text = fs.readFileSync(jsonPath, 'utf8')
   try {
-    data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
+    data = JSON.parse(text)
   } catch {
-    // Telegram Desktop пишет result.json по ходу экспорта: оборванный JSON значит «ещё идёт»,
-    // и заводить по нему строки — значит потерять всё, что после обрыва.
-    throw new Error('result.json не дописан — экспорт ещё идёт. Дождитесь окна «Экспорт завершён» и повторите.')
+    // Оборванный JSON значит «экспорт ещё идёт». Без --partial отказываемся: иначе легко
+    // решить, что архив целиком в базе, когда в ней только его начало.
+    if (!partial) throw new Error('result.json не дописан — экспорт ещё идёт. Дождитесь конца или запустите с --partial, чтобы взять уже записанное.')
+    data = parsePartialExport(text)
+    console.log(`экспорт ещё идёт — беру записанное: ${data.messages.length} сообщений`)
   }
 
   // Bot API видит супергруппу как -100<id>, обычную группу как -<id>. По этому id строки
   // экспорта совпадают со строками, которые уже завёл бот.
   const chatId = /supergroup|channel/.test(data.type ?? '') ? Number(`-100${data.id}`) : -Number(data.id)
 
-  const rows = [], skipped = {}, missing = []
+  const rows = [], skipped = {}, missing = [], partialFiles = []
   for (const m of data.messages ?? []) {
     if (m.type !== 'message') continue
     const media = mediaOf(m)
@@ -124,7 +157,10 @@ async function ingest(dir) {
       if (why) skipped[why] = (skipped[why] ?? 0) + 1
       continue
     }
-    if (!fs.existsSync(path.join(dir, media.rel))) { missing.push(media.rel); continue }
+    const full = path.join(dir, media.rel)
+    if (!fs.existsSync(full)) { missing.push(media.rel); continue }
+    // файл, который ещё качается, уже лежит в папке, но короче, чем записано в result.json
+    if (media.size && fs.statSync(full).size !== media.size) { partialFiles.push(media.rel); continue }
     const caption = captionOf(m)
     rows.push({
       source: 'export',
@@ -157,6 +193,7 @@ async function ingest(dir) {
   console.log(`экспорт «${data.name}»: кадров ${rows.length} (фото ${rows.filter(r => r.kind === 'photo').length}, видео ${rows.filter(r => r.kind === 'video').length})`)
   console.log(`  новых строк: ${added}, уже были (пойманы ботом или прошлым импортом): ${rows.length - added}`)
   if (missing.length) console.log(`  в result.json есть, файла в папке нет: ${missing.length} — например ${missing[0]}`)
+  if (partialFiles.length) console.log(`  ещё докачиваются (размер не совпал): ${partialFiles.length} — возьмёт следующий ingest`)
   const sk = Object.entries(skipped)
   if (sk.length) console.log(`  пропущено как не-кадры: ${sk.map(([k, v]) => `${k} ${v}`).join(', ')}`)
 }
@@ -359,11 +396,6 @@ function nameOf(row, ext) {
   return [stamp, row.order_number, msg].filter(Boolean).join('__') + '.' + ext
 }
 
-function folderOfVideo(row) {
-  const d = new Date(new Date(row.taken_at).getTime() + 3 * 3600e3).toISOString()
-  return `06 Видео/${d.slice(0, 4)}/${d.slice(0, 7)}`
-}
-
 async function upload({ dest, exportDir, limit }) {
   const toDisk = dest.startsWith('disk:')
   const token = toDisk ? readToken() : null
@@ -372,12 +404,11 @@ async function upload({ dest, exportDir, limit }) {
     console.log(`Диск на связи: свободно ${humanSize(info.total_space - info.used_space)} из ${humanSize(info.total_space)}`)
   }
 
-  // Видео не разбираем: модель смотрит картинки, а кадр из ролика без ffmpeg не вынуть.
-  // Они ложатся по датам — всё равно на Диске, как и просили.
+  // Только фото — решение владельца 29.09; видео бота остаются в бакете.
   let rows = await fetchAll(() => sb.from('montage_media')
     .select('id, source, kind, export_path, storage_path, classification, taken_at, tg_message_id, order_number, file_size')
     .is('disk_path', null).eq('fetch_status', 'stored')
-    .or('and(kind.eq.photo,class_status.eq.done),kind.eq.video')
+    .eq('kind', 'photo').eq('class_status', 'done')
     .order('taken_at', { ascending: true }).order('id'))
   if (limit) rows = rows.slice(0, limit)
   if (!rows.length) { console.log('выгружать нечего'); return }
@@ -390,7 +421,7 @@ async function upload({ dest, exportDir, limit }) {
   for (const [i, row] of rows.entries()) {
     const got = await bytesOf(row, exportDir)
     if (got.skip) { bad++; console.error(`  ! ${got.skip}`); continue }
-    const folder = row.kind === 'video' ? folderOfVideo(row) : folderFor(row.classification)
+    const folder = folderFor(row.classification)
     const rel = `${folder}/${nameOf(row, got.ext)}`
     try {
       if (toDisk) {
@@ -476,7 +507,7 @@ const needDest = () => { if (!dest) { console.error('нужен --dest disk:/<п
 try {
   switch (cmd) {
     case 'status':   await status(); break
-    case 'ingest':   if (!exportDir) throw new Error('нужен --export <папка экспорта>'); await ingest(exportDir); break
+    case 'ingest':   if (!exportDir) throw new Error('нужен --export <папка экспорта>'); await ingest(exportDir, { partial: !!args.partial }); break
     case 'classify': if (args.batch) await submitBatches({ exportDir, limit }); else await classify({ exportDir, limit, concurrency }); break
     case 'collect':  await collect(); break
     case 'upload':   needDest(); await upload({ dest, exportDir, limit }); break
