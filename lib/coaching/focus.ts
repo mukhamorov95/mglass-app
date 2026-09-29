@@ -10,7 +10,7 @@ import type { LeadFact, MissedFact } from '@/lib/coaching/rules'
 // (перезвонил, а пункт висит). Полный сбор живёт в lib/coaching/collect.ts.
 
 const DAY = 86400
-const WAIT_MIN = 20 * 60          // меньше 20 минут без ответа — ещё не «ждёт»
+export const WAIT_MIN = 20 * 60          // меньше 20 минут без ответа — ещё не «ждёт»
 const HOT_SILENCE = 3 * DAY       // горячая сделка без касания три дня — пора напомнить о себе
 const CHAT_TYPES = ['incoming_chat_message', 'outgoing_chat_message', 'outgoing_call']
 

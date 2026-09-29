@@ -79,7 +79,7 @@ export function advanceOf(e: StatusEvent, stageNames: Map<string, string>): Stag
   return after
 }
 
-function isWorkingDaytime(ts: number) {
+export function isWorkingDaytime(ts: number) {
   const d = new Date((ts + MSK) * 1000)
   const h = d.getUTCHours(), wd = d.getUTCDay()
   return wd >= 1 && wd <= 5 && h >= 9 && h < 19
