@@ -95,6 +95,12 @@
 
   Сегодня поведение прежнее. При переезде: `NEXT_PUBLIC_APP_URL=https://app.mglass.pro` и `INTERNAL_APP_URL=https://mglass-app.vercel.app`.
 
+**Проверено 29.09 в браузере (после #699):**
+- `navigator.serviceWorker.controller` = `/sw.js?sb=…`;
+- `fetch` публичной ссылки `…supabase.co/storage/v1/object/public/kp-photos/…` вернул ответ с `https://mglass-app.vercel.app/supabase/storage/…`: `server: Vercel`, 162 199 байт — ровно размер объекта.
+
+**#699:** `/sw.js` не было ни в одном `ROLE_ALLOWED`, и middleware уводил всех, кроме владельца, на `/access-denied`. Service worker не регистрировался ни у цеха, ни у партнёров — установка «Цеха» как приложения тоже не работала. Теперь `sw.js` исключён из matcher.
+
 Осталось второстепенное: realtime-тост, письмо сброса пароля, Google Fonts на странице КП, браузерный Sentry. Встраивание на Tilda и адрес заявки сайта зеркал меняются вместе с Э2.
 
 ### Э3. Мониторинг из России — после Э2
