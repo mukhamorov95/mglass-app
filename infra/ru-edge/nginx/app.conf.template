@@ -53,6 +53,9 @@ server {
     ssl_session_cache shared:SSL:10m;
 
     client_max_body_size 60m;   # фото замеров и чертежи
+    # Куки входа Supabase режутся на куски по ~3 КБ: запрос с Cookie и ответ с Set-Cookie
+    # после обновления сессии не влезают в умолчания 8 КБ (29.09 — 502 «too big header»).
+    large_client_header_buffers 8 64k;
 
     location / {
         proxy_pass https://vercel;
@@ -76,6 +79,9 @@ server {
         # RSC и потоковые ответы Next.js — отдаём по мере прихода, не копим.
         proxy_buffering off;
         proxy_request_buffering off;
+        proxy_buffer_size 64k;          # заголовки ответа Vercel целиком, в т.ч. Set-Cookie
+        proxy_buffers 8 64k;
+        proxy_busy_buffers_size 128k;
         proxy_connect_timeout 10s;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
