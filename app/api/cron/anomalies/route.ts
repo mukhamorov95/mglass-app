@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
+import { appUrl as publicAppUrl } from '@/lib/appUrl'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -43,7 +44,7 @@ export async function GET(req: Request) {
       .gte('created_at', since)
 
     const anomalies: string[] = []
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://mglass-app.vercel.app'
+    const appUrl = publicAppUrl()
 
     type OrderRow = { id: string; number: string; margin_percent: number; status: string }
     type LineRow  = { order_id: string; discount_percent: number; product_name: string }

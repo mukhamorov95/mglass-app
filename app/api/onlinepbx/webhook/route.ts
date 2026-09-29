@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { digits10, normalizePhone } from '@/lib/onlinepbx'
 import { notifyAdmins } from '@/lib/telegram'
+import { appUrl } from '@/lib/appUrl'
 
 // Вебхук OnlinePBX: события звонков (входящие/исходящие/пропущенные) и ссылки на
 // записи → в ленту лида (crm_lead_events kind='call'). API-ключ здесь НЕ нужен —
@@ -164,7 +165,7 @@ export async function POST(req: NextRequest) {
       '📵 <b>Пропущенный звонок</b>',
       fmtPhone(d10),
       lead.name ? `Клиент: ${lead.name}` : (created ? 'Новый клиент (лид создан)' : ''),
-      'Карточка: https://mglass-app.vercel.app/crm/' + lead.id,
+      'Карточка: ' + appUrl('/crm/' + lead.id),
     ].filter(Boolean).join('\n')).catch(() => {})
   }
 

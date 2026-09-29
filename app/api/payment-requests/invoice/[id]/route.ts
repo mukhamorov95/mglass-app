@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { redirectToStorage } from '@/lib/storageRedirect'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 
@@ -21,5 +22,5 @@ export async function GET(
   const svc = createServiceClient()
   const { data, error } = await svc.storage.from('b2b-attachments').createSignedUrl(path, 300)
   if (error || !data) return NextResponse.json({ error: 'Ссылка не создалась' }, { status: 500 })
-  return NextResponse.redirect(data.signedUrl)
+  return redirectToStorage(data.signedUrl)
 }

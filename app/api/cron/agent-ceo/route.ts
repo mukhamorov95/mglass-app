@@ -5,6 +5,7 @@ import * as tg from '@/lib/telegram'
 import { readMemory, writeMemory, writeLog, startRun, finishRun, failRun } from '@/lib/agentMemory'
 import { launchedOrders } from '@/lib/liveOrders'
 import { PROD_SINCE } from '@/lib/orderFlags'
+import { internalAppUrl } from '@/lib/appUrl'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -272,9 +273,7 @@ ${recentLogs || 'нет активности'}
       const targetAgent = decision.agent_task.agent
       const agentEnabled = agents[targetAgent]?.enabled
       if (agentEnabled) {
-        const host    = new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').host
-        const isLocal = host.includes('localhost')
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${isLocal ? 'http' : 'https'}://${host}`
+        const baseUrl = internalAppUrl() ?? 'http://localhost:3000'
         fetch(`${baseUrl}/api/cron/agent-${targetAgent}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${process.env.CRON_SECRET ?? ''}` },

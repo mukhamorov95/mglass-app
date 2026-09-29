@@ -11,6 +11,7 @@ import { loadBotKnowledge, recordKnowledgeGap } from '@/lib/knowledge/aiKnowledg
 import { botGate, isOwnBotEcho, MUTE_LABEL } from '@/lib/avito/botGate'
 import { muteIfHumanInThread } from '@/lib/avito/humanInThread'
 import { CRM_ZONES } from '@/lib/crmStages'
+import { appUrl } from '@/lib/appUrl'
 
 // Робот ведёт заявку только в зоне «Квалификация»; дальше курирует человек.
 const QUALIFICATION_STAGES = new Set(CRM_ZONES.find(z => z.zone === 'Квалификация')?.stages ?? [])
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
     await notifyAdmins([
       '📎 <b>Авито: обращение без текста</b>',
       'Иван это не обработает — нужен человек.',
-      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+      `Карточка: ${appUrl(`/crm/${leadId}`)}`,
     ].join('\n')).catch(() => {})
     return NextResponse.json({ ok: true, non_text: true, type: v.type ?? null })
   }
@@ -186,7 +187,7 @@ export async function POST(req: NextRequest) {
       '💬 <b>Авито: новое сообщение от клиента</b>',
       `Иван молчит: ${MUTE_LABEL[gate.reason]}${gate.who ? ` (${gate.who})` : ''}`,
       `Клиент: ${text.slice(0, 200)}`,
-      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+      `Карточка: ${appUrl(`/crm/${leadId}`)}`,
     ].join('\n')).catch(() => {})
     return NextResponse.json({ ok: true, silent: gate.reason })
   }
@@ -196,7 +197,7 @@ export async function POST(req: NextRequest) {
     await notifyAdmins([
       '🔕 <b>Авито: сообщение клиента (бот ВЫКЛЮЧЕН)</b>',
       `Клиент: ${text.slice(0, 200)}`,
-      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+      `Карточка: ${appUrl(`/crm/${leadId}`)}`,
     ].join('\n')).catch(() => {})
     return NextResponse.json({ ok: true, bot_disabled: true })
   }
@@ -262,7 +263,7 @@ export async function POST(req: NextRequest) {
           '⚠️ <b>Avito: AI-менеджер недоступен</b>',
           emsg.slice(0, 300),
           'Клиентам уходит вежливый фолбэк, заявки ждут человека. Проверьте баланс Anthropic / ключ.',
-          `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+          `Карточка: ${appUrl(`/crm/${leadId}`)}`,
         ].join('\n')).catch(() => {})
       }
       return NextResponse.json({ ok: true, ai_degraded: true })
@@ -411,7 +412,7 @@ export async function POST(req: NextRequest) {
       `Портрет: ${sc.coreDone}/${sc.coreTotal}`,
       setFlags.length ? `Флаги: ${setFlags.join(', ')}` : '',
       '',
-      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+      `Карточка: ${appUrl(`/crm/${leadId}`)}`,
     ].filter(Boolean)
     await notifyAdmins(lines.join('\n')).catch(() => {})
   }

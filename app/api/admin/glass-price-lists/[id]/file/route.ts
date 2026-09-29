@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { viaSupabaseProxy } from '@/lib/supabaseProxy'
 import { createServiceClient } from '@/lib/supabase-service'
 import { getRole } from '@/lib/getRole'
 
@@ -15,5 +16,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // без download — прайс открывается на просмотр во вкладке, а не падает в загрузки
   const { data, error } = await supa.storage.from('b2b-attachments').createSignedUrl(list.file_path, 600)
   if (error || !data) return NextResponse.json({ error: error?.message ?? 'ссылка не создана' }, { status: 500 })
-  return NextResponse.json({ url: data.signedUrl, file_name: list.file_name })
+  return NextResponse.json({ url: viaSupabaseProxy(data.signedUrl), file_name: list.file_name })
 }

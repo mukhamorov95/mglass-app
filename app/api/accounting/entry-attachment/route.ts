@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { redirectToStorage } from '@/lib/storageRedirect'
 import { requireRole } from '@/lib/apiAuth'
 import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createServiceClient } from '@/lib/supabase-service'
@@ -47,5 +48,5 @@ export async function GET(req: NextRequest) {
 
   const { data: signed } = await svc.storage.from(BUCKET).createSignedUrl(path, 300)
   if (!signed) return NextResponse.json({ error: 'Ссылка не создалась' }, { status: 500 })
-  return NextResponse.redirect(signed.signedUrl)
+  return redirectToStorage(signed.signedUrl)
 }

@@ -247,5 +247,8 @@ export async function middleware(request: NextRequest) {
 export const config = {
   // manifest/webmanifest обязаны быть публичными: браузер запрашивает манифест
   // БЕЗ кук (credentials omit по спеке) — редирект на /login ломает установку PWA.
-  matcher: ['/((?!supabase/|_next/static|_next/image|favicon.ico|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)'],
+  // sw.js тоже: браузер запрещает регистрацию, если скрипт за редиректом, а /sw.js нет
+  // ни в одном ROLE_ALLOWED — всех, кроме владельца, уводило на /access-denied, и цех
+  // с партнёрами service worker не получали. Секретов в нём нет.
+  matcher: ['/((?!supabase/|_next/static|_next/image|favicon.ico|manifest.json|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)'],
 }
