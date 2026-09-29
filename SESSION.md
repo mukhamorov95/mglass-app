@@ -618,7 +618,9 @@ result.json — это намеренно.
 
 Следующий шаг: пакеты закончились (`status` без `queued`) → `upload --dest "disk:/Монтажи M-Glass"
 --export "<папка>"` → `registry --dest "disk:/Монтажи M-Glass"` → `status` с фактической ценой
-владельцу. Отозвать токен Яндекса после.
+владельцу.
+Ежедневно в 21:00 — задача приложения `montage-daily-photos`: `collect` + `run --limit 200` из
+`.claude/worktrees/montage-daily` (копия main, PR #705). Токен Яндекса не отзывать — он нужен ей.
 
 ## Лидогенерация и доминирование (24.09)
 
