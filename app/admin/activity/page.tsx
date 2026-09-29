@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import PageUsage from './PageUsage'
 
 // Активность пользователей: во сколько начинают/заканчивают и сколько времени в
 // приложении (окно присутствия). Период: сегодня / неделя / месяц / конкретный день.
@@ -117,6 +118,8 @@ export default function ActivityPage() {
         </div>
 
         <p className="text-[11px] text-[#b0b0aa] mt-2">«Ч/день» и «Всего» — окно присутствия (первый заход → последний за день), а не чистое активное время: открытая вкладка тоже считается. Точность ~5 минут.</p>
+
+        <PageUsage from={data?.from} to={data?.to} />
       </div>
     </div>
   )
