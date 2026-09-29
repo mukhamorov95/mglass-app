@@ -6,7 +6,7 @@ supabase.co напрямую не ходит (#173, /supabase/* через Verce
 - Э2 набор готов: infra/ru-edge (nginx, setup.sh, проба, бэкап, systemd). nginx -t ок; запасной режим
   (Host=mglass-app.vercel.app) проверен в docker на живом приложении. SSH-ключ ~/.mglass-secrets/ru-edge_ed25519.
   Подключить app.mglass.pro к Vercel — классификатор требует разрешения владельца (DNS/Domain).
-- Э2б/Э2в (PR следом): файлы и картинки хранилища через /supabase (redirectToStorage + sw.js ?sb=), appUrl()/internalAppUrl().
+- Э2б/Э2в СДЕЛАНО (#698, #699 — /sw.js был за редиректом для всех, кроме владельца; проверено в браузере): файлы и картинки хранилища через /supabase (redirectToStorage + sw.js ?sb=), appUrl()/internalAppUrl().
   При переезде: NEXT_PUBLIC_APP_URL=https://app.mglass.pro, INTERNAL_APP_URL=https://mglass-app.vercel.app.
 - Дальше: Э2 российский VPS + nginx + app.mglass.pro (ждёт покупки VPS владельцем), Э3 мониторинг из РФ,
   Э4 полные бэкапы (сейчас 6 таблиц из 196 и в той же Supabase Free), Э6 вебхуки, Э7 всё в РФ — решение владельца.
