@@ -50,7 +50,8 @@ export default function CommandPalette() {
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(SEARCH_OPEN_EVENT, onOpen) }
   }, [])
 
-  useEffect(() => { if (open) requestAnimationFrame(() => inputRef.current?.focus()) }, [open])
+  // Без requestAnimationFrame: в фоновой вкладке кадры не идут, и фокус не вставал.
+  useEffect(() => { if (open) inputRef.current?.focus() }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -117,7 +118,7 @@ export default function CommandPalette() {
       <div className="relative w-full max-w-[560px] bg-white border border-[#e4e4e0] rounded-2xl shadow-[0_12px_40px_rgba(17,17,16,0.18)] overflow-hidden">
         <div className="flex items-center gap-2 px-4 border-b border-[#e4e4e0]">
           <span aria-hidden className="text-[#9a9a95] text-[16px]">⌕</span>
-          <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onInputKey}
+          <input ref={inputRef} autoFocus value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onInputKey}
             placeholder="Номер заказа, клиент, телефон, ИНН"
             role="combobox" aria-expanded="true" aria-controls="mg-search-list"
             aria-activedescendant={flat.length ? `mg-search-opt-${active}` : undefined}
