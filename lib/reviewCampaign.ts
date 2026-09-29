@@ -8,12 +8,14 @@ export { REVIEW_URL, buildMessage, DAILY_LIMIT } from '@/lib/reviewMessage'
 // Сбор отзывов после монтажа. Карточка на Картах держится на отзывах, а их 23 при
 // сотнях сданных объектов — пишем тем, у кого монтаж свежий в памяти.
 
-// Воронка «Продажи»: монтаж в процессе, оплата остатка, реализовано успешно.
-const DONE_STATUSES = [72465786, 44878897, 142]
+// Только «реализовано успешно» и только по closed_at. Фильтр по updated_at брал и
+// старые сделки, которые просто редактировали: из 166 найденных 44 были созданы больше
+// года назад — человек получил бы «делали вам изделие в сентябре» про шторку 2025 года.
+const DONE_STATUS = 142
 const PIPELINE = 1654237
 
 type AmoLeadWithContacts = {
-  id: number; name: string; price: number; updated_at: number
+  id: number; name: string; price: number; closed_at: number; updated_at: number
   _embedded?: { contacts?: { id: number }[] }
 }
 type AmoContact = {
@@ -25,11 +27,12 @@ type AmoContact = {
 // заказ дважды, поэтому запускать можно сколько угодно раз.
 export async function fillQueue(days = 90): Promise<{ found: number; added: number }> {
   const since = Math.floor(Date.now() / 1000) - days * 86400
-  const params: Record<string, string> = { with: 'contacts', 'filter[updated_at][from]': String(since) }
-  DONE_STATUSES.forEach((s, i) => {
-    params[`filter[statuses][${i}][pipeline_id]`] = String(PIPELINE)
-    params[`filter[statuses][${i}][status_id]`]   = String(s)
-  })
+  const params: Record<string, string> = {
+    with: 'contacts',
+    'filter[closed_at][from]': String(since),
+    'filter[statuses][0][pipeline_id]': String(PIPELINE),
+    'filter[statuses][0][status_id]': String(DONE_STATUS),
+  }
 
   const leads = await amoGetAll<AmoLeadWithContacts>('/api/v4/leads', params, 'leads')
   const ids = [...new Set(leads.flatMap(l => (l._embedded?.contacts ?? []).map(c => c.id)))]
@@ -46,16 +49,22 @@ export async function fillQueue(days = 90): Promise<{ found: number; added: numb
     }
   }
 
-  const rows = leads.flatMap(l => {
-    const c = byId.get(l._embedded?.contacts?.[0]?.id ?? -1)
-    if (!c?.phone || c.phone.length !== 11) return []
-    const doneAt = new Date(l.updated_at * 1000).toISOString().slice(0, 10)
-    return [{
-      amo_lead_id: l.id, client_name: c.name, phone: c.phone,
-      order_title: l.name, amount: l.price, done_at: doneAt,
-      message_text: buildMessage(c.name, doneAt),
-    }]
-  })
+  // Один человек — одно сообщение, даже если у него несколько закрытых сделок:
+  // две просьбы об отзыве подряд читаются как рассылка, а не как внимание.
+  const seen = new Set<string>()
+  const rows = leads
+    .sort((a, b) => b.closed_at - a.closed_at)
+    .flatMap(l => {
+      const c = byId.get(l._embedded?.contacts?.[0]?.id ?? -1)
+      if (!c?.phone || c.phone.length !== 11 || seen.has(c.phone)) return []
+      seen.add(c.phone)
+      const doneAt = new Date((l.closed_at || l.updated_at) * 1000).toISOString().slice(0, 10)
+      return [{
+        amo_lead_id: l.id, client_name: c.name, phone: c.phone,
+        order_title: l.name, amount: l.price, done_at: doneAt,
+        message_text: buildMessage(c.name, doneAt),
+      }]
+    })
 
   const sb = createServiceClient()
   const { data, error } = await sb.from('review_requests')

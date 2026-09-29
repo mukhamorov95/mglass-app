@@ -30,7 +30,7 @@ export default async function ReviewsPage() {
     <div className="mx-auto max-w-3xl p-6 text-[#111110]">
       <h1 className="text-2xl font-semibold">Просьбы об отзыве</h1>
       <p className="mt-2 text-sm text-[#9a9a95]">
-        Клиентам со сданными объектами за последние 90 дней.
+        Клиентам, у кого сделка закрыта успешно за последние 90 дней — один человек, одно сообщение.
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
