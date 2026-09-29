@@ -27,6 +27,7 @@
 | **Кабинет менеджера (B2C, MGlass)** | `/calculator/quick`, `/calculations`, `/kp`, `/contracts`, `/clients`, новая `deals` | b2b-quote-price-adjustment | 🟢 идёт (шаг 1) |
 | Кабинет менеджера (B2B) | `b2b-quotes`, `b2b-orders`, `b2b-invoices`, `b2b-crm`, `lib/b2b/**`, `calculator/b2b` | b2b-quote-price-adjustment | 🟢 идёт |
 | Кабинет менеджера (Amo) | `/manager`, `/manager-dashboard` | не занят | ⚪ |
+| Кабинет менеджера — удобство и визуал | главная по роли, экраны «дня», поиск ⌘K, общий набор компонентов — `docs/MANAGER_UX_ROUTE.md` (У0–У8) | backbone (оркестратор) | 🟡 маршрут 29.09, ждёт 3 решения владельца |
 | **Backbone (ядро)** | ниже | **оркестратор** | 🟢 |
 
 ### ⚠️ Заряженная мина: себестоимость фурнитуры душевой в бюджетном тире
