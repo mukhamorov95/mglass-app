@@ -5,6 +5,8 @@
 set -euo pipefail
 
 source /etc/mglass/ru-edge.env          # SUPABASE_DB_URL (session pooler, порт 5432), TG_TOKEN, TG_CHAT
+# Пароль базы даёт владелец; пока его нет — копию пропускаем, а не падаем каждую ночь.
+[[ -n "${SUPABASE_DB_URL:-}" ]] || { echo "SUPABASE_DB_URL не задан — копия пропущена"; exit 0; }
 DIR=/var/backups/mglass
 KEEP_DAYS=${KEEP_DAYS:-14}
 mkdir -p "$DIR"; chmod 700 "$DIR"
