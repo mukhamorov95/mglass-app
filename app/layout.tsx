@@ -8,6 +8,7 @@ import CartProvider from '@/components/CartProvider'
 import StorageProxySW from '@/components/StorageProxySW'
 import Toaster from '@/components/Toaster'
 import DialogHost from '@/components/DialogHost'
+import CommandPalette from '@/components/CommandPalette'
 import { OrganizationProvider } from '@/lib/hooks/use-organization'
 import type { OrgRole } from '@/lib/hooks/use-organization'
 
@@ -71,6 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div className="flex min-h-screen">
                 <Sidebar userEmail={user.email ?? ''} role={role} permissions={permissions} canViewMoney={profile?.canViewMoney ?? false} referralRate={profile?.referralRate ?? null} />
                 <main className="flex-1 min-w-0 pt-12 lg:pt-0">{children}</main>
+                {role !== 'production' && <CommandPalette />}
               </div>
             ) : (
               // Партнёр (и гость) — без нашей внутренней навигации. Кабинет партнёра

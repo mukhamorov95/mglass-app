@@ -8,6 +8,7 @@ import type { Role } from '@/lib/getRole'
 import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 import { hasB2BSalesScope, isAllClientsScope } from '@/lib/b2bScope'
+import { SEARCH_OPEN_EVENT } from '@/lib/search'
 import {
   MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, OWNER_AI, isGroup, isSection,
   type NavItem, type NavEntry, type NavSection,
@@ -1084,6 +1085,15 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-2 space-y-px overflow-y-auto">
+          {role && role !== 'production' && (
+            <button type="button"
+              onClick={() => { setMobileOpen(false); window.dispatchEvent(new Event(SEARCH_OPEN_EVENT)) }}
+              className="w-full mb-2 flex items-center gap-2 px-2.5 py-[7px] rounded-[7px] border border-[#e4e4e0] bg-white text-[12.5px] text-[#9a9a95] hover:text-[#6b6b66] hover:border-[#d8d8d3] transition-colors">
+              <span aria-hidden>⌕</span>
+              <span className="flex-1 text-left">Поиск</span>
+              <kbd className="text-[10px] text-[#b0b0aa] font-sans">⌘K</kbd>
+            </button>
+          )}
           {/* Личная вкладка владельца — всегда сверху, во всех режимах */}
           {userEmail === 'admin@mglass.ru' && (
             <div className="mb-2">
