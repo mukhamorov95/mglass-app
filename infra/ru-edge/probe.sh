@@ -14,9 +14,10 @@ MIN_LOGIN_BYTES=${MIN_LOGIN_BYTES:-15000}   # страница входа ~19,7 
 probe() {   # name url min_bytes [header]
   local name=$1 url=$2 min=$3 hdr=${4:-}
   local out code size t
+  # При тайм-ауте curl сам печатает «000 0 25.0» и выходит с ошибкой — запасное значение только на пустой вывод.
   out=$(curl -s -o /dev/null --max-time 25 ${hdr:+-H "$hdr"} \
-        -w '%{http_code} %{size_download} %{time_total}' "$url" 2>/dev/null || echo "000 0 25")
-  read -r code size t <<<"$out"
+        -w '%{http_code} %{size_download} %{time_total}' "$url" 2>/dev/null)
+  read -r code size t <<<"${out:-000 0 25}"
   local ok=0
   [[ "$code" == 200 && "$size" -ge "$min" ]] && ok=1
   printf '%s,%s,%s,%s,%s,%s\n' "$(date -Is)" "$name" "$code" "$size" "$t" "$ok" >> "$LOG"
