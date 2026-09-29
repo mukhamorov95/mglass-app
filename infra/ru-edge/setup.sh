@@ -9,12 +9,22 @@
 set -euo pipefail
 
 DOMAIN=${1:?укажи домен, например app.mglass.pro}
-UPSTREAM_HOST=${UPSTREAM_HOST:-$DOMAIN}
 HERE=$(cd "$(dirname "$0")" && pwd)
 EMAIL=${LE_EMAIL:-admin@${DOMAIN#*.}}
 
 [[ -f /etc/mglass/ru-edge.env ]] || { echo "нет /etc/mglass/ru-edge.env — скопируй ru-edge.env.example и заполни"; exit 1; }
 chmod 600 /etc/mglass/ru-edge.env
+# Режим запоминается в env-файле: повторный запуск без UPSTREAM_HOST не должен молча
+# переключить запасной режим на штатный — Vercel не знает домен, и вход ляжет.
+cli_upstream=${UPSTREAM_HOST:-}
+source /etc/mglass/ru-edge.env
+DOMAIN=$1   # env-файл тоже задаёт DOMAIN — аргумент главнее
+UPSTREAM_HOST=${cli_upstream:-${UPSTREAM_HOST:-$DOMAIN}}
+if grep -q '^UPSTREAM_HOST=' /etc/mglass/ru-edge.env; then
+  sed -i "s|^UPSTREAM_HOST=.*|UPSTREAM_HOST=$UPSTREAM_HOST|" /etc/mglass/ru-edge.env
+else
+  echo "UPSTREAM_HOST=$UPSTREAM_HOST" >> /etc/mglass/ru-edge.env
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q

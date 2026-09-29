@@ -48,3 +48,21 @@ check "Приложение (${DOMAIN})"  "$(probe app      "https://${DOMAIN}/l
 check "База через ${DOMAIN}"   "$(probe db       "https://${DOMAIN}/supabase/auth/v1/health" 2 "apikey: ${ANON_KEY}")"
 # Контроль: прямой путь из РЦОД на vercel.app — показывает, режут ли зарубежный отрезок.
 probe direct "https://mglass-app.vercel.app/login" "$MIN_LOGIN_BYTES" >/dev/null
+
+# Проба видит только /login без входа. Ошибки на страницах вошедших (29.09: 502 «too big
+# header» на /my-day) видны лишь в журнале nginx — читаем то, что дописано с прошлого запуска.
+ERR=/var/log/nginx/error.log
+pos=$(cat "$STATE/errlog.pos" 2>/dev/null || echo 0)
+size=$(stat -c %s "$ERR" 2>/dev/null || echo 0)
+(( size < pos )) && pos=0   # журнал повернули
+fresh=$(tail -c +$((pos + 1)) "$ERR" 2>/dev/null | grep -E '\[(error|crit|alert|emerg)\]' || true)
+echo "$size" > "$STATE/errlog.pos"
+if [[ -n "$fresh" ]]; then
+  last=$(cat "$STATE/errlog.alerted" 2>/dev/null || echo 0)
+  if (( $(date +%s) - last > 1800 )); then   # не чаще раза в 30 минут
+    n=$(grep -c . <<<"$fresh")
+    first=$(head -1 <<<"$fresh" | sed -E 's/^[0-9\/: ]+\[[a-z]+\] [0-9#]+: \*?[0-9]* ?//; s/, client: [^,]+//' | cut -c1-300)
+    alert "🟠 ${DOMAIN}: ошибки nginx за минуту — ${n}. Первая: ${first}"
+    date +%s > "$STATE/errlog.alerted"
+  fi
+fi
