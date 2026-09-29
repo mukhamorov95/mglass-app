@@ -73,7 +73,7 @@ export default async function Home() {
   const dateLabel = `${DAYS[mskNow.getUTCDay()]}, ${mskNow.getUTCDate()} ${MONTHS[mskNow.getUTCMonth()]}`
 
   // Fetch B2C calc stats
-  const { data: calcs } = await supabase
+  const { data: calcs, error: calcsErr } = await supabase
     .from('calculations')
     .select('id, status, final_price, margin, product_type, client_name, created_at, input_data')
     .order('created_at', { ascending: false })
@@ -140,6 +140,10 @@ export default async function Home() {
       {/* ── KPI row ────────────────────────────────────────────────────── */}
       <section>
         <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-3">Статистика</p>
+        {/* Сбой запроса не должен выглядеть как «ноль расчётов» — вместо чисел прочерк. */}
+        {calcsErr && (
+          <p role="alert" className="text-[12px] text-[#c23a2b] mb-2">Расчёты не загрузились: {calcsErr.message}. Обновите страницу.</p>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Расчётов сегодня', value: todayCalcs,    href: '/calculations', accent: '' },
@@ -150,7 +154,8 @@ export default async function Home() {
             <Link key={label} href={href}
               className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5 hover:border-[#c4c4be] hover:shadow-sm transition-all">
               <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wider mb-1.5 leading-tight">{label}</p>
-              <p className={`text-[22px] font-bold tabular-nums leading-none ${accent || 'text-[#111110]'}`}>{value}</p>
+              <p className={`text-[22px] font-bold tabular-nums leading-none ${calcsErr ? 'text-[#9a9a95]' : accent || 'text-[#111110]'}`}>{calcsErr ? '—' : value}</p>
+              {calcsErr && <p className="text-[10px] text-[#9a9a95] mt-1">не загрузилось</p>}
             </Link>
           ))}
         </div>

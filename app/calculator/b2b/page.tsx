@@ -20,6 +20,8 @@ import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, isAllClientsScope, hasB2BSalesScope, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
+import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/dialog'
 import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
@@ -293,6 +295,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [facetPrices, setFacetPrices] = useState<FacetPrice[]>([])
   // материалы, привязанные к прайсу поставщика — для мягкого предупреждения в проверке спецификации
   const [pricedMaterials, setPricedMaterials] = useState<Set<string> | null>(null)
+  const [mappingsErr, setMappingsErr] = useState(false)
   const widthRef = useRef<HTMLInputElement>(null)
   const heightRef = useRef<HTMLInputElement>(null)
   const qtyRef = useRef<HTMLInputElement>(null)
@@ -359,7 +362,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         let userManagerCode: number | null = null
         let userMGlassOnly = false
         if (user?.id) {
-          const { data: profile } = await sb.from('users').select('role,name,manager_code,max_discount_percent,can_view_all_clients,permissions').eq('id', user.id).single()
+          const { data: profile, error: profileErr } = await sb.from('users').select('role,name,manager_code,max_discount_percent,can_view_all_clients,permissions').eq('id', user.id).single()
+          // Без профиля неизвестны скоуп клиентов и лимит скидки — молча урезанный экран хуже ошибки.
+          if (profileErr && profileErr.code !== 'PGRST116') throw new Error(`Не удалось загрузить профиль: ${profileErr.message}`)
           userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
           const perms = (profile?.permissions ?? null) as UserPermissions | null
           // owners are never scope-restricted, even if the JSON says so
@@ -383,7 +388,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         setManagerCode(userManagerCode)
         setMglassOnly(userMGlassOnly)
 
-        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }, rateRes, finRes] = await Promise.all([
+        const [clsRes, matsRes, svcsRes, ordersRes, matrixRes, psRes, filmsRes, facetRes, surchargeRes, sheetRes, rateRes, finRes] = await Promise.all([
           sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
@@ -397,6 +402,23 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           sb.from('b2b_rates').select('key, value'),
           sb.from('financial_settings').select('tier, product_type, tax_percent, default_margin, min_margin'),
         ])
+        const { data: cls } = clsRes, { data: mats } = matsRes, { data: svcs } = svcsRes, { data: orders } = ordersRes
+        const { data: glassMatrix } = matrixRes, { data: psData } = psRes, { data: filmsData } = filmsRes
+        const { data: facetData } = facetRes, { data: surchargeData } = surchargeRes, { data: sheetVariants } = sheetRes
+        // Без справочника калькулятор не падает, а считает от нуля или заводских значений —
+        // цена выглядит правдой. Поэтому каждый несработавший запрос называем вслух.
+        const failedRefs = ([
+          [clsRes.error, 'клиенты'], [matsRes.error, 'материалы'], [svcsRes.error, 'услуги'],
+          [ordersRes.error, 'обороты клиентов'], [matrixRes.error, 'матрица цен стекла'],
+          [psRes.error, 'настройки производства'], [filmsRes.error, 'плёнки'], [facetRes.error, 'цены фацета'],
+          [surchargeRes.error, 'правила наценок'], [sheetRes.error, 'форматы листов'],
+          [rateRes.error, 'ставки B2B'], [finRes.error, 'маржа и налог'],
+        ] as const).filter(([err]) => err).map(([, name]) => name)
+        if (failedRefs.length > 0) {
+          toast.error('Справочники загрузились не полностью', {
+            detail: `Не загрузились: ${failedRefs.join(', ')}. Цена может быть неполной или неверной — обновите страницу, прежде чем отправлять просчёт.`,
+          })
+        }
         if (!finRes.error && finRes.data) setMgFinance(pickFinance(finRes.data as FinanceRow[], '', 'standard'))
         const loadedRates = ratesFromRows(rateRes.error ? null : (rateRes.data as RateRow[] | null))
         setRates(loadedRates.rates)
@@ -678,16 +700,19 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   }, [services])
 
   // Привязки материалов к прайсу поставщика — только для предупреждения «цена не обновится».
-  // Ошибку глотаем: без привязок проверка спецификации просто не покажет этот мягкий пункт.
+  // Сбой не блокирует расчёт, но под проверкой спецификации об этом сказано.
   useEffect(() => {
     let alive = true
     fetch('/api/admin/glass-price-mappings')
-      .then(r => r.ok ? r.json() : null)
+      // 403 — справочник закрыт роли, это не сбой: проверка просто без этого пункта.
+      .then(r => r.ok ? r.json() : r.status === 403 ? {} : null)
       .then((d: { mappings?: { matrix_name: string; matrix_category: string; enabled: boolean }[] } | null) => {
-        if (!alive || !d?.mappings) return
+        if (!alive) return
+        if (!d) { setMappingsErr(true); return }
+        if (!d.mappings) return
         setPricedMaterials(new Set(d.mappings.filter(m => m.enabled).map(m => `${m.matrix_name.trim()}|${m.matrix_category}`)))
       })
-      .catch(() => {})
+      .catch(() => { if (alive) setMappingsErr(true) })
     return () => { alive = false }
   }, [])
 
@@ -2539,7 +2564,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 {items.length > 0 && (
                   <div className="flex items-center gap-3">
                     <span className="text-[11px] text-[#9a9a95] hidden sm:inline">✎ нажмите на позицию, чтобы изменить</span>
-                    <button onClick={() => { if (confirm(`Очистить все позиции (${items.length})? Отменить это нельзя.`)) { setItems([]); clearSel() } }} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
+                    <button onClick={async () => {
+                      if (await confirmDialog({ title: `Очистить все позиции (${items.length})?`, text: 'Отменить это нельзя.', confirmLabel: 'Очистить', danger: true })) { setItems([]); clearSel() }
+                    }} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
                       Очистить всё
                     </button>
                   </div>
@@ -3201,6 +3228,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       <p className="mt-1.5 font-medium">Проверь позиции в справочнике до отправки клиенту — маржа по ним считается от нуля.</p>
                     )}
                   </div>
+                )}
+                {mappingsErr && items.length > 0 && (
+                  <p className="text-[11px] text-[#9a9a95]">Привязки к прайсу поставщика не загрузились — пункт «цена не обновится» в проверке сейчас не работает.</p>
                 )}
 
                 {editingOrderId != null && (

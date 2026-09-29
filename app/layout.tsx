@@ -6,6 +6,8 @@ import { getUserProfile, getSessionUser, DEFAULT_PERMISSIONS } from '@/lib/getRo
 import { Sidebar } from '@/components/Sidebar'
 import CartProvider from '@/components/CartProvider'
 import StorageProxySW from '@/components/StorageProxySW'
+import Toaster from '@/components/Toaster'
+import DialogHost from '@/components/DialogHost'
 import CommandPalette from '@/components/CommandPalette'
 import { OrganizationProvider } from '@/lib/hooks/use-organization'
 import type { OrgRole } from '@/lib/hooks/use-organization'
@@ -79,6 +81,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             )}
           </CartProvider>
         </OrganizationProvider>
+        <Toaster />
+        <DialogHost />
       </body>
     </html>
   )

@@ -9,6 +9,7 @@ import {
   type TodayOrder, type TodayInvoice, type PriorityRow,
 } from '@/lib/b2b/todayPriorities'
 import PlanEditor from './PlanEditor'
+import { responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Сверху — три главных дела (ТЗ 4.2): просроченные отгрузки, счета без оплаты, остывающие
 // просчёты. Каждое считается в lib/b2b/todayPriorities по данным, которые реально ведутся.
@@ -30,6 +31,8 @@ const DOT: Record<Tone, string> = {
 export default function TodayClient() {
   const [orders, setOrders] = useState<TodayOrder[]>([])
   const [invoices, setInvoices] = useState<TodayInvoice[] | null>(null)   // null — счета недоступны роли
+  const [invErr, setInvErr] = useState<string | null>(null)                 // сбой загрузки — не то же, что «недоступны роли»
+  const [planErr, setPlanErr] = useState<string | null>(null)
   // А18: план/факт месяца. Плана нет — блок не мешается, просто показываем факт.
   const [plan, setPlan] = useState<{ managerId: string | null; plan: number; launched: number; paid: number; forecast: number; donePct: number | null; name: string }[] | null>(null)
   const [planMonth, setPlanMonth] = useState<string>('')
@@ -49,7 +52,9 @@ export default function TodayClient() {
         const sb = createClient()
         const { data: { user } } = await sb.auth.getUser()
         if (!user) { setError('Не авторизован'); return }
-        const { data: profile } = await sb.from('users').select('role, see_all_orders').eq('id', user.id).maybeSingle()
+        const { data: profile, error: profileErr } = await sb.from('users').select('role, see_all_orders').eq('id', user.id).maybeSingle()
+        // Без профиля не понять, чьи заказы показывать: владелец увидел бы только свои и «всё разобрано».
+        if (profileErr) { setError(`Не удалось загрузить профиль: ${profileErr.message}. Обновите страницу.`); return }
         const seeAll = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.see_all_orders === true
 
         const since = new Date(); since.setDate(since.getDate() - 120)
@@ -63,25 +68,34 @@ export default function TodayClient() {
 
         const [{ data, error: err }, inv] = await Promise.all([
           q,
-          fetch('/api/invoices').then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch('/api/invoices')
+            .then(async (r): Promise<{ body?: { invoices?: TodayInvoice[] } | null; error?: string }> => {
+              if (r.ok) return { body: await r.json().catch(() => null) as { invoices?: TodayInvoice[] } | null }
+              // 403 — реестр счетов закрыт роли; остальное — сбой, о нём говорим прямо.
+              return r.status === 403 ? { body: null } : { error: await responseError(r) }
+            })
+            .catch((): { body?: undefined; error: string } => ({ error: NETWORK_ERROR })),
         ])
-        if (err) { setError(err.message); return }
+        if (err) { setError(`Не удалось загрузить заказы: ${err.message}. Обновите страницу.`); return }
         setOrders((data ?? []) as TodayOrder[])
-        setInvoices(inv?.invoices ? inv.invoices as TodayInvoice[] : null)
+        if (inv.error) setInvErr(inv.error)
+        else setInvoices(inv.body?.invoices ? inv.body.invoices : null)
       } finally { setLoading(false) }
     })()
   }, [])
 
   function loadPlans() {
     fetch('/api/b2b-plans')
-      .then(r => r.ok ? r.json() : null)
-      .then(j => {
+      .then(async r => {
+        if (!r.ok) { setPlanErr(await responseError(r)); return }
+        const j = await r.json()
+        setPlanErr(null)
         if (!j?.rows) return
         setPlan(j.rows)
         setPlanMonth(j.month)
         setCanSetPlan(!!j.seeAll)
       })
-      .catch(() => {})
+      .catch(() => setPlanErr(NETWORK_ERROR))
   }
 
   useEffect(() => { loadPlans() }, [])
@@ -103,7 +117,7 @@ export default function TodayClient() {
       <div className="mb-5">
         <h1 className="text-[24px] font-bold text-[#111110]">Мой день · B2B</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5">
-          {loading || !view ? 'Считаю…' : topCount > 0 ? `Главное сегодня: ${topCount}` : 'Главное разобрано'}
+          {loading || !view ? 'Считаю…' : topCount > 0 ? `Главное сегодня: ${topCount}${invErr ? ' (без счетов — не загрузились)' : ''}` : invErr ? 'Счета не загрузились — список дел неполный' : 'Главное разобрано'}
         </p>
       </div>
 
@@ -117,7 +131,11 @@ export default function TodayClient() {
             <PriorityCard tone="red" title="Просроченные отгрузки" rows={view.ship}
               caption="Срок прошёл, отметки «Отгружен» нет. Либо заказ не уехал, либо цех его не отметил — в обоих случаях это надо закрыть. Считаются сроки с 01.09, когда вернулась отметка."
               empty="Просроченных отгрузок нет" allHref="/b2b-orders" />
-            {view.pay ? (
+            {invErr ? (
+              <div role="alert" className="border border-[#eec5bf] bg-white rounded-2xl px-4 py-3 text-[12px] text-[#c23a2b]">
+                Счета ждут оплаты — не удалось загрузить: {invErr}. Обновите страницу.
+              </div>
+            ) : view.pay ? (
               <PriorityCard tone="amber" title="Счета ждут оплаты" rows={view.pay}
                 caption="Оплата — по платежам из банка и кассы, не по галочке в заказе. Сначала самые давние."
                 empty="Все выставленные счета оплачены" allHref="/b2b-invoices" />
@@ -174,6 +192,12 @@ export default function TodayClient() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {planErr && (
+        <div role="alert" className="mt-6 border border-[#eec5bf] bg-white rounded-2xl px-4 py-3 text-[12px] text-[#c23a2b]">
+          План месяца не загрузился: {planErr}. Обновите страницу.
         </div>
       )}
 

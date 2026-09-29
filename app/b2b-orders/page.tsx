@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { toast, responseError } from '@/lib/toast'
+import { confirmDialog } from '@/lib/dialog'
 import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
@@ -610,8 +612,6 @@ export default function B2BOrdersPage() {
   }, [])
   const [copiedMsg, setCopiedMsg]     = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [toastMsg, setToastMsg]       = useState<string | null>(null)
-  const [toastError, setToastError]   = useState(false)
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set())
   const [showMaterialReq, setShowMaterialReq]   = useState(false)
   const [creatingPurchaseOrder, setCreatingPurchaseOrder] = useState(false)
@@ -643,13 +643,12 @@ export default function B2BOrdersPage() {
         }),
       })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok) { setToastError(true); setToastMsg(j.error || 'Не удалось сохранить'); return }
+      if (!r.ok) { toast.error(j.error || 'Не удалось сохранить'); return }
       setOrders(prev => prev.map(o => o.id === orderId
         ? { ...o, parsedNotes: { ...o.parsedNotes, claim: j.claim } as typeof o.parsedNotes }
         : o))
       setClaimOpenId(null); setClaimComment(''); setClaimCost('')
-      setToastError(false)
-      setToastMsg(action === 'close' ? 'Рекламация закрыта' : 'Рекламация зафиксирована')
+      toast.success(action === 'close' ? 'Рекламация закрыта' : 'Рекламация зафиксирована')
     } finally { setClaimSaving(false) }
   }
 
@@ -665,11 +664,11 @@ export default function B2BOrdersPage() {
         body: JSON.stringify(patch),
       })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok) { setToastError(true); setToastMsg(j.error || 'Не удалось сохранить'); return }
+      if (!r.ok) { toast.error(j.error || 'Не удалось сохранить'); return }
       setOrders(prev => prev.map(o => o.id === orderId
         ? { ...o, parsedNotes: { ...o.parsedNotes, delivery: j.delivery } as typeof o.parsedNotes }
         : o))
-      setToastError(false); setToastMsg('Логистика обновлена')
+      toast.success('Логистика обновлена')
     } finally { setDeliverySaving(null) }
   }
 
@@ -708,11 +707,10 @@ export default function B2BOrdersPage() {
         created_by_name: authorName,
       }).select('id').single()
       if (error || !data) {
-        setToastError(true); setToastMsg('Не удалось повторить заказ')
+        toast.error('Не удалось повторить заказ')
         return
       }
-      setToastError(false)
-      setToastMsg(`Создан просчёт #${data.id} — открываю просчёты`)
+      toast.success(`Создан просчёт #${data.id} — открываю просчёты`)
       setTimeout(() => { window.location.href = '/b2b-quotes' }, 900)
     } finally { setRepeating(null) }
   }
@@ -1104,9 +1102,7 @@ export default function B2BOrdersPage() {
       const rem = orderRemainder(order)
       if (rem.outstanding && shipConfirmId !== orderId) {
         setShipConfirmId(orderId)
-        setToastError(true)
-        setToastMsg(`⚠️ Остаток ${fmt(rem.remainder)} не оплачен. Нажмите «Отгружен» ещё раз, чтобы отгрузить всё равно`)
-        setTimeout(() => setToastMsg(null), 4000)
+        toast.info(`⚠️ Остаток ${fmt(rem.remainder)} не оплачен`, { detail: 'Нажмите «Отгружен» ещё раз, чтобы отгрузить всё равно.', durationMs: 6000 })
         return
       }
       setShipConfirmId(null)
@@ -1179,13 +1175,10 @@ export default function B2BOrdersPage() {
 
     if (error) {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: order.parsedNotes } : o))
-      setToastError(true)
-      setToastMsg('Ошибка обновления статуса материала')
+      toast.error('Ошибка обновления статуса материала')
     } else {
-      setToastError(false)
-      setToastMsg('Статус материала обновлён')
+      toast.success('Статус материала обновлён')
     }
-    setTimeout(() => setToastMsg(null), 3000)
   }
 
   async function saveDeadlineControl(orderId: number) {
@@ -1208,15 +1201,12 @@ export default function B2BOrdersPage() {
     const error = res.ok ? null : new Error('deadline_control write failed')
     setDcSaving(null)
     if (error) {
-      setToastError(true)
-      setToastMsg('Ошибка сохранения контроля срока')
+      toast.error('Ошибка сохранения контроля срока')
     } else {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
       setDcEdit(prev => { const next = { ...prev }; delete next[orderId]; return next })
-      setToastError(false)
-      setToastMsg('Контроль срока сохранён')
+      toast.success('Контроль срока сохранён')
     }
-    setTimeout(() => setToastMsg(null), 3000)
   }
 
   async function quickPatchDc(orderId: number, patch: Partial<DeadlineControl>) {
@@ -1238,14 +1228,11 @@ export default function B2BOrdersPage() {
     const error = res.ok ? null : new Error('deadline_control write failed')
     setDcSaving(null)
     if (error) {
-      setToastError(true)
-      setToastMsg('Ошибка сохранения')
+      toast.error('Ошибка сохранения')
     } else {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
-      setToastError(false)
-      setToastMsg('Следующий контроль: завтра')
+      toast.success('Следующий контроль: завтра')
     }
-    setTimeout(() => setToastMsg(null), 3000)
   }
 
   async function bulkMarkMonthAsShipped(monthKey: string, ordersToUpdate: Order[]) {
@@ -1292,7 +1279,9 @@ export default function B2BOrdersPage() {
 
       if (error) {
         setBulkActionLoading(null)
-        alert(`Ошибка при обновлении заказа #${order.id}. Успешно обновлено: ${updatedCount} из ${ordersToUpdate.length}.`)
+        toast.error(`Заказ #${order.id} не отмечен отгруженным`, {
+          detail: `${await responseError(r)}. Успешно обновлено: ${updatedCount} из ${ordersToUpdate.length}; остальные не тронуты — нажмите «Отметить месяц отгруженным» ещё раз.`,
+        })
         return
       }
 
@@ -1301,9 +1290,7 @@ export default function B2BOrdersPage() {
     }
 
     setBulkActionLoading(null)
-    setToastError(false)
-    setToastMsg(`Отгружено: ${updatedCount} заказов`)
-    setTimeout(() => setToastMsg(null), 4000)
+    toast.success(`Отгружено: ${updatedCount} заказов`)
   }
 
   function toggleOrderSelection(orderId: number) {
@@ -1514,7 +1501,7 @@ export default function B2BOrdersPage() {
   }
 
   async function handleCreatePurchaseOrder(groups: MatReqGroup[]) {
-    if (!window.confirm('Создать закупочную заявку для выбранных заказов?')) return
+    if (!(await confirmDialog({ title: 'Создать закупочную заявку для выбранных заказов?', confirmLabel: 'Создать заявку' }))) return
     setCreatingPurchaseOrder(true)
     try {
       const sb = createClient()
@@ -1525,19 +1512,15 @@ export default function B2BOrdersPage() {
         .select('id')
         .single()
       if (error) {
-        setToastError(true)
-        setToastMsg(`Ошибка создания закупки: ${error.message}`)
+        toast.error(`Ошибка создания закупки: ${error.message}`)
       } else {
-        setToastError(false)
-        setToastMsg(`Закупочная заявка создана${data?.id ? ` (ID ${data.id})` : ''}`)
+        toast.success(`Закупочная заявка создана${data?.id ? ` (ID ${data.id})` : ''}`)
       }
     } catch {
-      setToastError(true)
-      setToastMsg('Ошибка создания закупки')
+      toast.error('Ошибка создания закупки')
     } finally {
       setCreatingPurchaseOrder(false)
     }
-    setTimeout(() => setToastMsg(null), 4000)
   }
 
   // Точный раскрой через оптимайзер для развёрнутого заказа
@@ -2493,11 +2476,13 @@ export default function B2BOrdersPage() {
                                   <span className="text-[11px] font-semibold text-red-700">{monthLabel}</span>
                                   <span className="text-[11px] text-red-400">— {monthOrders.length} зак.</span>
                                   <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                       if (isBulkLoading) return
-                                      const confirmed = window.confirm(
-                                        `Вы точно хотите отметить все просроченные заказы за ${monthLabel} как отгруженные?\nБудет изменено: ${monthOrders.length} заказов.\nДействие будет записано в историю notes.bulk_actions.`
-                                      )
+                                      const confirmed = await confirmDialog({
+                                        title: `Отметить все просроченные заказы за ${monthLabel} отгруженными?`,
+                                        text: `Будет изменено: ${monthOrders.length} заказов.\nДействие будет записано в историю notes.bulk_actions.`,
+                                        confirmLabel: 'Отметить отгруженными', danger: true,
+                                      })
                                       if (!confirmed) return
                                       bulkMarkMonthAsShipped(monthKey, monthOrders)
                                     }}
@@ -2996,13 +2981,6 @@ export default function B2BOrdersPage() {
           </div>
         )
       })()}
-
-      {/* Toast */}
-      {toastMsg && (
-        <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[12px] font-medium text-white transition-all ${toastError ? 'bg-red-600' : 'bg-[#111110]'}`}>
-          {toastMsg}
-        </div>
-      )}
 
       {/* Диалог архивирования */}
       {deletingId !== null && (

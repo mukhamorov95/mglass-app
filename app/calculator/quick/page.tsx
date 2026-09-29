@@ -4,12 +4,21 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { kpFromQuick } from '@/lib/kp/fromQuick'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
 
 const L = 'block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1'
 const I = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#111110] bg-white'
+
+// Куда лёг сохранённый расчёт помимо «Расчётов». failed — запрос к сделке не прошёл.
+type DealLink =
+  | { kind: 'attached'; dealId: number }
+  | { kind: 'created'; dealId: number }
+  | { kind: 'ambiguous' }
+  | { kind: 'none' }
+  | { kind: 'failed'; reason: string; dealId: number | null }
 
 type CartItem = { title: string; productPrice: number; installTotal: number; sections: number; perSection: number; delivery: number; lift: number; total: number }
 
@@ -181,35 +190,84 @@ export default function QuickCalcPage() {
         parent_calc_id: parentCalcIdRef.current ?? undefined,
       })
       const ok = !!(res && 'id' in res && res.id)
-      if (!ok) { if (!silent) setSaveMsg(res && 'error' in res ? res.error! : 'Не удалось сохранить'); return false }
+      if (!ok) {
+        const reason = res && 'error' in res ? res.error! : 'Не удалось сохранить'
+        if (!silent) setSaveMsg(reason)
+        toast.error('Расчёт не сохранён', {
+          detail: silent
+            ? `${reason}. КП открыто с этими данными, но в «Расчётах» этого расчёта нет.`
+            : `${reason}. Данные остались в форме — нажмите «Сохранить расчёт» ещё раз.`,
+        })
+        return false
+      }
       lastSavedSigRef.current = sig
       const newId = (res as { id: number }).id
-      let createdDeal = false
-      if (reopenDealIdRef.current) {
-        // Пересчёт из карточки — тот же объект: кладём вторичный в ту же сделку,
-        // не спрашивая (человек уже выбрал объект, открыв карточку).
-        try {
-          await fetch(`/api/deals/${reopenDealIdRef.current}/attach`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ calc_id: newId }),
-          })
-        } catch { /* привяжется вручную из «требуют привязки» */ }
-      } else if (clientPhone.trim() || objectAddress.trim()) {
-        // Новый расчёт с телефоном/адресом: сервер решает создать/спросить/осиротеть
-        // (/api/deals/ensure). Создание ≠ склейка — молча только новый объект.
-        try {
-          const er = await fetch('/api/deals/ensure', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ calc_id: newId, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }),
-          }).then(x => x.json()).catch(() => null)
-          createdDeal = !!er?.created
-        } catch { /* заведём позже вручную из «требуют привязки» */ }
-      }
-      if (!silent) setSaveMsg(createdDeal ? 'Сохранено, заведена сделка ✓ — КП делается кнопкой «Сформировать КП»' : 'Сохранено в «Расчёты» ✓ — КП делается кнопкой «Сформировать КП»')
+      const link = await linkToDeal(newId)
+      if (link.kind === 'failed') reportLinkFailure(newId, link)
+      if (!silent) setSaveMsg(
+        link.kind === 'attached' ? 'Сохранено ✓ — расчёт в сделке (вкладка «Расчёты») и в общем списке «Расчёты». КП — кнопкой «Сформировать КП»'
+        : link.kind === 'created' ? 'Сохранено, заведена сделка ✓ — расчёт в ней и в «Расчётах». КП — кнопкой «Сформировать КП»'
+        : link.kind === 'ambiguous' ? 'Сохранено в «Расчёты» ✓ — в сделку не положен: такой телефон уже есть в сделках. Расчёт ждёт в «Мой день» → «Расчёты без клиента»'
+        : link.kind === 'failed' ? 'Расчёт сохранён в «Расчёты», но в сделку не попал — подробности в сообщении внизу'
+        : 'Сохранено в «Расчёты» ✓ — КП делается кнопкой «Сформировать КП»')
       return true
+    } catch {
+      if (!silent) setSaveMsg('Не удалось сохранить')
+      toast.error('Расчёт не сохранён', { detail: `${NETWORK_ERROR}. Данные остались в форме — нажмите «Сохранить расчёт» ещё раз.` })
+      return false
     } finally {
       if (!silent) { setSaving(false); setTimeout(() => setSaveMsg(null), 4000) }
     }
+  }
+
+  // Привязка к сделке — отдельный запрос после сохранения. Его сбой не отменяет
+  // сохранение, но человек должен узнать, что расчёта в сделке нет.
+  async function linkToDeal(calcId: number): Promise<DealLink> {
+    const dealId = reopenDealIdRef.current
+    if (dealId) {
+      // Пересчёт из карточки — тот же объект: кладём вторичный в ту же сделку,
+      // не спрашивая (человек уже выбрал объект, открыв карточку).
+      try {
+        const r = await fetch(`/api/deals/${dealId}/attach`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ calc_id: calcId }),
+        })
+        return r.ok ? { kind: 'attached', dealId } : { kind: 'failed', reason: await responseError(r), dealId }
+      } catch { return { kind: 'failed', reason: NETWORK_ERROR, dealId } }
+    }
+    if (!clientPhone.trim() && !objectAddress.trim()) return { kind: 'none' }
+    // Новый расчёт с телефоном/адресом: сервер решает создать/спросить/осиротеть
+    // (/api/deals/ensure). Создание ≠ склейка — молча только новый объект.
+    try {
+      const r = await fetch('/api/deals/ensure', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calc_id: calcId, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }),
+      })
+      if (!r.ok) return { kind: 'failed', reason: await responseError(r), dealId: null }
+      const er = await r.json().catch(() => null) as { created?: boolean; dealId?: number; ambiguous?: boolean } | null
+      if (er?.created && er.dealId) return { kind: 'created', dealId: er.dealId }
+      return er?.ambiguous ? { kind: 'ambiguous' } : { kind: 'none' }
+    } catch { return { kind: 'failed', reason: NETWORK_ERROR, dealId: null } }
+  }
+
+  function reportLinkFailure(calcId: number, link: Extract<DealLink, { kind: 'failed' }>) {
+    toast.error(link.dealId ? 'Расчёт сохранён, но не положен в сделку' : 'Расчёт сохранён, но сделка не заведена', {
+      detail: `${link.reason}. Расчёт лежит в «Расчётах» и в «Мой день» → «Расчёты без клиента»; в карточке сделки его нет.`,
+      action: {
+        label: 'Повторить',
+        onClick: async () => {
+          const again = await linkToDeal(calcId)
+          if (again.kind === 'failed') reportLinkFailure(calcId, again)
+          else if (again.kind === 'attached' || again.kind === 'created') {
+            toast.success(again.kind === 'created' ? 'Сделка заведена, расчёт в ней' : 'Расчёт положен в сделку', {
+              action: { label: 'Открыть сделку', onClick: () => router.push(`/deal/${again.dealId}`) },
+            })
+          } else toast.info('Расчёт в «Расчётах», в сделку не положен', {
+            detail: again.kind === 'ambiguous' ? 'Такой телефон уже есть в сделках. Расчёт ждёт в «Мой день» → «Расчёты без клиента».' : undefined,
+          })
+        },
+      },
+    })
   }
   const saveQuick = () => persistCalc({ silent: false })
 

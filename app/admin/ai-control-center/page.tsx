@@ -783,7 +783,7 @@ export default function AIControlCenter() {
               <div className="flex flex-wrap gap-2">
                 {PERSPECTIVES.map(p => (
                   <button key={p.id} onClick={() => setPerspective(p.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${perspective === p.id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebе8]'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${perspective === p.id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebe8]'}`}>
                     {p.label}
                   </button>
                 ))}
@@ -840,7 +840,7 @@ export default function AIControlCenter() {
               ['new', 'Ждут решения'], ['in_work', 'В работе'], ['done', 'Сделано'], ['archived', 'Архив'], ['removed', 'Убранные'],
             ] as [RecStatus, string][]).map(([id, label]) => (
               <button key={id} onClick={() => setRecFilter(id)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${recFilter === id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebе8]'}`}>
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${recFilter === id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebe8]'}`}>
                 {label} <span className="ml-1 text-[10px] opacity-60">{recCount(id)}</span>
               </button>
             ))}
