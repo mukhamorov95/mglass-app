@@ -2,14 +2,15 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { swUrl } from '@/lib/swUrl'
 
-// A10: регистрирует service worker (passthrough /sw.js), чтобы кабинет можно было
+// A10: регистрирует service worker (/sw.js), чтобы кабинет можно было
 // «установить» как приложение на телефон/планшет партнёра. Плюс будит сессию при
 // возврате в фокус — в спящей PWA авто-рефреш токена заморожен.
 export default function RegisterSW() {
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js', { scope: '/partner' }).catch(() => {})
+      navigator.serviceWorker.register(swUrl(), { scope: '/partner' }).catch(() => {})
     }
     const wake = () => {
       if (document.visibilityState !== 'visible') return

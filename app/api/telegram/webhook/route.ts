@@ -9,6 +9,7 @@ import {
 import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
 import { sendMessage as sendWA } from '@/lib/wazzup'
 import { captureMontageMedia } from '@/lib/montageMedia'
+import { appUrl, internalAppUrl } from '@/lib/appUrl'
 
 export const maxDuration = 60
 
@@ -18,7 +19,7 @@ function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://mglass-app.vercel.app'
+const APP_URL = appUrl()
 
 function withTimeout<T>(p: Promise<T>, ms: number, label = ''): Promise<T> {
   return Promise.race([
@@ -939,7 +940,7 @@ export async function POST(req: Request) {
 
   const host    = req.headers.get('host') ?? 'localhost:3000'
   const isLocal = host.includes('localhost') || host.includes('127.0.0.1')
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${isLocal ? 'http' : 'https'}://${host}`
+  const baseUrl = internalAppUrl() ?? `${isLocal ? 'http' : 'https'}://${host}`
 
   after(async () => {
     try { await handle(update, baseUrl) }

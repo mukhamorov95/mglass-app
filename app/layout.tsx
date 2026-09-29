@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-server'
 import { getUserProfile, getSessionUser, DEFAULT_PERMISSIONS } from '@/lib/getRole'
 import { Sidebar } from '@/components/Sidebar'
 import CartProvider from '@/components/CartProvider'
+import StorageProxySW from '@/components/StorageProxySW'
 import { OrganizationProvider } from '@/lib/hooks/use-organization'
 import type { OrgRole } from '@/lib/hooks/use-organization'
 
@@ -61,6 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body className="min-h-full bg-[#f8f8f7]">
+        {user && <StorageProxySW />}
         <OrganizationProvider initialOrgId={orgId} initialRole={orgRole}>
           <CartProvider>
             {user && role !== 'partner' ? (

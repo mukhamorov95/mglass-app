@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { generateRecommendations, perspectiveForDay } from '@/lib/ai/recommendations'
 import { notifyAdmins } from '@/lib/telegram'
+import { appUrl } from '@/lib/appUrl'
 
 // Ежедневные рекомендации AI Control Center. Если владелец не разобрал прошлые —
 // новые не копим: рекомендация без решения ничего не меняет, а куча без решений
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
         `💡 <b>AI Control Center: новых рекомендаций — ${created.length}</b>`,
         ...created.map(r => `• ${r.title}`),
         '',
-        'Решить: в работу / в архив / убрать — https://mglass-app.vercel.app/admin/ai-control-center',
+        'Решить: в работу / в архив / убрать — ' + appUrl('/admin/ai-control-center'),
       ].join('\n')).catch(() => {})
     }
     return NextResponse.json({ ok: true, created: created.length })

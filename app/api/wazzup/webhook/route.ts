@@ -15,6 +15,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { internalAppUrl } from '@/lib/appUrl'
 
 export const maxDuration = 15
 
@@ -217,7 +218,7 @@ export async function POST(req: Request) {
   // Разгребаем очередь прямо здесь: тариф Vercel Hobby разрешает крону только
   // один запуск в сутки, а сообщение должно попасть в CRM сразу. Крон остаётся
   // подстраховкой на случай, если этот вызов не успел или упал.
-  const base = process.env.NEXT_PUBLIC_APP_URL
+  const base = internalAppUrl()
   if (base && process.env.CRON_SECRET) {
     try {
       await fetch(`${base}/api/cron/process-queue`, {

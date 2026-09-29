@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireOwner } from '@/lib/apiAuth'
+import { internalAppUrl } from '@/lib/appUrl'
 
 const ALLOWED_KEYS = ['revenue', 'analyst', 'production', 'catalog']
 
@@ -17,9 +18,7 @@ export async function POST(
 
   // Адрес — только из настроек, не из заголовка Host: иначе поддельный Host увёл бы
   // запрос вместе с CRON_SECRET на чужой сервер.
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
-    ?? (process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : null)
+  const baseUrl = internalAppUrl()
   if (!baseUrl) return NextResponse.json({ ok: false, error: 'Не задан адрес приложения (NEXT_PUBLIC_APP_URL)' }, { status: 500 })
 
   let res: Response

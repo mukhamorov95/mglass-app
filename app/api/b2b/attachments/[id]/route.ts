@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { redirectToStorage } from '@/lib/storageRedirect'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { getRole } from '@/lib/getRole'
@@ -40,5 +41,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { data: signed, error } = await svc.storage.from('b2b-attachments').createSignedUrl(path, 300)
   if (error || !signed?.signedUrl) return NextResponse.json({ error: 'Sign failed' }, { status: 500 })
 
-  return NextResponse.redirect(signed.signedUrl)
+  return redirectToStorage(signed.signedUrl)
 }
