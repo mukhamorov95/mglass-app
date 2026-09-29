@@ -1019,7 +1019,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
         `}
       >
         {/* Header */}
-        <div className="border-b border-[#ebebе8] flex-shrink-0">
+        <div className="border-b border-[#e4e4e0] flex-shrink-0">
           <Link href="/" onClick={() => setMobileOpen(false)}
             className="flex items-center gap-2.5 px-4 py-3 hover:bg-[#f5f5f3] transition-colors">
             <div className="w-[26px] h-[26px] bg-[#111110] rounded-[6px] flex items-center justify-center flex-shrink-0">
@@ -1094,7 +1094,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
         </nav>
 
         {/* Footer */}
-        <div className="px-3 py-2.5 border-t border-[#ebebе8] flex-shrink-0">
+        <div className="px-3 py-2.5 border-t border-[#e4e4e0] flex-shrink-0">
           <div className="flex items-center gap-2 px-2 mb-1">
             <div className="w-5 h-5 rounded-full bg-[#efefec] border border-[#e4e4e0] flex items-center justify-center flex-shrink-0">
               <span className="text-[9px] font-bold text-[#6b6b66]">{(userEmail[0] ?? '?').toUpperCase()}</span>

@@ -67,6 +67,9 @@ export default function ManagerDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [tasks, setTasks] = useState<TaskRow[]>([])
+  const [tasksErr, setTasksErr] = useState(false)
+  // Что не загрузилось: блоки ниже тогда неполные, и экран должен это сказать.
+  const [partialErr, setPartialErr] = useState<string[]>([])
 
   const [myEmail, setMyEmail]       = useState<string | null>(null)
   const [myUserId, setMyUserId]     = useState<string | null>(null)
@@ -94,6 +97,7 @@ export default function ManagerDashboardPage() {
   async function load() {
     setLoading(true)
     setError(false)
+    setPartialErr([])
     try {
     const sb = createClient()
 
@@ -117,8 +121,9 @@ export default function ManagerDashboardPage() {
 
     // Задачи CRM (свои открытые) — раньше жили только в /crm, менеджер не видел их
     // на дашборде. Грузим фоном (не блокируем основные данные).
-    fetch('/api/crm/tasks').then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.tasks) setTasks(d.tasks as TaskRow[]) }).catch(() => {})
+    fetch('/api/crm/tasks').then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
+      .then(d => { setTasksErr(false); if (d?.tasks) setTasks(d.tasks as TaskRow[]) })
+      .catch(() => setTasksErr(true))
 
     const now = new Date()
     const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes'
@@ -130,7 +135,7 @@ export default function ManagerDashboardPage() {
       quotesQuery = quotesQuery.eq('created_by', user.id)
     }
 
-    const [{ data: qs }, { data: cls }, { data: lastInts }] = await Promise.all([
+    const [{ data: qs, error: qsErr }, { data: cls, error: clsErr }, { data: lastInts, error: intsErr }] = await Promise.all([
       quotesQuery,
       sb.from('b2b_clients').select(CRM_COLS).eq('active', true),
       sb.from('b2b_interactions')
@@ -140,6 +145,10 @@ export default function ManagerDashboardPage() {
     ])
 
     setQuotes((qs ?? []) as unknown as Quote[])
+    const failed: string[] = []
+    if (qsErr) failed.push('КП и заказы')
+    if (clsErr) failed.push('клиенты')
+    if (intsErr) failed.push('история контактов')
 
     // Оборот клиента с начала года — постранично и только по живым заказам.
     // Раньше: без archived_at и без пагинации PostgREST отдавал произвольные 1000 из
@@ -150,7 +159,8 @@ export default function ManagerDashboardPage() {
       const { data, error } = await liveOrders(sb, 'client_id,total_after_discount,discount_percent,total_sale_inc_vat')
         .gte('created_at', new Date(now.getFullYear(), 0, 1).toISOString())
         .order('created_at', { ascending: false }).range(from, from + 999)
-      if (error || !data?.length) break
+      if (error) { failed.push('обороты клиентов за год'); break }
+      if (!data?.length) break
       for (const o of data as unknown as YtdRow[]) {
         const v = Number((o.discount_percent ?? 0) > 0 ? o.total_after_discount : o.total_sale_inc_vat) || 0
         totalByClient.set(o.client_id, (totalByClient.get(o.client_id) ?? 0) + v)
@@ -175,6 +185,7 @@ export default function ManagerDashboardPage() {
       enriched.map((c: ClientWithMeta) => c.crm.manager_name).filter((m): m is string => !!m)
     )].sort()
     setManagers(mgrs)
+    setPartialErr(failed)
     } catch (e) {
       console.error(e)
       setError(true)
@@ -340,7 +351,18 @@ export default function ManagerDashboardPage() {
           ))}
         </div>
 
+        {partialErr.length > 0 && (
+          <div role="alert" className="bg-white border border-[#eec5bf] rounded-xl px-4 py-3 mb-4 text-[13px] text-[#c23a2b]">
+            Не загрузилось: {partialErr.join(', ')}. Цифры и списки ниже неполные — обновите страницу.
+          </div>
+        )}
+
         {/* Задачи CRM на сегодня */}
+        {tasksErr && (
+          <div role="alert" className="bg-white border border-[#eec5bf] rounded-xl px-4 py-3 mb-4 text-[13px] text-[#c23a2b]">
+            Задачи CRM на сегодня не загрузились — обновите страницу или откройте <Link href="/crm" className="underline">CRM</Link>.
+          </div>
+        )}
         {(() => {
           const due = dueTodayOrOverdue(tasks)
           if (due.length === 0) return null

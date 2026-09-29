@@ -27,15 +27,18 @@ export function OrphanCalcs() {
   const [address, setAddress] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [loadErr, setLoadErr] = useState(false)
 
   const load = useCallback((v: 'active' | 'archive') => {
     fetch(`/api/calculations/orphans?view=${v}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
       .then(j => {
         setItems(Array.isArray(j?.items) ? j.items : [])
         if (j?.counts) setCounts(j.counts)
+        setLoadErr(false)
       })
-      .catch(() => setItems([]))
+      // Раньше сбой прятал блок целиком — как будто расчётов без клиента нет.
+      .catch(() => { setItems([]); setLoadErr(true) })
   }, [])
 
   useEffect(() => { load(view) }, [load, view])
@@ -90,6 +93,11 @@ export function OrphanCalcs() {
     } finally { setBusy(false) }
   }
 
+  if (loadErr) return (
+    <div role="alert" className="rounded-xl border border-[#eec5bf] bg-white px-4 py-3 text-[13px] text-[#c23a2b]">
+      Не удалось загрузить расчёты без клиента — обновите страницу.
+    </div>
+  )
   if (items == null) return null
   if (counts.active === 0 && counts.archived === 0) return null
 

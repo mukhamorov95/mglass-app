@@ -42,9 +42,19 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   if (!Number.isFinite(dealId)) notFound()
 
   const sb = await createServerClient()
-  const { data } = await sb.from('b2b_orders')
+  const { data, error } = await sb.from('b2b_orders')
     .select('id, client_id, client_name, custom_number, client_order_number, discount_percent, margin_percent, items, total_area, total_weight, total_cost_net, total_sale_inc_vat, total_after_discount, notes, created_at, created_by_name, launched_at, launched_by_name, updated_by_name, updated_at')
     .eq('id', dealId).maybeSingle()
+  // Сбой запроса — не «не найден»: иначе человек решит, что заказа больше нет.
+  if (error) return (
+    <div className="p-6 max-w-4xl mx-auto">
+      <p className="text-[11px] text-[#9a9a95]"><Link href="/b2b-orders" className="hover:underline">‹ Заказы</Link></p>
+      <div role="alert" className="mt-3 bg-white border border-[#eec5bf] rounded-2xl px-5 py-4">
+        <p className="text-[14px] font-semibold text-[#c23a2b]">Не удалось загрузить заказ №&nbsp;{String(dealId).padStart(5, '0')}</p>
+        <p className="text-[12px] text-[#6b6b66] mt-1">{error.message}. Это ошибка загрузки, заказ не удалён — обновите страницу.</p>
+      </div>
+    </div>
+  )
   if (!data) notFound()
 
   const order = data as Record<string, unknown>
@@ -61,19 +71,23 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   // A23: оплата — из payments (не из notes). Прямые платежи по заказу + доля от
   // оплаченных счетов, куда заказ входит. Считаем на сервере — деньги наружу
   // без себестоимости.
-  const [{ data: pays }, { data: invs }, { rates }] = await Promise.all([
+  const [{ data: pays, error: paysErr }, { data: invs, error: invsErr }, { rates }] = await Promise.all([
     sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').eq('b2b_order_id', dealId).is('voided_at', null),
     sb.from('invoices').select('id, order_ids, amount').overlaps('order_ids', [dealId]),
     loadB2BRates(sb),
   ])
   let invPays: { amount: number; b2b_order_id: number | null; invoice_id: number | null; voided_at: string | null }[] = []
+  let invPaysErr: { message: string } | null = null
   const invIds = ((invs ?? []) as { id: number }[]).map(i => i.id)
   if (invIds.length) {
-    const { data } = await sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').in('invoice_id', invIds).is('voided_at', null)
+    const { data, error: e } = await sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').in('invoice_id', invIds).is('voided_at', null)
     invPays = ((data ?? []) as Record<string, unknown>[])
       .filter(p => p.b2b_order_id == null)
       .map(p => ({ amount: Number(p.amount) || 0, b2b_order_id: null, invoice_id: Number(p.invoice_id) || null, voided_at: null }))
+    invPaysErr = e
   }
+  // Без оплат «Оплачено»/«Остаток» соврали бы («не заведена») — такие строки не показываем.
+  const moneyErr = paysErr ?? invsErr ?? invPaysErr
   const paidMap = paidByOrder(
     [...((pays ?? []) as Record<string, unknown>[]).map(p => ({ amount: Number(p.amount) || 0, b2b_order_id: Number(p.b2b_order_id) || null, invoice_id: p.invoice_id == null ? null : Number(p.invoice_id), voided_at: (p.voided_at as string | null) ?? null })), ...invPays],
     ((invs ?? []) as Record<string, unknown>[]).map(i => ({ id: Number(i.id), order_ids: Array.isArray(i.order_ids) ? (i.order_ids as unknown[]).map(Number) : null, amount: Number(i.amount) || 0 })),
@@ -149,13 +163,19 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         <Section title="Деньги">
           <dl className="text-[12px] space-y-1">
             <div className="flex justify-between"><dt className="text-[#9a9a95]">К оплате</dt><dd className="font-mono font-semibold">{fmt(total)}</dd></div>
-            <div className="flex justify-between"><dt className="text-[#9a9a95]">Оплачено</dt><dd className="font-mono">{rem.hasPayment ? fmt(paid) : '—'}</dd></div>
-            <div className="flex justify-between">
-              <dt className="text-[#9a9a95]">{rem.hasPayment ? 'Остаток' : 'Оплата'}</dt>
-              <dd className={`font-mono font-semibold ${!rem.hasPayment ? 'text-[#9a9a95]' : rem.outstanding ? 'text-red-600' : 'text-emerald-600'}`}>
-                {rem.hasPayment ? (rem.outstanding ? fmt(rem.remainder) : 'закрыт') : 'не заведена'}
-              </dd>
-            </div>
+            {moneyErr ? (
+              <p role="alert" className="text-[#c23a2b]">Оплаты не загрузились: {moneyErr.message}. «Оплачено» и «Остаток» не показаны — обновите страницу.</p>
+            ) : (
+              <>
+                <div className="flex justify-between"><dt className="text-[#9a9a95]">Оплачено</dt><dd className="font-mono">{rem.hasPayment ? fmt(paid) : '—'}</dd></div>
+                <div className="flex justify-between">
+                  <dt className="text-[#9a9a95]">{rem.hasPayment ? 'Остаток' : 'Оплата'}</dt>
+                  <dd className={`font-mono font-semibold ${!rem.hasPayment ? 'text-[#9a9a95]' : rem.outstanding ? 'text-red-600' : 'text-emerald-600'}`}>
+                    {rem.hasPayment ? (rem.outstanding ? fmt(rem.remainder) : 'закрыт') : 'не заведена'}
+                  </dd>
+                </div>
+              </>
+            )}
             {owner && (
               <div className="flex justify-between"><dt className="text-[#9a9a95]">Себестоимость</dt><dd className="font-mono text-[#6b6b66]">{fmt(Number(order.total_cost_net) || 0)}</dd></div>
             )}

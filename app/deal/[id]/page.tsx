@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation'
 import { formatPhone, telHref, waHref } from '@/lib/b2c/phoneKey'
 import type { DealStage } from '@/lib/b2c/dealProgress'
 import { kpItemsFromCalcs } from '@/lib/kp/fromQuick'
+import { toast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { confirmDialog, promptDialog } from '@/lib/dialog'
 
 // Карточка Сделки (B2C). Паттерн — как /b2b-deal, но модель своя (deals — тонкая
 // группировка по объекту). Этаж и деньги приходят с сервера тем же кодом, что
@@ -82,6 +84,21 @@ const date = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 
 const PRODUCT: Record<string, string> = { mirror: '🪞 Зеркало', shower: '🚿 Душевая', shower_standard: '🚿 Душевая', shower_budget: '🚿 Душевая', loft: '🏗️ Лофт', railing: '🪜 Ограждение', quick: '⚡ Быстрый' }
 const CALC_STATUS: Record<string, string> = { draft: 'Черновик', sent: 'Отправлено', approved: 'Согласовано', rejected: 'Отказ' }
 
+// Блоки, которые грузятся отдельно: сбой одного не должен выглядеть как «пусто».
+type LoadKey = 'docs' | 'notes' | 'payments' | 'files' | 'invoices'
+
+async function loadFailure(r: Response | null): Promise<string> {
+  return r ? responseError(r) : NETWORK_ERROR
+}
+
+function LoadError({ what, reason, className = 'px-5 py-4' }: { what: string; reason: string; className?: string }) {
+  return (
+    <p role="alert" className={`${className} text-[13px] text-[#c23a2b]`}>
+      Не удалось загрузить {what}: {reason}. Обновите страницу.
+    </p>
+  )
+}
+
 const TONE: Record<string, string> = {
   plain: 'bg-[#f0f0ec] text-[#6b6b66]', sent: 'bg-blue-50 text-blue-700',
   warn: 'bg-amber-50 text-amber-800', good: 'bg-emerald-50 text-emerald-700',
@@ -118,13 +135,21 @@ export default function DealPage() {
   const [invForm, setInvForm] = useState({ amount: '', purpose: 'prepay', due_at: '' })
   const [invBusy, setInvBusy] = useState(false)
   const [invOpen, setInvOpen] = useState(false)
+  const [loadErr, setLoadErr] = useState<Partial<Record<LoadKey, string>>>({})
+  const markLoad = (key: LoadKey, reason: string | null) =>
+    setLoadErr(e => ({ ...e, [key]: reason ?? undefined }))
 
   async function load() {
     setLoading(true)
     try {
       const r = await fetch(`/api/deals/${id}`)
       const j = await r.json().catch(() => ({}))
-      if (!r.ok) { setError(r.status === 403 ? 'Нет доступа к этой сделке' : 'Сделка не найдена'); return }
+      if (!r.ok) {
+        setError(r.status === 403 ? 'Нет доступа к этой сделке'
+          : r.status === 404 ? 'Сделка не найдена'
+          : `Не удалось загрузить сделку: ${await responseError(r)}. Обновите страницу.`)
+        return
+      }
       setDeal(j.deal); setCalcs(j.calculations ?? []); setSiblings(j.siblings ?? [])
       setStage(j.stage ?? null); setMoney(j.money ?? null)
       setForm({ client_name: j.deal.client_name ?? '', phone: j.deal.phone ?? '', address: j.deal.address ?? '', amo_lead_id: j.deal.amo_lead_id ?? '', source: j.deal.source ?? '' })
@@ -150,8 +175,10 @@ export default function DealPage() {
   async function save() {
     setSaving(true)
     try {
-      const r = await fetch(`/api/deals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      if (r.ok) { setEdit(false); await load() }
+      const r = await sendOrToast('Изменения сделки не сохранены', `/api/deals/${id}`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) },
+        'Данные остались в форме — нажмите «Сохранить» ещё раз')
+      if (r) { setEdit(false); await load() }
     } finally { setSaving(false) }
   }
 
@@ -167,7 +194,9 @@ export default function DealPage() {
   }
 
   async function detach(calcId: number) {
-    await fetch(`/api/deals/${id}/attach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: calcId, detach: true }) })
+    const r = await sendOrToast('Расчёт не убран из сделки', `/api/deals/${id}/attach`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: calcId, detach: true }) })
+    if (r) toast.success('Расчёт убран из сделки', { detail: 'Сам расчёт не удалён — он остался в истории расчётов.' })
     await load()
   }
 
@@ -176,11 +205,19 @@ export default function DealPage() {
   async function toggleArchive() {
     if (!deal) return
     const toArchive = !deal.archived_at
-    if (toArchive && !window.confirm('Убрать сделку в архив? Она пропадёт с доски, но останется вместе с расчётами и документами — вернуть можно в любой момент.')) return
+    if (toArchive && !(await confirmDialog({
+      title: 'Убрать сделку в архив?',
+      text: 'Она пропадёт с доски, но останется вместе с расчётами и документами — вернуть можно в любой момент.',
+      confirmLabel: 'В архив',
+    }))) return
     setArchiving(true)
     try {
-      const r = await fetch(`/api/deals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived: toArchive }) })
-      if (r.ok) { if (toArchive) window.location.assign('/deals/board'); else await load() }
+      const r = await sendOrToast(toArchive ? 'Сделка не убрана в архив' : 'Сделка не возвращена из архива', `/api/deals/${id}`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived: toArchive }) })
+      if (r) {
+        if (toArchive) window.location.assign('/deals/board')
+        else { toast.success('Сделка возвращена из архива', { detail: 'Она снова на доске сделок.' }); await load() }
+      }
     } finally { setArchiving(false) }
   }
 
@@ -189,16 +226,21 @@ export default function DealPage() {
   async function loadKpCandidates() {
     setKpBusy(true)
     try {
-      const r = await fetch(`/api/deals/${id}/kp-candidates`)
-      const j = await r.json().catch(() => ({}))
-      if (r.ok) setKpPick(j.candidates ?? [])
+      const r = await sendOrToast('Не удалось загрузить список КП', `/api/deals/${id}/kp-candidates`)
+      const j = r ? await r.json().catch(() => ({})) : {}
+      if (r) setKpPick(j.candidates ?? [])
     } finally { setKpBusy(false) }
   }
   async function attachKp(kpId: number) {
     setKpBusy(true)
     try {
-      const r = await fetch(`/api/deals/${id}/kp-candidates`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kp_id: kpId }) })
-      if (r.ok) { setKpPick(null); await loadDocs() }
+      const r = await sendOrToast('КП не привязано к сделке', `/api/deals/${id}/kp-candidates`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kp_id: kpId }) })
+      if (r) {
+        setKpPick(null)
+        toast.success('КП привязано к сделке', { detail: 'Оно во вкладке «Документы».', action: { label: 'Открыть документы', onClick: () => setTab('docs') } })
+        await loadDocs()
+      }
     } finally { setKpBusy(false) }
   }
 
@@ -206,8 +248,9 @@ export default function DealPage() {
     try {
       const r = await fetch(`/api/deals/${id}/invoices`)
       const j = await r.json().catch(() => ({}))
-      if (r.ok) setInvoices(j.invoices ?? [])
-    } catch { /* ignore */ }
+      if (r.ok) { setInvoices(j.invoices ?? []); markLoad('invoices', null) }
+      else markLoad('invoices', await loadFailure(r))
+    } catch { markLoad('invoices', await loadFailure(null)) }
   }
   // Счёт выставляется на СВОЮ сумму: предоплата, остаток или монтаж отдельно.
   async function createInvoice() {
@@ -216,72 +259,80 @@ export default function DealPage() {
     setInvBusy(true)
     try {
       const contractId = docs?.contracts?.[0]?.id ?? null
-      const r = await fetch(`/api/deals/${id}/invoices`, {
+      const r = await sendOrToast('Счёт не выставлен', `/api/deals/${id}/invoices`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount, purpose: invForm.purpose, due_at: invForm.due_at || null, contract_id: contractId }),
-      })
-      if (r.ok) { setInvForm({ amount: '', purpose: 'prepay', due_at: '' }); setInvOpen(false); await loadInvoices() }
+      }, 'Данные остались в форме — нажмите «Выставить» ещё раз')
+      if (r) { setInvForm({ amount: '', purpose: 'prepay', due_at: '' }); setInvOpen(false); await loadInvoices() }
     } finally { setInvBusy(false) }
   }
   async function cancelInvoice(invoiceId: number) {
-    if (!window.confirm('Отменить счёт? Запись останется, номер не переиспользуется.')) return
-    const r = await fetch(`/api/deals/${id}/invoices`, {
+    if (!(await confirmDialog({
+      title: 'Отменить счёт?',
+      text: 'Запись останется, номер не переиспользуется.',
+      confirmLabel: 'Отменить счёт', cancelLabel: 'Не отменять', danger: true,
+    }))) return
+    const r = await sendOrToast('Счёт не отменён', `/api/deals/${id}/invoices`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoice_id: invoiceId, status: 'cancelled' }),
     })
-    if (r.ok) await loadInvoices()
+    if (r) await loadInvoices()
   }
 
   async function loadNotes() {
     try {
       const r = await fetch(`/api/deals/${id}/notes`)
       const j = await r.json().catch(() => ({}))
-      if (r.ok) setNotes(j.notes ?? [])
-    } catch { /* ignore */ }
+      if (r.ok) { setNotes(j.notes ?? []); markLoad('notes', null) }
+      else markLoad('notes', await loadFailure(r))
+    } catch { markLoad('notes', await loadFailure(null)) }
   }
   async function addNote() {
     const text = noteText.trim()
     if (!text) return
     setNoteBusy(true)
     try {
-      const r = await fetch(`/api/deals/${id}/notes`, {
+      const r = await sendOrToast('Запись не сохранена', `/api/deals/${id}/notes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
-      })
-      if (r.ok) { setNoteText(''); await loadNotes() }
+      }, 'Текст остался в поле — нажмите «Записать» ещё раз')
+      if (r) { setNoteText(''); await loadNotes() }
     } finally { setNoteBusy(false) }
   }
 
   // Дата следующего контакта — обещание менеджера. По ней доска считает
   // просрочку: это точнее, чем «давно не трогали».
   async function setNextContact(value: string) {
-    const r = await fetch(`/api/deals/${id}`, {
+    const r = await sendOrToast('Дата связи не сохранена', `/api/deals/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ next_contact_at: value || null }),
-    })
-    if (r.ok) await load()
+    }, 'Выберите дату ещё раз')
+    if (r) await load()
   }
 
   // Отказ — исход, а не удаление: причина остаётся в сделке.
   async function markLost(reason: string) {
-    const r = await fetch(`/api/deals/${id}`, {
+    const r = await sendOrToast('Отказ не записан', `/api/deals/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lost: true, lost_reason: reason }),
-    })
-    if (r.ok) { setLostOpen(false); await load() }
+    }, 'Выберите причину ещё раз')
+    if (r) { setLostOpen(false); await load() }
   }
   async function unLost() {
-    const r = await fetch(`/api/deals/${id}`, {
+    const r = await sendOrToast('Сделка не возвращена в работу', `/api/deals/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lost: false }),
     })
-    if (r.ok) await load()
+    if (r) await load()
   }
 
   async function loadDocs() {
     try {
       const r = await fetch(`/api/deals/${id}/documents`)
       const j = await r.json().catch(() => ({}))
-      if (r.ok) setDocs({ kps: j.kps ?? [], contracts: j.contracts ?? [], invoices: j.invoices ?? [], measures: j.measures ?? [] })
-    } catch { /* ignore */ }
+      if (r.ok) {
+        setDocs({ kps: j.kps ?? [], contracts: j.contracts ?? [], invoices: j.invoices ?? [], measures: j.measures ?? [] })
+        markLoad('docs', null)
+      } else markLoad('docs', await loadFailure(r))
+    } catch { markLoad('docs', await loadFailure(null)) }
   }
   function openTab(k: 'calcs' | 'docs' | 'money') { setTab(k) }
 
@@ -293,63 +344,80 @@ export default function DealPage() {
     // записываем в саму сделку (по адресу ищут карточку — прямое требование владельца).
     let addr = (deal.address || '').trim()
     if (!addr) {
-      const entered = window.prompt('Адрес объекта для замера (обязателен — замерщику нужно куда ехать):', '')
+      const entered = await promptDialog({
+        title: 'Адрес объекта для замера',
+        text: 'Обязателен — замерщику нужно куда ехать. Адрес запишется и в сделку.',
+        placeholder: 'Город, улица, дом, квартира',
+        confirmLabel: 'Отправить на замер',
+      })
       addr = (entered || '').trim()
       if (!addr) return
-      await fetch(`/api/deals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_name: deal.client_name, phone: deal.phone, address: addr, amo_lead_id: deal.amo_lead_id ?? '' }) })
+      await sendOrToast('Адрес не записан в сделку', `/api/deals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_name: deal.client_name, phone: deal.phone, address: addr, amo_lead_id: deal.amo_lead_id ?? '' }) },
+        'Заявка на замер всё равно уйдёт с этим адресом; в сделку его можно внести через «Изменить»')
     }
     setMeasuring(true)
     try {
-      const r = await fetch(`/api/deals/${id}/measure`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr }) })
-      if (r.ok) await load()
+      const r = await sendOrToast('Заявка на замер не отправлена', `/api/deals/${id}/measure`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr }) },
+        'Нажмите «Отправить на замер» ещё раз')
+      if (r) {
+        toast.success('Заявка на замер отправлена', { detail: 'Замерщик увидит её в своём кабинете, статус — здесь, в карточке сделки.' })
+        await load()
+      }
     } finally { setMeasuring(false) }
   }
   async function attachMeasure(reqId: number, file: File) {
     const fd = new FormData(); fd.append('file', file)
-    const r = await fetch(`/api/measure-requests/${reqId}/photo`, { method: 'POST', body: fd })
-    if (r.ok) await loadDocs()
+    const r = await sendOrToast(`Файл «${file.name}» не приложен к замеру`, `/api/measure-requests/${reqId}/photo`, { method: 'POST', body: fd },
+      'Выберите файл ещё раз')
+    if (r) { toast.success('Файл замера приложен'); await loadDocs() }
   }
 
   async function loadPayments() {
     try {
       const r = await fetch(`/api/deals/${id}/payments`)
       const j = await r.json().catch(() => ({}))
-      if (r.ok) setPayments(j.payments ?? [])
-    } catch { /* ignore */ }
+      if (r.ok) { setPayments(j.payments ?? []); markLoad('payments', null) }
+      else markLoad('payments', await loadFailure(r))
+    } catch { markLoad('payments', await loadFailure(null)) }
   }
   async function addPayment() {
     const amount = Number(String(payForm.amount).replace(/[^\d.]/g, ''))
     if (!(amount > 0)) return
     setPayingSave(true)
     try {
-      const r = await fetch(`/api/deals/${id}/payments`, {
+      const r = await sendOrToast('Оплата не записана', `/api/deals/${id}/payments`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: payForm.kind, amount, paid_at: payForm.paid_at, invoice_id: payForm.invoice_id || null }),
-      })
-      if (r.ok) { setPayForm(f => ({ ...f, amount: '', invoice_id: '' })); await loadPayments(); await loadInvoices() }
+      }, 'Данные остались в форме — нажмите «Отметить» ещё раз')
+      if (r) { setPayForm(f => ({ ...f, amount: '', invoice_id: '' })); await loadPayments(); await loadInvoices() }
     } finally { setPayingSave(false) }
   }
   async function deletePayment(pid: number) {
-    const r = await fetch(`/api/deals/${id}/payments`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_id: pid }) })
-    if (r.ok) { await loadPayments(); await loadInvoices() }
+    const r = await sendOrToast('Оплата не удалена', `/api/deals/${id}/payments`,
+      { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_id: pid }) })
+    if (r) { await loadPayments(); await loadInvoices() }
   }
 
   async function loadFiles() {
     try {
       const r = await fetch(`/api/deals/${id}/files`)
       const j = await r.json().catch(() => ({}))
-      if (r.ok) setFiles(j.files ?? [])
-    } catch { /* ignore */ }
+      if (r.ok) { setFiles(j.files ?? []); markLoad('files', null) }
+      else markLoad('files', await loadFailure(r))
+    } catch { markLoad('files', await loadFailure(null)) }
   }
   async function uploadFile(file: File) {
     const fd = new FormData(); fd.append('file', file); fd.append('kind', 'drawing')
-    const r = await fetch(`/api/deals/${id}/files`, { method: 'POST', body: fd })
-    if (r.ok) await loadFiles()
+    const r = await sendOrToast(`Файл «${file.name}» не загружен`, `/api/deals/${id}/files`, { method: 'POST', body: fd },
+      'Выберите файл ещё раз')
+    if (r) { toast.success('Файл приложен к сделке', { detail: 'Он в блоке «Чертёж и файлы» на вкладке «Документы».' }); await loadFiles() }
   }
   async function deleteFile(fid: number) {
-    const r = await fetch(`/api/deals/${id}/files`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_id: fid }) })
-    if (r.ok) await loadFiles()
+    const r = await sendOrToast('Файл не удалён', `/api/deals/${id}/files`,
+      { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_id: fid }) })
+    if (r) await loadFiles()
   }
 
   // «Сделать КП» из карточки: клиент, адрес и позиции из расчётов сделки уже подставлены —
@@ -560,6 +628,7 @@ export default function DealPage() {
           </button>
         </div>
 
+        {loadErr.notes && <LoadError what="записи по сделке" reason={loadErr.notes} className="" />}
         {notes.length > 0 && (
           <div className="divide-y divide-[#f0f0ec]">
             {notes.map(n => (
@@ -589,6 +658,11 @@ export default function DealPage() {
       )}
 
       {/* Замер — состояние возвращается сюда через deal_id; файл прикладывается тут же. */}
+      {loadErr.docs && (
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl">
+          <LoadError what="документы и замер" reason={loadErr.docs} />
+        </div>
+      )}
       {docs && docs.measures.length > 0 && (
         <div className="bg-white border border-[#e4e4e0] rounded-2xl px-5 py-4 space-y-2">
           {docs.measures.map(m => {
@@ -664,7 +738,7 @@ export default function DealPage() {
       {tab === 'docs' && (
         <div className="space-y-4">
           <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden divide-y divide-[#f0f0ec]">
-            {docs === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
+            {docs === null ? (loadErr.docs ? <LoadError what="документы" reason={loadErr.docs} /> : <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>)
             : (docs.kps.length === 0 && docs.contracts.length === 0) ? (
               <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Пока нет документов. Нажмите «Сделать КП» — клиент и позиции подставятся из сделки.</p>
             ) : (
@@ -708,7 +782,8 @@ export default function DealPage() {
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
               </label>
             </div>
-            {files === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
+            {loadErr.files ? <LoadError what="файлы" reason={loadErr.files} />
+            : files === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
             : files.length === 0 ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Файлов нет. Приложите чертёж — он будет виден в сделке.</p>
             : (
               <div className="divide-y divide-[#f0f0ec]">
@@ -769,7 +844,8 @@ export default function DealPage() {
             </div>
           )}
 
-          {invoices.length === 0 ? (
+          {loadErr.invoices ? <LoadError what="счета" reason={loadErr.invoices} />
+          : invoices.length === 0 ? (
             <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Счетов нет. Выставьте счёт на предоплату, остаток или монтаж — оплата будет закрывать его.</p>
           ) : (
             <div className="divide-y divide-[#f0f0ec]">
@@ -822,7 +898,8 @@ export default function DealPage() {
             ) : null}
           </div>
 
-          {payments === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
+          {loadErr.payments ? <LoadError what="оплаты" reason={loadErr.payments} />
+          : payments === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
           : payments.length === 0 ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Оплат пока нет. Отметьте предоплату, остаток или остаток за монтаж ниже.</p>
           : (
             <div className="divide-y divide-[#f0f0ec]">

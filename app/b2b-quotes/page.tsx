@@ -15,6 +15,8 @@ import type { PriceApproval } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { checkSavedItems } from '@/lib/b2b/bomCheck'
 import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, type B2BRates, type RateRow } from '@/lib/b2b/rates'
+import { toast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { promptDialog } from '@/lib/dialog'
 
 
 const PAGE_SIZE = 50
@@ -289,6 +291,7 @@ export default function B2BQuotesPage() {
   // А13: свободный остаток стекла по названию материала (м²). Склад читаем через
   // /api/inventory/items — напрямую к таблицам браузер не ходит (там RLS deny-by-default).
   const [stock, setStock] = useState<Map<string, number>>(new Map())
+  const [stockErr, setStockErr] = useState(false)  // «—» в колонке без этого читалось бы как «на складе нет»
   const [workDrawing, setWorkDrawing] = useState<File | null>(null)  // чертёж для цеха (notes.drawing_url)
   const workDateRef = useRef<HTMLInputElement>(null)
 
@@ -300,9 +303,9 @@ export default function B2BQuotesPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [deleting, setDeleting]     = useState(false)
 
-  // Toast
-  const [toast, setToast] = useState<string | null>(null)
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000) }
+  // Уведомления — общий <Toaster />: успех гаснет сам, ошибка висит до закрытия.
+  const showToast = (msg: string) => toast.success(msg)
+  const showError = (title: string, detail?: string) => toast.error(title, detail ? { detail } : undefined)
 
   // Telegram copy — clipboard only, no network request
   // Future: replace copy-only flow with Telegram Bot API send after explicit confirmation.
@@ -315,7 +318,11 @@ export default function B2BQuotesPage() {
       setTimeout(() => setCopiedId(null), 2000)
       showToast('Текст для Telegram скопирован')
     } catch {
-      window.prompt('Скопируйте текст для Telegram:', text)
+      await promptDialog({
+        title: 'Скопируйте текст для Telegram',
+        text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
+        defaultValue: text, multiline: true, confirmLabel: 'Готово',
+      })
     }
   }
 
@@ -382,7 +389,7 @@ export default function B2BQuotesPage() {
       body: JSON.stringify({ status, amount }),
     })
     const d = await r.json().catch(() => ({}))
-    if (!r.ok) { showToast(d.error ?? 'Не удалось отметить оплату'); return }
+    if (!r.ok) { showError('Оплата не отмечена', d.error ?? `Сервер ответил ${r.status}`); return }
     const newNotes = JSON.stringify(d.notes ?? {})
     const meta = buildUpdateMeta()
     setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta } : x))
@@ -417,7 +424,7 @@ export default function B2BQuotesPage() {
     if (!q) return
     // Scope guard for mglass_only — they cannot touch other clients' quotes.
     if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
-      showToast(MGLASS_SCOPE_ERROR)
+      showError(MGLASS_SCOPE_ERROR)
       return
     }
     const parsed = parseNotes(q.notes)
@@ -429,7 +436,8 @@ export default function B2BQuotesPage() {
     const newNotes = JSON.stringify({ ...parsed, status: newStatus, status_history: history, ...(revertToDraft ? { launched_at: undefined } : {}) })
     const meta = buildUpdateMeta()
     const patch = { notes: newNotes, ...meta, ...(revertToDraft ? { launched_at: null } : {}) }
-    await createClient().from('b2b_orders').update(patch).eq('id', id)
+    const { error } = await createClient().from('b2b_orders').update(patch).eq('id', id)
+    if (error) { showError('Статус не изменён', error.message); return }
     setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta, ...(revertToDraft ? { launched_at: null } : {}) } : x))
     showToast(`Статус → ${STATUS_META[newStatus as QuoteStatus]?.label ?? newStatus}`)
   }
@@ -439,7 +447,7 @@ export default function B2BQuotesPage() {
     const q = quotes.find(q => q.id === pendingChange.quoteId)
     if (!q) return
     if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
-      showToast(MGLASS_SCOPE_ERROR)
+      showError(MGLASS_SCOPE_ERROR)
       setPendingChange(null)
       setPendingComment('')
       return
@@ -459,7 +467,8 @@ export default function B2BQuotesPage() {
       status_history: history,
     })
     const meta = buildUpdateMeta()
-    await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', pendingChange.quoteId)
+    const { error } = await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', pendingChange.quoteId)
+    if (error) { showError('Статус не изменён', `${error.message}. Комментарий остался в окне — нажмите ещё раз`); return }
     setQuotes(prev => prev.map(x => x.id === pendingChange.quoteId ? { ...x, notes: newNotes, ...meta } : x))
     showToast(`Статус → ${STATUS_META[pendingChange.status as QuoteStatus]?.label ?? pendingChange.status}`)
     setPendingChange(null)
@@ -471,7 +480,7 @@ export default function B2BQuotesPage() {
     const q = quotes.find(x => x.id === workDateId)
     if (!q) return
     if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
-      showToast(MGLASS_SCOPE_ERROR)
+      showError(MGLASS_SCOPE_ERROR)
       setWorkDateId(null)
       return
     }
@@ -486,7 +495,7 @@ export default function B2BQuotesPage() {
       const ext = (workDrawing.name.split('.').pop() || 'jpg').toLowerCase()
       const path = `order-drawings/${workDateId}.${ext}`
       const { error: upErr } = await sbUp.storage.from('b2b-attachments').upload(path, workDrawing, { upsert: true })
-      if (upErr) { showToast('Чертёж не загрузился: ' + upErr.message); return }
+      if (upErr) { showError('Чертёж не загрузился — заказ не запущен', `${upErr.message}. Нажмите «Запустить» ещё раз`); return }
       // bucket приватный, publicUrl не работает — храним путь, показ идёт через /api/b2b/drawing
       drawingUrl = path
     }
@@ -515,22 +524,34 @@ export default function B2BQuotesPage() {
       ...(num ? { custom_number: num } : {}),
     }
     const { error } = await createClient().from('b2b_orders').update(updateRow).eq('id', workDateId)
-    if (error) { showToast('Ошибка: ' + error.message); return }
+    if (error) { showError('Заказ не запущен', `${error.message}. Данные остались в окне — нажмите ещё раз`); return }
     // Чертёж дописываем ВТОРЫМ свежим read-merge-write: параллельные RMW notes
     // (этапы/материал в /b2b-orders) могут затереть общий update (случай #4960)
     if (drawingUrl) {
       const sb2 = createClient()
-      const { data: freshRow } = await sb2.from('b2b_orders').select('notes').eq('id', workDateId).single()
-      const freshNotes = parseNotes((freshRow as { notes: string | null } | null)?.notes ?? null)
-      await sb2.from('b2b_orders').update({ notes: JSON.stringify({ ...freshNotes, drawing_url: drawingUrl }) }).eq('id', workDateId)
+      const { data: freshRow, error: readErr } = await sb2.from('b2b_orders').select('notes').eq('id', workDateId).single()
+      // Без свежего чтения не пишем: запись из пустых notes стёрла бы этапы заказа.
+      const { error: drawErr } = readErr ? { error: readErr } : await sb2.from('b2b_orders')
+        .update({ notes: JSON.stringify({ ...parseNotes((freshRow as { notes: string | null } | null)?.notes ?? null), drawing_url: drawingUrl }) })
+        .eq('id', workDateId)
+      if (drawErr) showError('Чертёж загружен, но не привязан к заказу', `${drawErr.message}. Прикрепите его ещё раз в «Заказах»`)
     }
     // Генерация задач в цех. Раньше запрос уходил без await и с проглоченной
     // ошибкой — заказ 0928-3 так и провисел 16 дней невидимым для цеха: статус
     // «в работе» стоит, а задач ноль, и ни один производственный экран его не
     // показывает. Теперь ждём ответ и говорим вслух, если не получилось.
-    const launched = await fetch(`/api/b2b-orders/${workDateId}/launch-production`, { method: 'POST' }).catch(() => null)
+    const launchUrl = `/api/b2b-orders/${workDateId}/launch-production`
+    const launched = await fetch(launchUrl, { method: 'POST' }).catch(() => null)
     if (!launched?.ok) {
-      alert('Заказ запущен, НО задачи в цех не создались — цех его не увидит. Сообщите разработчику или повторите запуск.')
+      // Генерация задач идемпотентна — повтор не задвоит их.
+      const retry = async () => {
+        const r = await sendOrToast('Задачи в цех снова не создались', launchUrl, { method: 'POST' }, 'Сообщите разработчику')
+        if (r) toast.success('Задачи в цех созданы', { detail: 'Цех увидит заказ в своих экранах.' })
+      }
+      toast.error('Заказ запущен, но задачи в цех не создались', {
+        detail: `${launched ? await responseError(launched) : NETWORK_ERROR}. Цех его не увидит — повторите или сообщите разработчику.`,
+        action: { label: 'Создать задачи ещё раз', onClick: () => { void retry() } },
+      })
     }
     setQuotes(prev => prev.map(x => x.id === workDateId ? {
       ...x,
@@ -557,11 +578,14 @@ export default function B2BQuotesPage() {
       const { data: { user } } = await sb.auth.getUser()
       if (!user) { return }
 
-      const { data: profile } = await sb
+      const { data: profile, error: profileErr } = await sb
         .from('users')
         .select('role, name, see_all_orders, permissions')
         .eq('id', user.id)
         .single()
+      // Нет строки (PGRST116) — как раньше, без профиля; сбой запроса — не показываем
+      // урезанный список как полный.
+      if (profileErr && profileErr.code !== 'PGRST116') throw new Error(`профиль: ${profileErr.message}`)
 
       setUserRole(profile?.role ?? null)
       setCurrentUserId(user.id)
@@ -574,9 +598,10 @@ export default function B2BQuotesPage() {
 
       // А13: остатки склада — справочно, ошибка загрузки не ломает список просчётов.
       fetch('/api/inventory/items?contour=all')
-        .then(r => r.ok ? r.json() : null)
+        // 403 — склад закрыт роли: колонка пустая по праву, а не из-за сбоя.
+        .then(r => r.ok ? r.json() : r.status === 403 ? { items: [] } : null)
         .then((j: { items?: { name: string; qty: number; qty_reserved: number; unit: string }[] } | null) => {
-          if (!j?.items) return
+          if (!j?.items) { setStockErr(true); return }
           const m = new Map<string, number>()
           for (const it of j.items) {
             if (it.unit !== 'м2') continue
@@ -585,8 +610,9 @@ export default function B2BQuotesPage() {
             m.set(key, (m.get(key) ?? 0) + free)
           }
           setStock(m)
+          setStockErr(false)
         })
-        .catch(() => {})
+        .catch(() => setStockErr(true))
 
       // А6: очередь производства — сколько заказов уже запущено и ещё не отгружено.
       // Нужна как честный контекст при выборе срока сдачи (мощность цеха в системе
@@ -612,10 +638,11 @@ export default function B2BQuotesPage() {
 
       if (!canSeeAll) {
         // Show quotes created by this manager OR for clients assigned to this manager
-        const { data: myClients } = await sb
+        const { data: myClients, error: clientsErr } = await sb
           .from('b2b_clients')
           .select('id')
           .eq('manager_id', user.id)
+        if (clientsErr) throw new Error(`клиенты: ${clientsErr.message}`)
         const myClientIds = (myClients ?? []).map((c: { id: number }) => c.id)
         if (myClientIds.length > 0) {
           ordersQuery = ordersQuery.or(`created_by.eq.${user.id},client_id.in.(${myClientIds.join(',')})`)
@@ -624,11 +651,16 @@ export default function B2BQuotesPage() {
         }
       }
 
-      const [{ data: orders }, { data: attaches }, { data: mats }] = await Promise.all([
+      const [{ data: orders, error: ordersErr }, { data: attaches, error: attachErr }, { data: mats, error: matsErr }] = await Promise.all([
         ordersQuery,
         sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
         sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
       ])
+      // Пустой список при сбое читался бы как «просчётов нет» — показываем ошибку с «Повторить».
+      if (ordersErr) throw new Error(ordersErr.message)
+      if (attachErr || matsErr) {
+        showError('Часть данных не загрузилась', `${[attachErr && `вложения: ${attachErr.message}`, matsErr && `материалы: ${matsErr.message}`].filter(Boolean).join('; ')}. Себестоимость и сводка по материалам могут быть неполными — обновите страницу`)
+      }
       setQuotes((orders ?? []).map(q => ({
         ...q, items: Array.isArray(q.items) ? (q.items as OrderItem[]) : [],
       })))
@@ -666,7 +698,7 @@ export default function B2BQuotesPage() {
     if (!error && data) {
       setQuotes(prev => [{ ...data, items: q.items }, ...prev])
       showToast(isTemplate(q) ? 'Просчёт создан из шаблона' : 'Расчёт скопирован как черновик')
-    }
+    } else showError('Копия не создана', error?.message ?? 'Сервер не вернул новую запись')
   }
 
   // А2: ссылка на КП для клиента — выдаём и сразу кладём в буфер обмена.
@@ -676,7 +708,7 @@ export default function B2BQuotesPage() {
     try {
       const r = await fetch(`/api/b2b-quotes/${q.id}/share`, { method: 'POST' })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok) { showToast(j.error || 'Не удалось создать ссылку'); return }
+      if (!r.ok) { showError('Ссылка на КП не создана', j.error || `Сервер ответил ${r.status}`); return }
       const parsed = parseNotes(q.notes)
       if (!parsed.public_token) {
         const newNotes = JSON.stringify({ ...parsed, public_token: j.token })
@@ -686,7 +718,11 @@ export default function B2BQuotesPage() {
         await navigator.clipboard.writeText(j.url)
         showToast('Ссылка на КП скопирована — можно отправлять клиенту')
       } catch {
-        window.prompt('Ссылка на КП для клиента:', j.url)
+        await promptDialog({
+          title: 'Ссылка на КП для клиента',
+          text: 'Буфер обмена недоступен — ссылка выделена, скопируйте её (⌘C / Ctrl+C).',
+          defaultValue: j.url, confirmLabel: 'Готово',
+        })
       }
     } finally { setSharing(null) }
   }
@@ -702,7 +738,7 @@ export default function B2BQuotesPage() {
         body: JSON.stringify({ resolution }),
       })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok) { showToast(j.error || 'Не удалось сохранить решение'); return }
+      if (!r.ok) { showError('Решение по цене не сохранено', j.error || `Сервер ответил ${r.status}`); return }
       setQuotes(prev => prev.map(x => x.id === id
         ? { ...x, notes: JSON.stringify({ ...parseNotes(x.notes), price_approval: j.approval }) }
         : x))
@@ -718,7 +754,7 @@ export default function B2BQuotesPage() {
     const newNotes = JSON.stringify({ ...parsed, is_template: next || undefined })
     const { error } = await createClient().from('b2b_orders')
       .update({ notes: newNotes, ...buildUpdateMeta() }).eq('id', q.id)
-    if (error) { showToast('Не удалось сохранить'); return }
+    if (error) { showError(next ? 'Не добавлено в шаблоны' : 'Не убрано из шаблонов', error.message); return }
     setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: newNotes } : x))
     showToast(next ? 'Добавлено в шаблоны' : 'Убрано из шаблонов')
   }
@@ -726,10 +762,11 @@ export default function B2BQuotesPage() {
   async function handleDelete() {
     if (!deletingId) return
     setDeleting(true)
-    await createClient()
+    const { error } = await createClient()
       .from('b2b_orders')
       .update({ archived_at: new Date().toISOString() })
       .eq('id', deletingId)
+    if (error) { setDeleting(false); showError('Просчёт не архивирован', error.message); return }
     setQuotes(prev => prev.filter(q => q.id !== deletingId))
     setDeletingId(null)
     setDeleting(false)
@@ -740,7 +777,7 @@ export default function B2BQuotesPage() {
   // история в notes.total_history), фронт только показывает результат.
   async function savePriceOverride(id: number) {
     const target = Math.round(Number(totalInput.replace(/[^\d.]/g, '')) || 0)
-    if (target <= 0) { showToast('Укажите итоговую сумму'); return }
+    if (target <= 0) { toast.info('Укажите итоговую сумму'); return }
     setPriceSaving(true)
     try {
       const res  = await fetch(`/api/b2b-quotes/${id}/adjust-total`, {
@@ -748,7 +785,7 @@ export default function B2BQuotesPage() {
         body: JSON.stringify({ newTotal: target }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { showToast(json.error || 'Не удалось сохранить сумму'); return }
+      if (!res.ok) { showError('Сумма не сохранена', `${json.error || `Сервер ответил ${res.status}`}. Сумма осталась в поле — нажмите ещё раз`); return }
       applyPriceResult(id, json)
       setDiscountEditId(null)
       setPriceConfirmId(null)
@@ -764,7 +801,7 @@ export default function B2BQuotesPage() {
     try {
       const res  = await fetch(`/api/b2b-quotes/${id}/adjust-total`, { method: 'DELETE' })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { showToast(json.error || 'Не удалось вернуть прайс'); return }
+      if (!res.ok) { showError('Прайс не возвращён', json.error || `Сервер ответил ${res.status}`); return }
       applyPriceResult(id, json)
       setDiscountEditId(null)
       showToast('Цены возвращены к прайсу')
@@ -859,13 +896,6 @@ export default function B2BQuotesPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-[1200px] mx-auto px-4 py-5">
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed top-4 right-4 z-50 bg-[#111110] text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg animate-in fade-in">
-          {toast}
-        </div>
-      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
@@ -1487,7 +1517,9 @@ export default function B2BQuotesPage() {
                             <th className="px-2 py-1.5 text-right w-10">Кол.</th>
                             <th className="px-2 py-1.5 text-right w-14">Кв.м</th>
                             <th className="px-2 py-1.5 text-right w-14">Вес, кг</th>
-                            <th className="px-2 py-1.5 text-right w-16" title="Свободный остаток на складе">Склад</th>
+                            <th className="px-2 py-1.5 text-right w-16" title={stockErr ? 'Остатки склада не загрузились — «—» не значит, что стекла нет' : 'Свободный остаток на складе'}>
+                              Склад{stockErr && <span className="block text-[9px] font-normal normal-case tracking-normal text-[#9a9a95]">остатки не загрузились</span>}
+                            </th>
                             <th className="px-2 py-1.5 text-right w-18">Цена/м²</th>
                             <th className="px-2 py-1.5 text-right w-20 text-[#111110]">Итого</th>
                             <th className="px-2 py-1.5 text-right w-20 text-[#9a9a95]">Себест.</th>

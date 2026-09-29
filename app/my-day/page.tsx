@@ -38,7 +38,7 @@ export default async function MyDay() {
     .is('lost_at', null).is('archived_at', null)
     .order('updated_at', { ascending: true })
   if (!seeAll && user) dq = dq.eq('manager_id', user.id)
-  const { data: dealsRaw } = await dq
+  const { data: dealsRaw, error: dealsErr } = await dq
   const deals = (dealsRaw ?? []) as MyDayDeal[]
 
   // Заявки на замер тоже по своему менеджеру: RLS на measure_requests открыт
@@ -48,7 +48,7 @@ export default async function MyDay() {
     .in('status', ['new', 'scheduled'])
     .order('scheduled_at', { ascending: true, nullsFirst: false })
   if (!seeAll && user) mq = mq.eq('manager_id', user.id)
-  const { data: mrRaw } = await mq
+  const { data: mrRaw, error: measuresErr } = await mq
   const measures = (mrRaw ?? []) as MyDayMeasure[]
 
   const { promised, soon, unscheduled, stale, staleTotal } = pickUrgent(deals, measures)
@@ -71,7 +71,9 @@ export default async function MyDay() {
   }
   const mgr = (m: MyDayMeasure) => (seeAll ? m.manager_name : null)
 
-  const empty = promised.length === 0 && soon.length === 0 && unscheduled.length === 0 && stale.length === 0
+  // Сбой запроса — не «ничего не горит»: пустые блоки тогда ничего не утверждают.
+  const empty = !dealsErr && !measuresErr
+    && promised.length === 0 && soon.length === 0 && unscheduled.length === 0 && stale.length === 0
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-6">
@@ -83,6 +85,13 @@ export default async function MyDay() {
             {seeAll && ' Показаны все менеджеры.'}
           </p>
         </div>
+
+        {dealsErr && (
+          <LoadError text="Не удалось загрузить сделки — блоки «Обещали связаться» и «Сделки без движения» сейчас не показаны. Обновите страницу." />
+        )}
+        {measuresErr && (
+          <LoadError text="Не удалось загрузить заявки на замер — блоки «Замер сегодня и завтра» и «Замер не назначен» сейчас не показаны. Обновите страницу." />
+        )}
 
         {empty && (
           <div className="rounded-xl border border-[#e4e4e0] bg-white p-6 text-center">
@@ -150,6 +159,14 @@ export default async function MyDay() {
           <Link href="/calculator/build" className="px-4 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[13px]">Новый расчёт</Link>
         </div>
       </div>
+    </div>
+  )
+}
+
+function LoadError({ text }: { text: string }) {
+  return (
+    <div role="alert" className="rounded-xl border border-[#eec5bf] bg-white px-4 py-3 text-[13px] text-[#c23a2b]">
+      {text}
     </div>
   )
 }
