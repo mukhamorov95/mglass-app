@@ -54,19 +54,21 @@ export default function PageUsage({ from, to }: { from?: string; to?: string }) 
 
   const roleOf = useMemo(() => new Map((data?.people ?? []).map(p => [p.id, p.role])), [data])
   const roles = useMemo(() => [...new Set((data?.people ?? []).map(p => p.role))], [data])
+  // По умолчанию — менеджеры; пока их в данных нет, пустой экран выглядел бы как «никто не заходит».
+  const view = role !== 'all' && !roles.includes(role) ? 'all' : role
 
   const routes = useMemo(() => {
     const m = new Map<string, { hits: number; people: Set<string>; phone: number }>()
     for (const r of data?.rows ?? []) {
-      if (role !== 'all' && roleOf.get(r.user_id) !== role) continue
+      if (view !== 'all' && roleOf.get(r.user_id) !== view) continue
       const g = m.get(r.route) ?? { hits: 0, people: new Set<string>(), phone: 0 }
       g.hits += r.hits; g.people.add(r.user_id); if (r.device !== 'desktop') g.phone += r.hits
       m.set(r.route, g)
     }
     return [...m.entries()].map(([route, g]) => ({ route, hits: g.hits, people: g.people.size, phone: g.hits ? Math.round(g.phone / g.hits * 100) : 0 }))
       .sort((a, b) => b.hits - a.hits)
-  }, [data, role, roleOf])
-  const people = (data?.people ?? []).filter(p => role === 'all' || p.role === role)
+  }, [data, view, roleOf])
+  const people = (data?.people ?? []).filter(p => view === 'all' || p.role === view)
   const maxHits = Math.max(1, ...routes.map(r => r.hits))
   const label = (r: string) => labels[r] ?? r
 
@@ -80,7 +82,7 @@ export default function PageUsage({ from, to }: { from?: string; to?: string }) 
       <div className="flex gap-1 flex-wrap mb-3">
         {['all', ...roles].map(r => (
           <button key={r} onClick={() => setRole(r)}
-            className={`px-3 py-1.5 text-[12px] font-medium rounded-md border transition-colors ${role === r ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#f5f5f3]'}`}>
+            className={`px-3 py-1.5 text-[12px] font-medium rounded-md border transition-colors ${view === r ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#f5f5f3]'}`}>
             {r === 'all' ? 'Все' : (ROLE_LABEL[r] ?? r)}
           </button>
         ))}
