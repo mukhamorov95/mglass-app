@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Разворачивает российскую точку входа на чистом Ubuntu 24.04 (маршрут Э2–Э4).
+# Разворачивает российскую точку входа на чистом Ubuntu 24.04 или 26.04 (маршрут Э2–Э4).
 # Идемпотентен: повторный запуск обновляет конфиги и перезапускает службы.
 #
 #   scp -r infra/ru-edge root@<IP>:/opt/ && ssh root@<IP> 'bash /opt/ru-edge/setup.sh app.mglass.pro'
@@ -18,9 +18,10 @@ chmod 600 /etc/mglass/ru-edge.env
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -yq nginx certbot curl ca-certificates gnupg ufw dnsutils
-# pg_dump должен быть не старше сервера Supabase (Postgres 17) — ставим из репозитория PGDG.
-if ! command -v pg_dump >/dev/null || [[ "$(pg_dump --version | grep -oE '[0-9]+' | head -1)" -lt 17 ]]; then
+apt-get install -yq nginx certbot curl ca-certificates gnupg ufw dnsutils postgresql postgresql-client
+# pg_dump должен быть не старше сервера Supabase (Postgres 17). В Ubuntu 26.04 свой Postgres
+# новее — хватает его; на 24.04 (Postgres 16) доставляем 17 из репозитория PGDG.
+if [[ "$(pg_dump --version | grep -oE '[0-9]+' | head -1)" -lt 17 ]]; then
   install -d /usr/share/postgresql-common/pgdg
   curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
   echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release; echo "$VERSION_CODENAME")-pgdg main" \
