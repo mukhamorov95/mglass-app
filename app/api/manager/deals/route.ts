@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { amoGet, amoGetAll, getPipelines, getUsers, getDomain } from '@/lib/amocrm'
 import type { AmoEvent, AmoNote, AmoLead } from '@/lib/amocrm'
+import { mskDay, mskDayStart } from '@/lib/amoActivity'
+import { AMO_CLOSED_STATUSES } from '@/lib/amoLead'
 
 export const runtime     = 'nodejs'
-export const maxDuration = 30
+export const maxDuration = 60
 
 function stageZone(name: string): 1 | 2 | 3 | null {
   const n = name.toLowerCase()
@@ -40,27 +42,37 @@ export async function GET() {
     return NextResponse.json({ error: 'amo_not_configured' }, { status: 200 })
   }
 
-  const now        = new Date()
-  const todayStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000)
-  const nowTs      = Math.floor(now.getTime() / 1000)
+  // «Сегодня» — по Москве: сервер живёт в UTC, и день начинался в 03:00.
+  const nowTs      = Math.floor(Date.now() / 1000)
+  const todayStart = mskDayStart(mskDay(nowTs))
   const DAY        = 86400
 
-  const [pipelines, amoUsers, allLeads, eventsData, notesData] = await Promise.all([
-    getPipelines(),
-    getUsers(),
-    amoGetAll<AmoLead>('/leads', {}, 'leads'),
-    amoGet<{ _embedded: { events: AmoEvent[] } }>('/events', {
-      'filter[created_at][from]': String(todayStart),
-      'filter[created_at][to]':   String(nowTs),
-      limit: '250',
-    }),
-    amoGet<{ _embedded: { notes: AmoNote[] } }>('/leads/notes', {
-      'filter[note_type]': '4,10,1,13',
-      'filter[created_at][from]': String(todayStart),
-      'filter[created_at][to]':   String(nowTs),
-      limit: '250',
-    }),
-  ])
+  // Раньше тянулись ВСЕ сделки аккаунта и отбирались здесь — выгрузка не укладывалась в
+  // 30 с, и страница висела на «Загружаю…». Теперь только свои. Фильтр по открытым этапам
+  // AmoCRM отдаёт медленнее (замер 30.09: 559 сделок за 12,6 с против 999 за 8,7 с),
+  // поэтому закрытые отсеиваем здесь.
+  let fetched
+  try {
+    fetched = await Promise.all([
+      getPipelines(),
+      getUsers(),
+      amoGetAll<AmoLead>('/leads', { 'filter[responsible_user_id]': String(amoUserId) }, 'leads'),
+      amoGet<{ _embedded: { events: AmoEvent[] } }>('/events', {
+        'filter[created_at][from]': String(todayStart),
+        'filter[created_at][to]':   String(nowTs),
+        limit: '250',
+      }),
+      amoGet<{ _embedded: { notes: AmoNote[] } }>('/leads/notes', {
+        'filter[note_type]': '4,10,1,13',
+        'filter[created_at][from]': String(todayStart),
+        'filter[created_at][to]':   String(nowTs),
+        limit: '250',
+      }),
+    ])
+  } catch (e) {
+    return NextResponse.json({ error: `AmoCRM не ответила: ${(e as Error).message}` }, { status: 502 })
+  }
+  const [pipelines, amoUsers, allLeads, eventsData, notesData] = fetched
 
   const todayEvents = eventsData?._embedded?.events ?? []
   const todayNotes  = notesData?._embedded?.notes ?? []
@@ -76,7 +88,7 @@ export async function GET() {
   const activeLeads = allLeads.filter(l =>
     l.responsible_user_id === amoUserId &&
     l.closed_at === null &&
-    l.status_id !== 142 && l.status_id !== 143
+    !AMO_CLOSED_STATUSES.has(l.status_id)
   )
 
   const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === amoUserId)
