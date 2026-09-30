@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { buildMeasureStructured } from '@/lib/measureStructured'
+import { buildMeasureMessage, splitScope } from '@/lib/measure/message'
 
 // Заявки на замер (вкладка менеджера): диктовка/вставка → AI-структура →
 // редактируемая форма (или ручной ввод с нуля) → заявка в пул замерщиков.
@@ -20,8 +20,10 @@ type MReq = {
   deal_number: string | null
   client_name: string
   phone: string | null
+  amo_url: string | null
   address: string | null
   scope: string | null
+  notes: string | null
   visit_price: number
   payer: string | null
   is_repeat: boolean
@@ -30,6 +32,7 @@ type MReq = {
   manager_name: string | null
   measurer_name: string | null
   scheduled_at: string | null
+  duration_min: number | null
   status: string
   issue_text: string | null
   created_at: string
@@ -74,6 +77,8 @@ export default function MeasureRequestsPage() {
   const [fee, setFee] = useState('')
   const [reqs, setReqs] = useState<MReq[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser()
@@ -81,9 +86,10 @@ export default function MeasureRequestsPage() {
       const { data: p } = await sb.from('users').select('id, name, role').eq('id', user.id).maybeSingle()
       if (p) setMe(p as { id: string; name: string; role: string })
     }
-    const { data } = await sb.from('measure_requests')
-      .select('id, deal_number, client_name, phone, address, scope, visit_price, payer, is_repeat, structured_text, manager_id, manager_name, measurer_name, scheduled_at, status, issue_text, created_at')
+    const { data, error: loadErr } = await sb.from('measure_requests')
+      .select('id, deal_number, client_name, phone, amo_url, address, scope, notes, visit_price, payer, is_repeat, structured_text, manager_id, manager_name, measurer_name, scheduled_at, duration_min, status, issue_text, created_at')
       .order('created_at', { ascending: false }).limit(200)
+    if (loadErr) setError(`Заявки не загрузились: ${loadErr.message}`)
     setReqs((data ?? []) as MReq[])
     setLoading(false)
   }, [sb])
@@ -116,7 +122,9 @@ export default function MeasureRequestsPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: rawText }),
       }).then(x => x.json())
-      if (!r.error) {
+      if (r.error) setError(r.error)
+      else {
+        setError('')
         setFields({
           deal_number: r.deal_number ?? '',
           client_name: r.client_name ?? '',
@@ -134,10 +142,11 @@ export default function MeasureRequestsPage() {
     } finally { setParsing(false) }
   }
 
-  const structured = useMemo(() => fields ? buildMeasureStructured({
+  const structured = useMemo(() => fields ? buildMeasureMessage({
     ...fields,
     visit_price: Number(fields.visit_price.replace(/\s/g, '')) || 0,
-  }) : '', [fields])
+    manager_name: me?.name,
+  }) : '', [fields, me])
 
   async function createRequest() {
     if (!me || !fields || !fields.client_name.trim()) return
@@ -160,8 +169,21 @@ export default function MeasureRequestsPage() {
         manager_id: me.id, manager_name: me.name,
         measurer_fee: Number(fee.replace(/\s/g, '')) || visitPrice,
       })
-      if (!error) { setRawText(''); setFields(null); setFee(''); await load() }
+      if (error) { setError(`Заявка не создана: ${error.message}`); return }
+      setError(''); setRawText(''); setFields(null); setFee(''); await load()
     } finally { setSending(false) }
+  }
+
+  // Текст собирается из заявки в момент копирования: в нём текущее время и
+  // замерщик, и так же выглядят заявки, созданные из карточки сделки или лида.
+  async function copyMessage(r: MReq) {
+    try {
+      await navigator.clipboard.writeText(buildMeasureMessage(r))
+      setCopied(r.id)
+      setTimeout(() => setCopied(c => (c === r.id ? null : c)), 2000)
+    } catch {
+      setError('Не удалось скопировать — браузер не дал доступ к буферу обмена.')
+    }
   }
 
   function setF<K extends keyof Fields>(k: K, v: Fields[K]) {
@@ -185,6 +207,12 @@ export default function MeasureRequestsPage() {
       </div>
 
       <div className="px-5 pt-4 space-y-4 max-w-[1100px]">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] rounded-lg px-3 py-2 flex items-start gap-2">
+            <span className="flex-1">{error}</span>
+            <button onClick={() => setError('')} className="text-red-400 hover:text-red-700">✕</button>
+          </div>
+        )}
         {/* Новая заявка: диктовка/вставка */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
           <div className="flex items-center justify-between mb-2">
@@ -241,13 +269,15 @@ export default function MeasureRequestsPage() {
                 <label className={labelCls}>Адрес</label>
                 <input value={fields.address} onChange={e => setF('address', e.target.value)} placeholder="ул. Булатниковская, 9к1" className={inputCls} />
               </div>
-              <div className="sm:col-span-2">
-                <label className={labelCls}>Задача (что мерить)</label>
-                <input value={fields.scope} onChange={e => setF('scope', e.target.value)} placeholder="Зеркало осветлённое 900×2200, от стены до зелёной зоны" className={inputCls} />
+              <div className="sm:col-span-2 lg:row-span-2">
+                <label className={labelCls}>Что мерить — каждое изделие с новой строки</label>
+                <textarea value={fields.scope} onChange={e => setF('scope', e.target.value)} rows={4}
+                  placeholder={'Душевая перегородка\nЗеркало в чёрной алюминиевой раме\nЗеркало с подсветкой, отверстия под смеситель'}
+                  className={`${inputCls} resize-y`} />
               </div>
               <div className="sm:col-span-2">
-                <label className={labelCls}>Примечание (доступ, этаж, время)</label>
-                <input value={fields.notes} onChange={e => setF('notes', e.target.value)} placeholder="домофон 12, после 18:00" className={inputCls} />
+                <label className={labelCls}>Примечание (через кого связь, доступ, этаж, время)</label>
+                <input value={fields.notes} onChange={e => setF('notes', e.target.value)} placeholder="связь через Пашу, домофон 12, после 18:00" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Выезд, ₽</label>
@@ -269,7 +299,8 @@ export default function MeasureRequestsPage() {
               </div>
             </div>
 
-            <pre className="mt-3 bg-[#fafaf8] border border-[#f0f0ec] rounded-lg p-3 text-[12px] whitespace-pre-wrap font-sans">{structured}</pre>
+            <p className="mt-3 text-[11px] font-semibold text-[#6b6b66]">Так увидит замерщик</p>
+            <pre className="mt-1 bg-[#fafaf8] border border-[#f0f0ec] rounded-lg p-3 text-[12px] whitespace-pre-wrap font-sans">{structured}</pre>
 
             <div className="flex items-center gap-2 mt-3">
               <button onClick={createRequest} disabled={sending || !fields.client_name.trim()}
@@ -294,13 +325,17 @@ export default function MeasureRequestsPage() {
                       <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁' : '📐'} {r.deal_number || `#${r.id}`} · {r.client_name}</span>
                       <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${meta.cls}`}>{meta.label}</span>
                       {r.scheduled_at && <span className="text-[11px] text-[#6b6b66]">🕐 {new Date(r.scheduled_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {r.measurer_name || ''}</span>}
-                      {r.structured_text && (
-                        <button onClick={() => navigator.clipboard.writeText(r.structured_text!)}
-                          className="ml-auto text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1 hover:bg-[#f5f5f3]">📋 Копировать</button>
-                      )}
+                      <button onClick={() => copyMessage(r)}
+                        className={`ml-auto text-[11px] border rounded-lg px-2 py-1 ${copied === r.id ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-[#e4e4e0] hover:bg-[#f5f5f3]'}`}>
+                        {copied === r.id ? '✓ Скопировано — вставь замерщику' : '📋 Копировать замерщику'}
+                      </button>
                     </div>
                     {r.address && <p className="text-[12px] text-[#6b6b66] mt-1">📍 {r.address}</p>}
-                    {r.scope && <p className="text-[12px] text-[#6b6b66]">{r.scope}</p>}
+                    {splitScope(r.scope).length > 0 && (
+                      <ol className="text-[12px] text-[#6b6b66] list-decimal pl-5 mt-0.5">
+                        {splitScope(r.scope).map((it, i) => <li key={i}>{it}</li>)}
+                      </ol>
+                    )}
                     {r.issue_text && <p className="text-[12px] text-red-600 mt-1">⚠️ {r.issue_text}</p>}
                   </div>
                 )

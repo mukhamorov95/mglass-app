@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { CRM_STAGES, stageProgress, FIRST_STAGE, ASSIGNED_STAGE } from '@/lib/crmStages'
 import { FLAGS, FLAG_BY_KEY, type FlagKey } from '@/lib/avito/flags'
-import { buildMeasureStructured } from '@/lib/measureStructured'
+import { buildMeasureMessage } from '@/lib/measure/message'
 import { isAiManager } from '@/lib/avito/botGate'
 
 type Lead = {
@@ -181,7 +181,7 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
         payer: 'клиент (в зачёт заказа)', is_repeat: false,
       }
       const { error } = await sb.from('measure_requests').insert({
-        ...fields, structured_text: buildMeasureStructured(fields),
+        ...fields, structured_text: buildMeasureMessage({ ...fields, manager_name: mgrName }),
         lead_id: lead.id, manager_id: mgrId, manager_name: mgrName, measurer_fee: 0,
       })
       if (error) throw new Error(error.message)
