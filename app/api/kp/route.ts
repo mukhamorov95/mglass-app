@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { checkLeadAccess } from '@/lib/amoViewer'
 
 // Модуль КП: создание (с автономером), список (история), обновление черновика.
 const OWNER = new Set(['admin', 'ceo'])
@@ -61,8 +62,13 @@ export async function DELETE(req: Request) {
 export async function POST(req: Request) {
   const u = await authUser()
   if (!u) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const body = await req.json() as { content?: Record<string, unknown>; deal_id?: number }
+  const body = await req.json() as { content?: Record<string, unknown>; deal_id?: number; amo_lead_id?: number }
   const content = body.content ?? {}
+  const amoLeadId = body.amo_lead_id != null ? Number(body.amo_lead_id) : null
+  if (amoLeadId != null) {
+    const access = await checkLeadAccess(amoLeadId)
+    if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })
+  }
   const svc = createServiceClient()
 
   const { data: numData, error: numErr } = await svc.rpc('next_cp_number')
@@ -85,6 +91,7 @@ export async function POST(req: Request) {
     status: 'draft',
     // Связь со сделкой ставится в момент создания из карточки (не задним числом).
     ...(body.deal_id ? { deal_id: body.deal_id } : {}),
+    ...(amoLeadId != null ? { amo_lead_id: amoLeadId } : {}),
   }).select('id, number').single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

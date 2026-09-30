@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast, sendOrToast } from '@/lib/toast'
+import { useAmoLeadFromUrl } from '@/lib/useAmoLead'
+import { AmoLeadBanner } from '@/components/AmoLeadBanner'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
@@ -130,6 +132,12 @@ export default function BuildCalcPage() {
   const [mirrorPick, setMirrorPick] = useState<MirrorModel | null>(null)
   const [dealId, setDealId] = useState<number | null>(null)
   const [dealTitle, setDealTitle] = useState<string>('')
+  // Пустые поля клиента берём из сделки AmoCRM; вписанное руками не перебиваем.
+  const amo = useAmoLeadFromUrl(lead => {
+    setClientName(v => v || lead.contactName)
+    setClientPhone(v => v || lead.phone)
+  })
+  const amoLeadId = amo.lead?.id ?? null
 
   const model = getModel(code)
   const isCorner = model.constraints.needsWidth2
@@ -277,7 +285,7 @@ export default function BuildCalcPage() {
   // не попадает в воронку и не доходит до КП. Пришли из карточки сделки — клиент
   // уже известен, спрашивать нечего.
   const phoneDigits = clientPhone.replace(/\D/g, '')
-  const clientOk = dealId != null || (clientName.trim().length >= 2 && phoneDigits.length >= 10)
+  const clientOk = dealId != null || amoLeadId != null || (clientName.trim().length >= 2 && phoneDigits.length >= 10)
   const cost = glassCost + hwCost
   const sections = price?.sections ?? 1
   const m = numOr(margin), tx = numOr(tax)
@@ -327,6 +335,7 @@ export default function BuildCalcPage() {
         client_text: [title(), objectAddress && `Адрес: ${objectAddress}`].filter(Boolean).join(' · '),
         client_name: clientName.trim() || undefined,
         client_phone: clientPhone.trim() || undefined,
+        ...(amoLeadId ? { amo_lead_id: amoLeadId } : {}),
       })
       const ok = !!(res && 'id' in res && res.id)
       if (!ok) { setSaveMsg(res && 'error' in res ? res.error! : 'Не удалось сохранить'); return }
@@ -336,7 +345,10 @@ export default function BuildCalcPage() {
       // новый телефон заводит сделку сам, совпавший оставляет решение человеку.
       // Сбой привязки не отменяет сохранение, но человек должен знать, где теперь расчёт.
       // Уведомление живёт в корневом layout и переживает переход в КП ниже.
-      if (dealId) {
+      // Сделка AmoCRM — клиент ведётся там, своей сделки в приложении не заводим.
+      if (amoLeadId && !dealId) {
+        toast.success(`Расчёт сохранён в сделку AmoCRM №${amoLeadId}`, { detail: 'Он в «Расчётах» и в строке сделки на «Сделки в AmoCRM». Осталось оформить КП — открываю.' })
+      } else if (dealId) {
         await sendOrToast('Расчёт сохранён, но не попал в сделку', `/api/deals/${dealId}/attach`,
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId }) },
           'Он лежит в «Расчётах» — привяжите его из карточки сделки')
@@ -347,7 +359,7 @@ export default function BuildCalcPage() {
       }
       // КП из этого расчёта: позиции корзины → префилл /kp.
       const items = list.map(i => ({ name: i.title, qty: 1, price: i.productPrice + i.install + i.delivery + i.lift, sum: i.total }))
-      const content = { title: (clientName || 'Коммерческое предложение').toUpperCase(), items, subtotal: total, total, client_name: clientName, client_phone: clientPhone, client_address: objectAddress }
+      const content = { title: (clientName || 'Коммерческое предложение').toUpperCase(), items, subtotal: total, total, client_name: clientName, client_phone: clientPhone, client_address: objectAddress, ...(amoLeadId ? { amo_lead_id: amoLeadId } : {}) }
       try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch {
         toast.error('КП откроется без позиций', { detail: 'Браузер не дал передать данные расчёта. Сам расчёт сохранён в «Расчётах» — откройте его оттуда и нажмите «Сделать КП».' })
       }
@@ -360,6 +372,7 @@ export default function BuildCalcPage() {
     return (
       <div className="min-h-screen bg-[#f5f5f3] p-6">
         <div className="max-w-4xl mx-auto">
+          <AmoLeadBanner state={amo} />
           {dealId && (
             <p className="mb-3 text-[12px] text-[#4b4b47] bg-[#eef3ee] border border-[#cfe0d3] rounded-xl px-3 py-2">
               Расчёт пойдёт в сделку <b className="font-semibold">{dealTitle || `#${dealId}`}</b> — после сохранения он появится в её карточке.
@@ -456,6 +469,7 @@ export default function BuildCalcPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-4">
       <div className="max-w-[1400px] mx-auto">
+        <AmoLeadBanner state={amo} />
         {dealId && (
             <p className="mb-3 text-[12px] text-[#4b4b47] bg-[#eef3ee] border border-[#cfe0d3] rounded-xl px-3 py-2">
               Расчёт пойдёт в сделку <b className="font-semibold">{dealTitle || `#${dealId}`}</b> — после сохранения он появится в её карточке.

@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { isOwnerRole } from '@/lib/getRole'
 import { calcWriter } from '@/lib/calcAccess'
 import { checkCalculation, CALC_PRODUCT_TYPES, type CalcProductType } from '@/lib/calcInvariants'
+import { checkLeadAccess } from '@/lib/amoViewer'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,7 @@ type Body = {
   order_group_id?: string
   parent_calc_id?: number
   deal_id?: number
+  amo_lead_id?: number
 }
 
 export async function POST(req: NextRequest) {
@@ -46,6 +48,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Неизвестный тип расчёта: ${b.product_type}` }, { status: 400 })
   }
 
+  const amoLeadId = b.amo_lead_id != null ? Number(b.amo_lead_id) : null
+  if (amoLeadId != null) {
+    const access = await checkLeadAccess(amoLeadId)
+    if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })
+  }
+
   const verdict = checkCalculation({
     product_type: productType,
     final_price: Number(b.final_price),
@@ -54,6 +62,7 @@ export async function POST(req: NextRequest) {
     client_name: b.client_name,
     client_phone: b.client_phone,
     deal_id: b.deal_id ?? null,
+    amo_lead_id: amoLeadId,
     input_data: b.input_data,
   })
   if (!verdict.ok) return NextResponse.json({ error: verdict.error }, { status: 422 })
@@ -78,6 +87,7 @@ export async function POST(req: NextRequest) {
     ...(b.order_group_id != null ? { order_group_id: b.order_group_id } : {}),
     ...(b.parent_calc_id != null ? { parent_calc_id: b.parent_calc_id } : {}),
     ...(b.deal_id != null ? { deal_id: b.deal_id } : {}),
+    ...(amoLeadId != null ? { amo_lead_id: amoLeadId } : {}),
     created_by: a.userId,
     status: 'draft',
   }).select('id').single()
@@ -98,7 +108,7 @@ export async function PATCH(req: NextRequest) {
 
   const svc = createServiceClient()
   const { data: existing } = await svc.from('calculations')
-    .select('id, created_by, product_type, deal_id').eq('id', id).maybeSingle()
+    .select('id, created_by, product_type, deal_id, amo_lead_id').eq('id', id).maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Расчёт не найден' }, { status: 404 })
 
   if (!isOwnerRole(a.role) && existing.created_by !== a.userId) {
@@ -115,6 +125,7 @@ export async function PATCH(req: NextRequest) {
     client_phone: b.client_phone,
     // Расчёт уже в сделке — клиент известен из карточки.
     deal_id: (existing.deal_id as number | null) ?? b.deal_id ?? null,
+    amo_lead_id: existing.amo_lead_id as number | null,
     input_data: b.input_data,
   })
   if (!verdict.ok) return NextResponse.json({ error: verdict.error }, { status: 422 })

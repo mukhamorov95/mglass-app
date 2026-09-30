@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import AmoLeadsWork from './AmoLeadsWork'
 
 type StaleInfo = { id: number; name: string; daysStale: number; stageName: string }
 
@@ -129,6 +130,8 @@ export default function ManagerPage() {
           </a>
         </div>
 
+        <AmoLeadsWork />
+
         {/* Активность сегодня */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           {[
@@ -197,7 +200,8 @@ export default function ManagerPage() {
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">Быстрые действия</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { href: '/calculations',      icon: '📋', label: 'История КП' },
+              { href: '/calculations',      icon: '📋', label: 'Расчёты' },
+              { href: '/kp',                icon: '📄', label: 'КП' },
             ].map(l => (
               <Link key={l.href} href={l.href}
                 className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] text-[#111110] hover:bg-[#f8f8f7] transition-colors">

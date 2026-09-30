@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { requireDealActor } from '@/lib/b2c/dealScope'
 import { amoGet } from '@/lib/amocrm'
 import { phoneKey } from '@/lib/b2c/phoneKey'
+import { leadIdFrom, amoFieldValue as fieldValue, type AmoContactRaw as AmoContact } from '@/lib/amoLead'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,25 +14,6 @@ export const dynamic = 'force-dynamic'
 type AmoLeadFull = {
   id: number; name: string; status_id: number
   _embedded?: { contacts?: { id: number; is_main?: boolean }[] }
-}
-type AmoContact = {
-  id: number; name: string
-  custom_fields_values?: { field_code?: string; values?: { value?: string }[] }[] | null
-}
-
-// «https://mglass.amocrm.ru/leads/detail/12345» и «12345» — оба валидны.
-function leadIdFrom(input: unknown): number | null {
-  const s = String(input ?? '').trim()
-  if (!s) return null
-  const direct = Number(s)
-  if (Number.isFinite(direct) && direct > 0) return direct
-  const m = s.match(/(?:detail\/|leads\/)(\d+)/) ?? s.match(/(\d{4,})/)
-  return m ? Number(m[1]) : null
-}
-
-function fieldValue(c: AmoContact | null, code: string): string {
-  const f = c?.custom_fields_values?.find(x => x.field_code === code)
-  return String(f?.values?.[0]?.value ?? '').trim()
 }
 
 export async function POST(req: NextRequest) {
