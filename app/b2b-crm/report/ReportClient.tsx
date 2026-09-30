@@ -8,7 +8,7 @@ import { mskDayKey } from '@/lib/time'
 type GroupOpt = { key: string; label: string; ownRetail: boolean; merged: number }
 type OrderRow = {
   id: number; number: string; launchedAt: string; amount: number
-  byName: boolean; shipped: boolean; historical: boolean; clientName: string | null
+  byName: boolean; shipped: boolean; packaged: boolean; historical: boolean; clientName: string | null
 }
 type ClientInfo = { key: string; label: string; hasCard: boolean; ownRetail: boolean; cards: { id: number; name: string }[] }
 type Report = {
@@ -35,6 +35,7 @@ const PRESETS: { id: PresetId; label: string }[] = [
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
 
 const rub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
+const pct = (n: number) => `${n.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
 const day = (k: string) => `${k.slice(8, 10)}.${k.slice(5, 7)}.${k.slice(0, 4)}`
 const monthLabel = (k: string) => `${MONTHS[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`
 const ordersWord = (n: number) => {
@@ -137,7 +138,7 @@ export default function ReportClient({ initial }: {
   const orders = data?.orders ?? []
   const liveSum = orders.filter(o => !o.historical).reduce((s, o) => s + o.amount, 0)
   const paidSum = paid ? orders.reduce((s, o) => s + (paid[o.id] ?? 0), 0) : null
-  const hasHistory = orders.some(o => o.historical)
+  const paidCount = paid ? orders.filter(o => (paid[o.id] ?? 0) > 0).length : 0
   const monthMax = Math.max(1, ...(data?.months ?? []).map(m => m.sum))
   const total = data?.summary?.sum ?? 0
 
@@ -245,7 +246,7 @@ export default function ReportClient({ initial }: {
                         </td>
                         <td className="text-right px-3 py-2.5 font-mono">{r.orders}</td>
                         <td className="text-right px-3 py-2.5 font-mono whitespace-nowrap">{rub(r.sum)}</td>
-                        <td className="text-right px-3 py-2.5 font-mono text-[#6b6b66]">{total > 0 ? `${(r.sum / total * 100).toFixed(1)}%` : '—'}</td>
+                        <td className="text-right px-3 py-2.5 font-mono text-[#6b6b66]">{total > 0 ? pct(r.sum / total * 100) : '—'}</td>
                         <td className="text-right px-4 py-2.5 font-mono whitespace-nowrap text-[#6b6b66]">{rub(r.avg)}</td>
                       </tr>
                     ))}
@@ -284,9 +285,12 @@ export default function ReportClient({ initial }: {
               <Tile label="Заказов" value={String(data.summary.orders)} sub={`${day(data.period.from)} — ${day(data.period.to)}`} />
               <Tile label="Сумма" value={rub(data.summary.sum)} />
               <Tile label="Средний чек" value={rub(data.summary.avg)} sub="без нулевых заказов" />
-              <Tile label="Оплачено"
+              {/* Оплаты в приложении отмечены у малой части заказов (на 30.09 — у 74 из 1150
+                  за 2026 г.): «0 ₽» читался бы как долг. Поэтому — «отмечено», со счётом заказов. */}
+              <Tile label="Отмечено оплат"
                 value={paidError ? '—' : paidSum == null ? (liveIds.length ? '…' : rub(0)) : rub(paidSum)}
-                sub={paidError ? paidError : hasHistory ? `из ${rub(liveSum)} — оплаты в приложении с 2026 г.` : `из ${rub(liveSum)}`} />
+                sub={paidError ? paidError : paid == null ? undefined
+                  : `у ${paidCount} из ${liveIds.length} ${ordersWord(liveIds.length)} на ${rub(liveSum)}; без отметки — не значит «не оплачен»`} />
             </div>
 
             {orders.length === 0 ? (
@@ -318,7 +322,7 @@ export default function ReportClient({ initial }: {
                         <th className="text-left font-semibold px-4 py-2.5">Заказ</th>
                         <th className="text-left font-semibold px-3 py-2.5">Запуск</th>
                         <th className="text-right font-semibold px-3 py-2.5">Сумма</th>
-                        <th className="text-right font-semibold px-3 py-2.5">Оплачено</th>
+                        <th className="text-right font-semibold px-3 py-2.5">Оплата</th>
                         <th className="text-left font-semibold px-4 py-2.5">Статус</th>
                       </tr>
                     </thead>
@@ -334,11 +338,12 @@ export default function ReportClient({ initial }: {
                             <td className="px-3 py-2 text-[#6b6b66] whitespace-nowrap">{day(o.launchedAt)}</td>
                             <td className="text-right px-3 py-2 font-mono whitespace-nowrap">{rub(o.amount)}</td>
                             <td className="text-right px-3 py-2 font-mono whitespace-nowrap text-[#6b6b66]">
-                              {o.historical || paidError ? '—' : paid == null ? '…' : p > 0 ? rub(p) : '0 ₽'}
+                              {o.historical || paidError ? '—' : paid == null ? '…' : p > 0 ? rub(p) : <span title="Оплата в приложении не отмечена">—</span>}
                             </td>
                             <td className="px-4 py-2 text-[12px] whitespace-nowrap">
                               {o.historical ? <span className="text-[#9a9a95]">история</span>
                                 : o.shipped ? <span className="text-green-700">отгружен</span>
+                                : o.packaged ? <span className="text-emerald-700">готов / упакован</span>
                                 : <span className="text-[#6b6b66]">в работе</span>}
                             </td>
                           </tr>
