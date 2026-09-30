@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { AmoResultsReport } from '@/lib/amoResults'
+import { loadJson } from '@/lib/toast'
 import { Card, Num, fmtRub, fmtWait } from './ui'
 
 // Результат рядом с активностью: без него самый занятой выглядит лучшим, а тот, кто
@@ -14,21 +15,21 @@ export default function ResultsBlock({ notSellers }: { notSellers: Set<number> }
   const [data, setData] = useState<AmoResultsReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/commercial/amo-results?days=${days}`)
-      .then(async res => {
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? `Ошибка ${res.status}`)
-        if (!cancelled) { setData(json as AmoResultsReport); setError(null) }
-      })
-      .catch(e => { if (!cancelled) { setError(e instanceof Error ? e.message : String(e)); setData(null) } })
-      .finally(() => { if (!cancelled) setLoading(false) })
+    loadJson<AmoResultsReport>(`/api/commercial/amo-results?days=${days}`).then(r => {
+      if (cancelled) return
+      setData(r.data)
+      setError(r.error)
+      setLoading(false)
+    })
     return () => { cancelled = true }
-  }, [days])
+  }, [days, attempt])
 
-  const choose = (d: (typeof PERIODS)[number]) => { if (d !== days) { setDays(d); setLoading(true) } }
+  const choose = (d: (typeof PERIODS)[number]) => { if (d !== days) { setDays(d); setLoading(true); setError(null) } }
+  const retry = () => { setLoading(true); setError(null); setAttempt(a => a + 1) }
 
   return (
     <Card
@@ -45,8 +46,15 @@ export default function ResultsBlock({ notSellers }: { notSellers: Set<number> }
         </div>
       }
     >
-      {loading && <p className="text-[13px] text-[#9a9a95]">Считаю по AmoCRM… за 90 дней это до минуты.</p>}
-      {error && <p className="text-[13px] text-red-700">{error}</p>}
+      {loading && <p className="text-[13px] text-[#9a9a95]">Считаю по AmoCRM… за 90 дней это около минуты.</p>}
+      {error && !loading && (
+        <div role="alert" className="text-[13px] text-red-700">
+          Не удалось посчитать результат за {days} дней: {error}.
+          {days === 90 && error.includes('504') && ' 30 дней считаются вдвое быстрее.'}
+          {' '}
+          <button onClick={retry} className="underline decoration-dotted hover:text-[#111110]">Повторить</button>
+        </div>
+      )}
       {data && !loading && (
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">

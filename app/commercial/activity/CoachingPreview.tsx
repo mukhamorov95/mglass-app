@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import MyDay from '@/components/MyDay'
+import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { Card } from './ui'
 
 // Владельцу — ровно то, что видит менеджер у себя на главной. Пересчёт по кнопке:
@@ -16,22 +17,19 @@ export default function CoachingPreview() {
   const [nonce, setNonce] = useState(0)
 
   useEffect(() => {
-    fetch('/api/manager/coaching')
-      .then(r => r.json())
-      .then(j => {
-        if (!Array.isArray(j.managers)) throw new Error(j.error ?? 'Не удалось получить список')
-        setRows(j.managers)
-        setWho(prev => prev ?? j.managers[0]?.amo_user_id ?? null)
-      })
-      .catch(e => setState(e instanceof Error ? e.message : String(e)))
+    loadJson<{ managers?: Row[] }>('/api/manager/coaching').then(r => {
+      const managers = r.data?.managers
+      if (!Array.isArray(managers)) { setState(r.error ?? 'Не удалось получить список'); return }
+      setRows(managers)
+      setWho(prev => prev ?? managers[0]?.amo_user_id ?? null)
+    })
   }, [nonce])
 
   const refresh = async () => {
     setState('busy')
-    const res = await fetch('/api/manager/coaching', { method: 'POST' })
-    const json = await res.json().catch(() => ({}))
-    setState(res.ok ? 'idle' : (json.error ?? `Ошибка ${res.status}`))
-    if (res.ok) setNonce(n => n + 1)
+    const res = await fetch('/api/manager/coaching', { method: 'POST' }).catch(() => null)
+    setState(res?.ok ? 'idle' : res ? await responseError(res) : NETWORK_ERROR)
+    if (res?.ok) setNonce(n => n + 1)
   }
 
   return (

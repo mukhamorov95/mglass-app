@@ -7,6 +7,7 @@ import {
 } from '@/lib/amoActivity'
 import { checkDay, checkPeriod, fmtHm, saturdayDuty, type ManagerSchedule } from '@/lib/managerSchedule'
 import { sameName, type WazzupAuthors } from '@/lib/wazzupOutgoing'
+import { loadJson } from '@/lib/toast'
 import { Card, Num, fmtWait, isWeekend, nowTs, shortDay, weekday } from './ui'
 import ResultsBlock from './ResultsBlock'
 import PbxBlock from './PbxBlock'
@@ -187,27 +188,24 @@ export default function AmoActivityPage() {
   useEffect(() => {
     let cancelled = false
     const r = range(preset, day)
-    fetch(`/api/commercial/amo-activity?from=${r.from}&to=${r.to}`)
-      .then(async res => {
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? `Ошибка ${res.status}`)
-        if (!cancelled) { setData(json as ActivityResponse); setError(null); setResultsOn(true) }
-      })
-      .catch(e => { if (!cancelled) { setError(e instanceof Error ? e.message : String(e)); setData(null) } })
-      .finally(() => { if (!cancelled) setLoading(false) })
+    loadJson<ActivityResponse>(`/api/commercial/amo-activity?from=${r.from}&to=${r.to}`).then(res => {
+      if (cancelled) return
+      setData(res.data)
+      setError(res.error)
+      if (res.data) setResultsOn(true)
+      setLoading(false)
+    })
     return () => { cancelled = true }
   }, [preset, day])
 
   const [schedulesError, setSchedulesError] = useState<string | null>(null)
   const loadSchedules = useCallback(() => {
-    fetch('/api/commercial/manager-schedules')
-      .then(async res => {
-        const json = await res.json()
-        if (!res.ok || !Array.isArray(json.schedules)) throw new Error(json.error ?? `Ошибка ${res.status}`)
-        setSchedules(json.schedules as ManagerSchedule[])
-        setSchedulesError(null)
-      })
-      .catch(e => setSchedulesError(`Графики не загрузились — колонка «По графику» пустая: ${e instanceof Error ? e.message : String(e)}`))
+    loadJson<{ schedules?: ManagerSchedule[] }>('/api/commercial/manager-schedules').then(r => {
+      const error = r.error ?? (Array.isArray(r.data?.schedules) ? null : 'сервер не прислал список графиков')
+      if (error) { setSchedulesError(`Графики не загрузились — колонка «По графику» пустая: ${error}`); return }
+      setSchedules(r.data!.schedules!)
+      setSchedulesError(null)
+    })
   }, [])
   useEffect(() => { loadSchedules() }, [loadSchedules])
 

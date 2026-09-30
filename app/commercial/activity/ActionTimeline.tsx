@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { fmtTime } from '@/lib/amoActivity'
 import type { TimelineItem } from '@/lib/amoTimeline'
+import { loadJson } from '@/lib/toast'
 import { shortDay, weekday } from './ui'
 
 // Что именно человек делал за день — от первого действия до последнего.
@@ -24,13 +25,11 @@ export default function ActionTimeline({ userId, day, name }: { userId: number; 
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/commercial/amo-timeline?amo_user_id=${userId}&day=${day}`)
-      .then(async res => {
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? `Ошибка ${res.status}`)
-        if (!cancelled) { setItems(json.items as TimelineItem[]); setError(null) }
-      })
-      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
+    loadJson<{ items: TimelineItem[] }>(`/api/commercial/amo-timeline?amo_user_id=${userId}&day=${day}`).then(r => {
+      if (cancelled) return
+      if (r.data) setItems(r.data.items)
+      setError(r.error)
+    })
     return () => { cancelled = true }
   }, [userId, day])
 

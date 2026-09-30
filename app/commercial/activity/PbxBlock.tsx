@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { PbxReport } from '@/lib/pbxCallsFetch'
 import type { MissedClient } from '@/lib/missedClients'
 import { fmtTime, mskDay } from '@/lib/amoActivity'
+import { loadJson } from '@/lib/toast'
 import { Card, Num, fmtPhone, shortDay } from './ui'
 
 // Журнал АТС: звонки, которых amo не видит. Пропущенный с нового номера на общую линию
@@ -19,14 +20,12 @@ export default function PbxBlock({ from, to, names }: { from: string; to: string
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/commercial/pbx-calls?from=${from}&to=${to}`)
-      .then(async res => {
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? `Ошибка ${res.status}`)
-        if (!cancelled) { setData(json as PbxReport); setError(null) }
-      })
-      .catch(e => { if (!cancelled) { setError(e instanceof Error ? e.message : String(e)); setData(null) } })
-      .finally(() => { if (!cancelled) setLoading(false) })
+    loadJson<PbxReport>(`/api/commercial/pbx-calls?from=${from}&to=${to}`).then(r => {
+      if (cancelled) return
+      setData(r.data)
+      setError(r.error)
+      setLoading(false)
+    })
     return () => { cancelled = true }
   }, [from, to])
 
