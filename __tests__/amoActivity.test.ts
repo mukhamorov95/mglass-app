@@ -16,11 +16,11 @@ const chat = (type: 'incoming_chat_message' | 'outgoing_chat_message', by: numbe
 const call = (id: number, note_type: string, by: number, ts: number, status: number, duration = 60): AmoCallNote =>
   ({ id, note_type, created_by: by, created_at: ts, params: { call_status: status, duration } })
 
-const build = (events: AmoActivityEvent[], callNotes: AmoCallNote[] = [], resp: [number, number][] = [[100, ALINA]], created: [number, number][] = []) =>
+const build = (events: AmoActivityEvent[], callNotes: AmoCallNote[] = [], resp: [number, number][] = [[100, ALINA]], created: [number, number][] = [], botSentAt: number[] = []) =>
   buildAmoActivity({
     from: day, to: day + 86400,
     users: [{ id: ALINA, name: 'Алина' }, { id: YANA, name: 'Яна' }],
-    events, callNotes, leadResponsible: new Map(resp), leadCreatedAt: new Map(created),
+    events, callNotes, leadResponsible: new Map(resp), robots: { leadCreatedAt: new Map(created), botSentAt },
   })
 
 describe('время по Москве', () => {
@@ -173,8 +173,8 @@ describe('клиент остался ждать', () => {
 // что и сообщение клиента, и Salesbot через 5 с после создания сделки; сделка 39509941
 // (беседа 12131) — Salesbot через 2 с после создания, клиент написал позже.
 describe('автоответ робота — не ответ', () => {
-  const kept = (events: AmoActivityEvent[], created: [number, number][] = []) =>
-    dropAutoReplies(events, new Map(created)).map(e => `${e.type === 'incoming_chat_message' ? 'in' : 'out'}@${e.created_at - day}`)
+  const kept = (events: AmoActivityEvent[], created: [number, number][] = [], botSentAt: number[] = []) =>
+    dropAutoReplies(events, { leadCreatedAt: new Map(created), botSentAt }).map(e => `${e.type === 'incoming_chat_message' ? 'in' : 'out'}@${e.created_at - day}`)
 
   it('приветствие в ту же секунду, что и первое сообщение клиента, — убираем, в каком бы порядке amo их ни отдал', () => {
     const t = at(10, 17) + 6
@@ -209,11 +209,58 @@ describe('автоответ робота — не ответ', () => {
     expect(r).toHaveLength(6)
   })
 
-  it('с автором, позже 30 секунд и в Авито (там пишет ИИ-продавец) — это ответы', () => {
+  it('с автором, позже 30 секунд и в Авито без записи в журнале бота — это ответы', () => {
     const t = at(11, 0)
     expect(kept([chat('incoming_chat_message', 0, t, 5), chat('outgoing_chat_message', ALINA, t + 1, 5)])).toHaveLength(2)
     expect(kept([chat('incoming_chat_message', 0, t, 6), chat('outgoing_chat_message', 0, t + 31, 6)])).toHaveLength(2)
-    expect(kept([chat('incoming_chat_message', 0, t, 7, 100, 'avito'), chat('outgoing_chat_message', 0, t + 10, 7, 100, 'avito')])).toHaveLength(2)
+    // менеджер ответил из приложения Авито — без автора, но бот в это время не писал
+    expect(kept([chat('incoming_chat_message', 0, t, 7, 100, 'avito'), chat('outgoing_chat_message', 0, t + 10, 7, 100, 'avito')], [], [t + 300])).toHaveLength(2)
+  })
+
+  // 02–17.09 в Авито без автора писал ИИ-продавец «Иван»; владелец 30.09: менеджеру не засчитывать.
+  // Узнаём по его журналу: в amo сообщение стоит в пределах 1,5 с от записи «БОТ: …».
+  it('ответ «Ивана» в Авито — не ответ, в том числе посреди переписки и через 20 секунд', () => {
+    const t = at(11, 0)
+    const r = kept([
+      chat('incoming_chat_message', 0, t, 7, 100, 'avito'),
+      chat('outgoing_chat_message', 0, t + 12, 7, 100, 'avito'),
+      chat('incoming_chat_message', 0, t + 60, 7, 100, 'avito'),
+      chat('outgoing_chat_message', 0, t + 81, 7, 100, 'avito'),
+    ], [], [t + 13.2, t + 80.4])
+    expect(r).toEqual([`in@${t - day}`, `in@${t + 60 - day}`])
+  })
+
+  it('запись бота дальше 1,5 с или у сообщения с автором — не «Иван»', () => {
+    const t = at(11, 0)
+    const r = kept([
+      chat('incoming_chat_message', 0, t, 7, 100, 'avito'),
+      chat('outgoing_chat_message', 0, t + 12, 7, 100, 'avito'),
+      chat('outgoing_chat_message', ALINA, t + 40, 7, 100, 'avito'),
+    ], [], [t + 14, t + 40])
+    expect(r).toHaveLength(3)
+  })
+
+  it('журнал бота не трогает другие каналы — там свои правила', () => {
+    const t = at(11, 0)
+    expect(kept([chat('incoming_chat_message', 0, t, 8), chat('outgoing_chat_message', 0, t + 300, 8), chat('outgoing_chat_message', 0, t + 400, 8)], [], [t + 300, t + 400])).toHaveLength(3)
+  })
+
+  it('клиент в Авито, которому отвечал только «Иван», — «без ответа», а ответ менеджера меряется от сообщения клиента', () => {
+    const t = at(12, 0)
+    const r = build([
+      chat('incoming_chat_message', 0, t, 14, 100, 'avito'),
+      chat('outgoing_chat_message', 0, t + 11, 14, 100, 'avito'),
+      chat('incoming_chat_message', 0, t + 5 * 60, 14, 100, 'avito'),
+      chat('outgoing_chat_message', 0, t + 5 * 60 + 9, 14, 100, 'avito'),
+      chat('outgoing_chat_message', ALINA, t + 47 * 60, 14, 100, 'avito'),
+      chat('incoming_chat_message', 0, at(16, 0), 15, 100, 'avito'),
+      chat('outgoing_chat_message', 0, at(16, 0) + 8, 15, 100, 'avito'),
+    ], [], [[100, ALINA]], [], [t + 11, t + 5 * 60 + 9, at(16, 0) + 8])
+    const d = r.managers[0].days[0]
+    expect(d.replyMinutes).toEqual([47])
+    expect(d.unanswered).toBe(1)
+    expect(d.messagesNoAuthor).toBe(0)
+    expect(r.autoReplies).toBe(3)
   })
 
   it('звонки и чужие беседы правило не задевает', () => {

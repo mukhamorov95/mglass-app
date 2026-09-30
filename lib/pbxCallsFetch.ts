@@ -5,6 +5,7 @@ import { isOnlinePbxConfigured, onlinePbxHistory } from '@/lib/onlinepbx'
 import { extFromRecordLink, normalizePbxCall, summarizePbx, type PbxCall, type PbxSummary } from '@/lib/pbxCalls'
 import { describeMissedClient, type AmoContactHit, type AmoLeadHit, type MissedClient } from '@/lib/missedClients'
 import { dropAutoReplies, type AmoActivityEvent } from '@/lib/amoActivity'
+import { fetchBotSentAt } from '@/lib/botReplies'
 
 export type PbxReport =
   | { configured: false }
@@ -82,6 +83,7 @@ export async function describeMissed(list: PbxSummary['missedNotCalledBackList']
   const leads = new Map((await inBatches(chunks, 2, ids =>
     amoGetAll<AmoLeadHit>('/leads', { 'filter[id][]': ids.map(String) }, 'leads'))).flat().map(l => [l.id, l]))
   const leadCreatedAt = new Map([...leads.values()].map(l => [l.id, l.created_at]))
+  const botSentAt = await fetchBotSentAt(Math.min(...list.map(i => i.at)), Math.floor(Date.now() / 1000))
 
   const touchesByPhone = await inBatches(list.map((item, i) => ({ item, contacts: contactsByPhone[i] })), 2, async ({ item, contacts }) => {
     const byEntity = [
@@ -96,7 +98,7 @@ export async function describeMissed(list: PbxSummary['missedNotCalledBackList']
         'filter[created_at][from]': String(item.at),
       }, 'events')))
     // приветствие робота клиенту, написавшему после звонка, — не перезвон и не ответ
-    return dropAutoReplies(parts.flat(), leadCreatedAt).filter(e => e.type !== 'incoming_chat_message')
+    return dropAutoReplies(parts.flat(), { leadCreatedAt, botSentAt }).filter(e => e.type !== 'incoming_chat_message')
   })
 
   const digits = (s: unknown) => String(s ?? '').replace(/\D/g, '')

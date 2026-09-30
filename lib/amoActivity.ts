@@ -8,8 +8,8 @@
 //    нажал «отправить», amo не знает.
 // 2) Пропущенный входящий amo пишет событием incoming_call под именем менеджера.
 //    Это не его действие — отличаем по заметке звонка (call_status 4 = разговор был).
-// И одна, на которой человек выглядит быстрее, чем есть: автоответ Wazzup и Salesbot —
-// тоже исходящее без автора (см. dropAutoReplies).
+// И одна, на которой человек выглядит быстрее, чем есть: автоответ Wazzup и Salesbot и
+// ИИ-продавец Авито — тоже исходящее без автора (см. dropAutoReplies).
 
 export type AmoActivityEvent = {
   type: string
@@ -139,22 +139,38 @@ export function callKind(note: AmoCallNote): 'out_ok' | 'out_fail' | 'in_ok' | '
 const isChat = (e: AmoActivityEvent) =>
   e.type === 'incoming_chat_message' || e.type === 'outgoing_chat_message'
 
-// Автоответ — приветствие Wazzup и Salesbot: исходящее без автора не позже AUTO_REPLY_SEC после
-// создания сделки или после сообщения клиента, которое открывает беседу (первое в ней или первое
-// после часа тишины). Это не ответ и не касание — иначе «ответили через 0 мин», а клиент, которому
-// ответил только робот, выпадает из «ждёт ответа». Одно правило на «Активность», «Мой день»,
-// «Результат» и разбор дня.
-// Быстрое исходящее без автора посреди переписки — человек с телефона: по журналу Wazzup
-// 23–29.09 все 15 опознанных такие ответы — менеджеры. Авито не трогаем: без автора там писал
-// ИИ-продавец «Иван», ответ по существу; засчитывать ли его менеджеру — решение владельца.
+// Робот — не ответ и не касание: иначе «ответили через 0 мин», а клиент, которому ответил только
+// робот, выпадает из «ждёт ответа». Одно правило на «Активность», «Мой день», «Результат»,
+// пропущенные и разбор дня. В amo робот пишет без автора, как менеджер с телефона, и узнаётся так:
+// 1) приветствие Wazzup и Salesbot — не позже AUTO_REPLY_SEC после создания сделки или после
+//    сообщения клиента, которое открывает беседу (первое в ней или первое после часа тишины).
+//    Быстрое исходящее без автора посреди переписки — человек с телефона: по журналу Wazzup
+//    23–29.09 все 15 опознанных такие ответы — менеджеры;
+// 2) ИИ-продавец Авито «Иван» — по его журналу (lib/botReplies.ts): в amo его сообщение стоит не
+//    дальше BOT_MATCH_SEC от записи «БОТ: …» (02–17.09: 703 из 704; у сообщений с автором — 3 из
+//    1045). Владелец 30.09: менеджеру не засчитывать. Прочее без автора в Авито — менеджер из
+//    приложения Авито.
 export const AUTO_REPLY_SEC = 30
 export const TALK_PAUSE_SEC = 3600
+export const BOT_MATCH_SEC = 1.5
 
-// Может ли сообщение оказаться автоответом — по нему же сбор решает, где нужны входящие
+export type RobotTrace = { leadCreatedAt: Map<number, number>; botSentAt: number[] }
+
+const isAvito = (e: AmoActivityEvent) => !!e.value_after?.[0]?.message?.origin?.startsWith('avito')
+
+// Может ли сообщение оказаться автоответом по времени — по нему же сбор решает, где нужны входящие
 export const mayBeAutoReply = (e: AmoActivityEvent) =>
-  e.type === 'outgoing_chat_message' && !e.created_by && !e.value_after?.[0]?.message?.origin?.startsWith('avito')
+  e.type === 'outgoing_chat_message' && !e.created_by && !isAvito(e)
 
-export function dropAutoReplies<E extends AmoActivityEvent>(events: E[], leadCreatedAt: Map<number, number>): E[] {
+function hasNear(sorted: number[], t: number, tol: number): boolean {
+  let lo = 0, hi = sorted.length
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < t - tol) lo = mid + 1; else hi = mid }
+  return lo < sorted.length && sorted[lo] <= t + tol
+}
+
+export function dropAutoReplies<E extends AmoActivityEvent>(events: E[], robots: RobotTrace): E[] {
+  const { leadCreatedAt } = robots
+  const botSentAt = [...robots.botSentAt].sort((a, b) => a - b)
   const byTalk = new Map<number, E[]>()
   for (const e of events) {
     const talk = e.value_after?.[0]?.message?.talk_id
@@ -177,7 +193,8 @@ export function dropAutoReplies<E extends AmoActivityEvent>(events: E[], leadCre
   }
   const soonAfter = (t: number, from: number | undefined) => from !== undefined && t >= from && t - from <= AUTO_REPLY_SEC
   return events.filter(e => {
-    if (!mayBeAutoReply(e)) return true
+    if (e.type !== 'outgoing_chat_message' || e.created_by) return true
+    if (isAvito(e)) return !hasNear(botSentAt, e.created_at, BOT_MATCH_SEC)
     const msg = e.value_after?.[0]?.message
     if (e.entity_type === 'lead' && soonAfter(e.created_at, leadCreatedAt.get(e.entity_id))) return false
     return !(msg?.talk_id && (openers.get(msg.talk_id) ?? []).some(t => soonAfter(e.created_at, t)))
@@ -236,11 +253,11 @@ export function buildAmoActivity(input: {
   events: AmoActivityEvent[]
   callNotes: AmoCallNote[]
   leadResponsible: Map<number, number>
-  leadCreatedAt: Map<number, number>
+  robots: RobotTrace
 }): AmoActivityReport {
   const { from, to, users } = input
   const inRange = (ts: number) => ts >= from && ts < to
-  const events = dropAutoReplies(input.events, input.leadCreatedAt).filter(e => inRange(e.created_at))
+  const events = dropAutoReplies(input.events, input.robots).filter(e => inRange(e.created_at))
   const autoReplies = input.events.filter(e => inRange(e.created_at)).length - events.length
   const notes = input.callNotes.filter(n => inRange(n.created_at))
   const days = periodDays(from, to)

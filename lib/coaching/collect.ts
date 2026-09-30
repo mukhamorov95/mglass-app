@@ -33,7 +33,7 @@ export async function collectCoaching(managers: { id: number; name: string }[], 
   const tasks = await amoGetAll<Task>('/tasks', { 'filter[is_completed]': '0' }, 'tasks')
 
   const focus = focusFacts({
-    ids, now, events: raw.events,
+    ids, now, events: raw.events, botSentAt: raw.botSentAt,
     leadsById: new Map(raw.leads.map(l => [l.id, l as Lead])),
     stageName, hotLeads, newLeads, tasks, pbx, domain,
   })

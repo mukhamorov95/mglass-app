@@ -2,6 +2,7 @@ import 'server-only'
 import { amoGetAll, getPipelines } from '@/lib/amocrm'
 import { getAmoUserNames } from '@/lib/amoPeople'
 import { mayBeAutoReply } from '@/lib/amoActivity'
+import { fetchBotSentAt } from '@/lib/botReplies'
 import {
   advanceOf, buildAmoResults, stageId,
   type AmoResultsReport, type ContactEvent, type OpenTask, type ResultLead, type StatusEvent,
@@ -62,6 +63,7 @@ export async function fetchAmoResults(from: number, to: number): Promise<AmoResu
     'filter[created_at][to]': String(to - 1),
   }, 'events'))).flat()
   const contacts = [...touches, ...incoming]
+  const botSentAt = await fetchBotSentAt(from, to)
 
   const stageNames = new Map<string, string>()
   for (const p of pipelines) for (const s of p._embedded.statuses) stageNames.set(stageId(p.id, s.id), s.name)
@@ -73,6 +75,6 @@ export async function fetchAmoResults(from: number, to: number): Promise<AmoResu
   return buildAmoResults({
     from, to, now,
     users,
-    stageNames, statusEvents, newLeads, paidLeads, contacts, openTasks,
+    stageNames, statusEvents, newLeads, paidLeads, contacts, botSentAt, openTasks,
   })
 }
