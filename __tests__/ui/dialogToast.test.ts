@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { toast, TOAST_EVENT, responseError, type ToastPayload } from '@/lib/toast'
+import { toast, TOAST_EVENT, responseError, loadJson, NETWORK_ERROR, type ToastPayload } from '@/lib/toast'
 import {
   confirmDialog, promptDialog, answerDialog, pendingDialogCount,
   DIALOG_EVENT, HOST_WAIT_MS, type DialogEventDetail,
@@ -65,6 +65,41 @@ describe('responseError — причина словами', () => {
   it('без тела — по коду ответа', async () => {
     expect(await responseError(new Response('oops', { status: 502 }))).toBe('Ошибка сервера (502)')
     expect(await responseError(new Response(null, { status: 403 }))).toBe('Нет прав на это действие')
+  })
+  it('таймаут функции Vercel — словами, а не «ошибка сервера»', async () => {
+    const page = 'An error occurred with your deployment\n\nFUNCTION_INVOCATION_TIMEOUT'
+    expect(await responseError(new Response(page, { status: 504, headers: { 'x-vercel-error': 'FUNCTION_INVOCATION_TIMEOUT' } })))
+      .toBe('Сервер не успел посчитать за отведённое время (504)')
+  })
+})
+
+// 30.09 блок «Результат» показал «Unexpected token 'A', "An error o"... is not valid JSON»:
+// маршрут не уложился в лимит, Vercel отдал свою страницу, а экран сначала разбирал JSON.
+describe('loadJson — статус до разбора', () => {
+  const realFetch = globalThis.fetch
+  afterEach(() => { globalThis.fetch = realFetch })
+  const answer = (r: Response | Error) => { globalThis.fetch = vi.fn(async () => { if (r instanceof Error) throw r; return r }) as typeof fetch }
+
+  it('страница ошибки платформы — причина словами, без текста исключения', async () => {
+    answer(new Response('An error occurred with your deployment', { status: 504 }))
+    const r = await loadJson('/api/x')
+    expect(r).toEqual({ data: null, error: 'Сервер не успел посчитать за отведённое время (504)' })
+  })
+  it('наша ошибка { error } — её текст', async () => {
+    answer(new Response(JSON.stringify({ error: 'AmoCRM не ответил: 429' }), { status: 502 }))
+    expect((await loadJson('/api/x')).error).toBe('AmoCRM не ответил: 429')
+  })
+  it('обрыв сети — «сервер не ответил»', async () => {
+    answer(new TypeError('fetch failed'))
+    expect(await loadJson('/api/x')).toEqual({ data: null, error: NETWORK_ERROR })
+  })
+  it('200, но не JSON — не молчим', async () => {
+    answer(new Response('<html>вход</html>', { status: 200 }))
+    expect((await loadJson('/api/x')).error).toBe('Сервер прислал страницу вместо данных (200)')
+  })
+  it('нормальный ответ — данные', async () => {
+    answer(new Response(JSON.stringify({ managers: [1] }), { status: 200 }))
+    expect(await loadJson<{ managers: number[] }>('/api/x')).toEqual({ data: { managers: [1] }, error: null })
   })
 })
 
