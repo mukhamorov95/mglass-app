@@ -1,3 +1,24 @@
+## Текущая задача (30.09): RLS `calculations` — менеджер видит только свои расчёты
+Находка из PR #709: две разрешающие SELECT-политики складываются через OR, `auth_select_calculations`
+(`NOT is_partner()`) открывала все 101 расчёт любому сотруднику (цех, бухгалтерия, закупка, менеджеры без флагов).
+UPDATE так же: `auth_update_calculations` (`NOT is_partner()`) — любой сотрудник правил любой расчёт.
+- Читатели перечислены (39 файлов + RPC app_search): под RLS — /calculations (+[id], print), главная «/»,
+  /clients (+[phone]), /cfo/margins, /cfo/unit, /admin/dashboard, /admin/health-check, /admin/ai-control-center,
+  /ai-sales, /kp-generator, /my-earnings, /api/search; service-role — /api/deals*, orphans, save, кроны, CFO-сервер.
+- Две утечки мимо RLS: /api/ai/generate-kp и /api/ai/chat (инструменты get_calculation/get_recent_calculations)
+  читали расчёты service-ключом при гейте «вошёл» — любой роли, включая партнёра.
+- Проба 30.09 (откат в подтранзакции, проверено: политики/функция/роли на месте): вариант A — Яна 101→9,
+  Никита/Алёна 101→0, Дмитрий/Вера/cfo/commercial 101, admin 101, partner/anon 0; UPDATE чужого — только admin.
+  Вариант B (только can_view_all_deals) дополнительно режет Айжан/Дмитрия/Нуржана до своих (/clients, /my-day).
+- СДЕЛАНО (этот PR): /api/ai/generate-kp и /api/ai/chat читают под RLS вызывающего (executeTool принимает
+  его клиент) — партнёр больше не получает через чат закупочные цены и маржу, чужие расчёты режет RLS.
+- ЖДЁТ ВЛАДЕЛЬЦА: PR #723 — миграция `20260930_calculations_rls_isolation.sql` (вариант A: оба флага), НЕ накатана.
+  Вопрос: A или B (только can_view_all_deals — Айжан/Дмитрий/Нуржан теряют чужие расчёты в /clients и /my-day).
+  После «да»: apply_migration → повторить пробу уже без отката → мерж #723.
+- Попутные находки (не чинил): кнопка «Дублировать» в /calculations мертва у всех (INSERT-политики нет, ошибка
+  не показывается); financial_settings и materials пишет любой сотрудник (ALL `NOT is_partner()`); два флага
+  «видит чужие» (can_view_all_deals / can_view_all_clients) в коде значат одно и то же для разных экранов.
+
 ## Параллельная задача (29.09): ни одна заявка без разбора
 Маршрут — docs/LEAD_DAY_NOTES_ROUTE.md. Владелец 29.09: пропущенный звонок → задача «перезвонить» в amo;
 вечером по каждой заявке примечание «что хорошо / плохо / внимание / завтра». **Решение Р1: писать примечание

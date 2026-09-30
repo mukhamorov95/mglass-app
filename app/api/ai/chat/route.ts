@@ -71,7 +71,7 @@ export async function POST(req: Request) {
             toolUseBlocks.map(async (block) => ({
               type: 'tool_result' as const,
               tool_use_id: block.id,
-              content: await executeTool(block.name, block.input as Record<string, unknown>),
+              content: await executeTool(block.name, block.input as Record<string, unknown>, supabase),
             }))
           )
 
