@@ -123,10 +123,12 @@ describe('разбор старых отгрузок (решение владе�
     order(id, { launched_at: iso('2026-08-20'), n: { deadline_date: deadline, stages } })
 
   it('сверху — последние 14 дней, старше — в хвост', () => {
-    const rows = overdueShipments([late(1, '2026-09-10'), late(2, '2026-09-01')], NOW)
+    // Ровно 14 дней — ещё «последние»; хвост начинается с 15-го.
+    const LATER = Date.parse('2026-09-25T12:00:00Z')
+    const rows = overdueShipments([late(1, '2026-09-20'), late(2, '2026-09-11'), late(3, '2026-09-05')], LATER)
     const { recent, old } = splitShipments(rows)
-    expect(recent.map(r => r.ref)).toEqual(['#1'])
-    expect(old.map(r => r.ref)).toEqual(['#2'])
+    expect(recent.map(r => r.ref).sort()).toEqual(['#1', '#2'])
+    expect(old.map(r => r.ref)).toEqual(['#3'])
     expect(old[0].days).toBeGreaterThan(SHIP_RECENT_DAYS)
   })
 

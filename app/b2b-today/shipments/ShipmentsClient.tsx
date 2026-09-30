@@ -51,6 +51,7 @@ export default function ShipmentsClient({ focusId }: { focusId: number | null })
     }
   }, [focusId])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- загрузка при открытии; состояние меняется после ответа сервера
   useEffect(() => { void load(false) }, [load])
   useEffect(() => { if (rows && focusId) focusRef.current?.scrollIntoView({ block: 'center' }) }, [rows, focusId])
 
