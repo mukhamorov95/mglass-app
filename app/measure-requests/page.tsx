@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase-browser'
 import { buildMeasureMessage, splitScope } from '@/lib/measure/message'
 
 // Заявки на замер (вкладка менеджера): диктовка/вставка → AI-структура →
@@ -65,9 +64,8 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
 }
 
 export default function MeasureRequestsPage() {
-  const sb = createClient()
   const recRef = useRef<SpeechRec | null>(null)
-  const [me, setMe] = useState<{ id: string; name: string; role: string } | null>(null)
+  const [me, setMe] = useState<{ id: string; name: string; role: string; scope: string; canCreate: boolean } | null>(null)
   const [recording, setRecording] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(true)
   const [rawText, setRawText] = useState('')
@@ -80,19 +78,15 @@ export default function MeasureRequestsPage() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState<number | null>(null)
 
+  // Список уже отфильтрован сервером по кругу видимости: менеджер получает свои
+  // заявки, владелец и офис — все.
   const load = useCallback(async () => {
-    const { data: { user } } = await sb.auth.getUser()
-    if (user) {
-      const { data: p } = await sb.from('users').select('id, name, role').eq('id', user.id).maybeSingle()
-      if (p) setMe(p as { id: string; name: string; role: string })
-    }
-    const { data, error: loadErr } = await sb.from('measure_requests')
-      .select('id, deal_number, client_name, phone, amo_url, address, scope, notes, visit_price, payer, is_repeat, structured_text, manager_id, manager_name, measurer_name, scheduled_at, duration_min, status, issue_text, created_at')
-      .order('created_at', { ascending: false }).limit(200)
-    if (loadErr) setError(`Заявки не загрузились: ${loadErr.message}`)
-    setReqs((data ?? []) as MReq[])
+    const res = await fetch('/api/measure-requests', { cache: 'no-store' })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) setError(j.error || `Заявки не загрузились (${res.status})`)
+    else { setMe(j.me); setReqs(j.requests as MReq[]) }
     setLoading(false)
-  }, [sb])
+  }, [])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
@@ -152,24 +146,12 @@ export default function MeasureRequestsPage() {
     if (!me || !fields || !fields.client_name.trim()) return
     setSending(true)
     try {
-      const visitPrice = Number(fields.visit_price.replace(/\s/g, '')) || 0
-      const { error } = await sb.from('measure_requests').insert({
-        deal_number: fields.deal_number.trim() || null,
-        client_name: fields.client_name.trim(),
-        phone: fields.phone.trim() || null,
-        amo_url: fields.amo_url.trim() || null,
-        address: fields.address.trim() || null,
-        scope: fields.scope.trim() || null,
-        notes: fields.notes.trim() || null,
-        visit_price: visitPrice,
-        payer: fields.payer.trim() || null,
-        is_repeat: fields.is_repeat,
-        raw_text: rawText || null,
-        structured_text: structured,
-        manager_id: me.id, manager_name: me.name,
-        measurer_fee: Number(fee.replace(/\s/g, '')) || visitPrice,
+      const res = await fetch('/api/measure-requests', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...fields, raw_text: rawText || null, measurer_fee: fee.trim() || undefined }),
       })
-      if (error) { setError(`Заявка не создана: ${error.message}`); return }
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(j.error || `Заявка не создана (${res.status})`); return }
       setError(''); setRawText(''); setFields(null); setFee(''); await load()
     } finally { setSending(false) }
   }
@@ -190,9 +172,7 @@ export default function MeasureRequestsPage() {
     setFields(prev => prev ? { ...prev, [k]: v } : prev)
   }
 
-  const myReqs = useMemo(() =>
-    me && me.role === 'manager' ? reqs.filter(r => r.manager_id === me.id) : reqs,
-  [reqs, me])
+  const myReqs = reqs
 
   const inputCls = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]'
   const labelCls = 'text-[11px] font-semibold text-[#6b6b66] block mb-1'
@@ -266,7 +246,7 @@ export default function MeasureRequestsPage() {
                 <input value={fields.amo_url} onChange={e => setF('amo_url', e.target.value)} placeholder="https://mglass.amocrm.ru/…" className={inputCls} />
               </div>
               <div className="sm:col-span-2">
-                <label className={labelCls}>Адрес</label>
+                <label className={labelCls}>Адрес *</label>
                 <input value={fields.address} onChange={e => setF('address', e.target.value)} placeholder="ул. Булатниковская, 9к1" className={inputCls} />
               </div>
               <div className="sm:col-span-2 lg:row-span-2">
@@ -303,11 +283,13 @@ export default function MeasureRequestsPage() {
             <pre className="mt-1 bg-[#fafaf8] border border-[#f0f0ec] rounded-lg p-3 text-[12px] whitespace-pre-wrap font-sans">{structured}</pre>
 
             <div className="flex items-center gap-2 mt-3">
-              <button onClick={createRequest} disabled={sending || !fields.client_name.trim()}
+              <button onClick={createRequest} disabled={sending || !fields.client_name.trim() || !fields.address.trim()}
                 className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-4 py-2 hover:bg-emerald-700 disabled:opacity-40">
                 {sending ? '…' : '✅ Создать заявку'}
               </button>
-              {!fields.client_name.trim() && <span className="text-[11px] text-amber-600">Укажи имя клиента</span>}
+              {(!fields.client_name.trim() || !fields.address.trim()) && (
+                <span className="text-[11px] text-amber-600">{!fields.client_name.trim() ? 'Укажи имя клиента' : 'Укажи адрес — замерщику некуда ехать без него'}</span>
+              )}
             </div>
           </div>
         )}
