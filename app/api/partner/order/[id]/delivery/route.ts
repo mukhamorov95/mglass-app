@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { appUrl } from '@/lib/appUrl'
 
 // A8: партнёр указывает способ получения (самовывоз / доставка) и адрес по своему
 // заказу. Пишем в notes.delivery; логистику дальше ведёт менеджер (лист рейса).
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const number = (order.custom_number as string | null)?.trim() || `#${oid}`
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const base = appUrl()
   await notifyAdmins(
     `🚚 <b>Способ получения</b>\n${client.name}, заказ ${number}: ${method === 'delivery' ? `доставка — ${address}` : 'самовывоз'}` +
     (comment ? `\nКомментарий: ${comment}` : '') + (base ? `\n${base}/b2b-quotes` : ''),

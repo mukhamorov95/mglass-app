@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase-service'
 import { sendMessage, type InlineKeyboard } from '@/lib/telegram'
+import { appUrl } from '@/lib/appUrl'
 
 // А14: уведомления менеджеру в Telegram о событиях его заказов. До этого крон писал
 // владельцу и партнёру, а менеджер узнавал об оплате и вопросах клиента случайно.
@@ -34,7 +35,7 @@ export async function notifyOrderManager(orderId: number, text: string, link?: s
     const svc = createServiceClient()
     const { data } = await svc.from('b2b_orders').select('created_by').eq('id', orderId).maybeSingle()
     const userId = (data as { created_by?: string | null } | null)?.created_by ?? null
-    const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+    const base = appUrl()
     const keyboard: InlineKeyboard | undefined = link && base
       ? [[{ text: 'Открыть', url: `${base}${link}` }]]
       : undefined

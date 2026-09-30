@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
 import { createSetupToken } from '@/lib/setupToken'
+import { appUrl } from '@/lib/appUrl'
 
 // Выдать ссылку самостоятельной установки пароля. Два режима:
 //  • { email, role, name } — пригласить нового: создаём аккаунт БЕЗ известного
@@ -52,6 +53,6 @@ export async function POST(req: Request) {
   if (!userId) return NextResponse.json({ error: 'Пользователь не найден' }, { status: 400 })
 
   const token = await createSetupToken(userId)
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin).replace(/\/$/, '')
+  const base = appUrl()
   return NextResponse.json({ link: `${base}/set-password?token=${token}` })
 }

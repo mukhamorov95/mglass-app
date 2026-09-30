@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { viaSupabaseProxy } from '@/lib/supabaseProxy'
 import { swUrl } from '@/lib/swUrl'
 import { appUrl, internalAppUrl } from '@/lib/appUrl'
+import { execSync } from 'node:child_process'
 
 const SB = 'https://qbypyrzkguwlelyjehbj.supabase.co'
 
@@ -40,6 +41,26 @@ describe('appUrl / internalAppUrl', () => {
   it('для людей — публичный адрес, без двойного слэша', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.mglass.pro/')
     expect(appUrl('/crm/7')).toBe('https://app.mglass.pro/crm/7')
+  })
+
+  it('старый адрес vercel.app в настройке или пусто — ссылка для людей всё равно на российский вход', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://mglass-app.vercel.app')
+    expect(appUrl('/set-password?token=x')).toBe('https://app.mglass.pro/set-password?token=x')
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', '')
+    expect(appUrl()).toBe('https://app.mglass.pro')
+  })
+
+  it('свой адрес в настройке главнее (превью, другой домен)', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000')
+    expect(appUrl('/x')).toBe('http://localhost:3000/x')
+  })
+
+  it('ссылки для людей строятся только через appUrl — не из настройки напрямую', () => {
+    const offenders = execSync(
+      "git grep -n 'process.env.NEXT_PUBLIC_APP_URL' -- app lib components || true",
+      { encoding: 'utf8' },
+    ).split('\n').filter(l => l && !l.startsWith('lib/appUrl.ts'))
+    expect(offenders, 'используйте appUrl() из lib/appUrl.ts').toEqual([])
   })
 
   it('самовызовы после переезда остаются на прямом адресе Vercel', () => {

@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
 import { pushNotification } from '@/lib/partnerNotify'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { appUrl } from '@/lib/appUrl'
 
 // A3: партнёр согласует чертёж (или отправляет на доработку) прямо в кабинете.
 // Строго по своему заказу. Решение кладём в notes.drawing_approval; менеджеру —
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const number = (order.custom_number as string | null)?.trim() || `#${oid}`
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const base = appUrl()
   await notifyAdmins(
     (decision === 'approve'
       ? `✅ <b>Чертёж согласован</b>\n${client.name} согласовал чертёж заказа ${number}.`

@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
 import { createSetupToken } from '@/lib/setupToken'
 import { randomBytes } from 'crypto'
+import { appUrl } from '@/lib/appUrl'
 
 // Онбординг партнёра из приложения (только владелец). Создаёт auth-аккаунт,
 // роль partner, профиль в отдельной организации (id 2) и привязку к b2b_client —
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
   const { data: client } = await db.from('b2b_clients').select('id,name,user_id').eq('id', clientId).maybeSingle()
   if (!client) return NextResponse.json({ error: 'Клиент не найден' }, { status: 404 })
 
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin).replace(/\/$/, '')
+  const base = appUrl()
 
   // Переотправка: аккаунт уже есть — просто выдаём новую одноразовую ссылку.
   // Прежние неиспользованные токены гасятся внутри createSetupToken.

@@ -5,6 +5,7 @@ import { reviewPartnerQuote, type ReviewItem } from '@/lib/ai-tools/reviewPartne
 import { notifyAdmins } from '@/lib/telegram'
 import { pushNotification } from '@/lib/partnerNotify'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { appUrl } from '@/lib/appUrl'
 
 // Партнёр отправляет свой просчёт в заявку (на проверку менеджеру).
 // Просчёт → status='pending_approval'. Только свой просчёт, только если не запущен.
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
   }).catch(() => {})
 
   // Уведомление менеджерам/владельцу в Telegram (best-effort).
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const base = appUrl()
   await notifyAdmins(
     `🧾 <b>Новая заявка от партнёра</b>\n${client.name} отправил просчёт №${quoteId} в работу.` +
     (base ? `\n${base}/b2b-quotes` : ''),

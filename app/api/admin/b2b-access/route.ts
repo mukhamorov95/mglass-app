@@ -4,6 +4,7 @@ import { requireOwner } from '@/lib/apiAuth'
 import { createSetupToken } from '@/lib/setupToken'
 import { notifyPartnerAccessGranted } from '@/lib/notify'
 import { pushNotification } from '@/lib/partnerNotify'
+import { appUrl } from '@/lib/appUrl'
 
 // Выдача доступа в кабинет заказчику (роль partner). Владелец:
 //  • видит список B2B-клиентов и кто из них уже привязан к учётке;
@@ -161,7 +162,7 @@ export async function POST(req: Request) {
   if (!link.ok) return NextResponse.json({ error: link.error }, { status: link.status })
 
   const token = await createSetupToken(userId)
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin).replace(/\/$/, '')
+  const base = appUrl()
   const setupLink = `${base}/set-password?token=${token}`
   const emailed = await notifyPartnerAccessGranted({ to: email, clientName: link.clientName, setupLink }).catch(() => false)
 

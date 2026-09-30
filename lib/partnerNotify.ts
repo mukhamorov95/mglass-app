@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { notifyPartnerOrderStatus } from '@/lib/notify'
+import { appUrl } from '@/lib/appUrl'
 
 // Оркестрация уведомлений кабинета партнёра: колокольчик (partner_notifications)
 // + e-mail (Resend, best-effort). Идемпотентность — уникальный индекс
@@ -66,7 +67,7 @@ export async function reconcileOrder(
 ): Promise<void> {
   const orderId = order.id as number
   const number = (order.custom_number as string | null)?.trim() || `#${orderId}`
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const base = appUrl()
   const link = `${base}/partner/order/${orderId}`
 
   for (const t of orderTransitions(order)) {
