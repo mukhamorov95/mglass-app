@@ -1,3 +1,5 @@
+import { confirmDialog } from '@/lib/dialog'
+
 // Запрос к API замеров из браузера с одним общим поведением: мягкий конфликт
 // (мало времени на дорогу, вне часов, нерабочий день) сервер возвращает вопросом —
 // человек отвечает «да», и запрос уходит повторно с force.
@@ -16,7 +18,8 @@ export async function sendMeasure<T = Record<string, unknown>>(
   }
   let { res, j } = await call(body)
   if (res.status === 409 && j.needsConfirm) {
-    if (!window.confirm(`${j.warning}\n\nВсё равно назначить?`)) return { ok: false, error: '', cancelled: true }
+    const yes = await confirmDialog({ title: 'Всё равно назначить?', text: String(j.warning ?? ''), confirmLabel: 'Назначить' })
+    if (!yes) return { ok: false, error: '', cancelled: true }
     ;({ res, j } = await call(withForce(body)))
   }
   if (!res.ok) return { ok: false, error: (j.error as string) || `Не сохранено (${res.status})` }

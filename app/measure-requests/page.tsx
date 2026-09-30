@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildMeasureMessage, formatMeasureWhen, splitScope, tidy } from '@/lib/measure/message'
 import { sendMeasure } from '@/lib/measure/client'
+import { confirmDialog, type ConfirmOptions } from '@/lib/dialog'
 import MeasureBoard, { type BoardPick } from '@/components/measure/MeasureBoard'
 import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
 
@@ -206,8 +207,8 @@ export default function MeasureRequestsPage() {
   }
 
   // Действие над заявкой из списка: назначить / перенести / в пул / отменить / вернуть.
-  async function act(r: MReq, body: Record<string, unknown>, confirmText?: string) {
-    if (confirmText && !window.confirm(confirmText)) return
+  async function act(r: MReq, body: Record<string, unknown>, ask?: ConfirmOptions) {
+    if (ask && !(await confirmDialog(ask))) return
     setBusyId(r.id); setError('')
     try {
       const res = await sendMeasure(`/api/measure-requests/${r.id}`, 'PATCH', body)
@@ -310,7 +311,7 @@ export default function MeasureRequestsPage() {
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Структура заявки</p>
-              <button onClick={() => { if (window.confirm('Закрыть форму? Введённое будет стёрто.')) { setFields(null); setRawText(''); setFee('') } }}
+              <button onClick={async () => { if (await confirmDialog({ title: 'Закрыть форму?', text: 'Введённое будет стёрто.', confirmLabel: 'Закрыть', danger: true })) { setFields(null); setRawText(''); setFee('') } }}
                 className="text-[11px] text-[#9a9a95] hover:text-[#111110]">✕ Закрыть</button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -444,10 +445,10 @@ export default function MeasureRequestsPage() {
                           <button onClick={() => openAssign(r)} className={actBtn}>{r.status === 'new' ? '📅 Назначить замерщика' : '↔ Перенести'}</button>
                         )}
                         {(r.status === 'scheduled' || r.status === 'issue') && (
-                          <button onClick={() => act(r, { action: 'unassign' }, 'Снять время и вернуть заявку в пул? Замерщик увидит её снова как новую.')} className={actBtn}>↩ В пул</button>
+                          <button onClick={() => act(r, { action: 'unassign' }, { title: 'Вернуть заявку в пул?', text: 'Время снимется, замерщик увидит её снова как новую.', confirmLabel: 'Вернуть в пул' })} className={actBtn}>↩ В пул</button>
                         )}
                         {(r.status === 'new' || r.status === 'scheduled' || r.status === 'issue') && (
-                          <button onClick={() => act(r, { action: 'cancel' }, 'Отменить замер? Он исчезнет из пула и с доски.')} className={`${actBtn} text-red-600`}>✕ Отменить</button>
+                          <button onClick={() => act(r, { action: 'cancel' }, { title: 'Отменить замер?', text: 'Он исчезнет из пула и с доски.', confirmLabel: 'Отменить замер', danger: true })} className={`${actBtn} text-red-600`}>✕ Отменить</button>
                         )}
                         {r.status === 'cancelled' && (
                           <button onClick={() => act(r, { action: 'reopen' })} className={actBtn}>↺ Вернуть в пул</button>

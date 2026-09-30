@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatMeasureWhen, splitScope, tidy } from '@/lib/measure/message'
 import { mskDate } from '@/lib/measure/slots'
 import { mskToday, sendMeasure } from '@/lib/measure/client'
+import { confirmDialog } from '@/lib/dialog'
 import { telHref } from '@/lib/b2c/phoneKey'
 import MeasureBoard from '@/components/measure/MeasureBoard'
 import MeasurerAvailability from '@/components/measure/MeasurerAvailability'
@@ -218,7 +219,7 @@ export default function MeasurerCabinetPage() {
               onChange={e => { const f = e.target.files?.[0]; if (f) attachFile(r, f); e.target.value = '' }} />
           </label>
           {canBook && <button onClick={() => openBooking(r)} className={btn}>↔ Перенести</button>}
-          <button onClick={() => { if (window.confirm('Вернуть заявку в пул? Время снимется, менеджер увидит её снова как новую.')) act(r, { action: 'unassign' }, 'Заявка вернулась в пул.') }}
+          <button onClick={async () => { if (await confirmDialog({ title: 'Вернуть заявку в пул?', text: 'Время снимется, заявка снова станет новой для всех замерщиков.', confirmLabel: 'Вернуть в пул' })) act(r, { action: 'unassign' }, 'Заявка вернулась в пул.') }}
             className={btn}>↩ В пул</button>
         </div>
         {open && openFor?.kind === 'book' && bookingForm(r, '✅ Перенести')}
@@ -360,7 +361,7 @@ export default function MeasurerCabinetPage() {
                       {r.fee_status === 'paid' ? 'выплачено' : 'к выплате'}
                     </span>
                     {isOwner && r.status === 'done' && r.fee_status !== 'paid' && (
-                      <button onClick={() => { if (window.confirm(`Отметить выплату ${fmt(r.measurer_fee)} замерщику ${r.measurer_name ?? ''}?`)) act(r, { action: 'fee_paid' }, 'Выплата отмечена.') }}
+                      <button onClick={async () => { if (await confirmDialog({ title: 'Отметить выплату?', text: `${fmt(r.measurer_fee)} замерщику ${r.measurer_name ?? ''} за ${r.deal_number || `#${r.id}`}.`, confirmLabel: 'Выплачено' })) act(r, { action: 'fee_paid' }, 'Выплата отмечена.') }}
                         disabled={busy === r.id}
                         className="text-[11px] font-semibold bg-emerald-600 text-white rounded-lg px-2 py-1 hover:bg-emerald-700 disabled:opacity-40">💰 Выплачено</button>
                     )}
