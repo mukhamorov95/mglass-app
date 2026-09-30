@@ -1,3 +1,5 @@
+import { appUrl as publicAppUrl } from '@/lib/appUrl'
+
 // Sends email via Resend API. Requires RESEND_API_KEY (+ NOTIFY_ADMIN_EMAIL for admin mail).
 // If the key is missing, everything here is a graceful no-op — почта опциональна.
 
@@ -83,7 +85,7 @@ export async function notifyApprovalRequired(params: {
   const adminEmail = process.env.NOTIFY_ADMIN_EMAIL
   if (!apiKey || !adminEmail) return
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const appUrl = publicAppUrl()
 
   await fetch('https://api.resend.com/emails', {
     method: 'POST',

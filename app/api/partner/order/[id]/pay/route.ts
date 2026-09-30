@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { createPaymentLink, paymentsEnabled } from '@/lib/payments/provider'
+import { appUrl } from '@/lib/appUrl'
 
 // A2: инициировать онлайн-оплату по своему заказу. Пока эквайринг не подключён —
 // 501 «оплата онлайн ещё не подключена» (кнопка в кабинете и так скрыта). Когда
@@ -38,7 +39,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const amount = Number(order.total_after_discount ?? order.total_sale_inc_vat ?? 0) || 0
   if (amount <= 0) return NextResponse.json({ error: 'Нулевая сумма' }, { status: 400 })
   const number = (order.custom_number as string | null)?.trim() || `#${oid}`
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin).replace(/\/$/, '')
+  const base = appUrl()
 
   const link = await createPaymentLink({
     orderId: oid, amount, description: `Оплата заказа ${number} · M-Glass`,

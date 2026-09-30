@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { notifyAdmins } from '@/lib/telegram'
 import { pushNotification } from '@/lib/partnerNotify'
+import { appUrl } from '@/lib/appUrl'
 
 // A17: гарантия/сервис — заявки на рекламацию. GET — свои заявки. POST — создать
 // по своему заказу (тип + описание). Менеджеру сигнал в Telegram, партнёру запись
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     .select('id').maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const base = appUrl()
   await notifyAdmins(
     `⚠️ <b>Рекламация от партнёра</b>\n${client.name}${orderId ? ` · заказ #${orderId}` : ''}\n${KIND_LABEL[kind]}: ${description}` +
     (base ? `\n${base}/b2b-quotes` : ''),

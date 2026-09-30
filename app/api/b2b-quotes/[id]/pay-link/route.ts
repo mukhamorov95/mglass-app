@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createPaymentLink, paymentsEnabled } from '@/lib/payments/provider'
 import { parseNotes } from '@/lib/b2b/publicQuote'
+import { appUrl } from '@/lib/appUrl'
 
 // А8: менеджер получает ссылку на оплату по заказу и отправляет её клиенту.
 // Провайдер общий с кабинетом партнёра (lib/payments/provider): пока эквайринг
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (amount <= 0) return NextResponse.json({ error: 'Нечего оплачивать' }, { status: 400 })
 
   const number = (order.custom_number as string | null)?.trim() || `#${orderId}`
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin).replace(/\/$/, '')
+  const base = appUrl()
   const link = await createPaymentLink({
     orderId, amount,
     description: `Оплата заказа ${number} · M-Glass`,
