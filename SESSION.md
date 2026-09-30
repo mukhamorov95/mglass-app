@@ -1,3 +1,22 @@
+## Задача (30.09): «Дублировать» в /calculations молча ничего не делал
+У `calculations` RLS включён, INSERT-политики нет (проба 30.09: admin и менеджер — «new row violates row-level
+security policy»), а duplicateCalc вставлял из браузера и ошибку не читал (`if (data) …`) — кнопка не делала ничего.
+- СДЕЛАНО: POST /api/calculations/[id]/duplicate — исходник читается под RLS вызывающего, свой или «видит все
+  расчёты» (seesAllCalculations: admin/ceo или галка «Все сделки» — то же, что у списка), те же инварианты
+  checkCalculation (lib/calcDuplicate.ts buildDuplicate), вставка service-role. Сделка, заказ, номер заказа и
+  parent_calc_id не копируются. INSERT-политику НЕ открывали.
+- lib/calcAccess.ts: calcWriter() (бывший actor() из save/route.ts) и seesAllCalculations(); page.tsx и save/route.ts
+  на них; CALC_PRODUCT_TYPES в lib/calcInvariants.ts.
+- CalculationsClient: updateStatus, deleteCalc, deleteGroup, updateGroupStatus, saveClientInfo, saveGroupInfo —
+  `.select('id')` + writeFailure; экран меняет только строки, которые база вернула; у заказа частичный успех назван
+  («N из M»); форма клиента при отказе остаётся открытой с введённым. Итог — плашка внизу (ошибка до закрытия).
+  Ошибка загрузки списка больше не выглядит как «Расчётов не найдено».
+- Проверка: tsc, eslint (0 ошибок), vitest 1513/1513 (+8 в __tests__/calcDuplicate.test.ts, мутации пойманы);
+  вставка ровно этого набора колонок — проба в откатываемом DO-блоке: rows=1, draft, без группы и номера.
+- Живые данные: все 4 расчёта build без клиента — их копия получит отказ «Нужно имя клиента…» (инвариант).
+- PR #723 (RLS расчётов) не накатан; после него чужой расчёт менеджеру без галок → 404 «не найден или нет доступа».
+- Не чинил: PATCH /api/calculations/save читает existing без error — сбой чтения отвечает 404 «Расчёт не найден».
+
 ## Параллельная задача (29.09): ни одна заявка без разбора
 Маршрут — docs/LEAD_DAY_NOTES_ROUTE.md. Владелец 29.09: пропущенный звонок → задача «перезвонить» в amo;
 вечером по каждой заявке примечание «что хорошо / плохо / внимание / завтра». **Решение Р1: писать примечание

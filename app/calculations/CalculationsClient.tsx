@@ -8,6 +8,8 @@ import type { LaunchOrderPayload } from '@/components/LaunchOrderModal'
 import type { FinancialSettings } from '@/lib/types'
 import { computeMarginStatus, MARGIN_STATUS_LABELS } from '@/lib/types'
 import { calcDetail } from '@/lib/calcLabel'
+import { CALC_LIST_COLS } from '@/lib/calcDuplicate'
+import { writeFailure } from '@/lib/rlsWrite'
 
 type Calc = {
   id: number
@@ -155,6 +157,12 @@ function aggregateGlass(items: Calc[]): (GlassEntry & { count: number })[] {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'))
 }
 
+// Как человек узнаёт расчёт в сообщении: номера расчёта в списке нет.
+function calcTitle(c: Calc): string {
+  const label = PRODUCT_LABELS[c.product_type]?.label ?? c.product_type
+  return [label, getDesc(c), c.client_name].filter(Boolean).join(' · ')
+}
+
 function getProductName(c: Calc): string {
   const d = c.input_data
   const label = PRODUCT_LABELS[c.product_type]?.label ?? c.product_type
@@ -222,6 +230,15 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
   const [groupClientName, setGroupClientName] = useState('')
   const [groupClientPhone, setGroupClientPhone] = useState('')
   const [savingGroup, setSavingGroup]         = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  // Итог записи: ошибка висит, пока её не закроют; успех гаснет сам.
+  const [notice, setNotice] = useState<{ tone: 'error' | 'ok'; text: string } | null>(null)
+
+  useEffect(() => {
+    if (notice?.tone !== 'ok') return
+    const t = setTimeout(() => setNotice(null), 8000)
+    return () => clearTimeout(t)
+  }, [notice])
 
   // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { fetchCalcs() }, [])
@@ -230,40 +247,66 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
     const supabase = createClient()
     let query = supabase
       .from('calculations')
-      .select('id,created_at,created_by,product_type,input_data,cost_breakdown,financial_breakdown,base_price,discount,partner_percent,final_price,margin,profit,manager_bonus,status,client_text,client_name,client_phone,order_group_id,order_number')
+      .select(CALC_LIST_COLS)
       .order('created_at', { ascending: false })
     if (!canViewAll && userId) {
       query = query.eq('created_by', userId)
     }
-    const { data } = await query
-    setCalcs((data ?? []) as Calc[])
+    const { data, error } = await query
+    setLoadError(error ? error.message : null)
+    setCalcs((data ?? []) as unknown as Calc[])
     setLoading(false)
   }
 
+  function groupSize(groupId: string) {
+    return calcs.filter(c => c.order_group_id === groupId).length
+  }
+
+  // Запрещённый политикой UPDATE/DELETE не даёт ошибку, а меняет 0 строк
+  // (lib/rlsWrite.ts), поэтому каждая запись ниже судится по вернувшимся id,
+  // и экран меняет только те строки, которые база действительно приняла.
   async function updateStatus(id: number, status: string) {
-    const supabase = createClient()
-    await supabase.from('calculations').update({ status }).eq('id', id)
+    setNotice(null)
+    const res = await createClient().from('calculations').update({ status }).eq('id', id).select('id')
+    const failed = writeFailure(res)
+    if (failed) { setNotice({ tone: 'error', text: `${failed} — статус остался прежним` }); return }
     setCalcs(prev => prev.map(c => c.id === id ? { ...c, status } : c))
   }
 
   async function deleteCalc(id: number) {
     if (!confirm('Удалить этот расчёт?')) return
-    const supabase = createClient()
-    await supabase.from('calculations').delete().eq('id', id)
+    setNotice(null)
+    const res = await createClient().from('calculations').delete().eq('id', id).select('id')
+    const failed = writeFailure(res, 'delete')
+    if (failed) { setNotice({ tone: 'error', text: `${failed} — расчёт остался в списке` }); return }
     setCalcs(prev => prev.filter(c => c.id !== id))
   }
 
   async function deleteGroup(groupId: string) {
     if (!confirm('Удалить весь заказ (все изделия в группе)?')) return
-    const supabase = createClient()
-    await supabase.from('calculations').delete().eq('order_group_id', groupId)
-    setCalcs(prev => prev.filter(c => c.order_group_id !== groupId))
+    setNotice(null)
+    const total = groupSize(groupId)
+    const res = await createClient().from('calculations').delete().eq('order_group_id', groupId).select('id')
+    const failed = writeFailure(res, 'delete')
+    if (failed) { setNotice({ tone: 'error', text: `${failed} — заказ остался в списке` }); return }
+    const gone = new Set((res.data ?? []).map(r => r.id))
+    setCalcs(prev => prev.filter(c => !gone.has(c.id)))
+    if (gone.size < total) {
+      setNotice({ tone: 'error', text: `Удалено ${gone.size} из ${total} изделий заказа — остальные база не дала удалить, они остались в списке` })
+    }
   }
 
   async function updateGroupStatus(groupId: string, status: string) {
-    const supabase = createClient()
-    await supabase.from('calculations').update({ status }).eq('order_group_id', groupId)
-    setCalcs(prev => prev.map(c => c.order_group_id === groupId ? { ...c, status } : c))
+    setNotice(null)
+    const total = groupSize(groupId)
+    const res = await createClient().from('calculations').update({ status }).eq('order_group_id', groupId).select('id')
+    const failed = writeFailure(res)
+    if (failed) { setNotice({ tone: 'error', text: `${failed} — статус заказа остался прежним` }); return }
+    const done = new Set((res.data ?? []).map(r => r.id))
+    setCalcs(prev => prev.map(c => done.has(c.id) ? { ...c, status } : c))
+    if (done.size < total) {
+      setNotice({ tone: 'error', text: `Статус сменился у ${done.size} из ${total} изделий заказа — у остальных база не дала прав на правку` })
+    }
   }
 
   // «Открыть» для quick/build → в калькулятор для ПЕРЕСЧЁТА (владелец: «открыть и
@@ -284,25 +327,31 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
     window.location.assign(r.dest)
   }
 
+  // Копию пишет сервер: INSERT-политики у calculations нет, из браузера вставка
+  // отвергается всем ролям (проба 30.09.2026).
   async function duplicateCalc(c: Calc) {
     setDuplicating(c.id)
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    const { data } = await supabase
-      .from('calculations')
-      .insert({
-        product_type: c.product_type, input_data: c.input_data,
-        cost_breakdown: c.cost_breakdown, financial_breakdown: c.financial_breakdown,
-        base_price: c.base_price, discount: c.discount, partner_percent: c.partner_percent,
-        final_price: c.final_price, margin: c.margin, profit: c.profit,
-        manager_bonus: c.manager_bonus, client_text: c.client_text,
-        client_name: c.client_name, client_phone: c.client_phone,
-        created_by: session?.user.id ?? null, status: 'draft',
+    setNotice(null)
+    try {
+      const r = await fetch(`/api/calculations/${c.id}/duplicate`, { method: 'POST' })
+      const j = await r.json().catch(() => null) as { calc?: Calc; error?: string } | null
+      if (!r.ok || !j?.calc) {
+        setNotice({ tone: 'error', text: `Не продублировано «${calcTitle(c)}»: ${j?.error ?? `сервер ответил ${r.status}`}` })
+        return
+      }
+      const copy = j.calc
+      setCalcs(prev => [copy, ...prev])
+      const hiddenBy = filterStatus !== 'all' && filterStatus !== 'draft' ? STATUS_META[filterStatus]?.label : null
+      setNotice({
+        tone: 'ok',
+        text: `Копия «${calcTitle(copy)}» сохранена черновиком — первой в списке`
+          + (hiddenBy ? `; сейчас её скрывает фильтр «${hiddenBy}», выберите «Все статусы»` : ''),
       })
-      .select('id,created_at,created_by,product_type,input_data,cost_breakdown,financial_breakdown,base_price,discount,partner_percent,final_price,margin,profit,manager_bonus,status,client_text,client_name,client_phone,order_group_id')
-      .single()
-    if (data) setCalcs(prev => [data as Calc, ...prev])
-    setDuplicating(null)
+    } catch {
+      setNotice({ tone: 'error', text: `Не продублировано «${calcTitle(c)}»: нет связи с сервером` })
+    } finally {
+      setDuplicating(null)
+    }
   }
 
   function openClientEdit(c: Calc) {
@@ -314,12 +363,19 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
 
   async function saveClientInfo(id: number) {
     setSavingClient(true)
-    const supabase = createClient()
-    await supabase.from('calculations').update({
+    setNotice(null)
+    const res = await createClient().from('calculations').update({
       order_number: orderNumDraft.trim() || null,
       client_name:  clientNameDraft.trim() || null,
       client_phone: clientPhoneDraft.trim() || null,
-    }).eq('id', id)
+    }).eq('id', id).select('id')
+    const failed = writeFailure(res)
+    if (failed) {
+      // Поля остаются открытыми с введённым — можно повторить, ничего не набирая заново.
+      setNotice({ tone: 'error', text: `${failed} — клиент и номер заказа не изменены` })
+      setSavingClient(false)
+      return
+    }
     setCalcs(prev => prev.map(c => c.id === id
       ? { ...c, order_number: orderNumDraft.trim() || null, client_name: clientNameDraft.trim() || null, client_phone: clientPhoneDraft.trim() || null }
       : c
@@ -338,16 +394,27 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
 
   async function saveGroupInfo(groupId: string) {
     setSavingGroup(true)
-    const supabase = createClient()
-    await supabase.from('calculations').update({
+    setNotice(null)
+    const total = groupSize(groupId)
+    const res = await createClient().from('calculations').update({
       order_number: groupOrderNum.trim() || null,
       client_name:  groupClientName.trim() || null,
       client_phone: groupClientPhone.trim() || null,
-    }).eq('order_group_id', groupId)
-    setCalcs(prev => prev.map(c => c.order_group_id === groupId
+    }).eq('order_group_id', groupId).select('id')
+    const failed = writeFailure(res)
+    if (failed) {
+      setNotice({ tone: 'error', text: `${failed} — клиент и номер заказа не изменены` })
+      setSavingGroup(false)
+      return
+    }
+    const done = new Set((res.data ?? []).map(r => r.id))
+    setCalcs(prev => prev.map(c => done.has(c.id)
       ? { ...c, order_number: groupOrderNum.trim() || null, client_name: groupClientName.trim() || null, client_phone: groupClientPhone.trim() || null }
       : c
     ))
+    if (done.size < total) {
+      setNotice({ tone: 'error', text: `Клиент сохранён у ${done.size} из ${total} изделий заказа — у остальных база не дала прав на правку` })
+    }
     setEditingGroup(null)
     setSavingGroup(false)
   }
@@ -462,6 +529,11 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
         {/* Cards */}
         {loading ? (
           <div className="py-16 text-center text-[#9a9a95] text-sm">Загрузка...</div>
+        ) : loadError ? (
+          <div className="py-16 text-center">
+            <p className="text-red-600 text-sm mb-1">Не удалось загрузить расчёты: {loadError}</p>
+            <p className="text-[#9a9a95] text-xs">Обновите страницу. Расчёты в базе не тронуты.</p>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center">
             <p className="text-[#9a9a95] text-sm mb-2">Расчётов не найдено</p>
@@ -830,6 +902,15 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
           )
         })()}
       </div>
+
+      {notice && (
+        <div role={notice.tone === 'error' ? 'alert' : 'status'}
+          className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-32px)] max-w-lg flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg text-[13px] ${
+            notice.tone === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
+          <span className="flex-1">{notice.text}</span>
+          <button onClick={() => setNotice(null)} aria-label="Закрыть" className="opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
 
       <LaunchOrderModal
         isOpen={!!launchCalc}
