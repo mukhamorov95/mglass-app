@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { Material, MATERIAL_CATEGORIES } from '@/lib/types'
+import { writeFailure, NOT_DELETED_NO_RIGHTS } from '@/lib/rlsWrite'
+import { toast, sendOrToast, loadJson } from '@/lib/toast'
 
 const UNITS = ['м²', 'пог.м', 'шт', 'заказ', 'этаж', 'изделие']
 
@@ -58,9 +60,9 @@ export default function MaterialsAdminPage() {
     const fd = new FormData()
     fd.append('materialId', String(materialId))
     fd.append('file', file)
-    await fetch('/api/admin/materials/upload', { method: 'POST', body: fd })
+    const r = await sendOrToast('Фото не загружено', '/api/admin/materials/upload', { method: 'POST', body: fd })
     setUploadingId(null)
-    load()
+    if (r) load()
   }
 
   const triggerUpload = (id: number) => {
@@ -69,8 +71,8 @@ export default function MaterialsAdminPage() {
   }
 
   const removeImage = async (id: number) => {
-    await fetch(`/api/admin/materials/upload?materialId=${id}`, { method: 'DELETE' })
-    load()
+    const r = await sendOrToast('Фото не удалено', `/api/admin/materials/upload?materialId=${id}`, { method: 'DELETE' })
+    if (r) load()
   }
 
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
@@ -113,8 +115,13 @@ export default function MaterialsAdminPage() {
     if (selectedForClear.size === 0) return
     if (!confirm(`Удалить ${selectedForClear.size} позиций? Это действие нельзя отменить.`)) return
     const supabase = createClient()
-    await supabase.from('materials').delete().in('id', [...selectedForClear])
-    setSelectedForClear(new Set())
+    const ids = [...selectedForClear]
+    const { data, error } = await supabase.from('materials').delete().in('id', ids).select('id')
+    const deleted = new Set((data ?? []).map((r: { id: number }) => r.id))
+    if (error) toast.error('Не удалено', { detail: error.message })
+    else if (deleted.size === 0) toast.error(NOT_DELETED_NO_RIGHTS)
+    else if (deleted.size < ids.length) toast.error(`Удалено ${deleted.size} из ${ids.length}`, { detail: 'Остальные не удалены — нет прав или их уже нет. Они остались отмечены.' })
+    setSelectedForClear(new Set(ids.filter(id => !deleted.has(id))))
     await load()
   }
 
@@ -128,14 +135,14 @@ export default function MaterialsAdminPage() {
       sale_price: form.sale_price !== null && form.sale_price !== undefined && String(form.sale_price) !== ''
         ? Number(form.sale_price) : null,
     }
-    if (editingId !== null) {
-      const { error } = await supabase.from('materials').update(payload).eq('id', editingId)
-      if (error) { setError(error.message); setSaving(false); return }
-      setEditingId(null)
-    } else {
-      const { error } = await supabase.from('materials').insert(payload)
-      if (error) { setError(error.message); setSaving(false); return }
-    }
+    // Запрещённый политикой UPDATE не даёт ошибку — судим по вернувшимся строкам;
+    // при отказе форма остаётся открытой с введённым.
+    const res = editingId !== null
+      ? await supabase.from('materials').update(payload).eq('id', editingId).select('id')
+      : await supabase.from('materials').insert(payload).select('id')
+    const fail = writeFailure(res)
+    if (fail) { setError(fail); setSaving(false); return }
+    setEditingId(null)
     setForm(EMPTY)
     await load()
     setSaving(false)
@@ -164,21 +171,23 @@ export default function MaterialsAdminPage() {
   async function deleteMaterial(id: number, name: string) {
     if (!confirm(`Удалить «${name}»? Это действие нельзя отменить.`)) return
     const supabase = createClient()
-    const { error } = await supabase.from('materials').delete().eq('id', id)
-    if (error) { setError(error.message); return }
+    const fail = writeFailure(await supabase.from('materials').delete().eq('id', id).select('id'), 'delete')
+    if (fail) { toast.error(fail, { detail: name }); return }
     setMaterials(prev => prev.filter(m => m.id !== id))
     if (editingId === id) cancelEdit()
   }
 
   async function toggleActive(id: number, active: boolean) {
     const supabase = createClient()
-    await supabase.from('materials').update({ active: !active }).eq('id', id)
+    const fail = writeFailure(await supabase.from('materials').update({ active: !active }).eq('id', id).select('id'))
+    if (fail) { toast.error(fail); return }
     load()
   }
 
   async function toggleStock(id: number, in_stock: boolean) {
     const supabase = createClient()
-    await supabase.from('materials').update({ in_stock: !in_stock }).eq('id', id)
+    const fail = writeFailure(await supabase.from('materials').update({ in_stock: !in_stock }).eq('id', id).select('id'))
+    if (fail) { toast.error(fail); return }
     setMaterials(prev => prev.map(m => m.id === id ? { ...m, in_stock: !in_stock } : m))
   }
 
@@ -186,7 +195,7 @@ export default function MaterialsAdminPage() {
     if (!transfer || !transfer.target) return
     if (transfer.target === 'mirror_lighting' && !transfer.componentType) return
     setTransfer(t => t ? { ...t, transferring: true, error: null } : t)
-    const res = await fetch('/api/admin/materials/transfer', {
+    const { error } = await loadJson('/api/admin/materials/transfer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -196,9 +205,8 @@ export default function MaterialsAdminPage() {
         systemType:    transfer.systemType,
       }),
     })
-    const data = await res.json()
-    if (!res.ok) {
-      setTransfer(t => t ? { ...t, transferring: false, error: data.error } : t)
+    if (error) {
+      setTransfer(t => t ? { ...t, transferring: false, error } : t)
       return
     }
     setTransfer(null)
