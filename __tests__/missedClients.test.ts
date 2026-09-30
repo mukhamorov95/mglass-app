@@ -7,7 +7,7 @@ const stageNames = new Map([['1654237:49559185', 'Продажи → Кп отп
 const extToUser = new Map([['100', SEMEN], ['103', ALINA]])
 const T = 1790000000
 const lead = (over: Partial<AmoLeadHit>): AmoLeadHit =>
-  ({ id: 1, name: 'сделка', responsible_user_id: ALINA, pipeline_id: 1654237, status_id: 49559185, updated_at: T, ...over })
+  ({ id: 1, name: 'сделка', responsible_user_id: ALINA, pipeline_id: 1654237, status_id: 49559185, created_at: T, updated_at: T, ...over })
 const base = { names, stageNames, extToUser, domain: 'mglass.amocrm.ru', touches: [], amoRang: [] as number[] }
 
 describe('чей пропущенный клиент', () => {

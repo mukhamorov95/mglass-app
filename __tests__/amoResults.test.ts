@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAmoResults, stageKey, stageId, type StatusEvent } from '@/lib/amoResults'
+import { buildAmoResults, stageKey, stageId, type ContactEvent, type StatusEvent } from '@/lib/amoResults'
 
 const SALES = 1654237
 const QUAL = 8060186
@@ -24,6 +24,8 @@ const moved = (by: number, lead: number, status: number, ts = at(12), pipeline =
     value_after: [{ lead_status: { id: status, pipeline_id: pipeline } }],
     value_before: from ? [{ lead_status: { id: from, pipeline_id: pipeline } }] : null,
   })
+const touch = (lead: number, ts: number, type = 'outgoing_chat_message', by = SEMEN, talk?: number): ContactEvent =>
+  ({ type, entity_id: lead, entity_type: 'lead', created_by: by, created_at: ts, value_after: talk ? [{ message: { talk_id: talk, origin: 'com.wazzup24.wz' } }] : null })
 
 const build = (over: Partial<Parameters<typeof buildAmoResults>[0]>) => buildAmoResults({
   from: monday, to: monday + 7 * 86400, now: at(20),
@@ -94,10 +96,7 @@ describe('результат менеджера', () => {
         { id: 11, responsible_user_id: SEMEN, created_at: at(11), status_id: 143, pipeline_id: SALES },
         { id: 12, responsible_user_id: SEMEN, created_at: at(23), status_id: 1, pipeline_id: SALES },
       ],
-      contacts: [
-        { entity_id: 11, entity_type: 'lead', created_at: at(11, 4) },
-        { entity_id: 10, entity_type: 'lead', created_at: at(9) },
-      ],
+      contacts: [touch(11, at(11, 4)), touch(10, at(9))],
     })
     const s = r.managers[0]
     expect(s.leadsReceived).toBe(3)
@@ -105,6 +104,53 @@ describe('результат менеджера', () => {
     expect(s.leadsNoContact).toBe(1)
     expect(s.firstContactMedianMin).toBe(4)
     expect(s.lostOfReceived).toBe(1)
+  })
+
+  // Живые случаи 29.09: сделки 39509941 и 39507355 — Salesbot и приветствие Wazzup через
+  // 2–5 с после заявки считались первым контактом «через 0 мин».
+  it('автоответ робота после заявки — не первый контакт, считаем до менеджера', () => {
+    const created = at(14, 43) + 27
+    const r = build({
+      newLeads: [{ id: 20, responsible_user_id: SEMEN, created_at: created, status_id: 1, pipeline_id: SALES }],
+      contacts: [
+        touch(20, created + 2, 'outgoing_chat_message', 0, 7),
+        touch(20, created + 98, 'incoming_chat_message', 0, 7),
+        touch(20, created + 258, 'outgoing_chat_message', SEMEN, 7),
+      ],
+    })
+    expect(r.managers[0].firstContactMedianMin).toBe(4)
+    expect(r.managers[0].leadsNoContact).toBe(0)
+  })
+
+  it('клиенту ответил только робот — заявка без контакта', () => {
+    const created = at(10, 17) + 8
+    const r = build({
+      newLeads: [{ id: 21, responsible_user_id: SEMEN, created_at: created, status_id: 1, pipeline_id: SALES }],
+      contacts: [
+        touch(21, created - 2, 'incoming_chat_message', 0, 8),
+        touch(21, created - 2, 'outgoing_chat_message', 0, 8),
+        touch(21, created + 5, 'outgoing_chat_message', 0, 8),
+      ],
+    })
+    expect(r.managers[0].leadsNoContact).toBe(1)
+    expect(r.managers[0].firstContactMedianMin).toBeNull()
+  })
+
+  it('звонок сразу после заявки и сообщение с телефона позже 30 с — контакт', () => {
+    const created = at(12)
+    const r = build({
+      newLeads: [
+        { id: 22, responsible_user_id: SEMEN, created_at: created, status_id: 1, pipeline_id: SALES },
+        { id: 23, responsible_user_id: SEMEN, created_at: created, status_id: 1, pipeline_id: SALES },
+      ],
+      contacts: [
+        touch(22, created + 10, 'outgoing_call', SEMEN),
+        touch(23, created + 5, 'incoming_chat_message', 0, 9),
+        touch(23, created + 6 * 60, 'outgoing_chat_message', 0, 9),
+      ],
+    })
+    expect(r.managers[0].leadsNoContact).toBe(0)
+    expect(r.managers[0].firstContactMedianMin).toBe(3)
   })
 
   it('просроченные задачи и старше 30 дней', () => {

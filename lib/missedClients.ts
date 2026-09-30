@@ -5,7 +5,7 @@
 // номер, которого в amo нет вовсе. Чистые функции — данные собирает lib/pbxCallsFetch.ts.
 
 export type AmoContactHit = { id: number; name: string; responsible_user_id: number; leads: number[] }
-export type AmoLeadHit = { id: number; name: string; responsible_user_id: number; pipeline_id: number; status_id: number; updated_at: number }
+export type AmoLeadHit = { id: number; name: string; responsible_user_id: number; pipeline_id: number; status_id: number; created_at: number; updated_at: number }
 export type TouchEvent = { type: string; created_by: number; created_at: number }
 
 export type MissedClient = {

@@ -3,7 +3,8 @@ import { amoGet, amoGetAll, getDomain, getPipelines } from '@/lib/amocrm'
 import { getAmoUserNames } from '@/lib/amoPeople'
 import { isOnlinePbxConfigured, onlinePbxHistory } from '@/lib/onlinepbx'
 import { extFromRecordLink, normalizePbxCall, summarizePbx, type PbxCall, type PbxSummary } from '@/lib/pbxCalls'
-import { describeMissedClient, type AmoContactHit, type AmoLeadHit, type MissedClient, type TouchEvent } from '@/lib/missedClients'
+import { describeMissedClient, type AmoContactHit, type AmoLeadHit, type MissedClient } from '@/lib/missedClients'
+import { dropAutoReplies, type AmoActivityEvent } from '@/lib/amoActivity'
 
 export type PbxReport =
   | { configured: false }
@@ -80,6 +81,7 @@ export async function describeMissed(list: PbxSummary['missedNotCalledBackList']
   for (let i = 0; i < leadIds.length; i += 200) chunks.push(leadIds.slice(i, i + 200))
   const leads = new Map((await inBatches(chunks, 2, ids =>
     amoGetAll<AmoLeadHit>('/leads', { 'filter[id][]': ids.map(String) }, 'leads'))).flat().map(l => [l.id, l]))
+  const leadCreatedAt = new Map([...leads.values()].map(l => [l.id, l.created_at]))
 
   const touchesByPhone = await inBatches(list.map((item, i) => ({ item, contacts: contactsByPhone[i] })), 2, async ({ item, contacts }) => {
     const byEntity = [
@@ -87,13 +89,14 @@ export async function describeMissed(list: PbxSummary['missedNotCalledBackList']
       ['contact', contacts.map(c => c.id)],
     ] as const
     const parts = await Promise.all(byEntity.filter(([, ids]) => ids.length > 0).map(([entity, ids]) =>
-      amoGetAll<TouchEvent>('/events', {
+      amoGetAll<AmoActivityEvent>('/events', {
         'filter[entity]': entity,
         'filter[entity_id][]': ids.slice(0, 10).map(String),
-        'filter[type][]': ['outgoing_chat_message', 'outgoing_call'],
+        'filter[type][]': ['incoming_chat_message', 'outgoing_chat_message', 'outgoing_call'],
         'filter[created_at][from]': String(item.at),
       }, 'events')))
-    return parts.flat()
+    // приветствие робота клиенту, написавшему после звонка, — не перезвон и не ответ
+    return dropAutoReplies(parts.flat(), leadCreatedAt).filter(e => e.type !== 'incoming_chat_message')
   })
 
   const digits = (s: unknown) => String(s ?? '').replace(/\D/g, '')

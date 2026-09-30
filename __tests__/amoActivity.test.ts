@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  buildAmoActivity, callKind, replyEpisodes, mskDayStart, mskDay, fmtTime, median,
+  buildAmoActivity, callKind, replyEpisodes, dropAutoReplies, mskDayStart, mskDay, fmtTime, median,
   type AmoActivityEvent, type AmoCallNote,
 } from '@/lib/amoActivity'
 
@@ -11,16 +11,16 @@ const at = (hh: number, mm = 0) => day + hh * 3600 + mm * 60
 
 const ev = (type: string, created_by: number, created_at: number, extra: Partial<AmoActivityEvent> = {}): AmoActivityEvent =>
   ({ type, created_by, created_at, entity_id: 100, entity_type: 'lead', ...extra })
-const chat = (type: 'incoming_chat_message' | 'outgoing_chat_message', by: number, ts: number, talk: number, lead = 100) =>
-  ev(type, by, ts, { entity_id: lead, value_after: [{ message: { talk_id: talk } }] })
+const chat = (type: 'incoming_chat_message' | 'outgoing_chat_message', by: number, ts: number, talk: number, lead = 100, origin = 'com.wazzup24.wz') =>
+  ev(type, by, ts, { entity_id: lead, value_after: [{ message: { talk_id: talk, origin } }] })
 const call = (id: number, note_type: string, by: number, ts: number, status: number, duration = 60): AmoCallNote =>
   ({ id, note_type, created_by: by, created_at: ts, params: { call_status: status, duration } })
 
-const build = (events: AmoActivityEvent[], callNotes: AmoCallNote[] = [], resp: [number, number][] = [[100, ALINA]]) =>
+const build = (events: AmoActivityEvent[], callNotes: AmoCallNote[] = [], resp: [number, number][] = [[100, ALINA]], created: [number, number][] = []) =>
   buildAmoActivity({
     from: day, to: day + 86400,
     users: [{ id: ALINA, name: 'Алина' }, { id: YANA, name: 'Яна' }],
-    events, callNotes, leadResponsible: new Map(resp),
+    events, callNotes, leadResponsible: new Map(resp), leadCreatedAt: new Map(created),
   })
 
 describe('время по Москве', () => {
@@ -166,5 +166,86 @@ describe('клиент остался ждать', () => {
       chat('outgoing_chat_message', 0, at(18, 0), 9),
     ])
     expect(r.managers[0].days[0].leftWaiting).toBe(0)
+  })
+})
+
+// Живые случаи 23–29.09: сделка 39507355 (беседа 12129) — приветствие Wazzup в ту же секунду,
+// что и сообщение клиента, и Salesbot через 5 с после создания сделки; сделка 39509941
+// (беседа 12131) — Salesbot через 2 с после создания, клиент написал позже.
+describe('автоответ робота — не ответ', () => {
+  const kept = (events: AmoActivityEvent[], created: [number, number][] = []) =>
+    dropAutoReplies(events, new Map(created)).map(e => `${e.type === 'incoming_chat_message' ? 'in' : 'out'}@${e.created_at - day}`)
+
+  it('приветствие в ту же секунду, что и первое сообщение клиента, — убираем, в каком бы порядке amo их ни отдал', () => {
+    const t = at(10, 17) + 6
+    expect(kept([chat('outgoing_chat_message', 0, t, 1), chat('incoming_chat_message', 0, t, 1)])).toEqual([`in@${t - day}`])
+    expect(kept([chat('incoming_chat_message', 0, t, 1), chat('outgoing_chat_message', 0, t, 1)])).toEqual([`in@${t - day}`])
+  })
+
+  it('Salesbot через секунды после создания сделки — убираем, даже если клиент ещё не писал', () => {
+    const created = at(14, 43) + 27
+    expect(kept([chat('outgoing_chat_message', 0, created + 2, 2)], [[100, created]])).toEqual([])
+    expect(kept([chat('outgoing_chat_message', 0, created + 31, 2)], [[100, created]])).toHaveLength(1)
+  })
+
+  it('первое сообщение после часа тишины открывает беседу заново — приветствие на него тоже автоответ', () => {
+    const r = kept([
+      chat('outgoing_chat_message', ALINA, at(9, 0), 3),
+      chat('incoming_chat_message', 0, at(10, 12), 3),
+      chat('outgoing_chat_message', 0, at(10, 12), 3),
+    ])
+    expect(r).toEqual([`out@${at(9, 0) - day}`, `in@${at(10, 12) - day}`])
+  })
+
+  it('быстрый ответ без автора посреди переписки — менеджер с телефона, не трогаем', () => {
+    const r = kept([
+      chat('incoming_chat_message', 0, at(12, 0), 4),
+      chat('outgoing_chat_message', 0, at(12, 5), 4),
+      chat('incoming_chat_message', 0, at(12, 20), 4),
+      chat('outgoing_chat_message', 0, at(12, 20) + 1, 4),
+      chat('incoming_chat_message', 0, at(12, 40), 4),
+      chat('outgoing_chat_message', 0, at(12, 40) + 12, 4),
+    ])
+    expect(r).toHaveLength(6)
+  })
+
+  it('с автором, позже 30 секунд и в Авито (там пишет ИИ-продавец) — это ответы', () => {
+    const t = at(11, 0)
+    expect(kept([chat('incoming_chat_message', 0, t, 5), chat('outgoing_chat_message', ALINA, t + 1, 5)])).toHaveLength(2)
+    expect(kept([chat('incoming_chat_message', 0, t, 6), chat('outgoing_chat_message', 0, t + 31, 6)])).toHaveLength(2)
+    expect(kept([chat('incoming_chat_message', 0, t, 7, 100, 'avito'), chat('outgoing_chat_message', 0, t + 10, 7, 100, 'avito')])).toHaveLength(2)
+  })
+
+  it('звонки и чужие беседы правило не задевает', () => {
+    const t = at(11, 0)
+    const r = kept([
+      chat('incoming_chat_message', 0, t, 8),
+      ev('outgoing_call', ALINA, t + 5),
+      chat('outgoing_chat_message', 0, t + 5, 9, 200),
+    ])
+    expect(r).toHaveLength(3)
+  })
+
+  it('ответ клиенту меряется до менеджера, автоответ не идёт ни в медиану, ни в «+N»', () => {
+    const t = at(10, 17) + 6
+    const r = build([
+      chat('outgoing_chat_message', 0, t, 12),
+      chat('incoming_chat_message', 0, t, 12),
+      chat('outgoing_chat_message', 0, t + 7, 12),
+      chat('outgoing_chat_message', ALINA, at(10, 55) + 42, 12),
+    ], [], [[100, ALINA]], [[100, t + 2]])
+    const d = r.managers[0].days[0]
+    expect(d.replyMinutes).toEqual([39])
+    expect(d.messagesNoAuthor).toBe(0)
+    expect(d.messagesOwn).toBe(1)
+    expect(r.autoReplies).toBe(2)
+  })
+
+  it('клиенту ответил только робот — «без ответа»', () => {
+    const t = at(15, 0)
+    const r = build([chat('incoming_chat_message', 0, t, 13), chat('outgoing_chat_message', 0, t + 3, 13)])
+    const d = r.managers[0].days[0]
+    expect(d.unanswered).toBe(1)
+    expect(d.replyMinutes).toEqual([])
   })
 })
