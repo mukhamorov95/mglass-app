@@ -102,6 +102,7 @@ export function buildAmoResults(input: {
   newLeads: ResultLead[]
   paidLeads: ResultLead[]
   contacts: ContactEvent[]
+  botSentAt: number[]
   openTasks: OpenTask[]
 }): AmoResultsReport {
   const { from, to, now } = input
@@ -139,10 +140,10 @@ export function buildAmoResults(input: {
     r.paidBudget += l.price ?? 0
   }
 
-  // Автоответ робота через секунды после заявки — не первый контакт (lib/amoActivity.ts)
+  // Робот (автоответ, ИИ-продавец Авито) — не первый контакт (lib/amoActivity.ts)
   const leadCreatedAt = new Map(input.newLeads.map(l => [l.id, l.created_at]))
   const contactsByLead = new Map<number, number[]>()
-  for (const c of dropAutoReplies(input.contacts, leadCreatedAt)) {
+  for (const c of dropAutoReplies(input.contacts, { leadCreatedAt, botSentAt: input.botSentAt })) {
     if (c.entity_type !== 'lead' || !TOUCH.has(c.type)) continue
     const list = contactsByLead.get(c.entity_id) ?? []
     list.push(c.created_at)

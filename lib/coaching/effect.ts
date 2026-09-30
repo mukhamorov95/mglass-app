@@ -3,6 +3,7 @@ import { amoGetAll } from '@/lib/amocrm'
 import { onlinePbxHistory, isOnlinePbxConfigured } from '@/lib/onlinepbx'
 import { normalizePbxCall } from '@/lib/pbxCalls'
 import { dropAutoReplies, type AmoActivityEvent } from '@/lib/amoActivity'
+import { fetchBotSentAt } from '@/lib/botReplies'
 import type { Evidence } from '@/lib/coaching/effectRules'
 
 // Сбор доказательств для замера эффекта: что произошло после утреннего снимка.
@@ -12,12 +13,12 @@ export { isDone, scoreCoaching, type Evidence } from '@/lib/coaching/effectRules
 type Task = { responsible_user_id: number; complete_till: number }
 
 export async function collectEvidence(since: number, now = Math.floor(Date.now() / 1000)): Promise<Evidence> {
-  // входящие — только чтобы узнать автоответ: приветствие робота повод не закрывает. Сделки
-  // из поводов созданы до снимка, так что правило «сразу после создания» здесь не нужно.
+  // входящие — только чтобы узнать автоответ: робот повод не закрывает. Сделки из поводов
+  // созданы до снимка, так что правило «сразу после создания» здесь не нужно.
   const events = dropAutoReplies(await amoGetAll<AmoActivityEvent>('/events', {
     'filter[type][]': ['incoming_chat_message', 'outgoing_chat_message', 'outgoing_call'],
     'filter[created_at][from]': String(since),
-  }, 'events'), new Map())
+  }, 'events'), { leadCreatedAt: new Map(), botSentAt: await fetchBotSentAt(since, now) })
   const touchedLeads = new Set<number>()
   for (const e of events) if (e.entity_type === 'lead' && e.type !== 'incoming_chat_message') touchedLeads.add(e.entity_id)
 

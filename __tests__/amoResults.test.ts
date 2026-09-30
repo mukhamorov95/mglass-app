@@ -24,13 +24,13 @@ const moved = (by: number, lead: number, status: number, ts = at(12), pipeline =
     value_after: [{ lead_status: { id: status, pipeline_id: pipeline } }],
     value_before: from ? [{ lead_status: { id: from, pipeline_id: pipeline } }] : null,
   })
-const touch = (lead: number, ts: number, type = 'outgoing_chat_message', by = SEMEN, talk?: number): ContactEvent =>
-  ({ type, entity_id: lead, entity_type: 'lead', created_by: by, created_at: ts, value_after: talk ? [{ message: { talk_id: talk, origin: 'com.wazzup24.wz' } }] : null })
+const touch = (lead: number, ts: number, type = 'outgoing_chat_message', by = SEMEN, talk?: number, origin = 'com.wazzup24.wz'): ContactEvent =>
+  ({ type, entity_id: lead, entity_type: 'lead', created_by: by, created_at: ts, value_after: talk ? [{ message: { talk_id: talk, origin } }] : null })
 
 const build = (over: Partial<Parameters<typeof buildAmoResults>[0]>) => buildAmoResults({
   from: monday, to: monday + 7 * 86400, now: at(20),
   users: [{ id: ALINA, name: 'Алина' }, { id: SEMEN, name: 'Семён' }],
-  stageNames, statusEvents: [], newLeads: [], paidLeads: [], contacts: [], openTasks: [],
+  stageNames, statusEvents: [], newLeads: [], paidLeads: [], contacts: [], botSentAt: [], openTasks: [],
   ...over,
 })
 
@@ -134,6 +134,25 @@ describe('результат менеджера', () => {
     })
     expect(r.managers[0].leadsNoContact).toBe(1)
     expect(r.managers[0].firstContactMedianMin).toBeNull()
+  })
+
+  // Владелец 30.09: ответ ИИ-продавца Авито «Ивана» менеджеру не засчитывать
+  it('ответ «Ивана» по заявке из Авито — не первый контакт, считаем до менеджера', () => {
+    const created = at(11)
+    const r = build({
+      newLeads: [
+        { id: 24, responsible_user_id: SEMEN, created_at: created, status_id: 1, pipeline_id: SALES },
+        { id: 25, responsible_user_id: SEMEN, created_at: created, status_id: 1, pipeline_id: SALES },
+      ],
+      contacts: [
+        touch(24, created + 12, 'outgoing_chat_message', 0, 10, 'avito'),
+        touch(24, created + 20 * 60, 'outgoing_chat_message', SEMEN, 10, 'avito'),
+        touch(25, created + 9, 'outgoing_chat_message', 0, 11, 'avito'),
+      ],
+      botSentAt: [created + 12.6, created + 9.3],
+    })
+    expect(r.managers[0].firstContactMedianMin).toBe(20)
+    expect(r.managers[0].leadsNoContact).toBe(1)
   })
 
   it('звонок сразу после заявки и сообщение с телефона позже 30 с — контакт', () => {

@@ -1,6 +1,7 @@
 import 'server-only'
 import { amoGetAll, type AmoLead } from '@/lib/amocrm'
 import { getAmoUserNames } from '@/lib/amoPeople'
+import { fetchBotSentAt } from '@/lib/botReplies'
 import { buildAmoActivity, type AmoActivityEvent, type AmoCallNote, type AmoActivityReport } from '@/lib/amoActivity'
 
 // Сбор данных для lib/amoActivity.ts. Только GET к AmoCRM.
@@ -18,6 +19,7 @@ export type ActivityRaw = {
   events: AmoActivityEvent[]
   callNotes: AmoCallNote[]
   leads: AmoLead[]
+  botSentAt: number[]
 }
 
 export async function fetchAmoActivity(from: number, to: number): Promise<AmoActivityReport> {
@@ -31,7 +33,7 @@ export function buildFromRaw(from: number, to: number, raw: ActivityRaw): AmoAct
     events: raw.events,
     callNotes: raw.callNotes,
     leadResponsible: new Map(raw.leads.map(l => [l.id, l.responsible_user_id])),
-    leadCreatedAt: new Map(raw.leads.map(l => [l.id, l.created_at])),
+    robots: { leadCreatedAt: new Map(raw.leads.map(l => [l.id, l.created_at])), botSentAt: raw.botSentAt },
   })
 }
 
@@ -41,7 +43,7 @@ export async function fetchActivityRaw(from: number, to: number): Promise<Activi
   for (let t = from; t < to; t += DAY) dayStarts.push(t)
 
   // события — посуточно, по три суток параллельно: лимит amo 7 запросов в секунду
-  const [users, eventsByDay, callNotesByEntity] = await Promise.all([
+  const [users, eventsByDay, callNotesByEntity, botSentAt] = await Promise.all([
     getAmoUserNames(),
     inBatches(dayStarts, 3, a => amoGetAll<AmoActivityEvent>('/events', {
       'filter[created_at][from]': String(a),
@@ -52,6 +54,7 @@ export async function fetchActivityRaw(from: number, to: number): Promise<Activi
       'filter[note_type][]': ['call_in', 'call_out'],
       'filter[updated_at][from]': String(from),
     }, 'notes'))),
+    fetchBotSentAt(from, to),
   ])
   const events = eventsByDay.flat()
 
@@ -63,5 +66,5 @@ export async function fetchActivityRaw(from: number, to: number): Promise<Activi
   const leads = (await inBatches(idChunks, 3, ids =>
     amoGetAll<AmoLead>('/leads', { 'filter[id][]': ids.map(String) }, 'leads'))).flat()
 
-  return { users, events, callNotes: callNotesByEntity.flat(), leads }
+  return { users, events, callNotes: callNotesByEntity.flat(), leads, botSentAt }
 }

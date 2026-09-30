@@ -5,6 +5,7 @@ import { avitoSendMessage, avitoGetSelfId, isAvitoConfigured } from '@/lib/avito
 import { CRM_ZONES } from '@/lib/crmStages'
 import { botGate } from '@/lib/avito/botGate'
 import { muteIfHumanInThread } from '@/lib/avito/humanInThread'
+import { isBotEnabled } from '@/lib/aiKillSwitch'
 
 // Одноразовый «догон» после сбоя AI (кончились кредиты 05.08): находит Авито-лиды,
 // где было «Ошибка AI / AI недоступен» и клиент остался без ответа, и отправляет
@@ -86,6 +87,8 @@ export async function POST(req: NextRequest) {
   if (body.confirm !== true) return NextResponse.json({ error: 'Нужен {"confirm":true}. Сначала посмотрите список через GET.' }, { status: 400 })
 
   const service = db()
+  // Догон пишет от лица Ивана — выключенный бот не пишет ничего, в том числе так
+  if (!(await isBotEnabled(service))) return NextResponse.json({ error: 'Бот Иван выключен (/vladislav) — догон не отправляется' }, { status: 409 })
   const days = Math.min(30, Math.max(1, Number(body.days) || 3))
   const stuck = await collectStuck(service, days, 100)
 

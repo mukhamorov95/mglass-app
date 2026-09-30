@@ -2,6 +2,7 @@ import 'server-only'
 import { amoGetAll, getDomain, getPipelines, type AmoLead } from '@/lib/amocrm'
 import { dropAutoReplies, replyEpisodes, type AmoActivityEvent } from '@/lib/amoActivity'
 import { stageKey } from '@/lib/amoResults'
+import { fetchBotSentAt } from '@/lib/botReplies'
 import { fetchPbxReport, type PbxReport } from '@/lib/pbxCallsFetch'
 import type { LeadFact, MissedFact } from '@/lib/coaching/rules'
 
@@ -31,6 +32,7 @@ export type FocusInput = {
   ids: Set<number>
   now: number
   events: AmoActivityEvent[]
+  botSentAt: number[]
   leadsById: Map<number, Lead>
   stageName: Map<string, string>
   hotLeads: Lead[]
@@ -51,7 +53,7 @@ export function focusFacts(input: FocusInput): Map<number, FocusFacts> {
 
   // автоответ робота — не касание: клиент, которому ответил только он, всё ещё ждёт
   const leadCreatedAt = new Map([...input.leadsById.values(), ...input.newLeads, ...input.hotLeads].map(l => [l.id, l.created_at]))
-  const events = dropAutoReplies(input.events, leadCreatedAt)
+  const events = dropAutoReplies(input.events, { leadCreatedAt, botSentAt: input.botSentAt })
 
   const outgoingByLead = new Map<number, number[]>()
   for (const e of events) {
@@ -160,9 +162,10 @@ export async function collectFocusLive(amoUserId: number, now = Math.floor(Date.
   const { hotLeads, newLeads } = await fetchHotAndNew(hot, now)
   const tasks = await amoGetAll<Task>('/tasks', { 'filter[is_completed]': '0', 'filter[responsible_user_id][]': [String(amoUserId)] }, 'tasks')
   const pbx = await fetchPbxReport(now - 2 * DAY, now).catch(() => null)
+  const botSentAt = await fetchBotSentAt(now - 3 * DAY, now)
 
   return focusFacts({
-    ids: new Set([amoUserId]), now, events,
+    ids: new Set([amoUserId]), now, events, botSentAt,
     leadsById: new Map(leads.map(l => [l.id, l])),
     stageName, hotLeads, newLeads, tasks, pbx, domain,
   }).get(amoUserId) ?? emptyFocus()

@@ -2,6 +2,7 @@ import 'server-only'
 import { amoGetAll, getDomain, getPipelines } from '@/lib/amocrm'
 import { getAmoUserNames } from '@/lib/amoPeople'
 import { dropAutoReplies, replyEpisodes, type AmoActivityEvent } from '@/lib/amoActivity'
+import { fetchBotSentAt } from '@/lib/botReplies'
 import { isWorkingDaytime, stageId, type StatusEvent } from '@/lib/amoResults'
 import { WAIT_MIN } from '@/lib/coaching/focus'
 import { fetchPbxReport } from '@/lib/pbxCallsFetch'
@@ -61,7 +62,7 @@ export async function collectDayFacts(from: number, now: number): Promise<DayFac
     'filter[type][]': EVENT_TYPES,
     'filter[created_at][from]': String(from),
     'filter[created_at][to]': String(now),
-  }, 'events'), new Map(leads.map(l => [l.id, l.created_at])))
+  }, 'events'), { leadCreatedAt: new Map(leads.map(l => [l.id, l.created_at])), botSentAt: await fetchBotSentAt(from, now) })
 
   const tasks: Task[] = []
   for (const ids of chunks([...leadIds], 200)) {
