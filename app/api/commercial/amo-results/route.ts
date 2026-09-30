@@ -4,7 +4,9 @@ import { fetchAmoResults } from '@/lib/amoResultsFetch'
 import { mskDay, mskDayStart } from '@/lib/amoActivity'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+// 90 дней из amo на проде — 59 с (замер 30.09), при открытии экрана вместе с соседними
+// запросами к amo минуты не хватало: экран получал вместо данных страницу ошибки Vercel
+export const maxDuration = 120
 
 // Результат — на длинном окне: оплат у человека единицы в месяц, за неделю выводов не сделать.
 const ALLOWED_DAYS = new Set([30, 90])
