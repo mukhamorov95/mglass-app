@@ -1,6 +1,6 @@
 import 'server-only'
 import { amoGetAll, getDomain, getPipelines, type AmoLead } from '@/lib/amocrm'
-import { replyEpisodes, type AmoActivityEvent } from '@/lib/amoActivity'
+import { dropAutoReplies, replyEpisodes, type AmoActivityEvent } from '@/lib/amoActivity'
 import { stageKey } from '@/lib/amoResults'
 import { fetchPbxReport, type PbxReport } from '@/lib/pbxCallsFetch'
 import type { LeadFact, MissedFact } from '@/lib/coaching/rules'
@@ -49,8 +49,12 @@ export function focusFacts(input: FocusInput): Map<number, FocusFacts> {
   const stageOf = (l: Lead) => input.stageName.get(`${l.pipeline_id}:${l.status_id}`) ?? `этап ${l.status_id}`
   const closed = (l: { status_id: number }) => l.status_id === 142 || l.status_id === 143
 
+  // автоответ робота — не касание: клиент, которому ответил только он, всё ещё ждёт
+  const leadCreatedAt = new Map([...input.leadsById.values(), ...input.newLeads, ...input.hotLeads].map(l => [l.id, l.created_at]))
+  const events = dropAutoReplies(input.events, leadCreatedAt)
+
   const outgoingByLead = new Map<number, number[]>()
-  for (const e of input.events) {
+  for (const e of events) {
     if (e.entity_type !== 'lead' || (e.type !== 'outgoing_chat_message' && e.type !== 'outgoing_call')) continue
     const list = outgoingByLead.get(e.entity_id) ?? []
     list.push(e.created_at)
@@ -61,7 +65,7 @@ export function focusFacts(input: FocusInput): Map<number, FocusFacts> {
 
   // клиент ждёт ответа: писал и не получил ни сообщения, ни звонка
   const waitingByLead = new Map<number, { owner: number; fact: LeadFact }>()
-  for (const ep of replyEpisodes(input.events)) {
+  for (const ep of replyEpisodes(events)) {
     if (ep.replyAt !== null || !ep.leadId || ep.startAt < now - 3 * DAY || ep.startAt > now - WAIT_MIN) continue
     const lead = input.leadsById.get(ep.leadId)
     if (!lead || closed(lead) || !ids.has(lead.responsible_user_id)) continue

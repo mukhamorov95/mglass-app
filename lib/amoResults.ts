@@ -4,6 +4,8 @@
 // с нормальной активностью не довёл до оплаты ни одной сделки.
 // Чистые функции — данные собирает lib/amoResultsFetch.ts.
 
+import { dropAutoReplies, type AmoActivityEvent } from '@/lib/amoActivity'
+
 export type StageKey = 'measure' | 'kp' | 'invoice' | 'paid' | 'won' | 'lost'
 export const STAGES: StageKey[] = ['measure', 'kp', 'invoice', 'paid', 'won', 'lost']
 
@@ -17,7 +19,9 @@ export type StatusEvent = {
 }
 export type ResultLead = { id: number; responsible_user_id: number; created_at: number; status_id: number; pipeline_id: number; price?: number | null }
 export type OpenTask = { responsible_user_id: number; complete_till: number }
-export type ContactEvent = { entity_id: number; entity_type: string; created_at: number }
+// Исходящие сообщения и звонки — касания; входящие нужны, чтобы узнать автоответ
+export type ContactEvent = AmoActivityEvent
+const TOUCH = new Set(['outgoing_chat_message', 'outgoing_call'])
 
 export type ManagerResult = {
   userId: number
@@ -135,9 +139,11 @@ export function buildAmoResults(input: {
     r.paidBudget += l.price ?? 0
   }
 
+  // Автоответ робота через секунды после заявки — не первый контакт (lib/amoActivity.ts)
+  const leadCreatedAt = new Map(input.newLeads.map(l => [l.id, l.created_at]))
   const contactsByLead = new Map<number, number[]>()
-  for (const c of input.contacts) {
-    if (c.entity_type !== 'lead') continue
+  for (const c of dropAutoReplies(input.contacts, leadCreatedAt)) {
+    if (c.entity_type !== 'lead' || !TOUCH.has(c.type)) continue
     const list = contactsByLead.get(c.entity_id) ?? []
     list.push(c.created_at)
     contactsByLead.set(c.entity_id, list)

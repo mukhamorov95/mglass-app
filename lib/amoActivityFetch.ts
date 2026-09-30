@@ -31,6 +31,7 @@ export function buildFromRaw(from: number, to: number, raw: ActivityRaw): AmoAct
     events: raw.events,
     callNotes: raw.callNotes,
     leadResponsible: new Map(raw.leads.map(l => [l.id, l.responsible_user_id])),
+    leadCreatedAt: new Map(raw.leads.map(l => [l.id, l.created_at])),
   })
 }
 

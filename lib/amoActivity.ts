@@ -8,6 +8,8 @@
 //    нажал «отправить», amo не знает.
 // 2) Пропущенный входящий amo пишет событием incoming_call под именем менеджера.
 //    Это не его действие — отличаем по заметке звонка (call_status 4 = разговор был).
+// И одна, на которой человек выглядит быстрее, чем есть: автоответ Wazzup и Salesbot —
+// тоже исходящее без автора (см. dropAutoReplies).
 
 export type AmoActivityEvent = {
   type: string
@@ -15,7 +17,7 @@ export type AmoActivityEvent = {
   entity_type: string
   created_by: number
   created_at: number
-  value_after?: Array<{ note?: { id: number }; message?: { talk_id?: number } }> | null
+  value_after?: Array<{ note?: { id: number }; message?: { talk_id?: number; origin?: string } }> | null
 }
 
 export type AmoCallNote = {
@@ -81,6 +83,7 @@ export type AmoActivityReport = {
   days: string[]
   managers: ManagerActivity[]
   noAuthorUnassigned: number
+  autoReplies: number
 }
 
 const MSK = 3 * 3600
@@ -136,8 +139,51 @@ export function callKind(note: AmoCallNote): 'out_ok' | 'out_fail' | 'in_ok' | '
 const isChat = (e: AmoActivityEvent) =>
   e.type === 'incoming_chat_message' || e.type === 'outgoing_chat_message'
 
+// Автоответ — приветствие Wazzup и Salesbot: исходящее без автора не позже AUTO_REPLY_SEC после
+// создания сделки или после сообщения клиента, которое открывает беседу (первое в ней или первое
+// после часа тишины). Это не ответ и не касание — иначе «ответили через 0 мин», а клиент, которому
+// ответил только робот, выпадает из «ждёт ответа». Одно правило на «Активность», «Мой день»,
+// «Результат» и разбор дня.
+// Быстрое исходящее без автора посреди переписки — человек с телефона: по журналу Wazzup
+// 23–29.09 все 15 опознанных такие ответы — менеджеры. Авито не трогаем: без автора там писал
+// ИИ-продавец «Иван», ответ по существу; засчитывать ли его менеджеру — решение владельца.
+export const AUTO_REPLY_SEC = 30
+export const TALK_PAUSE_SEC = 3600
+
+export function dropAutoReplies<E extends AmoActivityEvent>(events: E[], leadCreatedAt: Map<number, number>): E[] {
+  const byTalk = new Map<number, E[]>()
+  for (const e of events) {
+    const talk = e.value_after?.[0]?.message?.talk_id
+    if (!isChat(e) || !talk) continue
+    const list = byTalk.get(talk) ?? []
+    list.push(e)
+    byTalk.set(talk, list)
+  }
+  const openers = new Map<number, number[]>()
+  for (const [talk, list] of byTalk) {
+    list.sort((a, b) => a.created_at - b.created_at)
+    // паузу меряем до событий прошлых секунд: автоответ в ту же секунду amo отдаёт то раньше, то позже
+    let prev: number | null = null, cur: number | null = null
+    const opens: number[] = []
+    for (const m of list) {
+      if (m.created_at !== cur) { prev = cur; cur = m.created_at }
+      if (m.type === 'incoming_chat_message' && (prev === null || m.created_at - prev >= TALK_PAUSE_SEC)) opens.push(m.created_at)
+    }
+    openers.set(talk, opens)
+  }
+  const soonAfter = (t: number, from: number | undefined) => from !== undefined && t >= from && t - from <= AUTO_REPLY_SEC
+  return events.filter(e => {
+    if (e.type !== 'outgoing_chat_message' || e.created_by) return true
+    const msg = e.value_after?.[0]?.message
+    if (msg?.origin?.startsWith('avito')) return true
+    if (e.entity_type === 'lead' && soonAfter(e.created_at, leadCreatedAt.get(e.entity_id))) return false
+    return !(msg?.talk_id && (openers.get(msg.talk_id) ?? []).some(t => soonAfter(e.created_at, t)))
+  })
+}
+
 // Ожидание ответа: клиент написал после нашего сообщения (или первым) — ждёт до
-// первого исходящего в этой беседе, от кого бы оно ни пришло.
+// первого исходящего в этой беседе, от кого бы оно ни пришло. Автоответы убирает
+// вызывающий (dropAutoReplies) — ему нужна дата создания сделки.
 export function replyEpisodes(events: AmoActivityEvent[]) {
   const byTalk = new Map<number, AmoActivityEvent[]>()
   for (const e of events) {
@@ -187,10 +233,12 @@ export function buildAmoActivity(input: {
   events: AmoActivityEvent[]
   callNotes: AmoCallNote[]
   leadResponsible: Map<number, number>
+  leadCreatedAt: Map<number, number>
 }): AmoActivityReport {
   const { from, to, users } = input
   const inRange = (ts: number) => ts >= from && ts < to
-  const events = input.events.filter(e => inRange(e.created_at))
+  const events = dropAutoReplies(input.events, input.leadCreatedAt).filter(e => inRange(e.created_at))
+  const autoReplies = input.events.filter(e => inRange(e.created_at)).length - events.length
   const notes = input.callNotes.filter(n => inRange(n.created_at))
   const days = periodDays(from, to)
 
@@ -298,7 +346,7 @@ export function buildAmoActivity(input: {
     }
   })
   managers.sort((a, b) => b.total.actions - a.total.actions)
-  return { from, to, days, managers, noAuthorUnassigned }
+  return { from, to, days, managers, noAuthorUnassigned, autoReplies }
 }
 
 export const fmtMinuteOfDay = (m: number | null) =>
