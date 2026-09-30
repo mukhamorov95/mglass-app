@@ -77,7 +77,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // отдельно. Иначе целая запись notes затёрла бы оплату/доставку/этапы, попавшие
   // туда между чтением и записью. Патч зовём сервис-клиентом (гейт RPC).
   const svc = createServiceClient()
-  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { claim, claim_history: history } })
+  const { error: notesErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { claim, claim_history: history } })
+  if (notesErr) return NextResponse.json({ error: `Рекламация не записана: ${notesErr.message}` }, { status: 500 })
   const { error } = await sb.from('b2b_orders').update({
     updated_by_user_id: user?.id ?? null,
     updated_by_name: name,

@@ -30,11 +30,12 @@ export async function PATCH(
   // notes между чтением и записью, были бы затёрты.
   const nowIso = new Date().toISOString()
   const orderId = Number(id)
-  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: {
+  const { error: notesErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: {
     docs_printed: printed,
     docs_printed_at: printed ? nowIso : null,
     docs_printed_by: printed ? (user.email ?? user.id) : null,
   } })
+  if (notesErr) return NextResponse.json({ error: `Отметка не записана: ${notesErr.message}` }, { status: 500 })
   const { error } = await svc.rpc('mark_order_stages', { p_order_id: orderId, p_stages: { printed: printed ? nowIso : null } })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

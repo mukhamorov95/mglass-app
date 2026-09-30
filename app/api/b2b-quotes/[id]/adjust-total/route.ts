@@ -7,6 +7,9 @@ import {
   type OverrideMeta, type PriceApproval,
 } from '@/lib/b2b/priceOverride'
 import { loadB2BRates } from '@/lib/b2b/rates'
+import { createServiceClient } from '@/lib/supabase-service'
+import { writeFailure } from '@/lib/rlsWrite'
+import { appendTo, parseOrderNotes, type Notes } from '@/lib/b2b/orderNotes'
 
 // Ручная корректировка итоговой суммы ПРОСЧЁТА (до запуска в работу).
 // POST { newTotal } — раскидать сумму по позициям и зафиксировать скидку.
@@ -15,6 +18,11 @@ import { loadB2BRates } from '@/lib/b2b/rates'
 // Читаем/пишем под пользователем (анон-ключ + куки) — изоляция менеджеров держится
 // на RLS, как и в остальных мутациях списка просчётов. Запущенные заказы сюда не
 // пускаем: у них своя ручка /api/b2b-orders/[id]/adjust-total (только владелец).
+//
+// Колонки — под RLS вошедшего (ноль строк = нет прав), notes — точечным патчем своих
+// ключей из свежей записи. Раньше notes писались целиком из чтения в начале запроса:
+// между ними четыре ожидания, и ответ клиента или этапы, пришедшие в это окно, стирались.
+// Патч — сервис-клиентом (гейт RPC не пускает менеджера) и только после записи колонок.
 
 const ALLOWED = ['admin', 'ceo', 'manager', 'commercial', 'buyer'] as const
 
@@ -69,6 +77,17 @@ async function loadContext(id: string) {
   return { sb, orderId, order, notes, userId: user?.id ?? null, actorName }
 }
 
+async function patchNotes(orderId: number, build: (fresh: Notes) => Notes): Promise<{ notes: string | null } | { error: string }> {
+  const svc = createServiceClient()
+  const { data: fresh, error: readErr } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
+  if (readErr || !fresh) return { error: `Заказ не прочитан: ${readErr?.message ?? 'нет строки'}` }
+  const patch = build(parseOrderNotes((fresh as { notes: unknown }).notes))
+  const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: patch })
+  if (error) return { error: error.message }
+  const { data: after } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
+  return { notes: (after as { notes: string | null } | null)?.notes ?? null }
+}
+
 function updateMeta(userId: string | null, actorName: string | null) {
   return {
     updated_by_user_id: userId,
@@ -81,7 +100,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const ctx = await loadContext(id)
   if ('error' in ctx) return ctx.error
-  const { sb, orderId, order, notes, userId, actorName } = ctx
+  const { sb, orderId, order, userId, actorName } = ctx
 
   const body = await req.json().catch(() => ({}))
   const target = Math.round(Number(body?.newTotal))
@@ -105,12 +124,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     by:               userId,
     by_name:          actorName,
   }
-  const history = Array.isArray(notes.total_history) ? [...(notes.total_history as unknown[])] : []
-  history.push({
+  const entry = {
     old_total: oldTotal, new_total: res.appliedTotal,
     discount_percent: res.discountPercent, markup_percent: res.markupPercent,
     changed_by: actorName, changed_by_id: userId, changed_at: override.at, source: 'quote_list',
-  })
+  }
   // А11: тонкая маржа не блокирует цену, но ставит её на согласование владельцу.
   // Пока не согласовано — просчёт виден владельцу в отдельной вкладке, у менеджера
   // горит бейдж. Ушли выше порога — заявка снимается сама.
@@ -123,22 +141,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     : undefined
 
-  const newNotes = JSON.stringify({
-    ...notes,
-    price_override: override,
-    total_history: history,
-    price_approval: approval,
-  })
-
-  const { error } = await sb.from('b2b_orders').update({
+  const fail = writeFailure(await sb.from('b2b_orders').update({
     items:                res.items,
     discount_percent:     res.discountPercent,
     total_after_discount: res.appliedTotal,
     margin_percent:       marginPercent,
-    notes:                newNotes,
     ...updateMeta(userId, actorName),
-  }).eq('id', orderId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }).eq('id', orderId).select('id'))
+  if (fail) return NextResponse.json({ error: fail }, { status: 403 })
+  // Снятие заявки на согласование — null: патч ключи не удаляет, читатели проверяют истинность.
+  const saved = await patchNotes(orderId, fresh => ({
+    price_override: override,
+    total_history: appendTo(fresh, 'total_history', entry),
+    price_approval: approval ?? null,
+  }))
+  if ('error' in saved) {
+    return NextResponse.json({ error: `Сумма записана, пометка корректировки — нет: ${saved.error}. Нажмите ещё раз` }, { status: 500 })
+  }
 
   return NextResponse.json({
     ok: true,
@@ -148,7 +167,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     marginPercent,
     needsApproval:   !!approval,
     items:           res.items,
-    notes:           newNotes,
+    notes:           saved.notes,
   })
 }
 
@@ -156,33 +175,35 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params
   const ctx = await loadContext(id)
   if ('error' in ctx) return ctx.error
-  const { sb, orderId, order, notes, userId, actorName } = ctx
+  const { sb, orderId, order, userId, actorName } = ctx
 
   const items = clearAutoOverride(Array.isArray(order.items) ? order.items : [])
   // Возврат к прайсу: скидка обнуляется вместе с корректировкой, договорные позиции остаются.
   const restored = items.reduce((s, it) => s + (it.manualTotal ?? Math.round(Number(it.saleIncVat) || 0)), 0)
   const marginPercent = orderMarginPercent(items, 0)
 
-  const rest = { ...notes }
-  delete rest.price_override
-  delete rest.price_approval
-  const history = Array.isArray(notes.total_history) ? [...(notes.total_history as unknown[])] : []
-  history.push({
+  const entry = {
     old_total: Number(order.total_after_discount) || 0, new_total: restored,
     reset: true, changed_by: actorName, changed_by_id: userId,
     changed_at: new Date().toISOString(), source: 'quote_list',
-  })
-  const newNotes = JSON.stringify({ ...rest, total_history: history })
+  }
 
-  const { error } = await sb.from('b2b_orders').update({
+  const fail = writeFailure(await sb.from('b2b_orders').update({
     items,
     discount_percent:     0,
     total_after_discount: restored,
     margin_percent:       marginPercent,
-    notes:                newNotes,
     ...updateMeta(userId, actorName),
-  }).eq('id', orderId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }).eq('id', orderId).select('id'))
+  if (fail) return NextResponse.json({ error: fail }, { status: 403 })
+  const saved = await patchNotes(orderId, fresh => ({
+    price_override: null,
+    price_approval: null,
+    total_history: appendTo(fresh, 'total_history', entry),
+  }))
+  if ('error' in saved) {
+    return NextResponse.json({ error: `Прайс возвращён, пометка корректировки — нет: ${saved.error}. Нажмите ещё раз` }, { status: 500 })
+  }
 
-  return NextResponse.json({ ok: true, newTotal: restored, discountPercent: 0, marginPercent, items, notes: newNotes })
+  return NextResponse.json({ ok: true, newTotal: restored, discountPercent: 0, marginPercent, items, notes: saved.notes })
 }

@@ -83,10 +83,11 @@ export async function POST(req: NextRequest) {
     if (markErr) { skipped.push({ order_id: it.order_id, reason: `не записано: ${markErr.message}` }); continue }
 
     // Кто и когда закрыл задним числом — чтобы отличать от отметки у машины.
-    await svc.rpc('patch_order_notes_shallow', {
+    const { error: traceErr } = await svc.rpc('patch_order_notes_shallow', {
       p_order_id: it.order_id,
       p_patch: { ship_backfill: { by: who, at: nowIso, date: it.date } },
     })
+    if (traceErr) console.error('[ship-backfill] след «задним числом» не записан', it.order_id, traceErr.message)
     await svc.from('b2b_orders').update({ updated_by_name: who, updated_at: nowIso }).eq('id', it.order_id)
 
     if (it.date < today && o.client_id && partnerClient.has(o.client_id as number)) {

@@ -82,12 +82,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     paid_at: body.status === 'paid' ? new Date().toISOString() : undefined,
     stages: { ...stages, invoice_paid: body.status === 'paid' ? paidAt : null },
   }
-  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: {
+  const { error: notesErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: {
     payment_status: body.status,
     prepayment_amount: body.status === 'partial' ? prepayment : null,
     paid_at: body.status === 'paid' ? nextNotes.paid_at : null,
   } })
-  await svc.rpc('mark_order_stages', { p_order_id: orderId, p_stages: { invoice_paid: body.status === 'paid' ? paidAt : null } })
+  if (notesErr) return NextResponse.json({ error: `Оплата не записана: ${notesErr.message}` }, { status: 500 })
+  const { error: stageErr } = await svc.rpc('mark_order_stages', { p_order_id: orderId, p_stages: { invoice_paid: body.status === 'paid' ? paidAt : null } })
+  if (stageErr) return NextResponse.json({ error: `Оплата записана, этап «оплачен» — нет: ${stageErr.message}` }, { status: 500 })
   const { error: upErr } = await svc.from('b2b_orders')
     .update({ updated_by_name: me?.name ?? null, updated_at: new Date().toISOString() })
     .eq('id', orderId)

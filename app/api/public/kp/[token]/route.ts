@@ -33,7 +33,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const notes = parseNotes((order as { notes: string | null }).notes)
   if (!notes.public_opened_at) {
     // Точечный патч: только свой ключ, чтобы не затереть чужие при открытии ссылки.
-    await svc.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { public_opened_at: new Date().toISOString() } })
+    const { error: openErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { public_opened_at: new Date().toISOString() } })
+    if (openErr) console.error('[public/kp] отметка «открыта» не записана', order.id, openErr.message)
   }
 
   return NextResponse.json({ quote: toPublicQuote(order) }, { headers: { 'Cache-Control': 'no-store' } })

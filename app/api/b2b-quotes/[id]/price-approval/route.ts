@@ -51,7 +51,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // иначе оплата/доставка/этапы, попавшие в notes между чтением и записью, были
   // бы затёрты. Патч зовём сервис-клиентом (гейт RPC), колонки авторства — sb.
   const svc = createServiceClient()
-  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { price_approval: next } })
+  const { error: notesErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { price_approval: next } })
+  if (notesErr) return NextResponse.json({ error: `Решение по цене не записано: ${notesErr.message}` }, { status: 500 })
   const { error } = await sb.from('b2b_orders')
     .update({
       updated_by_user_id: user?.id ?? null,

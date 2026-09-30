@@ -3,6 +3,7 @@ import { requireOwner } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { rescaleItemsToTotal } from '@/lib/b2b/adjustTotal'
+import { appendTo, parseOrderNotes } from '@/lib/b2b/orderNotes'
 
 // Владелец меняет итоговую сумму уже запущенного B2B-заказа — в ЛЮБУЮ сторону.
 // Изначально разрешалось только вниз (сценарий скидки), но заказ продаётся и дороже
@@ -52,12 +53,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   } catch {}
 
-  let notes: Record<string, unknown> = {}
-  try { notes = order.notes ? JSON.parse(order.notes as string) : {} } catch {}
-  const history = Array.isArray(notes.total_history) ? notes.total_history : []
-  history.push({ old_total: oldTotal, new_total: nt, changed_by: actor, changed_at: new Date().toISOString() })
-  notes.total_history = history
-
   // Колонки пишем прямо, notes — точечным патчем (только свой ключ total_history),
   // чтобы не затереть чужие ключи (оплата, доставка, этапы), попавшие в notes
   // между нашим чтением и записью. Правило: контур патчит только свои ключи.
@@ -69,7 +64,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     updated_at: new Date().toISOString(),
   }).eq('id', orderId)
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
-  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { total_history: history } })
+  // Историю дописываем к свежей записи: между чтением в начале и этой строкой — ожидания.
+  const { data: fresh, error: freshErr } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
+  const entry = { old_total: oldTotal, new_total: nt, changed_by: actor, changed_at: new Date().toISOString() }
+  const { error: notesErr } = freshErr || !fresh
+    ? { error: freshErr ?? { message: 'нет строки' } }
+    : await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: {
+        total_history: appendTo(parseOrderNotes((fresh as { notes: unknown }).notes), 'total_history', entry),
+      } })
+  if (notesErr) return NextResponse.json({ error: `Сумма изменена, история — нет: ${notesErr.message}` }, { status: 500 })
 
   // Реестр продаж: если заказ оплачен — обновляем сумму (sale_date НЕ трогаем).
   const { data: sale } = await svc.from('crm_sales').select('id').eq('b2b_order_id', orderId).maybeSingle()
