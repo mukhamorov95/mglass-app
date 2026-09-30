@@ -1,3 +1,14 @@
+## Задача (30.09): прогон доступов видит запись всем штатом
+Наблюдение 157: ежемесячный /api/cron/access-audit спрашивал только «достанет ли аноним», а маржу, налог и закупку
+мог переписать любой сотрудник. lib/security/accessAudit.ts п. 6 — `staff_wide_write`: политика записи на таблице
+из SENSITIVE_TABLES должна назвать текущего пользователя (… = auth.uid()) или функцию-список ролей
+(is_owner(), can_edit_pricing()); «не партнёр», auth.role(), current_org_id() — весь штат.
+- Сухой прогон на живом снимке 30.09: 13 важных (было 0) — materials, services, hardware_items,
+  financial_settings, production_settings, process_cost_inputs, purchase_orders, b2b_materials, b2b_services,
+  b2b_orders, b2b_clients, b2b_client_legal_entities, calculations. 1 октября придут в телеграм.
+- Лечат: PR #733 (прайсовые входы, миграция ждёт владельца), PR #723 (calculations). Остальные B2B —
+  решение владельца, кто правит заказы и клиентов.
+
 ## Задача (30.09): распределение новых заявок — тень
 Маршрут — docs/LEAD_DISTRIBUTION_ROUTE.md. Владелец 30.09: знакомый клиент своему менеджеру (если на смене), новая —
 по очереди, перегруженным не давать; решения Д0/Д0а/Д0б приняты. Сейчас распределяют сами менеджеры: 184 из 260

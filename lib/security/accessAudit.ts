@@ -96,6 +96,23 @@ export function policyChecksSession(p: SnapshotPolicy): boolean {
 const READ_CMDS = new Set(['r', '*'])
 const WRITE_CMDS = new Set(['*', 'w', 'a', 'd'])
 
+// Условие записи называет, кого пускает: текущего пользователя (created_by =
+// auth.uid()) или функцию-список ролей (is_owner(), can_edit_pricing()). «Не
+// партнёр», «вошёл», «своя организация» — это весь штат: 30.09 так маржу, налог и
+// закупку месяцами мог переписать любой сотрудник, а прогон молчал — он спрашивал
+// только про анонима. ИЛИ с таким условием расширяет узкое до всех.
+const CALLER_BOUND = /=\s*\(?\s*(select\s+)?auth\.uid\(\)|auth\.uid\(\)\s*(as\s+uid\s*\)\s*)?=|\b(is_owner|is_admin|can_edit_[a-z_]+)\(\)/i
+const STAFF_WIDE = /not\s+is_partner\(\)|auth\.role\(\)|current_org_id\(\)|auth\.uid\(\)\s*(as\s+uid\s*\)\s*)?is\s+not\s+null/i
+export function namesWhoWrites(expr: string | null | undefined): boolean {
+  const e = expr ?? ''
+  if (!CALLER_BOUND.test(e)) return false
+  return !(/\bor\b/i.test(e) && STAFF_WIDE.test(e))
+}
+
+// Для INSERT решает WITH CHECK, для остальных — USING (без него Postgres берёт
+// USING и как проверку новой строки).
+const writeCondition = (p: SnapshotPolicy) => (p.cmd === 'a' ? p.check : p.using ?? p.check) ?? null
+
 export function auditAccess(s: AccessSnapshot): Finding[] {
   const out: Finding[] = []
 
@@ -195,6 +212,25 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
       severity: 'low', code: 'rls_no_policies', table: '—',
       title: `RLS включён без политик: ${silent.length} таблиц`,
       detail: `Такая таблица отдаёт 200 и пустой массив — экран выглядит рабочим, просто «данных нет». Если чтение нужно с клиента, политики не хватает: ${silent.slice(0, 6).map(r => r.table).join(', ')}${silent.length > 6 ? '…' : ''}`,
+    })
+  }
+
+  // 6. Запись в таблицу с деньгами или людьми, открытая всему штату. Политики
+  // складываются через ИЛИ, поэтому хватает одной широкой — строка на таблицу.
+  // Выданное анониму уже в п. 2, здесь — вошедшие.
+  const staffWide = new Map<string, SnapshotPolicy[]>()
+  for (const p of s.policies ?? []) {
+    if (!SENSITIVE_TABLES.has(p.table) || !WRITE_CMDS.has(p.cmd)) continue
+    if (!p.roles.some(r => r === 'authenticated' || r === 'PUBLIC')) continue
+    if (isPublicRole(p.roles) && !policyChecksSession(p)) continue
+    if (namesWhoWrites(writeCondition(p))) continue
+    staffWide.set(p.table, [...(staffWide.get(p.table) ?? []), p])
+  }
+  for (const [table, ps] of staffWide) {
+    out.push({
+      severity: 'high', code: 'staff_wide_write', table,
+      title: `Запись открыта всему штату: ${table}`,
+      detail: `Политики ${ps.map(p => `«${p.policy}»`).join(', ')} пускают на запись любого вошедшего сотрудника (условие «${writeCondition(ps[0]) ?? 'нет'}»). Назвать, кого пускать: функция-список ролей (can_edit_pricing(), is_owner()) или текущий пользователь (… = auth.uid()).`,
     })
   }
 

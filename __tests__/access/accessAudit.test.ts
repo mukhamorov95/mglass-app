@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { auditAccess, countBySeverity, escapeHtml, formatReport, SENSITIVE_TABLES, type AccessSnapshot } from '@/lib/security/accessAudit'
+import { auditAccess, countBySeverity, escapeHtml, formatReport, namesWhoWrites, SENSITIVE_TABLES, type AccessSnapshot, type SnapshotPolicy } from '@/lib/security/accessAudit'
 
 const empty: AccessSnapshot = { policies: [], grants: [], rls: [], suspicious_columns: [] }
 
@@ -129,7 +129,9 @@ describe('прогон доступов ловит то, что нашлось �
         { table: 'user_devices', policy: 'own', cmd: 'r', roles: ['PUBLIC'], using: '(auth.uid() = user_id)' },
       ],
     })
-    expect(f).toEqual([])
+    // анонима отсекает; то, что b2b_orders пишет весь штат, — отдельный вопрос (п. 6)
+    expect(f.filter(x => x.code !== 'staff_wide_write')).toEqual([])
+    expect(f.map(x => x.table)).toEqual(['b2b_orders'])
   })
 
   it('а «только не партнёр» анонима не отсекает — находка', () => {
@@ -217,6 +219,77 @@ describe('витрина, где чтение публично осознанн�
     })
     expect(f.map(x => x.code)).toContain('public_write_policy')
     expect(f.map(x => x.code)).toContain('anon_write_open')
+  })
+})
+
+// 30.09: маржу, налог и закупку мог переписать любой сотрудник (FOR ALL … USING
+// (NOT is_partner())), а прогон молчал — спрашивал только про анонима. Условия ниже
+// скопированы из живого снимка того дня.
+describe('запись в таблицу с деньгами, открытая всему штату', () => {
+  const wide = (table: string, using: string, cmd = '*', roles = ['authenticated']): SnapshotPolicy =>
+    ({ table, policy: `p_${table}`, cmd, roles, using, check: cmd === 'a' ? using : null })
+
+  it('«не партнёр», «вошёл», «своя организация» — весь штат', () => {
+    expect(namesWhoWrites('(NOT is_partner())')).toBe(false)
+    expect(namesWhoWrites("((( SELECT auth.role() AS role) = 'authenticated'::text) AND (NOT is_partner()))")).toBe(false)
+    expect(namesWhoWrites('((organization_id = current_org_id()) AND (NOT is_partner()))')).toBe(false)
+    expect(namesWhoWrites('true')).toBe(false)
+    expect(namesWhoWrites(null)).toBe(false)
+  })
+
+  it('текущий пользователь или функция-список ролей — узко', () => {
+    expect(namesWhoWrites('can_edit_pricing()')).toBe(true)
+    expect(namesWhoWrites('(auth.uid() = user_id)')).toBe(true)
+    expect(namesWhoWrites('(( SELECT auth.uid() AS uid) = manager_id)')).toBe(true)
+    expect(namesWhoWrites('(auth.uid() IS NOT NULL)')).toBe(false)
+    expect(namesWhoWrites('((created_by = ( SELECT auth.uid() AS uid)) OR is_admin())')).toBe(true)
+    expect(namesWhoWrites("((created_by = auth.uid()) OR (manager_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM users u WHERE ((u.id = auth.uid()) AND (u.role = ANY (ARRAY['admin'::text, 'ceo'::text]))))))")).toBe(true)
+  })
+
+  it('ИЛИ с широким условием расширяет узкое до всех', () => {
+    expect(namesWhoWrites('((created_by = auth.uid()) OR (NOT is_partner()))')).toBe(false)
+  })
+
+  it('одна широкая политика на таблице — одна находка, с именами политик', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [
+        wide('materials', '(NOT is_partner())'),
+        { ...wide('materials', '(NOT is_partner())'), policy: 'auth_write_materials' },
+        wide('materials', '(NOT is_partner())', 'r'),
+        wide('financial_settings', '(NOT is_partner())'),
+      ],
+    })
+    const sw = f.filter(x => x.code === 'staff_wide_write')
+    expect(sw.map(x => x.table)).toEqual(['financial_settings', 'materials'])
+    expect(sw.every(x => x.severity === 'high')).toBe(true)
+    expect(sw[1].detail).toContain('auth_write_materials')
+  })
+
+  it('узкие политики, чтение, служебная роль и нечувствительная таблица — не находка', () => {
+    const f = auditAccess({
+      ...empty,
+      policies: [
+        wide('calculations', '((created_by = ( SELECT auth.uid() AS uid)) OR is_admin())', 'w'),
+        wide('b2b_rates', 'can_edit_pricing()', 'a'),
+        wide('b2b_orders', '(NOT is_partner())', 'r'),
+        wide('users', 'true', '*', ['service_role']),
+        wide('task_queue', '(NOT is_partner())'),
+      ],
+    })
+    expect(f.filter(x => x.code === 'staff_wide_write')).toEqual([])
+  })
+
+  it('PUBLIC с проверкой сессии — сюда; без проверки — уже в «записи без входа», не дважды', () => {
+    const withSession = auditAccess({ ...empty, policies: [wide('b2b_clients', "((( SELECT auth.role() AS role) = 'authenticated'::text) AND (NOT is_partner()))", '*', ['PUBLIC'])] })
+    expect(withSession.map(x => x.code)).toEqual(['staff_wide_write'])
+    const anon = auditAccess({ ...empty, policies: [wide('b2b_clients', '(NOT is_partner())', '*', ['PUBLIC'])] })
+    expect(anon.map(x => x.code)).toEqual(['public_write_policy'])
+  })
+
+  it('для INSERT решает WITH CHECK', () => {
+    const f = auditAccess({ ...empty, policies: [{ table: 'deals', policy: 'ins', cmd: 'a', roles: ['authenticated'], using: null, check: '(NOT is_partner())' }] })
+    expect(f.map(x => x.code)).toEqual(['staff_wide_write'])
   })
 })
 
