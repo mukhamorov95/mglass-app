@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildMeasureMessage } from '@/lib/measure/message'
+import MeasureBoard from '@/components/measure/MeasureBoard'
+import MeasurerAvailability from '@/components/measure/MeasurerAvailability'
 
 // Кабинет замерщика: пул новых заявок → назначить дату/время → мой календарь
 // (занято/свободно) → выполнен / сложность (проблема + решение, как у цеха)
@@ -38,6 +40,7 @@ const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 export default function MeasurerCabinetPage() {
   const [me, setMe] = useState<{ id: string; name: string; role: string } | null>(null)
   const [error, setError] = useState('')
+  const [boardKey, setBoardKey] = useState(0)
   const [reqs, setReqs] = useState<MReq[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<number | null>(null)
@@ -70,6 +73,7 @@ export default function MeasurerCabinetPage() {
       }
       if (!res.ok) { if (!j.needsConfirm) setError(j.error || `Не сохранено (${res.status})`); return false }
       await load()
+      setBoardKey(k => k + 1)
       return true
     } finally { setBusy(null) }
   }
@@ -236,6 +240,9 @@ export default function MeasurerCabinetPage() {
             ))}
           </div>
         </div>
+
+        <MeasureBoard title="Все замерщики — занятость" refreshKey={boardKey} />
+        <MeasurerAvailability onChanged={() => setBoardKey(k => k + 1)} />
 
         {/* История: выполненные и сложности */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
