@@ -146,6 +146,11 @@ export async function fetchHotAndNew(hot: { pipeline: number; status: number }[]
 // Пересчёт поводов по одному человеку — для кнопки «Обновить»: берём только то, что нужно
 // для списка, и только за три дня, поэтому укладывается в секунды, а не в минуту.
 export async function collectFocusLive(amoUserId: number, now = Math.floor(Date.now() / 1000)): Promise<FocusFacts> {
+  return (await collectFocusLiveMany([amoUserId], now)).get(amoUserId) ?? emptyFocus()
+}
+
+// То же по нескольким людям одним сбором — распределителю заявок нужна загрузка всех продавцов разом
+export async function collectFocusLiveMany(amoUserIds: number[], now = Math.floor(Date.now() / 1000)): Promise<Map<number, FocusFacts>> {
   const domain = getDomain()
   const { stageName, hot } = await stageMaps()
   const events = await amoGetAll<AmoActivityEvent>('/events', {
@@ -160,13 +165,13 @@ export async function collectFocusLive(amoUserId: number, now = Math.floor(Date.
   for (const ids of chunks) leads.push(...await amoGetAll<Lead>('/leads', { 'filter[id][]': ids.map(String) }, 'leads'))
 
   const { hotLeads, newLeads } = await fetchHotAndNew(hot, now)
-  const tasks = await amoGetAll<Task>('/tasks', { 'filter[is_completed]': '0', 'filter[responsible_user_id][]': [String(amoUserId)] }, 'tasks')
+  const tasks = await amoGetAll<Task>('/tasks', { 'filter[is_completed]': '0', 'filter[responsible_user_id][]': amoUserIds.map(String) }, 'tasks')
   const pbx = await fetchPbxReport(now - 2 * DAY, now).catch(() => null)
   const botSentAt = await fetchBotSentAt(now - 3 * DAY, now)
 
   return focusFacts({
-    ids: new Set([amoUserId]), now, events, botSentAt,
+    ids: new Set(amoUserIds), now, events, botSentAt,
     leadsById: new Map(leads.map(l => [l.id, l])),
     stageName, hotLeads, newLeads, tasks, pbx, domain,
-  }).get(amoUserId) ?? emptyFocus()
+  })
 }
