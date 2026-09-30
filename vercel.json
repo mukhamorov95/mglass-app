@@ -82,6 +82,10 @@
       "schedule": "0 16 * * *"
     },
     {
+      "path": "/api/cron/lead-distribution",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/morning-briefing",
       "schedule": "0 4 * * *"
     },
