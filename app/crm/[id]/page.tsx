@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { CRM_STAGES, stageProgress, FIRST_STAGE, ASSIGNED_STAGE } from '@/lib/crmStages'
 import { FLAGS, FLAG_BY_KEY, type FlagKey } from '@/lib/avito/flags'
-import { buildMeasureMessage } from '@/lib/measure/message'
 import { isAiManager } from '@/lib/avito/botGate'
 
 type Lead = {
@@ -168,23 +167,23 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
     setBusy(true); setErr('')
     try {
       const { data: { user } } = await sb.auth.getUser()
-      let mgrId: string | null = null, mgrName: string | null = null
+      let mgrName: string | null = null
       if (user) {
-        const { data: p } = await sb.from('users').select('id,name').eq('id', user.id).maybeSingle()
-        const pr = p as { id: string; name: string | null } | null
-        mgrId = pr?.id ?? null; mgrName = pr?.name ?? user.email ?? null
+        const { data: p } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
+        mgrName = (p as { name: string | null } | null)?.name ?? user.email ?? null
       }
-      const fields = {
-        deal_number: lead.order_no, client_name: lead.name || lead.phone || `Лид #${lead.id}`,
-        phone: lead.phone, address: addr.trim(), scope: scope.trim() || null,
-        notes: notes.trim() || null, visit_price: Number(price.replace(/\s/g, '')) || 0,
-        payer: 'клиент (в зачёт заказа)', is_repeat: false,
-      }
-      const { error } = await sb.from('measure_requests').insert({
-        ...fields, structured_text: buildMeasureMessage({ ...fields, manager_name: mgrName }),
-        lead_id: lead.id, manager_id: mgrId, manager_name: mgrName, measurer_fee: 0,
+      // Запись заявки — через API: там права и проверка; из браузера таблица закрыта.
+      const res = await fetch('/api/measure-requests', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deal_number: lead.order_no, client_name: lead.name || lead.phone || `Лид #${lead.id}`,
+          phone: lead.phone, address: addr.trim(), scope: scope.trim() || null,
+          notes: notes.trim() || null, visit_price: Number(price.replace(/\s/g, '')) || 0,
+          payer: 'клиент (в зачёт заказа)', is_repeat: false, lead_id: lead.id, measurer_fee: 0,
+        }),
       })
-      if (error) throw new Error(error.message)
+      const j = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) throw new Error(j.error || `Заявка не создана (${res.status})`)
       await sb.from('crm_leads').update({ stage: 'Замер назначен', updated_at: new Date().toISOString() }).eq('id', lead.id)
       await sb.from('crm_lead_events').insert({ lead_id: lead.id, kind: 'system', author: mgrName, text: `📐 Заявка на замер оформлена для замерщика (${addr.trim()})` })
       setOpen(false); setNotes(''); load()

@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase-browser'
 import { buildMeasureMessage } from '@/lib/measure/message'
 
 // Кабинет замерщика: пул новых заявок → назначить дату/время → мой календарь
@@ -37,8 +36,8 @@ type MReq = {
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 
 export default function MeasurerCabinetPage() {
-  const sb = createClient()
   const [me, setMe] = useState<{ id: string; name: string; role: string } | null>(null)
+  const [error, setError] = useState('')
   const [reqs, setReqs] = useState<MReq[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<number | null>(null)
@@ -47,16 +46,33 @@ export default function MeasurerCabinetPage() {
   const [sTime, setSTime] = useState('10:00')
 
   const load = useCallback(async () => {
-    const { data: { user } } = await sb.auth.getUser()
-    if (user) {
-      const { data: p } = await sb.from('users').select('id, name, role').eq('id', user.id).maybeSingle()
-      if (p) setMe(p as { id: string; name: string; role: string })
-    }
-    const { data } = await sb.from('measure_requests').select('*')
-      .order('created_at', { ascending: false }).limit(300)
-    setReqs((data ?? []) as MReq[])
+    const res = await fetch('/api/measure-requests', { cache: 'no-store' })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) setError(j.error || `Заявки не загрузились (${res.status})`)
+    else { setMe(j.me); setReqs(j.requests as MReq[]) }
     setLoading(false)
-  }, [sb])
+  }, [])
+
+  // Любое действие — через сервер: там права и проверка пересечений. Мягкий
+  // конфликт (мало времени на дорогу, вне часов) сервер возвращает вопросом.
+  async function act(r: MReq, body: Record<string, unknown>): Promise<boolean> {
+    setBusy(r.id); setError('')
+    try {
+      let res = await fetch(`/api/measure-requests/${r.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      let j = await res.json().catch(() => ({}))
+      if (res.status === 409 && j.needsConfirm && window.confirm(`${j.warning}\n\nВсё равно назначить?`)) {
+        res = await fetch(`/api/measure-requests/${r.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, force: true }),
+        })
+        j = await res.json().catch(() => ({}))
+      }
+      if (!res.ok) { if (!j.needsConfirm) setError(j.error || `Не сохранено (${res.status})`); return false }
+      await load()
+      return true
+    } finally { setBusy(null) }
+  }
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
@@ -90,31 +106,18 @@ export default function MeasurerCabinetPage() {
 
   async function take(r: MReq) {
     if (!me || !sDate) return
-    setBusy(r.id)
-    try {
-      await sb.from('measure_requests').update({
-        measurer_id: me.id, measurer_name: me.name,
-        scheduled_at: new Date(`${sDate}T${sTime || '10:00'}:00`).toISOString(),
-        status: 'scheduled', updated_at: new Date().toISOString(),
-      }).eq('id', r.id)
-      setSchedFor(null); setSDate('')
-      await load()
-    } finally { setBusy(null) }
+    if (await act(r, { action: 'schedule', date: sDate, time: sTime || '10:00' })) { setSchedFor(null); setSDate('') }
   }
 
-  async function setStatus(r: MReq, status: string) {
-    setBusy(r.id)
-    try {
-      const patch: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
-      if (status === 'issue') {
-        const issue = window.prompt('Какая сложность?', r.issue_text ?? '')
-        if (issue == null) return
-        const solution = window.prompt('Какое видишь решение?', r.issue_solution ?? '')
-        patch.issue_text = issue; patch.issue_solution = solution
-      }
-      await sb.from('measure_requests').update(patch).eq('id', r.id)
-      await load()
-    } finally { setBusy(null) }
+  async function setStatus(r: MReq, status: 'done' | 'issue') {
+    if (status === 'issue') {
+      const issue = window.prompt('Какая сложность?', r.issue_text ?? '')
+      if (issue == null) return
+      const solution = window.prompt('Какое видишь решение?', r.issue_solution ?? '')
+      await act(r, { action: 'issue', issue_text: issue, issue_solution: solution })
+      return
+    }
+    await act(r, { action: 'done' })
   }
 
   // Файл замера (чертёж/фото) с объекта → measure_requests.photos, виден в карточке сделки.
@@ -122,17 +125,14 @@ export default function MeasurerCabinetPage() {
     setBusy(r.id)
     try {
       const fd = new FormData(); fd.append('file', file)
-      await fetch(`/api/measure-requests/${r.id}/photo`, { method: 'POST', body: fd })
+      const res = await fetch(`/api/measure-requests/${r.id}/photo`, { method: 'POST', body: fd })
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setError(j.error || `Файл не загружен (${res.status})`) }
       await load()
     } finally { setBusy(null) }
   }
 
   async function markFeePaid(r: MReq) {
-    setBusy(r.id)
-    try {
-      await sb.from('measure_requests').update({ fee_status: 'paid', fee_paid_at: new Date().toISOString() }).eq('id', r.id)
-      await load()
-    } finally { setBusy(null) }
+    await act(r, { action: 'fee_paid' })
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
@@ -145,6 +145,12 @@ export default function MeasurerCabinetPage() {
       </div>
 
       <div className="px-5 pt-4 space-y-4 max-w-[1100px]">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] rounded-lg px-3 py-2 flex items-start gap-2">
+            <span className="flex-1">{error}</span>
+            <button onClick={() => setError('')} className="text-red-400 hover:text-red-700">✕</button>
+          </div>
+        )}
         {/* Деньги месяца */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-[#111110] text-white rounded-xl p-4">
