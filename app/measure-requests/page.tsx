@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { buildMeasureMessage, splitScope } from '@/lib/measure/message'
+import { buildMeasureMessage, splitScope, tidy } from '@/lib/measure/message'
+import MeasureBoard from '@/components/measure/MeasureBoard'
 
 // Заявки на замер (вкладка менеджера): диктовка/вставка → AI-структура →
 // редактируемая форма (или ручной ввод с нуля) → заявка в пул замерщиков.
@@ -183,7 +184,7 @@ export default function MeasureRequestsPage() {
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Заявки на замер</h1>
-        <p className="text-[12px] text-[#9a9a95] mt-0.5">Надиктуй или вставь текст — AI соберёт структуру, её можно поправить. Или заполни форму вручную. Занятость замерщиков — в «Календаре замеров».</p>
+        <p className="text-[12px] text-[#9a9a95] mt-0.5">Надиктуй или вставь текст — AI соберёт структуру, её можно поправить. Или заполни форму вручную. Ниже — когда замерщики свободны.</p>
       </div>
 
       <div className="px-5 pt-4 space-y-4 max-w-[1100px]">
@@ -294,6 +295,8 @@ export default function MeasureRequestsPage() {
           </div>
         )}
 
+        <MeasureBoard title="Когда можно на замер" refreshKey={reqs.length} />
+
         {/* Мои заявки */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
           <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">Заявки ({myReqs.length})</p>
@@ -304,7 +307,7 @@ export default function MeasureRequestsPage() {
                 return (
                   <div key={r.id} className="border border-[#f0f0ec] rounded-lg p-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁' : '📐'} {r.deal_number || `#${r.id}`} · {r.client_name}</span>
+                      <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁' : '📐'} {r.deal_number || `#${r.id}`} · {tidy(r.client_name)}</span>
                       <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${meta.cls}`}>{meta.label}</span>
                       {r.scheduled_at && <span className="text-[11px] text-[#6b6b66]">🕐 {new Date(r.scheduled_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {r.measurer_name || ''}</span>}
                       <button onClick={() => copyMessage(r)}

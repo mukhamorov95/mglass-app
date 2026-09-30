@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase-server'
+import { isOwnerRole } from '@/lib/getRole'
 import { measureActorFrom, type MeasureActor } from '@/lib/measure/access'
 import { DEFAULT_DURATION_MIN, DEFAULT_SCHEDULE, addDays, checkBooking, mskToIso, type Booking, type DayOff, type Schedule } from '@/lib/measure/slots'
 
@@ -62,10 +63,39 @@ export async function requireMeasureActor(): Promise<MeasureActor | NextResponse
 
 export type Measurer = { id: string; name: string; schedule: Schedule }
 
+const hm = (t: unknown, fallback: string) => typeof t === 'string' && t.length >= 5 ? t.slice(0, 5) : fallback
+
 export async function loadMeasurers(svc: SupabaseClient): Promise<Measurer[]> {
   const { data, error } = await svc.from('users').select('id, name, email').eq('role', 'measurer').eq('active', true).order('name')
   if (error) throw new Error(`Замерщики не загрузились: ${error.message}`)
-  return (data ?? []).map(u => ({ id: u.id as string, name: (u.name as string) || (u.email as string) || 'замерщик', schedule: DEFAULT_SCHEDULE }))
+  const ids = (data ?? []).map(u => u.id as string)
+  const schedules = new Map<string, Schedule>()
+  if (ids.length) {
+    const { data: sch, error: schErr } = await svc.from('measurer_schedules').select('user_id, work_days, work_from, work_to').in('user_id', ids)
+    if (schErr) throw new Error(`Часы замерщиков не загрузились: ${schErr.message}`)
+    for (const r of sch ?? []) {
+      schedules.set(r.user_id as string, {
+        work_days: ((r.work_days as number[] | null) ?? DEFAULT_SCHEDULE.work_days).map(Number),
+        work_from: hm(r.work_from, DEFAULT_SCHEDULE.work_from),
+        work_to: hm(r.work_to, DEFAULT_SCHEDULE.work_to),
+      })
+    }
+  }
+  return (data ?? []).map(u => ({
+    id: u.id as string,
+    name: (u.name as string) || (u.email as string) || 'замерщик',
+    schedule: schedules.get(u.id as string) ?? DEFAULT_SCHEDULE,
+  }))
+}
+
+// Выходные и отпуска, задевающие окно дат (включительно).
+export async function loadDaysOff(svc: SupabaseClient, from: string, to: string, measurerId?: string): Promise<(DayOff & { id: number })[]> {
+  let q = svc.from('measurer_days_off').select('id, measurer_id, date_from, date_to, note')
+    .lte('date_from', to).gte('date_to', from).order('date_from')
+  if (measurerId) q = q.eq('measurer_id', measurerId)
+  const { data, error } = await q
+  if (error) throw new Error(`Выходные замерщиков не загрузились: ${error.message}`)
+  return (data ?? []) as (DayOff & { id: number })[]
 }
 
 // Проверка замерщика и времени перед записью. Жёсткий конфликт — 409 с причиной;
@@ -77,22 +107,36 @@ export async function tryBook(svc: SupabaseClient, p: {
   time: unknown
   durationMin?: unknown
   force?: unknown
-  daysOff?: DayOff[]
 }): Promise<{ measurer: Measurer; startIso: string; durationMin: number } | NextResponse> {
   if (typeof p.date !== 'string' || !DATE_RE.test(p.date)) return NextResponse.json({ error: 'Укажи дату замера' }, { status: 400 })
   if (typeof p.time !== 'string' || !TIME_RE.test(p.time)) return NextResponse.json({ error: 'Укажи время замера (ЧЧ:ММ)' }, { status: 400 })
   const dur = Number(p.durationMin) || DEFAULT_DURATION_MIN
   if (dur < 15 || dur > 480) return NextResponse.json({ error: 'Длительность замера — от 15 минут до 8 часов' }, { status: 400 })
 
+  try {
+    return await checkedBooking(svc, { ...p, date: p.date, time: p.time }, dur)
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
+}
+
+async function checkedBooking(
+  svc: SupabaseClient,
+  p: { requestId?: number; measurerId: string; date: string; time: string; force?: unknown },
+  dur: number,
+): Promise<{ measurer: Measurer; startIso: string; durationMin: number } | NextResponse> {
   const measurers = await loadMeasurers(svc)
   const measurer = measurers.find(m => m.id === p.measurerId)
   if (!measurer) return NextResponse.json({ error: 'Замерщик не найден или не активен' }, { status: 400 })
 
   const startIso = mskToIso(p.date, p.time)
-  const bookings = await loadBookings(svc, p.date, p.date, measurer.id)
+  const [bookings, daysOff] = await Promise.all([
+    loadBookings(svc, p.date, p.date, measurer.id),
+    loadDaysOff(svc, p.date, p.date, measurer.id),
+  ])
   const conflicts = checkBooking({
     startIso, durationMin: dur, measurerId: measurer.id, schedule: measurer.schedule,
-    daysOff: p.daysOff ?? [], bookings, excludeId: p.requestId,
+    daysOff, bookings, excludeId: p.requestId,
   })
   const hard = conflicts.filter(c => c.hard)
   if (hard.length) {
@@ -132,3 +176,21 @@ export function money(v: unknown): number {
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+// Чьи часы и выходные правим: замерщик — только свои, владелец — любого замерщика.
+export async function targetMeasurer(svc: SupabaseClient, actor: MeasureActor, requested: unknown): Promise<Measurer | NextResponse> {
+  const id = actor.role === 'measurer' ? actor.userId : String(requested ?? '')
+  if (actor.role === 'measurer' && requested && requested !== actor.userId) {
+    return NextResponse.json({ error: 'Замерщик правит только свой график' }, { status: 403 })
+  }
+  if (actor.role !== 'measurer' && !isOwnerRole(actor.role)) {
+    return NextResponse.json({ error: 'График замерщика правит сам замерщик или владелец' }, { status: 403 })
+  }
+  if (!id) return NextResponse.json({ error: 'Выбери замерщика' }, { status: 400 })
+  try {
+    const m = (await loadMeasurers(svc)).find(x => x.id === id)
+    return m ?? NextResponse.json({ error: 'Замерщик не найден или не активен' }, { status: 400 })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
+}
