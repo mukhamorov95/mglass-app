@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import {
-  overdueShipments, unpaidInvoices, staleQuotes, otherBuckets, TOP_LIMIT,
-  STALE_QUOTE_MIN_DAYS, STALE_QUOTE_MAX_DAYS,
+  overdueShipments, splitShipments, unpaidInvoices, staleQuotes, otherBuckets, TOP_LIMIT,
+  STALE_QUOTE_MIN_DAYS, STALE_QUOTE_MAX_DAYS, SHIP_RECENT_DAYS,
   type TodayOrder, type TodayInvoice, type PriorityRow,
 } from '@/lib/b2b/todayPriorities'
+import { loadTodayOrders } from '@/lib/b2b/loadTodayOrders'
 import PlanEditor from './PlanEditor'
 import { responseError, NETWORK_ERROR } from '@/lib/toast'
 
@@ -16,6 +17,12 @@ import { responseError, NETWORK_ERROR } from '@/lib/toast'
 // Остальные дела — ниже, свёрнутыми группами.
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
+const ordersWord = (n: number) => {
+  const d10 = n % 10, d100 = n % 100
+  if (d10 === 1 && d100 !== 11) return 'заказ'
+  if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return 'заказа'
+  return 'заказов'
+}
 
 type Tone = 'red' | 'amber' | 'blue' | 'plain'
 const TONE: Record<Tone, string> = {
@@ -49,25 +56,8 @@ export default function TodayClient() {
   useEffect(() => {
     (async () => {
       try {
-        const sb = createClient()
-        const { data: { user } } = await sb.auth.getUser()
-        if (!user) { setError('Не авторизован'); return }
-        const { data: profile, error: profileErr } = await sb.from('users').select('role, see_all_orders').eq('id', user.id).maybeSingle()
-        // Без профиля не понять, чьи заказы показывать: владелец увидел бы только свои и «всё разобрано».
-        if (profileErr) { setError(`Не удалось загрузить профиль: ${profileErr.message}. Обновите страницу.`); return }
-        const seeAll = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.see_all_orders === true
-
-        const since = new Date(); since.setDate(since.getDate() - 120)
-        let q = sb.from('b2b_orders')
-          .select('id,client_name,custom_number,total_sale_inc_vat,total_after_discount,notes,created_at,updated_at,launched_at,created_by_name')
-          .is('archived_at', null)
-          .gte('created_at', since.toISOString())
-          .order('created_at', { ascending: false })
-          .limit(1000)
-        if (!seeAll) q = q.eq('created_by', user.id)
-
-        const [{ data, error: err }, inv] = await Promise.all([
-          q,
+        const [loaded, inv] = await Promise.all([
+          loadTodayOrders(createClient()),
           fetch('/api/invoices')
             .then(async (r): Promise<{ body?: { invoices?: TodayInvoice[] } | null; error?: string }> => {
               if (r.ok) return { body: await r.json().catch(() => null) as { invoices?: TodayInvoice[] } | null }
@@ -76,8 +66,8 @@ export default function TodayClient() {
             })
             .catch((): { body?: undefined; error: string } => ({ error: NETWORK_ERROR })),
         ])
-        if (err) { setError(`Не удалось загрузить заказы: ${err.message}. Обновите страницу.`); return }
-        setOrders((data ?? []) as TodayOrder[])
+        if (loaded.error) { setError(loaded.error); return }
+        setOrders(loaded.orders)
         if (inv.error) setInvErr(inv.error)
         else setInvoices(inv.body?.invoices ? inv.body.invoices : null)
       } finally { setLoading(false) }
@@ -103,14 +93,16 @@ export default function TodayClient() {
   const view = useMemo(() => {
     if (!nowTs) return null
     return {
-      ship: overdueShipments(orders, nowTs),
+      ship: splitShipments(overdueShipments(orders, nowTs)),
       pay: invoices ? unpaidInvoices(invoices, nowTs) : null,
       quotes: staleQuotes(orders, nowTs),
       other: otherBuckets(orders, nowTs),
     }
   }, [orders, invoices, nowTs])
 
-  const topCount = view ? view.ship.length + (view.pay?.length ?? 0) + view.quotes.length : 0
+  const topCount = view ? view.ship.recent.length + (view.pay?.length ?? 0) + view.quotes.length : 0
+  const oldShip = view?.ship.old ?? []
+  const oldShipSum = oldShip.reduce((s, r) => s + r.amount, 0)
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -128,9 +120,20 @@ export default function TodayClient() {
       ) : (
         <>
           <div className="space-y-3">
-            <PriorityCard tone="red" title="Просроченные отгрузки" rows={view.ship}
-              caption="Срок прошёл, отметки «Отгружен» нет. Либо заказ не уехал, либо цех его не отметил — в обоих случаях это надо закрыть. Считаются сроки с 01.09, когда вернулась отметка."
-              empty="Просроченных отгрузок нет" allHref="/b2b-orders" />
+            <PriorityCard tone="red" title="Просроченные отгрузки" rows={view.ship.recent}
+              caption={`Срок прошёл в последние ${SHIP_RECENT_DAYS} дней, отметки «Отгружен» нет. Либо заказ не уехал, либо его не отметили — закройте с датой отгрузки.`}
+              empty={`За ${SHIP_RECENT_DAYS} дней просроченных отгрузок нет`} allHref="/b2b-today/shipments" />
+            {oldShip.length > 0 && (
+              <div className="border border-[#e4e4e0] bg-white rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[12px] text-[#6b6b66]">
+                  <span className="font-semibold text-[#111110]">{oldShip.length}</span> {ordersWord(oldShip.length)} старше {SHIP_RECENT_DAYS} дней без отметки об отгрузке
+                  <span className="font-mono"> · {fmt(oldShipSum)}</span>. Почти всегда это отгружено, но не отмечено.
+                </p>
+                <Link href="/b2b-today/shipments" className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f3] whitespace-nowrap">
+                  Разобрать
+                </Link>
+              </div>
+            )}
             {invErr ? (
               <div role="alert" className="border border-[#eec5bf] bg-white rounded-2xl px-4 py-3 text-[12px] text-[#c23a2b]">
                 Счета ждут оплаты — не удалось загрузить: {invErr}. Обновите страницу.
@@ -264,7 +267,7 @@ function PriorityCard({ title, caption, rows, tone, empty, allHref, collapsed }:
                 <span className="text-[12px] font-mono text-[#111110] text-right">{fmt(r.amount)}</span>
                 <span className={`text-[11px] md:text-right ${tone === 'red' ? 'text-red-600' : 'text-[#6b6b66]'}`}>{r.daysLabel}</span>
                 <span className="text-[11px] text-[#6b6b66] truncate md:text-right">{r.owner ?? '—'}</span>
-                <Link href={r.href}
+                <Link href={r.actionHref ?? r.href}
                   className="justify-self-end text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] whitespace-nowrap">
                   {r.action}
                 </Link>
