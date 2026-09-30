@@ -39,15 +39,12 @@ export const MANAGER_MGLASS: NavEntry[] = [
   ] },
 
   { groupLabel: 'Расчёты и документы' },
-  // Калькуляторы изделий по-прежнему нужны каждый день (#480), поэтому первыми в группе.
-  { sectionLabel: 'Калькуляторы изделий', icon: '🧮', items: [
-    { href: '/calculator/shower', label: 'Душевая',        icon: '🚿' },
-    { href: '/calculator/mirror', label: 'Зеркало',        icon: '🪞' },
-    { href: '/calculator/loft',   label: 'Лофт',           icon: '🏗️' },
-    { href: '/configurator',      label: 'Визуализатор 3D', icon: '🧊' },
-  ] },
+  // Старые калькуляторы душевой, зеркала и лофта убраны из меню решением владельца
+  // 30.09.2026 (docs/MANAGER_UX_ROUTE.md): считать через «Новый расчёт» и «Быстрый».
+  // Страницы и доступ остались — старые ссылки открываются.
   { href: '/calculator/build',  label: 'Новый расчёт',     icon: '🚿' },
   { href: '/calculator/quick',  label: 'Быстрый расчёт · черновик', icon: '⚡' },
+  { href: '/configurator',      label: 'Визуализатор 3D',  icon: '🧊' },
   { href: '/calculations',      label: 'Расчёты',          icon: '📋' },
   { sectionLabel: 'КП и документы', icon: '📄', items: [
     { href: '/kp',                label: 'КП',               icon: '📄' },
