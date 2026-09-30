@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { Schedule } from '@/lib/measure/slots'
+import { confirmDialog } from '@/lib/dialog'
 
 // Рабочие часы и выходные/отпуск замерщика. Замерщик правит свои, владелец —
 // любого. Всё, что здесь сохранено, сразу видно на доске занятости у менеджеров:
@@ -77,7 +78,8 @@ export default function MeasurerAvailability({ onChanged }: { onChanged?: () => 
   }
 
   async function removeOff(o: Off) {
-    if (!window.confirm(`Убрать выходной ${fmtDate(o.date_from)}${o.date_to !== o.date_from ? `–${fmtDate(o.date_to)}` : ''}?`)) return
+    const range = `${fmtDate(o.date_from)}${o.date_to !== o.date_from ? `–${fmtDate(o.date_to)}` : ''}`
+    if (!(await confirmDialog({ title: `Убрать выходной ${range}?`, text: 'Эти дни снова станут свободными на доске.', confirmLabel: 'Убрать' }))) return
     await call(`/api/measurers/days-off?id=${o.id}`, { method: 'DELETE' }, 'Выходной убран.')
   }
 
