@@ -1,3 +1,24 @@
+## Задача (30.09): запись во входы цены — только тем, кто правит цены (ветка claude/pricing-inputs-write-rls)
+У `financial_settings` (маржа, налог) и `materials` (закупочная cost_price) политики FOR ALL `NOT is_partner()` —
+любой сотрудник (цех 6, менеджеры 6, бухгалтерия 2) мог переписать их прямым запросом к API своим токеном.
+- Писатели: financial_settings — только PUT /api/admin/settings (service, requireOwner). materials — /admin/materials
+  браузером под RLS (admin/ceo/buyer); service: from-supplier, transfer (admin/ceo/buyer), upload, warehouse,
+  catalog/approve (владелец), data-hub/import (admin/buyer). Триггеров и функций, пишущих в таблицы, нет.
+- Миграция supabase/migrations/20260930_pricing_inputs_write_rls.sql — НЕ ПРИМЕНЕНА, ждёт «да» владельца:
+  financial_settings → can_edit_pricing() (admin, ceo, commercial, cfo); materials → can_edit_materials()
+  = can_edit_pricing() или buyer. SELECT не трогали. Явные to authenticated, WITH CHECK на insert/update.
+- Проба 30.09 (откат по каждой личности, ceo/commercial/cfo — переназначением внутри отката): было — все, кроме
+  партнёра, 1/1/1; стало — admin/ceo/commercial/cfo 1; buyer: materials 1, настройки 0; manager/production/
+  accountant/без sub — 0 и отказ INSERT; партнёр 0 (не видит); anon permission denied. Контрольные суммы таблиц,
+  ролей и политик после пробы — прежние; фикстуры с отрицательными id (последовательности не сдвинуты).
+- Код: /admin/materials — сохранить/добавить/удалить/скрыть/«в наличии» через .select('id') + writeFailure, отказ
+  строк — тостом; массовое удаление называет «N из M», неудалённые остаются отмечены; фото и перенос — причина
+  отказа сервера (раньше молча). /api/admin/settings PUT — 404, если строки нет; /admin/settings не пишет «Нет
+  записей» при отказе загрузки. tsc 0, vitest 1542/1542.
+- После «да»: apply_migration → повторить пробу (стало = применено) → мерж PR.
+- Открытые вопросы владельцу: закупщик видит кнопку фото в /admin/materials, а upload пускает только владельца;
+  cfo открывает /admin/settings, а API — requireOwner (cfo получит «Нет прав»). Пользователей cfo сейчас нет.
+
 ## Задача (30.09): «Дублировать» в /calculations молча ничего не делал
 У `calculations` RLS включён, INSERT-политики нет (проба 30.09: admin и менеджер — «new row violates row-level
 security policy»), а duplicateCalc вставлял из браузера и ошибку не читал (`if (data) …`) — кнопка не делала ничего.
