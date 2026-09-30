@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { buildMeasureMessage } from '@/lib/measure/message'
 
 // Кабинет замерщика: пул новых заявок → назначить дату/время → мой календарь
 // (занято/свободно) → выполнен / сложность (проблема + решение, как у цеха)
@@ -173,7 +174,7 @@ export default function MeasurerCabinetPage() {
             <div className="mt-2 space-y-2">
               {pool.map(r => (
                 <div key={r.id} className={`bg-white border border-amber-100 rounded-lg p-3 ${busy === r.id ? 'opacity-50' : ''}`}>
-                  <pre className="text-[12px] whitespace-pre-wrap font-sans">{r.structured_text || `${r.client_name} · ${r.address ?? ''}`}</pre>
+                  <pre className="text-[12px] whitespace-pre-wrap font-sans">{buildMeasureMessage(r)}</pre>
                   <p className="text-[11px] text-[#9a9a95] mt-1">от {r.manager_name || 'менеджера'} · гонорар замерщика: <b>{fmt(r.measurer_fee)}</b></p>
                   {schedFor === r.id ? (
                     <div className="flex items-center gap-2 mt-2">
