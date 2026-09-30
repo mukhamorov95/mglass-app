@@ -1,6 +1,7 @@
 import 'server-only'
 import { amoGetAll, getPipelines } from '@/lib/amocrm'
 import { getAmoUserNames } from '@/lib/amoPeople'
+import { mayBeAutoReply } from '@/lib/amoActivity'
 import {
   advanceOf, buildAmoResults, stageId,
   type AmoResultsReport, type ContactEvent, type OpenTask, type ResultLead, type StatusEvent,
@@ -46,12 +47,12 @@ export async function fetchAmoResults(from: number, to: number): Promise<AmoResu
     amoGetAll<OpenTask>('/tasks', { 'filter[is_completed]': '0' }, 'tasks'),
   ])
 
-  // Входящие нужны только чтобы узнать автоответ робота — и только по новым заявкам с сообщением
-  // без автора: там он мог стать «первым контактом». Все входящие за 90 дней — вдвое дольше
-  // (замер 30.09: 25 → 52 с), а у маршрута минута. amo фильтрует по 10 сделок за запрос.
+  // Входящие нужны только чтобы узнать автоответ робота — и только по новым заявкам, где он
+  // мог стать «первым контактом». Все входящие за 90 дней — вдвое дольше (замер 30.09:
+  // 25 → 52 с). amo фильтрует по 10 сделок за запрос.
   const fresh = new Set(newLeads.map(l => l.id))
   const suspects = [...new Set(touches
-    .filter(e => e.type === 'outgoing_chat_message' && !e.created_by && e.entity_type === 'lead' && fresh.has(e.entity_id))
+    .filter(e => mayBeAutoReply(e) && e.entity_type === 'lead' && fresh.has(e.entity_id))
     .map(e => e.entity_id))]
   const incoming = (await inBatches(chunks(suspects, 10), 3, ids => amoGetAll<ContactEvent>('/events', {
     'filter[entity]': 'lead',
