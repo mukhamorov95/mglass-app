@@ -33,6 +33,11 @@ describe('инварианты расчёта', () => {
     expect(r.ok).toBe(true)
   })
 
+  it('расчёт по сделке AmoCRM клиента не требует — он ведётся в CRM', () => {
+    const r = checkCalculation({ ...base, product_type: 'build', amo_lead_id: 28123456 })
+    expect(r.ok).toBe(true)
+  })
+
   it('быстрый расчёт остаётся свободным — им считают на бегу', () => {
     const r = checkCalculation({ ...base, product_type: 'quick' })
     expect(r.ok).toBe(true)

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { kpFromQuick } from '@/lib/kp/fromQuick'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { useAmoLeadFromUrl } from '@/lib/useAmoLead'
+import { AmoLeadBanner } from '@/components/AmoLeadBanner'
 
 const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
@@ -16,6 +18,7 @@ const I = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] outli
 type DealLink =
   | { kind: 'attached'; dealId: number }
   | { kind: 'created'; dealId: number }
+  | { kind: 'amo'; leadId: number }
   | { kind: 'ambiguous' }
   | { kind: 'none' }
   | { kind: 'failed'; reason: string; dealId: number | null }
@@ -51,6 +54,12 @@ export default function QuickCalcPage() {
   // Клиент — опционально: расчёт сохраняется и без него, но с ним попадёт в сделку.
   const [clientName, setClientName]   = useState('')
   const [clientPhone, setClientPhone] = useState('')
+  // Пустые поля клиента берём из сделки AmoCRM; вписанное руками не перебиваем.
+  const amo = useAmoLeadFromUrl(lead => {
+    setClientName(v => v || lead.contactName)
+    setClientPhone(v => v || lead.phone)
+  })
+  const amoLeadId = amo.lead?.id ?? null
   const [objectAddress, setObjectAddress] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
@@ -145,7 +154,7 @@ export default function QuickCalcPage() {
       clientName, clientPhone,
     })
     if (!content) return
-    try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch { /* ignore */ }
+    try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(amoLeadId ? { ...content, amo_lead_id: amoLeadId } : content)) } catch { /* ignore */ }
     router.push('/kp')
   }
 
@@ -188,6 +197,7 @@ export default function QuickCalcPage() {
         client_phone: clientPhone.trim() || undefined,
         // Связь первичный→вторичный: пересчёт из карточки помнит родителя.
         parent_calc_id: parentCalcIdRef.current ?? undefined,
+        ...(amoLeadId ? { amo_lead_id: amoLeadId } : {}),
       })
       const ok = !!(res && 'id' in res && res.id)
       if (!ok) {
@@ -207,6 +217,7 @@ export default function QuickCalcPage() {
       if (!silent) setSaveMsg(
         link.kind === 'attached' ? 'Сохранено ✓ — расчёт в сделке (вкладка «Расчёты») и в общем списке «Расчёты». КП — кнопкой «Сформировать КП»'
         : link.kind === 'created' ? 'Сохранено, заведена сделка ✓ — расчёт в ней и в «Расчётах». КП — кнопкой «Сформировать КП»'
+        : link.kind === 'amo' ? `Сохранено ✓ — расчёт в сделке AmoCRM №${link.leadId} (её строка на «Сделки в AmoCRM») и в «Расчётах». КП — кнопкой «Сформировать КП»`
         : link.kind === 'ambiguous' ? 'Сохранено в «Расчёты» ✓ — в сделку не положен: такой телефон уже есть в сделках. Расчёт ждёт в «Мой день» → «Расчёты без клиента»'
         : link.kind === 'failed' ? 'Расчёт сохранён в «Расчёты», но в сделку не попал — подробности в сообщении внизу'
         : 'Сохранено в «Расчёты» ✓ — КП делается кнопкой «Сформировать КП»')
@@ -235,6 +246,8 @@ export default function QuickCalcPage() {
         return r.ok ? { kind: 'attached', dealId } : { kind: 'failed', reason: await responseError(r), dealId }
       } catch { return { kind: 'failed', reason: NETWORK_ERROR, dealId } }
     }
+    // Сделка AmoCRM: связь уже записана в самом расчёте, своей сделки не заводим.
+    if (amoLeadId) return { kind: 'amo', leadId: amoLeadId }
     if (!clientPhone.trim() && !objectAddress.trim()) return { kind: 'none' }
     // Новый расчёт с телефоном/адресом: сервер решает создать/спросить/осиротеть
     // (/api/deals/ensure). Создание ≠ склейка — молча только новый объект.
@@ -278,6 +291,7 @@ export default function QuickCalcPage() {
           <h1 className="text-[18px] font-semibold text-[#111110]">Быстрый расчёт</h1>
           <p className="text-[12px] text-[#9a9a95] mt-0.5">Прозрачный расчёт по формуле: себестоимость → рекомендованная цена. Можно добавить несколько изделий.</p>
         </div>
+        <AmoLeadBanner state={amo} />
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-4 items-start">
           <div className="space-y-4">

@@ -17,6 +17,7 @@ export type CalcCheckInput = {
   client_name?: string
   client_phone?: string
   deal_id?: number | null
+  amo_lead_id?: number | null
   input_data?: Record<string, unknown>
 }
 
@@ -42,7 +43,8 @@ export function checkCalculation(p: CalcCheckInput): CalcCheck {
   }
 
   // Расчёт внутри сделки: клиент уже известен из карточки, спрашивать нечего.
-  if (CLIENT_REQUIRED.includes(p.product_type) && !p.deal_id) {
+  // Сделка AmoCRM — то же самое: клиент ведётся там (решение владельца 30.09).
+  if (CLIENT_REQUIRED.includes(p.product_type) && !p.deal_id && !p.amo_lead_id) {
     if ((p.client_name ?? '').trim().length < 2) {
       return { ok: false, error: 'Нужно имя клиента — иначе расчёт не станет сделкой' }
     }

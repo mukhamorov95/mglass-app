@@ -43,6 +43,7 @@ type SavePayload = {
   client_phone?: string
   order_group_id?: string
   parent_calc_id?: number
+  amo_lead_id?: number
 }
 
 export type SaveResult = { id: number; error?: never } | { id?: never; error: string } | null

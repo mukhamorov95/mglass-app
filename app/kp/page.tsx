@@ -95,6 +95,7 @@ export default function KpPage() {
   const [tab, setTab] = useState<'new' | 'history'>('new')
   const [form, setForm] = useState<Form>(emptyForm())
   const dealIdRef = useRef<number | null>(null)   // КП из карточки сделки несёт связь в commercial_proposals
+  const [amoLeadId, setAmoLeadId] = useState<number | null>(null)   // КП из расчёта по сделке AmoCRM
   const [editingId, setEditingId] = useState<number | null>(null)
   const [savedId, setSavedId] = useState<number | null>(null)
   const [transcript, setTranscript] = useState('')
@@ -132,10 +133,11 @@ export default function KpPage() {
       // Раньше ключ стирался при чтении: перезагрузка страницы или возврат на неё
       // оставляли пустую форму, и КП, который менеджер уже считал сделанным,
       // исчезал. Стираем только после сохранения или явной очистки.
-      const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number; deal_id?: number; client_name?: string; client_phone?: string; client_address?: string }
+      const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number; deal_id?: number; amo_lead_id?: number; client_name?: string; client_phone?: string; client_address?: string }
       // Из карточки сделки: клиент и связь уже подставлены — менеджер их не вводит заново.
       if (typeof p.deal_id === 'number') dealIdRef.current = p.deal_id
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (typeof p.amo_lead_id === 'number') setAmoLeadId(p.amo_lead_id)
       setTab('new')
       setFromQuick(true)
       setForm(f => ({
@@ -335,7 +337,7 @@ export default function KpPage() {
         if (res.ok) { dropDraft(); setSavedId(editingId) }
         else setSaveError(data.error || `Ошибка ${res.status}`)
       } else {
-        const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, ...(dealIdRef.current ? { deal_id: dealIdRef.current } : {}) }) })
+        const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, ...(dealIdRef.current ? { deal_id: dealIdRef.current } : {}), ...(amoLeadId ? { amo_lead_id: amoLeadId } : {}) }) })
         const data = await res.json().catch(() => ({}))
         if (res.ok && data.id) {
           dropDraft()
@@ -372,6 +374,8 @@ export default function KpPage() {
     if (tab === 'new' && !savedId && !editingId && hasContent(form)
       && !confirm('Очистить форму? Это КП ещё не сохранено — оно пропадёт.')) return
     dropDraft()
+    // Новое КП — уже не про ту сделку: иначе следующее КП молча легло бы в прежнюю.
+    dealIdRef.current = null; setAmoLeadId(null)
     setForm(emptyForm()); setEditingId(null); setSavedId(null); setTranscript(''); setTab('new')
   }
 
@@ -406,6 +410,13 @@ export default function KpPage() {
             {fromQuick && !savedId && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[13px] text-amber-800">
                 Данные подставлены из быстрого расчёта. В историю КП попадёт только после кнопки «Сохранить КП» внизу.
+              </div>
+            )}
+            {amoLeadId && (
+              <div className="bg-[#eef3ee] border border-[#cfe0d3] rounded-xl px-4 py-3 text-[13px] text-[#4b4b47]">
+                {savedId
+                  ? <>КП привязано к сделке AmoCRM №{amoLeadId} — оно видно в строке этой сделки на странице «Сделки в AmoCRM».</>
+                  : <>КП по сделке AmoCRM №{amoLeadId}. После сохранения оно появится в строке этой сделки на странице «Сделки в AmoCRM».</>}
               </div>
             )}
             {/* voice */}
