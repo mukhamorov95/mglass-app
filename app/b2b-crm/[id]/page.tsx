@@ -122,7 +122,7 @@ export default function B2BClientCardPage() {
       sb.from('b2b_clients').select(CRM_COLS).eq('id', clientId).single(),
       sb.from('b2b_orders')
         .select('id,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,created_at,notes')
-        .eq('client_id', clientId).order('created_at', { ascending: false }).limit(20),
+        .eq('client_id', clientId).is('archived_at', null).order('created_at', { ascending: false }).limit(20),
       sb.from('b2b_interactions')
         .select('id,client_id,type,note,outcome,next_action,next_action_date,created_by,created_at')
         .eq('client_id', clientId).order('created_at', { ascending: false }),
@@ -446,11 +446,16 @@ export default function B2BClientCardPage() {
             {/* Статистика заказов */}
             {orders.length > 0 && (
               <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Заказы в текущем году</p>
+                {/* Раньше блок назывался «Заказы в текущем году», а показывал последние 20
+                    записей любого года, вместе с просчётами. Заказы за период — в отчёте. */}
+                <div className="flex items-baseline justify-between gap-2 mb-3">
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Последние просчёты и заказы</p>
+                  <Link href={`/b2b-crm/report?client=${clientId}`} className="text-[11px] text-[#6b6b66] underline hover:text-[#111110] whitespace-nowrap">Отчёт за период →</Link>
+                </div>
                 <div className="flex gap-4 mb-3">
                   <div>
                     <p className="text-[20px] font-bold text-[#111110] font-mono leading-none">{fmt(yearTotal)}</p>
-                    <p className="text-[11px] text-[#9a9a95] mt-0.5">{orders.length} просчётов</p>
+                    <p className="text-[11px] text-[#9a9a95] mt-0.5">сумма последних {orders.length}</p>
                   </div>
                 </div>
                 <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
