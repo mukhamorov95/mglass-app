@@ -57,6 +57,8 @@ describe('структура по ТЗ (Н1)', () => {
       '/kp', '/contracts', '/my-earnings', '/clients', '/crm', '/sales', '/sales/managers', '/orders',
       '/measure-requests', '/measure-calendar', '/measurer', '/installations', '/calendar', '/inventory',
       '/b2b-today', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-invoices', '/b2b-crm',
+      // Отчёт по клиентам B2B — клиент × период (просьба владельца 30.09)
+      '/b2b-crm/report',
     ]
     expect(all.map(i => i.href).sort()).toEqual(before.sort())
   })

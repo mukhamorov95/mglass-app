@@ -78,6 +78,7 @@ export const MANAGER_B2B: NavItem[] = [
   { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦' },
   { href: '/b2b-invoices',   label: 'Счета B2B',       icon: '📒' },
   { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
+  { href: '/b2b-crm/report', label: 'Отчёт по клиентам', icon: '📈' },
 ]
 
 
