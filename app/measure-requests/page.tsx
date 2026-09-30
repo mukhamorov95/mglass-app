@@ -1,8 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { buildMeasureMessage, splitScope, tidy } from '@/lib/measure/message'
-import MeasureBoard from '@/components/measure/MeasureBoard'
+import { buildMeasureMessage, formatMeasureWhen, splitScope, tidy } from '@/lib/measure/message'
+import { sendMeasure } from '@/lib/measure/client'
+import MeasureBoard, { type BoardPick } from '@/components/measure/MeasureBoard'
+import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
 
 // Заявки на замер (вкладка менеджера): диктовка/вставка → AI-структура →
 // редактируемая форма (или ручной ввод с нуля) → заявка в пул замерщиков.
@@ -31,6 +33,7 @@ type MReq = {
   manager_id: string | null
   manager_name: string | null
   measurer_name: string | null
+  measurer_id: string | null
   scheduled_at: string | null
   duration_min: number | null
   status: string
@@ -56,6 +59,9 @@ const EMPTY_FIELDS: Fields = {
   address: '', scope: '', notes: '', visit_price: '', payer: '', is_repeat: false,
 }
 
+const DRAFT_KEY = 'mglass_measure_request_draft'
+const EMPTY_BOOKING: BookingValue = { measurerId: '', date: '', time: '', durationMin: 90 }
+
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   new:       { label: '🆕 Ждёт замерщика', cls: 'bg-amber-50 text-amber-700' },
   scheduled: { label: '📅 Назначен',       cls: 'bg-blue-50 text-blue-700' },
@@ -78,6 +84,14 @@ export default function MeasureRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState<number | null>(null)
+  const [measurers, setMeasurers] = useState<{ id: string; name: string }[]>([])
+  const [when, setWhen] = useState<'pool' | 'book'>('pool')
+  const [booking, setBooking] = useState<BookingValue>(EMPTY_BOOKING)
+  const [notice, setNotice] = useState<{ text: string; req: MReq } | null>(null)
+  const [assignFor, setAssignFor] = useState<number | null>(null)
+  const [assignVal, setAssignVal] = useState<BookingValue>(EMPTY_BOOKING)
+  const [busyId, setBusyId] = useState<number | null>(null)
+  const [boardKey, setBoardKey] = useState(0)
 
   // Список уже отфильтрован сервером по кругу видимости: менеджер получает свои
   // заявки, владелец и офис — все.
@@ -85,12 +99,35 @@ export default function MeasureRequestsPage() {
     const res = await fetch('/api/measure-requests', { cache: 'no-store' })
     const j = await res.json().catch(() => ({}))
     if (!res.ok) setError(j.error || `Заявки не загрузились (${res.status})`)
-    else { setMe(j.me); setReqs(j.requests as MReq[]) }
+    else { setMe(j.me); setReqs(j.requests as MReq[]); setMeasurers(j.measurers ?? []) }
     setLoading(false)
+    setBoardKey(k => k + 1)
   }, [])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
+
+  // Черновик заявки (надиктованное и форма) переживает перезагрузку, пока заявку
+  // не создали или не закрыли форму.
+  useEffect(() => {
+    try {
+      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null') as { rawText?: string; fields?: Fields | null; fee?: string } | null
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (d?.rawText) setRawText(d.rawText)
+      if (d?.fields) setFields({ ...EMPTY_FIELDS, ...d.fields })
+      if (d?.fee) setFee(d.fee)
+    } catch { /* нет хранилища — работаем без черновика */ }
+  }, [])
+  useEffect(() => {
+    try {
+      if (rawText || fields) localStorage.setItem(DRAFT_KEY, JSON.stringify({ rawText, fields, fee }))
+      else localStorage.removeItem(DRAFT_KEY)
+    } catch { /* нет хранилища */ }
+  }, [rawText, fields, fee])
+
+  // Один замерщик — сразу он; иначе менеджер выбирает (или кликом по доске).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (measurers.length === 1) setBooking(b => b.measurerId ? b : { ...b, measurerId: measurers[0].id }) }, [measurers])
 
   function toggleRecording() {
     if (recording) { recRef.current?.stop(); return }
@@ -143,18 +180,54 @@ export default function MeasureRequestsPage() {
     manager_name: me?.name,
   }) : '', [fields, me])
 
+  const bookingReady = when === 'pool' || (!!booking.measurerId && !!booking.date && !!booking.time)
+
   async function createRequest() {
-    if (!me || !fields || !fields.client_name.trim()) return
+    if (!me || !fields || !fields.client_name.trim() || !bookingReady) return
     setSending(true)
     try {
-      const res = await fetch('/api/measure-requests', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...fields, raw_text: rawText || null, measurer_fee: fee.trim() || undefined }),
+      const body: Record<string, unknown> = { ...fields, raw_text: rawText || null, measurer_fee: fee.trim() || undefined }
+      if (when === 'book') {
+        body.booking = { measurer_id: booking.measurerId, date: booking.date, time: booking.time, duration_min: booking.durationMin }
+      }
+      const r = await sendMeasure<{ request: MReq }>('/api/measure-requests', 'POST', body,
+        b => ({ ...b, booking: { ...(b.booking as Record<string, unknown>), force: true } }))
+      if (!r.ok) { if (!r.cancelled) setError(r.error); return }
+      const req = r.data.request
+      setNotice({
+        req,
+        text: req.scheduled_at
+          ? `Замер назначен: ${formatMeasureWhen(req.scheduled_at, req.duration_min)} · ${req.measurer_name}. Он на доске ниже и в кабинете замерщика.`
+          : 'Заявка в пуле — замерщики видят её в своём кабинете и назначат время. Если замерщика надо предупредить — скопируй текст.',
       })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(j.error || `Заявка не создана (${res.status})`); return }
-      setError(''); setRawText(''); setFields(null); setFee(''); await load()
+      setError(''); setRawText(''); setFields(null); setFee(''); setWhen('pool'); setBooking(b => ({ ...EMPTY_BOOKING, measurerId: measurers.length === 1 ? b.measurerId : '' }))
+      await load()
     } finally { setSending(false) }
+  }
+
+  // Действие над заявкой из списка: назначить / перенести / в пул / отменить / вернуть.
+  async function act(r: MReq, body: Record<string, unknown>, confirmText?: string) {
+    if (confirmText && !window.confirm(confirmText)) return
+    setBusyId(r.id); setError('')
+    try {
+      const res = await sendMeasure(`/api/measure-requests/${r.id}`, 'PATCH', body)
+      if (!res.ok) { if (!res.cancelled) setError(res.error); return }
+      setAssignFor(null)
+      await load()
+    } finally { setBusyId(null) }
+  }
+
+  function openAssign(r: MReq) {
+    const at = r.scheduled_at ? new Date(new Date(r.scheduled_at).getTime() + 3 * 3600_000).toISOString() : ''
+    setAssignFor(r.id)
+    setAssignVal({
+      measurerId: r.measurer_id ?? (measurers.length === 1 ? measurers[0].id : ''),
+      date: at.slice(0, 10), time: at.slice(11, 16), durationMin: r.duration_min || 90,
+    })
+  }
+
+  function onBoardPick(p: BoardPick) {
+    setBooking(b => ({ ...b, measurerId: p.measurerId, date: p.date, time: p.time }))
   }
 
   // Текст собирается из заявки в момент копирования: в нём текущее время и
@@ -177,6 +250,7 @@ export default function MeasureRequestsPage() {
 
   const inputCls = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]'
   const labelCls = 'text-[11px] font-semibold text-[#6b6b66] block mb-1'
+  const actBtn = 'text-[11px] border border-[#e4e4e0] bg-white rounded-lg px-2 py-1 hover:bg-[#f5f5f3]'
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
@@ -192,6 +266,16 @@ export default function MeasureRequestsPage() {
           <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] rounded-lg px-3 py-2 flex items-start gap-2">
             <span className="flex-1">{error}</span>
             <button onClick={() => setError('')} className="text-red-400 hover:text-red-700">✕</button>
+          </div>
+        )}
+        {notice && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12px] rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap">
+            <span className="flex-1 min-w-[200px]">✅ {notice.text}</span>
+            <button onClick={() => copyMessage(notice.req)}
+              className="text-[11px] font-semibold border border-emerald-300 bg-white rounded-lg px-2 py-1 hover:bg-emerald-100">
+              {copied === notice.req.id ? '✓ Скопировано' : '📋 Копировать замерщику'}
+            </button>
+            <button onClick={() => setNotice(null)} className="text-emerald-500 hover:text-emerald-800">✕</button>
           </div>
         )}
         {/* Новая заявка: диктовка/вставка */}
@@ -226,7 +310,7 @@ export default function MeasureRequestsPage() {
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Структура заявки</p>
-              <button onClick={() => setFields(null)}
+              <button onClick={() => { if (window.confirm('Закрыть форму? Введённое будет стёрто.')) { setFields(null); setRawText(''); setFee('') } }}
                 className="text-[11px] text-[#9a9a95] hover:text-[#111110]">✕ Закрыть</button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -280,22 +364,52 @@ export default function MeasureRequestsPage() {
               </div>
             </div>
 
+            <div className="mt-4 border-t border-[#f0f0ec] pt-3">
+              <p className={labelCls}>Когда замер</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {([
+                  ['pool', '🆕 В пул — замерщик сам договорится с клиентом'],
+                  ['book', '📅 Уже договорились — назначить сразу'],
+                ] as const).map(([k, l]) => (
+                  <button key={k} type="button" onClick={() => setWhen(k)}
+                    className={`text-[12px] rounded-lg px-3 py-1.5 border ${when === k ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:bg-[#f5f5f3]'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {when === 'book' && (measurers.length === 0 ? (
+                <p className="text-[12px] text-amber-700">Замерщики ещё не заведены в приложении — назначить некого, заявка уйдёт в пул.</p>
+              ) : (
+                <>
+                  <BookingPicker value={booking} onChange={setBooking} measurers={measurers} />
+                  <p className="text-[11px] text-[#9a9a95] mt-1">Или кликни зелёное окно на доске «Когда можно на замер» ниже — замерщик, дата и время подставятся сюда.</p>
+                </>
+              ))}
+            </div>
+
             <p className="mt-3 text-[11px] font-semibold text-[#6b6b66]">Так увидит замерщик</p>
             <pre className="mt-1 bg-[#fafaf8] border border-[#f0f0ec] rounded-lg p-3 text-[12px] whitespace-pre-wrap font-sans">{structured}</pre>
 
-            <div className="flex items-center gap-2 mt-3">
-              <button onClick={createRequest} disabled={sending || !fields.client_name.trim() || !fields.address.trim()}
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <button onClick={createRequest} disabled={sending || !fields.client_name.trim() || !fields.address.trim() || !bookingReady}
                 className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-4 py-2 hover:bg-emerald-700 disabled:opacity-40">
-                {sending ? '…' : '✅ Создать заявку'}
+                {sending ? '…' : when === 'book' ? '✅ Создать и назначить замер' : '✅ Создать заявку в пул'}
               </button>
-              {(!fields.client_name.trim() || !fields.address.trim()) && (
-                <span className="text-[11px] text-amber-600">{!fields.client_name.trim() ? 'Укажи имя клиента' : 'Укажи адрес — замерщику некуда ехать без него'}</span>
+              {(!fields.client_name.trim() || !fields.address.trim() || !bookingReady) && (
+                <span className="text-[11px] text-amber-600">
+                  {!fields.client_name.trim() ? 'Укажи имя клиента'
+                    : !fields.address.trim() ? 'Укажи адрес — замерщику некуда ехать без него'
+                    : 'Выбери замерщика, дату и время — или отправь в пул'}
+                </span>
               )}
             </div>
           </div>
         )}
 
-        <MeasureBoard title="Когда можно на замер" refreshKey={reqs.length} />
+        <MeasureBoard title="Когда можно на замер" refreshKey={boardKey}
+          pick={fields && when === 'book' && measurers.length > 0
+            ? { durationMin: booking.durationMin, selected: booking.measurerId && booking.date && booking.time ? { measurerId: booking.measurerId, measurerName: '', date: booking.date, time: booking.time } : null, onPick: onBoardPick }
+            : undefined} />
 
         {/* Мои заявки */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
@@ -309,7 +423,8 @@ export default function MeasureRequestsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁' : '📐'} {r.deal_number || `#${r.id}`} · {tidy(r.client_name)}</span>
                       <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${meta.cls}`}>{meta.label}</span>
-                      {r.scheduled_at && <span className="text-[11px] text-[#6b6b66]">🕐 {new Date(r.scheduled_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {r.measurer_name || ''}</span>}
+                      {r.scheduled_at && <span className="text-[11px] text-[#6b6b66]">🕐 {formatMeasureWhen(r.scheduled_at, r.duration_min)} · {r.measurer_name || ''}</span>}
+                      {r.manager_name && me?.scope === 'all' && <span className="text-[11px] text-[#9a9a95]">· {r.manager_name}</span>}
                       <button onClick={() => copyMessage(r)}
                         className={`ml-auto text-[11px] border rounded-lg px-2 py-1 ${copied === r.id ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-[#e4e4e0] hover:bg-[#f5f5f3]'}`}>
                         {copied === r.id ? '✓ Скопировано — вставь замерщику' : '📋 Копировать замерщику'}
@@ -322,6 +437,36 @@ export default function MeasureRequestsPage() {
                       </ol>
                     )}
                     {r.issue_text && <p className="text-[12px] text-red-600 mt-1">⚠️ {r.issue_text}</p>}
+
+                    {me?.canCreate && (
+                      <div className={`flex items-center gap-1.5 flex-wrap mt-2 ${busyId === r.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {(r.status === 'new' || r.status === 'scheduled' || r.status === 'issue') && measurers.length > 0 && assignFor !== r.id && (
+                          <button onClick={() => openAssign(r)} className={actBtn}>{r.status === 'new' ? '📅 Назначить замерщика' : '↔ Перенести'}</button>
+                        )}
+                        {(r.status === 'scheduled' || r.status === 'issue') && (
+                          <button onClick={() => act(r, { action: 'unassign' }, 'Снять время и вернуть заявку в пул? Замерщик увидит её снова как новую.')} className={actBtn}>↩ В пул</button>
+                        )}
+                        {(r.status === 'new' || r.status === 'scheduled' || r.status === 'issue') && (
+                          <button onClick={() => act(r, { action: 'cancel' }, 'Отменить замер? Он исчезнет из пула и с доски.')} className={`${actBtn} text-red-600`}>✕ Отменить</button>
+                        )}
+                        {r.status === 'cancelled' && (
+                          <button onClick={() => act(r, { action: 'reopen' })} className={actBtn}>↺ Вернуть в пул</button>
+                        )}
+                      </div>
+                    )}
+                    {assignFor === r.id && (
+                      <div className="mt-2 rounded-lg border border-[#e4e4e0] bg-[#fafaf8] p-3 space-y-2">
+                        <BookingPicker value={assignVal} onChange={setAssignVal} measurers={measurers} excludeRequestId={r.id} />
+                        <div className="flex items-center gap-2">
+                          <button disabled={!assignVal.measurerId || !assignVal.date || !assignVal.time || busyId === r.id}
+                            onClick={() => act(r, { action: 'schedule', measurer_id: assignVal.measurerId, date: assignVal.date, time: assignVal.time, duration_min: assignVal.durationMin })}
+                            className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-40">
+                            ✅ Назначить
+                          </button>
+                          <button onClick={() => setAssignFor(null)} className="text-[12px] text-[#9a9a95]">отмена</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
