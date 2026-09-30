@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   overdueShipments, unpaidInvoices, staleQuotes, otherBuckets, daysText,
+  splitShipments, backfillCandidates, backfillDateProblem, SHIP_RECENT_DAYS,
   type TodayOrder, type TodayInvoice,
 } from '@/lib/b2b/todayPriorities'
 
@@ -115,4 +116,49 @@ describe('остальные дела', () => {
 
 it('склонение дней', () => {
   expect([1, 2, 5, 11, 21, 22, 25].map(daysText)).toEqual(['1 день', '2 дня', '5 дней', '11 дней', '21 день', '22 дня', '25 дней'])
+})
+
+describe('разбор старых отгрузок (решение владельца 30.09)', () => {
+  const late = (id: number, deadline: string, stages: Record<string, unknown> = {}) =>
+    order(id, { launched_at: iso('2026-08-20'), n: { deadline_date: deadline, stages } })
+
+  it('сверху — последние 14 дней, старше — в хвост', () => {
+    const rows = overdueShipments([late(1, '2026-09-10'), late(2, '2026-09-01')], NOW)
+    const { recent, old } = splitShipments(rows)
+    expect(recent.map(r => r.ref)).toEqual(['#1'])
+    expect(old.map(r => r.ref)).toEqual(['#2'])
+    expect(old[0].days).toBeGreaterThan(SHIP_RECENT_DAYS)
+  })
+
+  it('кнопка строки ведёт на разбор этого заказа, ссылка номера — в карточку', () => {
+    const [r] = overdueShipments([late(7, '2026-09-10')], NOW)
+    expect(r.href).toBe('/b2b-deal/7')
+    expect(r.actionHref).toBe('/b2b-today/shipments?order=7')
+  })
+
+  it('дата по умолчанию — день упаковки, иначе срок; не сегодняшняя', () => {
+    const rows = backfillCandidates([
+      late(1, '2026-09-05', { packaged: '2026-09-03T09:30:00+03:00' }),
+      late(2, '2026-09-04'),
+    ], NOW)
+    const byId = Object.fromEntries(rows.map(r => [r.id, r]))
+    expect(byId[1]).toMatchObject({ packagedDay: '2026-09-03', defaultDate: '2026-09-03', deadlineDay: '2026-09-05' })
+    expect(byId[2]).toMatchObject({ packagedDay: null, defaultDate: '2026-09-04' })
+  })
+
+  it('отгруженные, шаблоны и незапущенные в разбор не попадают', () => {
+    const rows = backfillCandidates([
+      late(1, '2026-09-05', { shipped: '2026-09-06' }),
+      order(2, { launched_at: iso('2026-08-20'), n: { deadline_date: '2026-09-05', is_template: true } }),
+      order(3, { n: { deadline_date: '2026-09-05' } }),
+    ], NOW)
+    expect(rows).toEqual([])
+  })
+
+  it('проверка даты: будущее и раньше запуска — нельзя', () => {
+    expect(backfillDateProblem('2026-09-10', '2026-09-15', '2026-08-20')).toBeNull()
+    expect(backfillDateProblem('2026-09-16', '2026-09-15', null)).toBe('дата в будущем')
+    expect(backfillDateProblem('2026-08-19', '2026-09-15', '2026-08-20')).toMatch(/раньше запуска/)
+    expect(backfillDateProblem('10.09.2026', '2026-09-15', null)).toBe('дата не распознана')
+  })
 })

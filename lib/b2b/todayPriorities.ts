@@ -1,6 +1,7 @@
 import { finalTotalOf } from './priceOverride'
 import { deadlineFor } from './deadline'
 import { stageDayKey } from '../production/dayLists'
+import { mskDayKey } from '../time'
 
 // «Мой день · B2B» — что сделать сегодня. Маршрут docs/FINMODEL_MANAGER_ROUTE.md, Н2.
 //
@@ -61,6 +62,7 @@ export type PriorityRow = {
   owner: string | null
   note?: string
   action: string
+  actionHref?: string   // куда ведёт кнопка, если не в карточку
 }
 
 type Notes = Record<string, unknown>
@@ -109,10 +111,66 @@ export function overdueShipments(orders: TodayOrder[], now: number): PriorityRow
       amount: finalTotalOf(o), days: d, daysLabel: `просрочка ${daysText(d)}`,
       owner: o.created_by_name,
       note: stageDayKey((n.stages as Record<string, unknown> | undefined)?.packaged) ? 'упакован, не отгружен' : undefined,
-      action: 'Проверить отгрузку',
+      action: 'Отметить отгрузку',
+      actionHref: `/b2b-today/shipments?order=${o.id}`,
     })
   }
   return rows.sort((a, b) => b.days - a.days || b.amount - a.amount)
+}
+
+// Решение владельца 30.09: сверху «Мой день · B2B» — отгрузки последних 14 дней.
+// Старше — почти всегда отгружено без отметки; этот хвост менеджер закрывает разом
+// на /b2b-today/shipments, а наверху он занимал весь экран и учил его пролистывать.
+export const SHIP_RECENT_DAYS = 14
+
+export function splitShipments(rows: PriorityRow[]): { recent: PriorityRow[]; old: PriorityRow[] } {
+  return {
+    recent: rows.filter(r => r.days <= SHIP_RECENT_DAYS),
+    old: rows.filter(r => r.days > SHIP_RECENT_DAYS),
+  }
+}
+
+export type BackfillRow = {
+  id: number
+  ref: string
+  client: string
+  amount: number
+  owner: string | null
+  days: number
+  deadlineDay: string        // YYYY-MM-DD по Москве
+  packagedDay: string | null
+  defaultDate: string        // что предложить: день упаковки, иначе срок; не позже сегодня
+}
+
+// Кандидаты на разбор — те же заказы, что в «просроченных отгрузках». Дата по умолчанию
+// не «сегодня»: пачка вчерашних отгрузок сегодняшним числом раздула бы «отгружено
+// сегодня» в цеху и дневные списки.
+export function backfillCandidates(orders: TodayOrder[], now: number): BackfillRow[] {
+  const since = Date.parse(SHIP_MARKS_SINCE)
+  const today = mskDayKey(now)
+  const rows: BackfillRow[] = []
+  for (const o of orders) {
+    const n = parseNotes(o.notes)
+    if (n.is_template === true || !isLaunched(o, n) || isShipped(n)) continue
+    const dl = orderDeadline(o, n).getTime()
+    if (dl < since || dl >= now) continue
+    const packagedDay = stageDayKey((n.stages as Record<string, unknown> | undefined)?.packaged)
+    const deadlineDay = mskDayKey(dl)
+    const guess = packagedDay ?? deadlineDay
+    rows.push({
+      id: o.id, ref: orderRef(o), client: o.client_name, amount: finalTotalOf(o), owner: o.created_by_name,
+      days: days(dl, now), deadlineDay, packagedDay, defaultDate: guess > today ? today : guess,
+    })
+  }
+  return rows.sort((a, b) => b.days - a.days || b.amount - a.amount)
+}
+
+// Проверка даты отгрузки из разбора: null — годится, иначе текст для человека.
+export function backfillDateProblem(date: string, today: string, launchedDay: string | null): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) return 'дата не распознана'
+  if (date > today) return 'дата в будущем'
+  if (launchedDay && date < launchedDay) return `раньше запуска (${launchedDay})`
+  return null
 }
 
 export function unpaidInvoices(invoices: TodayInvoice[], now: number): PriorityRow[] {
