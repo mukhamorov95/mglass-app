@@ -7,6 +7,8 @@
 
 export type CalcProductType = 'mirror' | 'loft' | 'shower' | 'railing' | 'quick' | 'build'
 
+export const CALC_PRODUCT_TYPES: CalcProductType[] = ['mirror', 'loft', 'shower', 'railing', 'quick', 'build']
+
 export type CalcCheckInput = {
   product_type: CalcProductType
   final_price: number

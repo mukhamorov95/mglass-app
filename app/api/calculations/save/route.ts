@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
-import { getRole } from '@/lib/getRole'
-import { checkCalculation, type CalcProductType } from '@/lib/calcInvariants'
+import { isOwnerRole } from '@/lib/getRole'
+import { calcWriter } from '@/lib/calcAccess'
+import { checkCalculation, CALC_PRODUCT_TYPES, type CalcProductType } from '@/lib/calcInvariants'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,29 +34,15 @@ type Body = {
   deal_id?: number
 }
 
-const TYPES: CalcProductType[] = ['mirror', 'loft', 'shower', 'railing', 'quick', 'build']
-
-async function actor() {
-  const { data: { user } } = await (await createClient()).auth.getUser()
-  if (!user) return { error: NextResponse.json({ error: 'Нет активной сессии. Войдите в аккаунт.' }, { status: 401 }) }
-  const role = await getRole()
-  // Партнёр считает в своём кабинете и в общую историю расчётов не пишет —
-  // то же правило, что стояло в RLS.
-  if (!role || role === 'partner') {
-    return { error: NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 }) }
-  }
-  return { userId: user.id }
-}
-
 export async function POST(req: NextRequest) {
-  const a = await actor()
+  const a = await calcWriter()
   if ('error' in a) return a.error
 
   const b = await req.json().catch(() => null) as Body | null
   if (!b) return NextResponse.json({ error: 'Пустое тело запроса' }, { status: 400 })
 
   const productType = b.product_type as CalcProductType
-  if (!TYPES.includes(productType)) {
+  if (!CALC_PRODUCT_TYPES.includes(productType)) {
     return NextResponse.json({ error: `Неизвестный тип расчёта: ${b.product_type}` }, { status: 400 })
   }
 
@@ -103,7 +89,7 @@ export async function POST(req: NextRequest) {
 // Правка ранее сохранённого расчёта — через те же инварианты. Менять чужой
 // расчёт нельзя: проверяем автора до записи (service-role RLS не применит).
 export async function PATCH(req: NextRequest) {
-  const a = await actor()
+  const a = await calcWriter()
   if ('error' in a) return a.error
 
   const b = await req.json().catch(() => null) as (Body & { id?: number }) | null
@@ -115,9 +101,7 @@ export async function PATCH(req: NextRequest) {
     .select('id, created_by, product_type, deal_id').eq('id', id).maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Расчёт не найден' }, { status: 404 })
 
-  const role = await getRole()
-  const owner = role === 'admin' || role === 'ceo'
-  if (!owner && existing.created_by !== a.userId) {
+  if (!isOwnerRole(a.role) && existing.created_by !== a.userId) {
     return NextResponse.json({ error: 'Это чужой расчёт' }, { status: 403 })
   }
 

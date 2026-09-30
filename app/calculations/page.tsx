@@ -2,6 +2,7 @@ import { getRole } from '@/lib/getRole'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import CalculationsClient from './CalculationsClient'
+import { seesAllCalculations } from '@/lib/calcAccess'
 import type { FinancialSettings } from '@/lib/types'
 
 export default async function CalculationsPage() {
@@ -20,11 +21,7 @@ export default async function CalculationsPage() {
 
   // «Видит все сделки»: владелец (admin/ceo) или менеджер с can_view_all_deals.
   // Раньше все КП видел только admin — галка can_view_all_deals не применялась.
-  let canViewAll = isAdmin || role === 'ceo'
-  if (!canViewAll && userId) {
-    const { data: profile } = await supabase.from('users').select('can_view_all_deals').eq('id', userId).maybeSingle()
-    canViewAll = profile?.can_view_all_deals === true
-  }
+  const canViewAll = userId ? await seesAllCalculations(supabase, userId, role) : false
 
   if (canViewAll) {
     const admin = createClient(
