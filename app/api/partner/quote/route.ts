@@ -144,17 +144,19 @@ export async function POST(req: NextRequest) {
     let en: Record<string, unknown> = {}
     try { en = exr.notes ? JSON.parse(exr.notes) : {} } catch {}
     if (en.status && en.status !== 'quote') return NextResponse.json({ error: 'Просчёт уже отправлен — редактирование недоступно' }, { status: 400 })
-    en.status = 'quote'; en.source = 'partner'
-    en.partner_comment = comment || undefined
-    en.updated_by_partner_at = new Date().toISOString()
     const { error: upErr } = await svc.from('b2b_orders').update({
       discount_percent: discount, margin_percent: marginPct, items,
       total_area: totals.totalAreaNet, total_weight: totals.totalWeight,
       total_cost_net: totals.totalCostExVat, total_cost_vat: totals.totalInputVat,
       total_sale_inc_vat: totals.totalSaleIncVat, total_after_discount: totals.totalAfterDiscount,
-      notes: JSON.stringify(en), updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }).eq('id', editId)
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
+    // notes — только свои ключи; снять комментарий — null (патч ключи не удаляет).
+    const { error: notesErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: editId, p_patch: {
+      status: 'quote', source: 'partner', partner_comment: comment || null, updated_by_partner_at: new Date().toISOString(),
+    } })
+    if (notesErr) return NextResponse.json({ error: notesErr.message }, { status: 500 })
     return NextResponse.json({ ok: true, quoteId: editId, items: safeItems, total: partnerTotal, discountPercent: discount })
   }
 

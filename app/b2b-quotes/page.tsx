@@ -18,6 +18,8 @@ import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, type B2BRates, type RateR
 import { toast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { promptDialog } from '@/lib/dialog'
 import { writeFailure } from '@/lib/rlsWrite'
+import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
+import { notesForCopy } from '@/lib/b2b/orderNotes'
 
 
 const PAGE_SIZE = 50
@@ -428,18 +430,13 @@ export default function B2BQuotesPage() {
       showError(MGLASS_SCOPE_ERROR)
       return
     }
-    const parsed = parseNotes(q.notes)
-    const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
-    history.push({ from: getStatus(q), to: newStatus, date: new Date().toISOString(), comment: null })
     // Возврат в черновик снимает признак запуска (колонку и notes), чтобы просчёт снова
-    // грузился в этот список (мы грузим только launched_at IS NULL).
-    const revertToDraft = newStatus === 'quote'
-    const newNotes = JSON.stringify({ ...parsed, status: newStatus, status_history: history, ...(revertToDraft ? { launched_at: undefined } : {}) })
-    const meta = buildUpdateMeta()
-    const patch = { notes: newNotes, ...meta, ...(revertToDraft ? { launched_at: null } : {}) }
-    const fail = writeFailure(await createClient().from('b2b_orders').update(patch).eq('id', id).select('id'))
-    if (fail) { showError('Статус не изменён', fail); return }
-    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta, ...(revertToDraft ? { launched_at: null } : {}) } : x))
+    // грузился в этот список (мы грузим только launched_at IS NULL). Патч собирает сервер
+    // из свежих notes — копия вкладки не затирает ответ клиента, согласование, ссылку.
+    const r = await saveOrderNotes(id, { action: 'status', to: newStatus, revertToDraft: newStatus === 'quote' })
+    if (r.error !== null) { showError('Статус не изменён', r.error); return }
+    const saved = r.data
+    setQuotes(prev => prev.map(x => x.id === id ? { ...x, ...(saved.columns as Partial<Quote>), notes: saved.notes } : x))
     showToast(`Статус → ${STATUS_META[newStatus as QuoteStatus]?.label ?? newStatus}`)
   }
 
@@ -453,24 +450,10 @@ export default function B2BQuotesPage() {
       setPendingComment('')
       return
     }
-    const parsed = parseNotes(q.notes)
-    const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
-    history.push({
-      from: getStatus(q),
-      to: pendingChange.status,
-      date: new Date().toISOString(),
-      comment: pendingComment || null,
-    })
-    const newNotes = JSON.stringify({
-      ...parsed,
-      status: pendingChange.status,
-      status_comment: pendingComment || null,
-      status_history: history,
-    })
-    const meta = buildUpdateMeta()
-    const fail = writeFailure(await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', pendingChange.quoteId).select('id'))
-    if (fail) { showError('Статус не изменён', `${fail}. Комментарий остался в окне — нажмите ещё раз`); return }
-    setQuotes(prev => prev.map(x => x.id === pendingChange.quoteId ? { ...x, notes: newNotes, ...meta } : x))
+    const r = await saveOrderNotes(pendingChange.quoteId, { action: 'status', to: pendingChange.status, comment: pendingComment || null })
+    if (r.error !== null) { showError('Статус не изменён', `${r.error}. Комментарий остался в окне — нажмите ещё раз`); return }
+    const saved = r.data
+    setQuotes(prev => prev.map(x => x.id === pendingChange.quoteId ? { ...x, ...(saved.columns as Partial<Quote>), notes: saved.notes } : x))
     showToast(`Статус → ${STATUS_META[pendingChange.status as QuoteStatus]?.label ?? pendingChange.status}`)
     setPendingChange(null)
     setPendingComment('')
@@ -485,9 +468,6 @@ export default function B2BQuotesPage() {
       setWorkDateId(null)
       return
     }
-    const parsed = parseNotes(q.notes)
-    const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
-    history.push({ from: getStatus(q), to: 'sent', date: new Date().toISOString(), comment: null })
     // Чертёж для цеха: тот же bucket/путь, что «Прикрепить чертёж» в заказах —
     // мастер увидит его в «Моих задачах» и в карточке заказа
     let drawingUrl: string | null = null
@@ -501,42 +481,14 @@ export default function B2BQuotesPage() {
       drawingUrl = path
     }
     // «В работу» с датой = запуск в производство: выбранная дата это и есть дата запуска.
-    // Пишем launched_at (колонку и notes), иначе заказ висит «без даты запуска» в /b2b-orders,
-    // который группирует по launched_at, а не по work_started_at.
-    const newNotes = JSON.stringify({
-      ...parsed,
-      status: 'sent',
-      work_started_at: workDate,
-      launched_at: workDate,
-      ...(workDeadline ? { deadline_date: workDeadline } : {}),
-      ...(drawingUrl ? { drawing_url: drawingUrl } : {}),
-      status_history: history,
+    // launched_at пишется и колонкой, и в notes, иначе заказ висит «без даты запуска» в
+    // /b2b-orders. notes сервер собирает из свежей записи — чертёж, этапы и ответ клиента,
+    // появившиеся после открытия вкладки, не затираются (раньше спасали только чертёж).
+    const r = await saveOrderNotes(workDateId, {
+      action: 'launch', workDate, deadline: workDeadline || null, drawingUrl, customNumber: workNumber.trim() || null,
     })
-    const meta = buildUpdateMeta()
-    const num = workNumber.trim()
-    const updateRow = {
-      notes: newNotes,
-      ...meta,
-      launched_at:          workDate,
-      launched_by_user_id:  currentUserId,
-      launched_by_name:     currentUserName,
-      converted_by_user_id: currentUserId,
-      converted_by_name:    currentUserName,
-      ...(num ? { custom_number: num } : {}),
-    }
-    const launchFail = writeFailure(await createClient().from('b2b_orders').update(updateRow).eq('id', workDateId).select('id'))
-    if (launchFail) { showError('Заказ не запущен', `${launchFail}. Данные остались в окне — нажмите ещё раз`); return }
-    // Чертёж дописываем ВТОРЫМ свежим read-merge-write: параллельные RMW notes
-    // (этапы/материал в /b2b-orders) могут затереть общий update (случай #4960)
-    if (drawingUrl) {
-      const sb2 = createClient()
-      const { data: freshRow, error: readErr } = await sb2.from('b2b_orders').select('notes').eq('id', workDateId).single()
-      // Без свежего чтения не пишем: запись из пустых notes стёрла бы этапы заказа.
-      const { error: drawErr } = readErr ? { error: readErr } : await sb2.from('b2b_orders')
-        .update({ notes: JSON.stringify({ ...parseNotes((freshRow as { notes: string | null } | null)?.notes ?? null), drawing_url: drawingUrl }) })
-        .eq('id', workDateId)
-      if (drawErr) showError('Чертёж загружен, но не привязан к заказу', `${drawErr.message}. Прикрепите его ещё раз в «Заказах»`)
-    }
+    if (r.error !== null) { showError('Заказ не запущен', `${r.error}. Данные остались в окне — нажмите ещё раз`); return }
+    const launchedRow = r.data
     // Генерация задач в цех. Раньше запрос уходил без await и с проглоченной
     // ошибкой — заказ 0928-3 так и провисел 16 дней невидимым для цеха: статус
     // «в работе» стоит, а задач ноль, и ни один производственный экран его не
@@ -555,15 +507,7 @@ export default function B2BQuotesPage() {
       })
     }
     setQuotes(prev => prev.map(x => x.id === workDateId ? {
-      ...x,
-      notes: newNotes,
-      launched_at:          workDate,
-      launched_by_user_id:  currentUserId,
-      launched_by_name:     currentUserName,
-      converted_by_user_id: currentUserId,
-      converted_by_name:    currentUserName,
-      ...(num ? { custom_number: num } : {}),
-      ...meta,
+      ...x, ...(launchedRow.columns as Partial<Quote>), notes: launchedRow.notes,
     } : x))
     showToast('Запущено в работу')
     setWorkDateId(null)
@@ -682,10 +626,10 @@ export default function B2BQuotesPage() {
   async function duplicateQuote(q: Quote) {
     const sb = createClient()
     const { data: { user } } = await sb.auth.getUser()
-    const parsed = parseNotes(q.notes)
-    // Автор дубля — текущий пользователь (не исходный менеджер): чистим manager_name в notes.
-    // Копия/«из шаблона» — всегда обычный черновик: флаг шаблона и следы запуска снимаем.
-    const newNotes = JSON.stringify({ ...parsed, status: 'quote', quote_date: new Date().toISOString(), launched_at: undefined, payment_status: undefined, is_template: undefined, template_name: undefined, manager_name: currentUserName ?? undefined })
+    // Автор дубля — текущий пользователь (не исходный менеджер). Копия/«из шаблона» —
+    // обычный черновик: следы жизни исходного заказа (токен ссылки клиента, ответ,
+    // согласование, этапы, оплата, история) не переносим — lib/b2b/orderNotes.ts.
+    const newNotes = JSON.stringify(notesForCopy(parseNotes(q.notes), { at: new Date().toISOString(), managerName: currentUserName ?? null }))
     const { data, error } = await sb.from('b2b_orders').insert({
       client_id: q.client_id, client_name: q.client_name,
       discount_percent: q.discount_percent, margin_percent: q.margin_percent,
@@ -750,13 +694,11 @@ export default function B2BQuotesPage() {
   // А3: пометить/снять шаблон. Шаблон не мешается в активных вкладках и служит
   // заготовкой для повторяющихся заказов клиента.
   async function toggleTemplate(q: Quote) {
-    const parsed = parseNotes(q.notes)
     const next = !isTemplate(q)
-    const newNotes = JSON.stringify({ ...parsed, is_template: next || undefined })
-    const fail = writeFailure(await createClient().from('b2b_orders')
-      .update({ notes: newNotes, ...buildUpdateMeta() }).eq('id', q.id).select('id'))
-    if (fail) { showError(next ? 'Не добавлено в шаблоны' : 'Не убрано из шаблонов', fail); return }
-    setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: newNotes } : x))
+    const r = await saveOrderNotes(q.id, { action: 'template', value: next })
+    if (r.error !== null) { showError(next ? 'Не добавлено в шаблоны' : 'Не убрано из шаблонов', r.error); return }
+    const saved = r.data
+    setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, ...(saved.columns as Partial<Quote>), notes: saved.notes } : x))
     showToast(next ? 'Добавлено в шаблоны' : 'Убрано из шаблонов')
   }
 

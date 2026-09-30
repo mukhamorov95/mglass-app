@@ -9,6 +9,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { createClient } from '@/lib/supabase-browser'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
 
 type Quote = {
   id: number
@@ -206,22 +207,18 @@ export default function B2BPipelinePage() {
     if (!quote) return
     if (getStatus(quote) === newStatus) return
 
-    const parsed   = parseNotes(quote.notes)
-    const history  = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
-    history.push({ from: getStatus(quote), to: newStatus, date: new Date().toISOString() })
-    const newNotes = JSON.stringify({ ...parsed, status: newStatus, status_history: history })
+    // Оптимистично двигаем карточку; notes целиком не пишем — воронка открыта надолго,
+    // и копия вкладки стёрла бы этапы и оплату заказов в работе. Патч — на сервере.
+    const optimistic = JSON.stringify({ ...parseNotes(quote.notes), status: newStatus })
+    setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, notes: optimistic } : q))
 
-    // Optimistic update
-    setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, notes: newNotes } : q))
-
-    const sb = createClient()
-    const { error } = await sb.from('b2b_orders').update({ notes: newNotes }).eq('id', quoteId)
-
-    if (error) {
-      // Rollback
+    const r = await saveOrderNotes(quoteId, { action: 'status', to: newStatus })
+    if (r.error !== null) {
       setQuotes(prev => prev.map(q => q.id === quoteId ? quote : q))
-      showToast('Ошибка при обновлении статуса')
+      showToast(`Статус не изменён: ${r.error}`)
     } else {
+      const saved = r.data
+      setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, notes: saved.notes } : q))
       showToast('Статус обновлён')
     }
   }
@@ -291,15 +288,10 @@ export default function B2BPipelinePage() {
                             value={col.key}
                             onChange={async e => {
                               const newStatus = e.target.value as typeof col.key
-                              const parsed = parseNotes(q.notes)
-                              const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
-                              history.push({ from: col.key, to: newStatus, date: new Date().toISOString() })
-                              const newNotes = JSON.stringify({ ...parsed, status: newStatus, status_history: history })
-                              setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: newNotes } : x))
-                              const sb = createClient()
-                              const { error } = await sb.from('b2b_orders').update({ notes: newNotes }).eq('id', q.id)
-                              if (error) { setQuotes(prev => prev.map(x => x.id === q.id ? q : x)); showToast('Ошибка') }
-                              else showToast('Статус обновлён')
+                              setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: JSON.stringify({ ...parseNotes(q.notes), status: newStatus }) } : x))
+                              const r = await saveOrderNotes(q.id, { action: 'status', to: newStatus })
+                              if (r.error !== null) { setQuotes(prev => prev.map(x => x.id === q.id ? q : x)); showToast(`Статус не изменён: ${r.error}`) }
+                              else { const saved = r.data; setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: saved.notes } : x)); showToast('Статус обновлён') }
                             }}
                             className="text-[10px] border border-[#e4e4e0] rounded-lg px-1.5 py-1 bg-white text-[#6b6b66] outline-none"
                             onClick={e => e.stopPropagation()}>

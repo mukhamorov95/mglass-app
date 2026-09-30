@@ -6,6 +6,7 @@ import { notifyAdmins } from '@/lib/telegram'
 import { pushNotification } from '@/lib/partnerNotify'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { appUrl } from '@/lib/appUrl'
+import { appendTo, parseOrderNotes } from '@/lib/b2b/orderNotes'
 
 // Партнёр отправляет свой просчёт в заявку (на проверку менеджеру).
 // Просчёт → status='pending_approval'. Только свой просчёт, только если не запущен.
@@ -34,13 +35,10 @@ export async function POST(req: NextRequest) {
   try { notes = order.notes ? JSON.parse(order.notes as string) : {} } catch {}
   if (notes.status === 'pending_approval') return NextResponse.json({ ok: true, already: true })
 
-  const history = Array.isArray(notes.status_history) ? notes.status_history : []
-  history.push({ from: (notes.status as string) || 'quote', to: 'pending_approval', date: new Date().toISOString(), by: 'partner' })
-  notes.status = 'pending_approval'
-  notes.status_history = history
-  notes.submitted_by_partner_at = new Date().toISOString()
-
-  // AI-проверка логики просчёта — best-effort, не роняет отправку.
+  // AI-проверка логики просчёта — best-effort, не роняет отправку. Идёт секунды, поэтому
+  // notes после неё читаем заново и пишем только свои ключи: целая запись из чтения до
+  // вызова модели стирала то, что менеджер успел записать за это время.
+  let aiReview: unknown = undefined
   try {
     const rawItems = Array.isArray(order.items) ? (order.items as Record<string, unknown>[]) : []
     const reviewItems: ReviewItem[] = rawItems.map(it => ({
@@ -49,11 +47,22 @@ export async function POST(req: NextRequest) {
       hasTempering: !!it.hasTempering, hasFacet: !!it.hasFacet, hasHoles: !!it.hasHoles, shape: String(it.shape ?? 'rect'),
     }))
     const review = await reviewPartnerQuote(reviewItems)
-    if (review.summary || review.issues.length) notes.ai_review = review
+    if (review.summary || review.issues.length) aiReview = review
   } catch { /* AI недоступен — заявка всё равно уходит */ }
 
-  const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(notes), updated_at: new Date().toISOString() }).eq('id', quoteId)
+  const { data: freshRow, error: freshErr } = await svc.from('b2b_orders').select('notes').eq('id', quoteId).maybeSingle()
+  if (freshErr || !freshRow) return NextResponse.json({ error: 'Просчёт не прочитан — отправьте ещё раз' }, { status: 500 })
+  const fresh = parseOrderNotes((freshRow as { notes: unknown }).notes)
+  if (fresh.status === 'pending_approval') return NextResponse.json({ ok: true, already: true })
+  const at = new Date().toISOString()
+  const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: quoteId, p_patch: {
+    status: 'pending_approval',
+    status_history: appendTo(fresh, 'status_history', { from: (fresh.status as string) || 'quote', to: 'pending_approval', date: at, by: 'partner' }),
+    submitted_by_partner_at: at,
+    ...(aiReview !== undefined ? { ai_review: aiReview } : {}),
+  } })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await svc.from('b2b_orders').update({ updated_at: at }).eq('id', quoteId)
 
   // Аудит: партнёр отправил просчёт в работу (best-effort, не роняет ответ).
   await svc.from('security_events').insert({

@@ -52,10 +52,12 @@ export async function POST(
     const deadline = addWorkingDays(from, makeDays)
     // Атомарный shallow-patch (не перезапись всего notes) — заказ уже в проде,
     // рядом могут идти правки стадий.
-    await svc.rpc('patch_order_notes_shallow', {
+    // Срок — не повод не создать задачи цеху: ошибку пишем в лог и идём дальше.
+    const { error: deadlineErr } = await svc.rpc('patch_order_notes_shallow', {
       p_order_id: orderId,
       p_patch: { deadline_date: deadline.toISOString().slice(0, 10), production_days: (notes.production_days as number) || makeDays },
     })
+    if (deadlineErr) console.error('[launch-production] срок не записан', orderId, deadlineErr.message)
   }
   const rows = buildProductionTasks(orderId, items)
   if (rows.length === 0) return NextResponse.json({ created: 0, skipped: 0 })

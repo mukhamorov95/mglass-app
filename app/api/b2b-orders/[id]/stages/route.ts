@@ -62,8 +62,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const missing = error.code === '42883' || /mark_order_stages/i.test(error.message ?? '')
       if (!missing) return NextResponse.json({ error: error.message }, { status: 500 })
 
-      const { data: row } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
-      const notes = parseNotes((row?.notes as string | null) ?? null)
+      // Без прочитанной строки не пишем: parseNotes(null) даёт {}, и патч { stages } из
+      // пустоты стёр бы все остальные этапы заказа.
+      const { data: row, error: readErr } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
+      if (readErr || !row) return NextResponse.json({ error: `Заказ не прочитан: ${readErr?.message ?? 'нет строки'}` }, { status: 500 })
+      const notes = parseNotes((row.notes as string | null) ?? null)
       const merged = { ...(notes.stages as Record<string, unknown> ?? {}) }
       for (const [k, v] of Object.entries(stages)) {
         if (v === null) delete merged[k]

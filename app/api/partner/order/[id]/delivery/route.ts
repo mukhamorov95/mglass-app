@@ -40,8 +40,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     status: prev.status ?? null,   // статус доставки проставляем мы, партнёр не трогает
     at: new Date().toISOString(), by: 'partner',
   }
-  const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(notes), updated_at: new Date().toISOString() }).eq('id', oid)
+  // Только свой ключ — целая запись notes стёрла бы этапы и оплату, пришедшие между чтением и записью.
+  const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: oid, p_patch: { delivery: notes.delivery } })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await svc.from('b2b_orders').update({ updated_at: new Date().toISOString() }).eq('id', oid)
 
   const number = (order.custom_number as string | null)?.trim() || `#${oid}`
   const base = appUrl()

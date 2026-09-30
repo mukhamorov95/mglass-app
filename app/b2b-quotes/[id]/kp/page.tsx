@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase-browser'
+import { toast } from '@/lib/toast'
+import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import AssignInstallationButton from '@/components/AssignInstallationButton'
 
@@ -104,26 +105,19 @@ export default function KPPrintPage() {
     }
   }
 
-  // Условия оплаты в подписи КП: 50/50 или 100% предоплата. Хранится в notes просчёта.
-  async function savePayTerms(v: '50_50' | '100') {
-    setPayTerms(v)
-    try {
-      const n = parseNotes(order?.notes ?? null)
-      const newNotes = JSON.stringify({ ...n, kp_payment_terms: v })
-      await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', id)
-      setOrder(o => o ? { ...o, notes: newNotes } : o)
-    } catch { /* не блокируем просмотр */ }
+  // Условия оплаты и вид цены в КП хранятся в notes. Шлём только свой ключ: страница
+  // открывается и у запущенных заказов, и целая запись notes из копии вкладки стирала
+  // этапы, оплату и доставку, появившиеся после открытия. Просмотр отказ не блокирует,
+  // но и не молчит: выбор остаётся на экране, а в заказе — прежний.
+  async function saveKpOption(patch: { kp_payment_terms?: '50_50' | '100'; kp_price_mode?: 'consolidated' | 'detailed' }) {
+    const r = await saveOrderNotes(id, { action: 'kp-options', ...patch })
+    if (r.error !== null) { toast.error('Выбор не сохранён в заказе', { detail: `${r.error}. В этом КП он действует, при следующем открытии вернётся прежний.` }); return }
+    const saved = r.data
+    setOrder(o => o ? { ...o, notes: saved.notes } : o)
   }
 
-  async function savePriceMode(v: 'consolidated' | 'detailed') {
-    setPriceMode(v)
-    try {
-      const n = parseNotes(order?.notes ?? null)
-      const newNotes = JSON.stringify({ ...n, kp_price_mode: v })
-      await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', id)
-      setOrder(o => o ? { ...o, notes: newNotes } : o)
-    } catch { /* не блокируем просмотр */ }
-  }
+  function savePayTerms(v: '50_50' | '100') { setPayTerms(v); void saveKpOption({ kp_payment_terms: v }) }
+  function savePriceMode(v: 'consolidated' | 'detailed') { setPriceMode(v); void saveKpOption({ kp_price_mode: v }) }
 
   useEffect(() => {
     if (!id) return

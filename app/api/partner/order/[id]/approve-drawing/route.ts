@@ -43,8 +43,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     at: new Date().toISOString(),
     by: 'partner',
   }
-  const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(notes), updated_at: new Date().toISOString() }).eq('id', oid)
+  // Только свой ключ: целая запись notes стёрла бы то, что цех и менеджер записали
+  // между чтением и записью (этапы, оплату, доставку).
+  const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: oid, p_patch: { drawing_approval: notes.drawing_approval } })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await svc.from('b2b_orders').update({ updated_at: new Date().toISOString() }).eq('id', oid)
 
   const number = (order.custom_number as string | null)?.trim() || `#${oid}`
   const base = appUrl()
