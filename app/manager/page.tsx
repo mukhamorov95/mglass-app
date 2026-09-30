@@ -62,27 +62,19 @@ export default function ManagerPage() {
   const [error, setError]   = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Показатели считаются по всем своим сделкам и приходят за секунды; блок расчёта от них
+  // не зависит и виден сразу. Раньше вся страница ждала этот ответ и при сбое пустела.
   useEffect(() => {
     fetch('/api/manager/deals')
-      .then(r => r.json())
-      .then(d => {
-        if (d.error === 'amo_not_configured') {
-          setError('amo_not_configured')
-        } else if (d.error) {
-          setError(d.error)
-        } else {
-          setData(d)
-        }
+      .then(async r => {
+        const d = await r.json().catch(() => null)
+        if (d?.error === 'amo_not_configured') setError('amo_not_configured')
+        else if (!r.ok || !d || d.error) setError(d?.error ?? `Сервер ответил ${r.status} — показатели не посчитаны`)
+        else setData(d)
       })
-      .catch(() => setError('network'))
+      .catch(() => setError('Сервер не ответил — проверьте связь и обновите страницу'))
       .finally(() => setLoading(false))
   }, [])
-
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">
-      Загружаю данные из AmoCRM…
-    </div>
-  )
 
   if (error === 'amo_not_configured') return (
     <div className="min-h-screen flex items-center justify-center">
@@ -101,14 +93,8 @@ export default function ManagerPage() {
     </div>
   )
 
-  if (error || !data) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-red-500">
-      Ошибка загрузки данных. Попробуйте обновить страницу.
-    </div>
-  )
-
-  const firstName = data.user.name.split(' ')[0]
-  const hasStale  = data.staleZone1.length + data.staleZone2.length + data.invoiceStale.length
+  const firstName = data?.user.name.split(' ')[0]
+  const hasStale  = data ? data.staleZone1.length + data.staleZone2.length + data.invoiceStale.length : 0
 
   return (
     <div className="min-h-screen bg-[#f8f8f7]">
@@ -118,20 +104,34 @@ export default function ManagerPage() {
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">
-              Мои сделки — {firstName}
+              Мои сделки{firstName ? ` — ${firstName}` : ''}
             </h1>
             <p className="text-[12px] text-[#9a9a95] mt-0.5">
               {new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
-          <a href={`https://${data.domain}/leads/`} target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-[12px] text-[#6b6b66] hover:bg-white hover:text-[#111110] transition-colors">
-            Открыть AmoCRM ↗
-          </a>
+          {data && (
+            <a href={`https://${data.domain}/leads/`} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-[12px] text-[#6b6b66] hover:bg-white hover:text-[#111110] transition-colors">
+              Открыть AmoCRM ↗
+            </a>
+          )}
         </div>
 
         <AmoLeadsWork />
 
+        {loading && (
+          <div className="bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 mb-5 text-[13px] text-[#8a8a85]">
+            Считаю показатели дня и зависшие сделки…
+          </div>
+        )}
+        {!loading && error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 mb-5 text-[13px] text-red-700">
+            Показатели дня не загрузились: {error}
+          </div>
+        )}
+
+        {data && (<>
         {/* Активность сегодня */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           {[
@@ -194,6 +194,7 @@ export default function ManagerPage() {
             ✅ Зависших сделок нет — все в норме
           </div>
         )}
+        </>)}
 
         {/* Быстрые действия */}
         <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
