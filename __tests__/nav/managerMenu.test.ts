@@ -44,9 +44,14 @@ describe('структура по ТЗ (Н1)', () => {
     expect(all.map(i => i.href)).not.toContain('/production-app')
     expect(all.map(i => i.href)).not.toContain('/b2b-cutting')
   })
-  it('ни один пункт не пропал, кроме переданных цеху', () => {
+  it('старые калькуляторы душевой, зеркала и лофта — не в меню (решение владельца 30.09)', () => {
+    for (const href of ['/calculator/shower', '/calculator/mirror', '/calculator/loft']) {
+      expect(all.map(i => i.href)).not.toContain(href)
+    }
+  })
+  it('ни один пункт не пропал, кроме переданных цеху и старых калькуляторов', () => {
     const before = [
-      '/manager', '/calculator/shower', '/calculator/mirror', '/calculator/loft', '/configurator',
+      '/manager', '/configurator',
       '/my-day', '/deals', '/calculator/build', '/calculator/quick', '/calculator/b2b-mglass', '/calculations',
       // '/sales/managers' — третий срез продаж (показатели менеджеров), добавлен 17.09
       '/kp', '/contracts', '/my-earnings', '/clients', '/crm', '/sales', '/sales/managers', '/orders',
