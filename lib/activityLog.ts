@@ -1,4 +1,6 @@
+import 'server-only'
 import { createClient } from './supabase-server'
+import { createServiceClient } from './supabase-service'
 
 export type LogAction =
   | 'user.update'
@@ -17,55 +19,42 @@ export type LogAction =
   | 'calculation.update'
   | 'pdf.download'
 
-export type LogEntry = {
-  user_id?:    string | null
-  user_name?:  string | null
-  action:      LogAction
-  entity_type?: string | null
-  entity_id?:   string | null
-  details?:    Record<string, unknown> | null
-}
-
-export async function writeLog(entry: LogEntry): Promise<void> {
-  try {
-    const supabase = await createClient()
-    await supabase.from('activity_log').insert({
-      user_id:     entry.user_id ?? null,
-      user_name:   entry.user_name ?? null,
-      action:      entry.action,
-      entity_type: entry.entity_type ?? null,
-      entity_id:   entry.entity_id ?? null,
-      details:     entry.details ?? null,
-    })
-  } catch {
-    // Log write failure must never break the main flow
-  }
-}
-
+// Автор — только из проверенной сессии: функции, которой можно передать чужой user_id,
+// больше нет. Пишет service-role, потому что у ролей пользователей прав на запись в
+// журнал нет (миграция 20261001_activity_log_owner_read_server_write) — иначе любой
+// вошедший дописал бы в него что угодно напрямую через PostgREST.
+// Сбой записи не ломает основное действие, но и не молчит: до 01.10.2026 каждую запись
+// отбивал RLS, ошибку никто не читал, и журнал оставался пустым.
 export async function writeLogForCurrentUser(
   action: LogAction,
   opts?: { entityType?: string; entityId?: string; details?: Record<string, unknown> },
 ): Promise<void> {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const sb = await createClient()
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) {
+      console.error('[activityLog] нет сессии, запись пропущена:', action)
+      return
+    }
 
-    const { data: profile } = await supabase
+    const db = createServiceClient()
+    const { data: profile, error: profileErr } = await db
       .from('users')
       .select('name, email')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
+    if (profileErr) console.error('[activityLog] не прочитать имя автора:', profileErr.message)
 
-    await writeLog({
+    const { error } = await db.from('activity_log').insert({
       user_id:     user.id,
       user_name:   profile?.name ?? profile?.email ?? user.email ?? null,
       action,
-      entity_type: opts?.entityType,
-      entity_id:   opts?.entityId,
-      details:     opts?.details,
+      entity_type: opts?.entityType ?? null,
+      entity_id:   opts?.entityId ?? null,
+      details:     opts?.details ?? null,
     })
-  } catch {
-    // silently swallow
+    if (error) console.error('[activityLog] запись не прошла:', error.message, { action, entityType: opts?.entityType })
+  } catch (e) {
+    console.error('[activityLog] запись не прошла:', e instanceof Error ? e.message : e, { action })
   }
 }
