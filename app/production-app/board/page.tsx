@@ -3,6 +3,8 @@ import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { type DetailStages, getApplicableStages, type DetailStageKey, stageLabel } from '@/lib/productionStages'
 import { PROD_SINCE } from '@/lib/orderFlags'
+import { loadPointClientIds, pointRank } from '@/lib/b2b/points'
+import PointBadge from '@/components/PointBadge'
 
 // ЕДИНЫЙ ОБЗОР ЦЕХА. Собран из трёх экранов, которые отвечали на один вопрос
 // «что сейчас в цеху» (П6): матрица «заказ × этапы» отсюда, пул по станциям — из
@@ -30,7 +32,7 @@ type NotesData = {
   urgent?: boolean
 }
 type ItemLite = { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string }
-type Order = { id: number; client_name: string | null; custom_number: string | null; items: ItemLite[]; created_at: string; pn: NotesData }
+type Order = { id: number; client_name: string | null; custom_number: string | null; items: ItemLite[]; created_at: string; pn: NotesData; point: boolean }
 
 // Колонки ленты заказа. stage — этап производства (для уточнения по позициям), null — только order-level.
 // alt — второй ключ флага (разные конвенции: импорт использует edge/packed, /b2b-orders — edge_processed/packaged).
@@ -89,14 +91,14 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const filter: FilterKey = (FILTERS.some(f => f.key === sp.filter) ? sp.filter : 'all') as FilterKey
   const svc = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-  const { data } = await svc
+  const [{ data }, pointClients] = await Promise.all([svc
     .from('b2b_orders')
-    .select('id,client_name,custom_number,items,notes,created_at')
+    .select('id,client_id,client_name,custom_number,items,notes,created_at,launched_at')
     .not('notes', 'ilike', '%"status":"quote"%')
     .is('archived_at', null)
     .gte('created_at', PROD_SINCE)
     .order('created_at', { ascending: false })
-    .limit(500)
+    .limit(500), loadPointClientIds(svc)])
 
   const active: Order[] = (data ?? []).map((o: Record<string, unknown>) => ({
     id: o.id as number,
@@ -105,6 +107,9 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     items: Array.isArray(o.items) ? o.items as ItemLite[] : [],
     created_at: o.created_at as string,
     pn: parseNotes(o.notes as string | null),
+    // Обзор показывает и незапущенные заказы; точку поднимаем только запущенную —
+    // неоплаченная точка в работу не идёт и наверху цеху не нужна.
+    point: o.launched_at != null && pointClients.has(o.client_id as number),
   })).filter(o => !o.pn.stages?.shipped)
 
   // WIP-оверлей из нового поточного цеха.
@@ -184,7 +189,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 
   const rows = active.map(buildRow)
     .map(r => ({ ...r, undos: Array.isArray(r.o.pn.detail_stage_audit) ? r.o.pn.detail_stage_audit.length : 0 }))
-    .sort((a, b) => (a.allDone ? 1 : 0) - (b.allDone ? 1 : 0) || a.days - b.days)
+    .sort((a, b) => (a.allDone ? 1 : 0) - (b.allDone ? 1 : 0) || pointRank(a.o.point) - pointRank(b.o.point) || a.days - b.days)
 
   const doneCount    = rows.filter(r => r.allDone).length
   const problemCount = rows.filter(r => r.anyProblem).length
@@ -283,6 +288,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
                   <tr key={o.id} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
                     <td className="px-3 py-2 sticky left-0 bg-white">
                       <Link href={`/production-app/orders/${o.id}`} className="block min-w-[120px]">
+                        {o.point && <PointBadge className="mr-1" />}
                         <span className="font-bold text-[#111110]">{o.custom_number?.trim() || `00${o.id}`}</span>
                         {anyProblem && <span className="ml-1 text-red-600">⚠</span>}
                         {undos > 0 && <span className="ml-1 text-blue-600" title={`Отмен этапов: ${undos}`}>↩{undos}</span>}

@@ -10,6 +10,7 @@ import {
   KP_PAYMENT_TERMS, KP_PRICE_MODES, type Notes,
 } from '@/lib/b2b/orderNotes'
 import type { OrderNotesAction } from '@/lib/b2b/orderNotesClient'
+import { pointLaunchGate, orderTotal, IN_WORK_STATUSES } from '@/lib/b2b/points'
 
 // Правка notes просчёта/заказа со списка просчётов, воронки и печати КП. Экран шлёт
 // намерение, патч собирается здесь из свежих notes (lib/b2b/orderNotes.ts): копия
@@ -45,10 +46,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!body || typeof body !== 'object') return bad('Пустой запрос')
 
   const { data: order, error: readErr } = await sb.from('b2b_orders')
-    .select('id, client_id, client_name').eq('id', orderId).maybeSingle()
+    .select('id, client_id, client_name, notes, total_after_discount, total_sale_inc_vat').eq('id', orderId).maybeSingle()
   if (readErr) return bad(`Заказ не прочитан: ${readErr.message}`, 500)
   if (!order) return bad('Заказ не найден', 404)
-  const o = order as { id: number; client_id: number | null; client_name: string | null }
+  const o = order as {
+    id: number; client_id: number | null; client_name: string | null; notes: unknown
+    total_after_discount: number | null; total_sale_inc_vat: number | null
+  }
   if (scope === 'mglass_only' && !isMGlassClient({ id: o.client_id, name: o.client_name })) return bad(MGLASS_SCOPE_ERROR, 403)
 
   const at = new Date().toISOString()
@@ -106,11 +110,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return bad('Неизвестное действие')
   }
 
+  const svc = createServiceClient()
+  // Заказ точки — в работу только после 100 % оплаты (решение владельца 01.10.2026).
+  // Остальных партнёров правило не касается.
+  if (body.action === 'launch' || (body.action === 'status' && IN_WORK_STATUSES.includes(body.to))) {
+    const gate = await pointLaunchGate(svc, { client_id: o.client_id, notes: o.notes, total: orderTotal(o) })
+    if (!gate.ok) return bad(gate.error, gate.status)
+  }
+
   // Право на строку — под RLS вошедшего, как раньше делал экран.
   const fail = writeFailure(await sb.from('b2b_orders').update(columns).eq('id', orderId).select('id'))
   if (fail) return bad(fail, 403)
 
-  const svc = createServiceClient()
   const { data: freshRow, error: freshErr } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
   // Без свежего чтения не пишем: патч из пустого объекта потерял бы историю статусов.
   if (freshErr || !freshRow) return bad(`Заказ не прочитан: ${freshErr?.message ?? 'нет строки'}`, 500)

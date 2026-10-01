@@ -12,6 +12,8 @@ import { myStationGroups, canCompleteWholeDetail, type StationGroup, type Statio
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
 import { materialLabelShort } from '@/lib/materialLabel'
+import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
+import PointBadge from '@/components/PointBadge'
 
 // «Мои задачи»: карточка = ЗАКАЗ (раскрывается на месте — детали с кнопками и
 // чертёж), сверху личное табло мастера по ИЗДЕЛИЯМ (сегодня/неделя, процент),
@@ -44,7 +46,7 @@ type RouteStage = {
 
 type DoneRow = { order_id: number; item_index: number; completed_at: string }
 type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string; hasHoles?: boolean; hasFacet?: boolean; hasSandblast?: boolean; hasTempering?: boolean; hasTriplex?: boolean; comment?: string; holes?: unknown; cutouts?: number }
-type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[]; notes?: unknown }
+type OrderLite = { id: number; client_id?: number | null; client_name: string; custom_number: string | null; items?: ItemSpec[]; notes?: unknown }
 type BlockerLite = { id: number; status: string; stage_key: string }
 
 const orderNo = (o: OrderLite | undefined, id: number) => o?.custom_number?.trim() || `00${id}`
@@ -126,6 +128,7 @@ export default function MyQueuePage() {
   const [doneWeek, setDoneWeek] = useState<DoneRow[]>([])
   const [doneOrders, setDoneOrders] = useState<Map<number, OrderLite>>(new Map())
   const [orders, setOrders] = useState<Map<number, OrderLite>>(new Map())
+  const [pointClients, setPointClients] = useState<Set<number>>(new Set())
   const [blockers, setBlockers] = useState<Map<number, BlockerLite>>(new Map())
   // П3: вместо андона — «Переделать». Хранится задача, на которой рабочий нашёл брак.
   const [reworkFor, setReworkFor] = useState<number | null>(null)
@@ -227,9 +230,9 @@ export default function MyQueuePage() {
     const doneOrderIds = [...new Set(dw.map(t => t.order_id))].filter(id => !orderIds.includes(id))
     const blockerIds = [...new Set(list.map(t => t.blocked_by_task_id).filter((x): x is number => x != null))]
 
-    const [{ data: orderRows }, { data: doneOrderRows }, { data: blockerRows }] = await Promise.all([
+    const [{ data: orderRows }, { data: doneOrderRows }, { data: blockerRows }, points] = await Promise.all([
       orderIds.length
-        ? sb.from('b2b_orders').select('id,client_name,custom_number,items,notes').in('id', orderIds).gte('created_at', PROD_SINCE)
+        ? sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes').in('id', orderIds).gte('created_at', PROD_SINCE)
         : Promise.resolve({ data: [] as OrderLite[] }),
       doneOrderIds.length
         ? sb.from('b2b_orders').select('id,items').in('id', doneOrderIds).gte('created_at', PROD_SINCE)
@@ -237,7 +240,9 @@ export default function MyQueuePage() {
       blockerIds.length
         ? sb.from('production_tasks').select('id,status,stage_key').in('id', blockerIds)
         : Promise.resolve({ data: [] as BlockerLite[] }),
+      loadPointClientIds(sb),
     ])
+    setPointClients(points)
 
     // Что по этим заказам ещё открыто у ВСЕГО цеха, а не только у меня.
     const { data: workRows } = orderIds.length
@@ -584,7 +589,12 @@ export default function MyQueuePage() {
   const groups: Record<Horizon, number[]> = { today: [], tomorrow: [], week: [], later: [] }
   for (const id of byOrder.keys()) groups[horizonOf(id)].push(id)
   const rankOrder = (id: number) => urgencyRank(orders.get(id)?.notes)
-  for (const k of Object.keys(groups) as Horizon[]) groups[k].sort((a, b) => rankOrder(a) - rankOrder(b))
+  const isPointOrder = (id: number) => {
+    const c = orders.get(id)?.client_id
+    return c != null && pointClients.has(c)
+  }
+  // Заказы точек — первыми внутри своего горизонта (решение владельца 01.10).
+  for (const k of Object.keys(groups) as Horizon[]) groups[k] = pointsFirst(groups[k].sort((a, b) => rankOrder(a) - rankOrder(b)), isPointOrder)
 
   // ── Группировка по материалу и толщине ──
   // Деталь считаем один раз, даже если у мастера по ней две задачи (резка+кромка)
@@ -826,8 +836,7 @@ export default function MyQueuePage() {
             </button>
             {openG && (
             <div className="bg-white rounded-b-xl border border-t-0 border-[#111110] overflow-hidden">
-              {[...g.perOrder.entries()]
-                .sort((a, b) => rankOrder(a[0]) - rankOrder(b[0]))
+              {pointsFirst([...g.perOrder.entries()].sort((a, b) => rankOrder(a[0]) - rankOrder(b[0])), ([oid]) => isPointOrder(oid))
                 .map(([oid, cnt]) => {
                   const o = orders.get(oid)
                   const launched = launchedOf(o?.notes)
@@ -839,6 +848,7 @@ export default function MyQueuePage() {
                       <div className="min-w-0">
                         <p className="text-[13px] font-bold text-[#111110] truncate">
                           {isUrgent(o?.notes) && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white mr-1.5">🔥 СРОЧНО</span>}
+                          {isPointOrder(oid) && <PointBadge className="mr-1.5" />}
                           {orderNo(o, oid)}
                         </p>
                         <p className="text-[11px] text-[#6b6b66] truncate">{o?.client_name}</p>
@@ -866,7 +876,7 @@ export default function MyQueuePage() {
             <div className="space-y-2">
               {groups[h.key].map(id => (
                 <OrderCard key={id}
-                  order={orders.get(id)} orderId={id}
+                  order={orders.get(id)} orderId={id} point={isPointOrder(id)}
                   tasks={byOrder.get(id) ?? []}
                   blockers={blockers}
                   open={isOpen(id)}
@@ -935,9 +945,10 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, canCloseOrder, onCompleteMyStage, confirmingStation, onAskConfirmMine, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, point, tasks, blockers, open, onToggle, isReady, canCloseOrder, onCompleteMyStage, confirmingStation, onAskConfirmMine, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
+  point: boolean
   tasks: TaskRow[]
   blockers: Map<number, BlockerLite>
   open: boolean
@@ -1008,6 +1019,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
             <p className="text-[14px] font-bold text-[#111110] truncate flex items-center gap-1.5">
               <span className="text-[#9a9a95]">{open ? '▾' : '▸'}</span>
               {urgent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
+              {point && <PointBadge />}
               {orderNo(order, orderId)}
               {drawingUrl && <span title="Есть чертёж">📐</span>}
               {noMatOrder && (() => {

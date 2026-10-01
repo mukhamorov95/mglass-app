@@ -57,8 +57,9 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard
 
   const a = admin()
-  const { data: clients } = await a.from('b2b_clients')
-    .select('id,name,user_id,discount_percent,active').order('name')
+  const { data: clients, error: clientsErr } = await a.from('b2b_clients')
+    .select('id,name,user_id,discount_percent,active,is_point').order('name')
+  if (clientsErr) return NextResponse.json({ error: `Клиенты не прочитаны: ${clientsErr.message}` }, { status: 500 })
   const { data: members } = await a.from('b2b_client_members').select('client_id,user_id')
 
   // Собираем email по всем причастным учёткам (первичные + участники команды).
@@ -79,7 +80,7 @@ export async function GET() {
   }
 
   const rows = (clients ?? []).map(c => ({
-    id: c.id, name: c.name, discount: c.discount_percent, active: c.active,
+    id: c.id, name: c.name, discount: c.discount_percent, active: c.active, isPoint: c.is_point === true,
     linked: !!c.user_id, email: c.user_id ? (emails[c.user_id as string] ?? null) : null,
     members: membersByClient.get(c.id) ?? [],
   }))
@@ -138,6 +139,17 @@ export async function POST(req: Request) {
     const { error } = await a.from('b2b_clients').update({ can_self_invoice: !!body.value }).eq('id', clientId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true, value: !!body.value })
+  }
+
+  // Точка на стройрынке: заказы цех делает первыми, в работу — только после 100 % оплаты.
+  if (body.action === 'set_point') {
+    const clientId = Number(body.clientId)
+    if (!Number.isInteger(clientId) || clientId <= 0) return NextResponse.json({ error: 'Нужен клиент' }, { status: 400 })
+    if (typeof body.value !== 'boolean') return NextResponse.json({ error: 'Нужно value: true или false' }, { status: 400 })
+    const { data, error } = await a.from('b2b_clients').update({ is_point: body.value }).eq('id', clientId).select('id')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data?.length) return NextResponse.json({ error: 'Клиент не найден' }, { status: 404 })
+    return NextResponse.json({ ok: true, value: body.value })
   }
 
   const clientId = Number(body.clientId)

@@ -7,6 +7,8 @@ import { STAGE_LABELS, getApplicableStages, type DetailStageKey } from '@/lib/pr
 import { ANDON_REASONS } from '@/lib/productionRouting'
 import { PROD_SINCE, urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf, daysLeftLabel, parseNotes } from '@/lib/orderFlags'
 import { materialLabelShort } from '@/lib/materialLabel'
+import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
+import PointBadge from '@/components/PointBadge'
 
 // Единый экран «Заказы»: список по срочности → клик раскрывает заказ (чертёж
 // сверху, детали × этапы кнопками, «Упаковано» = всё готово, «Проблема»).
@@ -16,7 +18,7 @@ import { materialLabelShort } from '@/lib/materialLabel'
 
 type Task = { id: number; order_id: number; item_index: number; stage_key: string; station: string; status: string; sequence_order: number; auto_closed?: boolean }
 type Item = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; hasTempering?: boolean; hasFacet?: boolean; hasHoles?: boolean; shape?: 'rect' | 'curved'; hasTriplex?: boolean }
-type Order = { id: number; custom_number: string | null; client_name: string; items: unknown; notes: unknown }
+type Order = { id: number; client_id: number | null; custom_number: string | null; client_name: string; items: unknown; notes: unknown }
 type Me = { role: string | null; production_stations: string[] | null; production_lead: boolean }
 
 const OWNER = new Set(['admin', 'ceo'])
@@ -35,6 +37,7 @@ export default function OrdersScreen() {
   const sb = createClient()
   const [tasks, setTasks] = useState<Task[]>([])
   const [orders, setOrders] = useState<Map<number, Order>>(new Map())
+  const [pointClients, setPointClients] = useState<Set<number>>(new Set())
   const [me, setMe] = useState<Me>({ role: null, production_stations: [], production_lead: false })
   const [open, setOpen] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -64,8 +67,12 @@ export default function OrdersScreen() {
     let ts: Task[] = []
     if (ids.length) {
       // Производственный контур — только заказы с PROD_SINCE; задачи старых заказов скрываем
-      const { data: ords } = await sb.from('b2b_orders').select('id,custom_number,client_name,items,notes')
-        .in('id', ids).gte('created_at', PROD_SINCE)
+      const [{ data: ords }, points] = await Promise.all([
+        sb.from('b2b_orders').select('id,client_id,custom_number,client_name,items,notes')
+          .in('id', ids).gte('created_at', PROD_SINCE),
+        loadPointClientIds(sb),
+      ])
+      setPointClients(points)
       const fresh = new Map((ords ?? []).map((o: Order) => [o.id, o]))
       setOrders(fresh)
       const freshIds = [...fresh.keys()]
@@ -126,9 +133,10 @@ export default function OrdersScreen() {
     await load()
   }
 
-  // Заказы по срочности.
-  const orderIds = [...new Set(tasks.map(t => t.order_id))]
-    .sort((a, b) => urgencyRank(orders.get(a)?.notes) - urgencyRank(orders.get(b)?.notes))
+  // Заказы по срочности; заказы точек — первыми (решение владельца 01.10).
+  const isPointOrder = (id: number) => { const c = orders.get(id)?.client_id; return c != null && pointClients.has(c) }
+  const orderIds = pointsFirst([...new Set(tasks.map(t => t.order_id))]
+    .sort((a, b) => urgencyRank(orders.get(a)?.notes) - urgencyRank(orders.get(b)?.notes)), isPointOrder)
 
   if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
 
@@ -138,7 +146,7 @@ export default function OrdersScreen() {
 
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Заказы</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">{orderIds.length} в работе · по срочности · клик — раскрыть{me.production_lead ? ' · вы ответственный' : ''}</p>
+        <p className="text-[13px] text-[#9a9a95] mt-0.5">{orderIds.length} в работе · точки первыми, дальше по срочности · клик — раскрыть{me.production_lead ? ' · вы ответственный' : ''}</p>
         <ProductionTabs />
       </div>
 
@@ -165,6 +173,7 @@ export default function OrdersScreen() {
                   <div className="min-w-0">
                     <p className="text-[14px] font-bold text-[#111110] truncate flex items-center gap-1.5">
                       {urgent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
+                      {isPointOrder(oid) && <PointBadge />}
                       {o?.custom_number?.trim() || `00${oid}`}
                     </p>
                     <p className="text-[12px] text-[#6b6b66] truncate">

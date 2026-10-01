@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { confirmDialog } from '@/lib/dialog'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Выдача доступа в кабинет заказчику. Владелец создаёт учётку партнёру, привязывает
 // к карточке клиента и отдаёт ссылку на установку пароля. API сам проверяет права.
 
-type Row = { id: number; name: string; discount: number; active: boolean; linked: boolean; email: string | null }
+type Row = { id: number; name: string; discount: number; active: boolean; isPoint: boolean; linked: boolean; email: string | null }
 
 export default function B2BAccessPage() {
   const [rows, setRows] = useState<Row[]>([])
@@ -19,10 +21,48 @@ export default function B2BAccessPage() {
   const [link, setLink] = useState<string | null>(null)
   const [emailed, setEmailed] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
+  const [pointBusy, setPointBusy] = useState<number | null>(null)
 
-  function load() {
-    return fetch('/api/admin/b2b-access').then(r => r.json()).then(d => setRows(d.clients ?? [])).catch(() => setRows([]))
+  async function load() {
+    try {
+      const r = await fetch('/api/admin/b2b-access')
+      if (!r.ok) { setLoadErr(await responseError(r)); return }
+      const d = await r.json()
+      setLoadErr(null)
+      setRows(d.clients ?? [])
+    } catch { setLoadErr(NETWORK_ERROR) }
   }
+
+  async function togglePoint(r: Row) {
+    const next = !r.isPoint
+    const ok = await confirmDialog(next
+      ? {
+          title: `Отметить «${r.name}» как точку на рынке?`,
+          text: 'Цех увидит у заказов пометку «Точка» и будет делать их первыми. В работу такой заказ уйдёт только после 100 % оплаты: менеджер отмечает «Оплачен», потом запускает.',
+          confirmLabel: 'Отметить точкой',
+        }
+      : {
+          title: `Снять признак точки с «${r.name}»?`,
+          text: 'Заказы перестанут подниматься первыми в цеху, и правило 100 % предоплаты для них снимется.',
+          confirmLabel: 'Снять признак',
+          danger: true,
+        })
+    if (!ok) return
+    setPointBusy(r.id)
+    try {
+      const res = await fetch('/api/admin/b2b-access', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_point', clientId: r.id, value: next }),
+      })
+      if (!res.ok) { toast.error('Признак точки не сохранён', { detail: await responseError(res) }); return }
+      setRows(prev => prev.map(x => x.id === r.id ? { ...x, isPoint: next } : x))
+      toast.success(next ? `«${r.name}» — точка на рынке` : `«${r.name}» больше не точка`)
+    } catch {
+      toast.error('Признак точки не сохранён', { detail: NETWORK_ERROR })
+    } finally { setPointBusy(null) }
+  }
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().finally(() => setLoading(false)) }, [])
 
   async function grant(clientId: number) {
@@ -91,6 +131,12 @@ export default function B2BAccessPage() {
 
         {loading ? (
           <div className="text-[13px] text-[#9a9a95] py-8 text-center">Загрузка…</div>
+        ) : loadErr ? (
+          <div className="bg-white rounded-xl border border-red-200 px-4 py-6 text-center">
+            <p className="text-[13px] text-red-600">Список клиентов не загрузился: {loadErr}</p>
+            <button onClick={() => { setLoading(true); load().finally(() => setLoading(false)) }}
+              className="mt-2 text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#111110] hover:border-[#111110]">Повторить</button>
+          </div>
         ) : (
           <div className="bg-white rounded-xl border border-[#e4e4e0] divide-y divide-[#f0f0ec]">
             {filtered.map(r => (
@@ -101,6 +147,11 @@ export default function B2BAccessPage() {
                     {r.linked
                       ? <p className="text-[12px] text-emerald-700 mt-0.5">✓ Доступ выдан{r.email ? ` · ${r.email}` : ''}</p>
                       : <p className="text-[12px] text-[#9a9a95] mt-0.5">Доступа нет</p>}
+                    <button onClick={() => togglePoint(r)} disabled={pointBusy === r.id}
+                      title="Точка на стройрынке: заказы цех делает первыми, в работу — только после 100 % оплаты"
+                      className={`mt-1 text-[11px] rounded-full px-2 py-0.5 border transition-colors disabled:opacity-50 ${r.isPoint ? 'text-sky-800 bg-sky-50 border-sky-300 hover:bg-sky-100' : 'text-[#9a9a95] bg-[#f8f8f7] border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                      {pointBusy === r.id ? 'Сохраняю…' : r.isPoint ? 'Точка на рынке: да' : 'Точка на рынке: нет'}
+                    </button>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button onClick={() => preview(r.id)} disabled={busy} title="Открыть кабинет глазами этого клиента — только просмотр"
