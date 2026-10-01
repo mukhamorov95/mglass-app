@@ -3,7 +3,10 @@
 // его розница: наценка точки поверх его же закупки. Себестоимости M-Glass тут нет
 // и быть не может — на вход приходит итог позиции, который партнёр и так видит.
 
-export const DEFAULT_MARKUP_PCT = 25
+// Рекомендация 01.10 (второй мозг, решение о точках): цена покупателю = наш прайс × 1,25.
+// Наценка точки — на её закупку, а закупка уже со скидкой партнёра, поэтому
+// умолчание считается от скидки: при 10 % это 39 %, без скидки — 25 %.
+export const RECOMMENDED_LIST_FACTOR = 1.25
 export const MAX_MARKUP_PCT = 300
 // Розница округляется вверх до 10 ₽ построчно: точка не теряет на копейках, а итог
 // КП — ровно сумма напечатанных строк.
@@ -30,6 +33,11 @@ export function normalizeMarkup(v: unknown): number | null {
   const n = typeof v === 'string' ? Number(v.replace(',', '.')) : Number(v)
   if (v === null || v === '' || !Number.isFinite(n) || n < 0 || n > MAX_MARKUP_PCT) return null
   return Math.round(n * 100) / 100
+}
+
+export function recommendedMarkup(discountPct: number): number {
+  const d = Number.isFinite(discountPct) && discountPct > 0 && discountPct < 100 ? discountPct : 0
+  return Math.round((RECOMMENDED_LIST_FACTOR / (1 - d / 100) - 1) * 100)
 }
 
 export function retailLine(partnerLine: number, markupPct: number): number {

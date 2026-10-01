@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  SUPER_CATS, DEFAULT_MARKUP_PCT, readDraft, writeDraft, retailLine, retailQuote, describeSpec,
+  SUPER_CATS, readDraft, writeDraft, retailLine, retailQuote, describeSpec,
   type CounterSpec, type SuperCat,
 } from '@/lib/partner/counter'
 
@@ -42,7 +42,7 @@ function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () 
 export default function PartnerCounterPage() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [facetOpts, setFacetOpts] = useState<FacetOpt[]>([])
-  const [markup, setMarkup] = useState(DEFAULT_MARKUP_PCT)
+  const [markup, setMarkup] = useState<number | null>(null)   // без наценки цену покупателю не называем
   const [loading, setLoading] = useState(true)
   const [linked, setLinked] = useState(true)
 
@@ -156,7 +156,7 @@ export default function PartnerCounterPage() {
     setList([]); setShowCost(false); void reprice([])
   }
 
-  const retail = priced && priced.items.length === list.length
+  const retail = priced && markup != null && priced.items.length === list.length
     ? retailQuote(priced.items.map(i => i.lineTotal), markup) : null
   const income = retail && priced ? retail.total - priced.total : null
 
@@ -164,7 +164,9 @@ export default function PartnerCounterPage() {
     <div className="top">
       <div>
         <h1>Прилавок</h1>
-        <div className="cap">Цена покупателю с вашей наценкой {markup.toLocaleString('ru-RU')}% · <Link href="/partner/profile#counter" style={{ color: 'var(--blue)' }}>изменить</Link></div>
+        <div className="cap">{markup != null
+          ? <>Цена покупателю с вашей наценкой {markup.toLocaleString('ru-RU')}% · <Link href="/partner/profile#counter" style={{ color: 'var(--blue)' }}>изменить</Link></>
+          : <span style={{ color: '#dc2626' }}>Наценка не загрузилась — цену покупателю не показываем. Обновите страницу.</span>}</div>
       </div>
     </div>
   )
@@ -218,7 +220,7 @@ export default function PartnerCounterPage() {
               <div>
                 <div className="cap">Эта деталь покупателю</div>
                 <div className="tnum" style={{ ...big, fontSize: 26, color: live != null ? 'var(--ink)' : 'var(--muted)' }}>
-                  {live != null ? fmt(retailLine(live, markup)) : liveBusy ? 'считаю…' : '—'}
+                  {live != null && markup != null ? fmt(retailLine(live, markup)) : liveBusy ? 'считаю…' : '—'}
                 </div>
               </div>
               <button className="primary" onClick={add} disabled={!current} style={{ padding: '14px 20px', fontSize: 15, ...(current ? {} : { opacity: 0.4, cursor: 'default' }) }}>＋ Добавить</button>

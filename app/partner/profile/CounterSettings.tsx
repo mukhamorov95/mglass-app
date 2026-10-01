@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { DEFAULT_MARKUP_PCT, normalizeMarkup, retailLine } from '@/lib/partner/counter'
+import { normalizeMarkup, retailLine } from '@/lib/partner/counter'
 
 // Наценка точки и шапка КП покупателю (/api/partner/settings). «Есть несохранённое»
 // выводится сравнением с последним сохранённым снимком, а не флагом.
@@ -12,7 +12,7 @@ type Form = { markupPct: string; kpName: string; kpPhone: string; kpNote: string
 export default function CounterSettings() {
   const [form, setForm] = useState<Form | null>(null)
   const [saved, setSaved] = useState<Form | null>(null)
-  const [defaults, setDefaults] = useState({ name: '', phone: '' })
+  const [defaults, setDefaults] = useState({ name: '', phone: '', markupPct: 0 })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [justSaved, setJustSaved] = useState(false)
@@ -53,10 +53,10 @@ export default function CounterSettings() {
           <div className="frm">
             <div className="fld">
               <span className="lab">Ваша наценка, %</span>
-              <input inputMode="decimal" value={form.markupPct} onChange={set('markupPct')} placeholder={String(DEFAULT_MARKUP_PCT)} />
+              <input inputMode="decimal" value={form.markupPct} onChange={set('markupPct')} placeholder={String(defaults.markupPct)} />
               <span className="cap">{markup != null
                 ? `Закупка 1 000 ₽ → покупателю ${retailLine(1000, markup).toLocaleString('ru-RU')} ₽`
-                : 'Число от 0 до 300'}</span>
+                : 'Число от 0 до 300'}. Рекомендуем {defaults.markupPct}% — покупатель платит наш прайс + 25 %.</span>
             </div>
             <div className="fld">
               <span className="lab">Телефон в КП</span>

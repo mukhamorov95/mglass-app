@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { retailLine, retailQuote, normalizeMarkup, normalizeSettingsInput, parseDraft, describeSpec, DEFAULT_MARKUP_PCT } from '@/lib/partner/counter'
+import { retailLine, retailQuote, normalizeMarkup, normalizeSettingsInput, parseDraft, describeSpec, recommendedMarkup } from '@/lib/partner/counter'
 
 describe('розница точки — закупка партнёра × (1 + наценка)', () => {
   it('25% от 1000 ₽ — ровно 1250 ₽, без «плавающих» 10 ₽ сверху', () => expect(retailLine(1000, 25)).toBe(1250))
@@ -17,7 +17,16 @@ describe('розница точки — закупка партнёра × (1 + 
     expect(q.lines).toEqual([1260, 2940, 1250])
     expect(q.total).toBe(q.lines.reduce((s, l) => s + l, 0))
   })
-  it('по умолчанию наценка 25%', () => expect(DEFAULT_MARKUP_PCT).toBe(25))
+  it('наценка по умолчанию — покупатель платит наш прайс × 1,25', () => {
+    expect(recommendedMarkup(10)).toBe(39)
+    expect(recommendedMarkup(0)).toBe(25)
+    expect(recommendedMarkup(12)).toBe(42)
+    expect(recommendedMarkup(NaN)).toBe(25)
+  })
+  it('зеркало 600×800: прайс 1500, закупка 1350 → покупателю 1880 = прайс × 1,25 (01.10, движок)', () => {
+    expect(retailLine(1350, recommendedMarkup(10))).toBe(1880)
+    expect(retailLine(1500, 25)).toBe(1880)
+  })
 })
 
 describe('наценка и настройки КП', () => {

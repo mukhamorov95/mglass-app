@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
-import { readDraft, retailQuote, describeSpec, DEFAULT_MARKUP_PCT, type CounterSpec } from '@/lib/partner/counter'
+import { readDraft, retailQuote, describeSpec, type CounterSpec } from '@/lib/partner/counter'
 
 // КП покупателю точки — от имени партнёра, с его розничной ценой. Ни бренда, ни цен
 // M-Glass на листе нет: покупатель покупает у партнёра. Позиции — из черновика
@@ -21,7 +21,7 @@ const today = () => new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/M
 export default function CounterKpPage() {
   const [specs, setSpecs] = useState<CounterSpec[]>([])
   const [items, setItems] = useState<Priced[] | null>(null)
-  const [settings, setSettings] = useState<Settings>({ markupPct: DEFAULT_MARKUP_PCT, kpName: '', kpPhone: '', kpNote: '' })
+  const [settings, setSettings] = useState<Settings | null>(null)   // без наценки лист не печатаем
   const [defaults, setDefaults] = useState<{ name: string; phone: string }>({ name: '', phone: '' })
   const [buyer, setBuyer] = useState('')
   const [loading, setLoading] = useState(true)
@@ -40,7 +40,8 @@ export default function CounterKpPage() {
       setSpecs(draft)
       if (s?.settings) setSettings(s.settings as Settings)
       if (s?.defaults) setDefaults(s.defaults)
-      if (q && (!q.ok || !q.d.ok)) setError(q.d.error || 'Цена не посчитана')
+      if (!s?.settings) setError('Наценка не загрузилась')
+      else if (q && (!q.ok || !q.d.ok)) setError(q.d.error || 'Цена не посчитана')
       else if (q) setItems(q.d.items as Priced[])
     }).catch(() => setError('Сеть недоступна')).finally(() => setLoading(false))
   }, [])
@@ -72,7 +73,7 @@ export default function CounterKpPage() {
       <Link href="/partner/counter" className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← Прилавок</Link>
     </div></div>
   )
-  if (error || !items || items.length !== specs.length) return (
+  if (error || !settings || !items || items.length !== specs.length) return (
     <div className="wrap"><div className="note">
       <div className="t">КП не собрано</div>
       <div className="s">{error || 'Цена не посчитана'}. Без цены лист не печатаем.</div>
