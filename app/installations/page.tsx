@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { SkeletonTable } from '@/components/ui/Skeleton'
 
 // Монтажи — одно окно отдела реализации: заявка на монтаж (один заказ = одна
 // задача бригаде) по устоявшейся форме компании, копия в чат монтажной группы
@@ -287,7 +288,7 @@ export default function InstallationsPage() {
     crewMonth.set(i.crew_id, (crewMonth.get(i.crew_id) ?? 0) + Number(i.amount ?? 0))
   }
 
-  if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
+  if (loading) return <SkeletonTable rows={8} />
 
   const inputCls = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white outline-none focus:border-[#111110]'
   const lbl = 'text-[11px] font-medium text-[#6b6b66] mb-1 block'
