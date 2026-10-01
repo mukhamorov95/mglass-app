@@ -5,14 +5,16 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { getRole } from '@/lib/getRole'
 import { getPartnerClientId } from '@/lib/partnerScope'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 // Выдаёт короткоживущую подписанную ссылку на вложение и редиректит на неё.
 // Bucket b2b-attachments приватный, поэтому прямые publicUrl не работают (400).
 // Путь берём из file_url: либо это уже путь (новые записи), либо старый publicUrl
 // (вырезаем часть после /b2b-attachments/).
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const attId = Number(id)
-  if (!attId) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
+  const { id: attId } = await params
+  // id вложения — uuid. Раньше тут стоял Number(id), и каждое вложение отвечало 400.
+  if (!UUID_RE.test(attId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()

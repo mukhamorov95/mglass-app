@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
+import DrawingFiles from './DrawingFiles'
 
 // Карточка заказа кабинета (дизайн из прототипа, .pcab).
 type Item = { material: string; thickness: number; width: number; height: number; quantity: number; tempering: boolean; facet: boolean; triplex: boolean; price: number }
@@ -181,6 +182,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
               )}
             </div>
           </div>
+          <DrawingFiles orderId={id} />
         </div>
       </div>
 
