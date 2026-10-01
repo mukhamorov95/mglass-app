@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getModel } from '@/lib/configurator/arrangement'
-import { computeKitQuantities, computeKitPrice, type RoleId } from '@/lib/configurator/kit'
+import { computeKitQuantities, computeKitPrice, piecesForRole, type RoleId } from '@/lib/configurator/kit'
 import { buildWithVariant } from '@/lib/configurator/quoteContract'
 import type { MVariant } from '@/components/configurator/scene/assembly'
 import { resolveTierData } from '@/lib/configurator/priceVersion'
@@ -9,6 +9,7 @@ import { calcItem, effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalcul
 import { loadB2BRates } from '@/lib/b2b/rates'
 import { MGLASS_CLIENT_IDS } from '@/lib/b2bScope'
 import type { B2BMaterial } from '@/lib/types'
+import { buildStops } from '@/lib/calc/buildStops'
 
 // Расчёт изделия для вкладки «Расчёт» кабинета менеджера и стандартной линейки CFO.
 // Композирует ДВА движка, ни один не редактирует:
@@ -29,6 +30,11 @@ export type BuildRequest = {
   thickness?: number; finishId?: string; glassType?: string; withDelivery?: boolean; floors?: number
   zoneId?: string; km?: number; installFactors?: string[]; choice?: Record<string, string>; qtyChoice?: Record<string, number>
   variant?: MVariant
+  // Расчёт по чертежу (Ч1): размеры панелей с чертежа — по индексу как в геометрии;
+  // артикулы, как подписаны на чертеже, по роли. Цену это не меняет, кроме стекла по
+  // размерам чертежа, — расхождения уходят в stops.
+  panels?: Array<{ w: number; h: number } | null>
+  drawn?: Record<string, string>
 }
 
 export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
@@ -66,20 +72,21 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
   // Спецификация стекла: по одной строке на панель — размер, площадь, ₽/м² по прайсу,
   // сумма и скидка M GLASS. Менеджеру нужно видеть, из чего сложилась цифра.
   const glassLines: Array<{
-    label: string; w: number; h: number; areaM2: number; pricePerM2: number
+    index: number; label: string; w: number; h: number; areaM2: number; pricePerM2: number
     listTotal: number; total: number; minPriceApplied: boolean
   }> = []
   if (glassMat) {
     assembly.glass.forEach((g, i) => {
-      const w = Math.round(g.size[0] * 1000)
-      const h = Math.round(g.size[1] * 1000)
+      const fromDrawing = body.panels?.[i]
+      const w = Math.round(fromDrawing?.w || g.size[0] * 1000)
+      const h = Math.round(fromDrawing?.h || g.size[1] * 1000)
       if (w <= 0 || h <= 0) return
       // Душевое стекло — всегда закалённое (hasTempering=true), иначе занижение.
       const item = calcItem(glassMat, w, h, 1, glassMat.waste_percent, true, [], false, null, [], false, 2, null, [], true, loadedRates.rates)
       const total = effectiveItemTotal(item as B2BOrderItem, mgDiscount)
       glassCost += total
       glassLines.push({
-        label: `Панель ${i + 1}`,
+        index: i, label: `Панель ${i + 1}`,
         w, h,
         areaM2: item.totalAreaNet,
         pricePerM2: item.pricePerM2,
@@ -110,6 +117,27 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
 
   // Если стекло не посчиталось — сообщаем как пробел, не занижаем молча.
   const missing = [...price.missing, ...glassMissing.map(label => ({ role: 'glass' as RoleId, label, reason: 'нет цены' as const }))]
+
+  const byId = new Map(library.items.map(i => [i.id, i]))
+  const doors = assembly.glass.flatMap((g, i) => g.role !== 'door' ? [] : [{
+    w: Math.round(body.panels?.[i]?.w || g.size[0] * 1000),
+    h: Math.round(body.panels?.[i]?.h || g.size[1] * 1000),
+  }])
+  const kit = kits[body.model] ?? { slots: [] }
+  // Уплотнитель и заглушку движок набирает из нескольких хлыстов — цена верна, но стык
+  // менеджер должен видеть до заказа: у поставщика может быть длина подлиннее.
+  const spliced = price.lines.flatMap(l => {
+    const longest = Math.max(0, ...(byId.get(l.itemId)?.stocks ?? []).map(st => st.len))
+    if (l.unit !== 'хлыст' || longest <= 0) return []
+    return piecesForRole(q, kit, l.role).filter(p => p > longest).map(p => ({ label: l.label, piece: Math.round(p), stock: longest }))
+  })
+  const { stops, notes } = buildStops({
+    lines: price.lines.map(l => ({ ...l, specs: l.itemId ? byId.get(l.itemId)?.specs : undefined })),
+    missing: price.missing,
+    drawn: body.drawn,
+    doors, thicknessMm: thickness, swingDoors: q.swingDoors,
+    heightMm: body.dims.height, heightRange: model.constraints.height, spliced,
+  })
   return {
     ...price, missing, complete: price.complete && glassMissing.length === 0,
     glassSource: glassMat ? glassMat.name : null,
@@ -117,5 +145,6 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
     glassDiscountPct: mgDiscount,
     glassLines,
     glassSubstituted,
+    stops, notes,
   }
 }
