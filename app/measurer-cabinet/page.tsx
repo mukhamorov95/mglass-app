@@ -315,7 +315,7 @@ export default function MeasurerCabinetPage() {
       <div className="bg-white border-b border-[#e4e4e0] px-4 sm:px-5 pt-5 sm:pt-6 pb-4">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Кабинет замерщика</h1>
         <p className="text-[12px] text-[#9a9a95] mt-0.5">
-          {isOwner ? 'Все замерщики: сегодня, пул новых заявок, дальше по дням, график и выплаты.'
+          {isOwner ? 'Все замерщики: сегодня, пул новых заявок, дальше по дням, проведённые. График — в «Календаре», выплаты — в «Заработке».'
             : 'Сегодня — куда ехать. Новые заявки — бери в своё свободное окно: менеджер сразу видит время.'}
         </p>
         <div className="flex flex-wrap gap-2 mt-3 text-[12px]">

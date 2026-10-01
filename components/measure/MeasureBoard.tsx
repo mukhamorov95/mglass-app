@@ -68,12 +68,15 @@ export default function MeasureBoard(props: {
   const btn = 'text-[12px] font-semibold border border-[#e4e4e0] bg-white rounded-lg px-3 py-1.5 hover:bg-[#f5f5f3] disabled:opacity-40'
 
   return (
-    <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
+    <div className="bg-white rounded-xl border border-[#e4e4e0] p-3 sm:p-4">
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mr-auto">{props.title ?? 'Занятость замерщиков'}</p>
-        <button onClick={() => setOffset(o => o - 1)} className={btn} aria-label="Неделя раньше">←</button>
-        <button onClick={() => setOffset(0)} disabled={offset === 0} className={btn}>Сегодня</button>
-        <button onClick={() => setOffset(o => o + 1)} className={btn} aria-label="Неделя позже">→</button>
+        {/* Стрелки и «Сегодня» — одной группой: на телефоне не разъезжаются по строкам. */}
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setOffset(o => o - 1)} className={btn} aria-label="Неделя раньше">←</button>
+          <button onClick={() => setOffset(0)} disabled={offset === 0} className={btn}>Сегодня</button>
+          <button onClick={() => setOffset(o => o + 1)} className={btn} aria-label="Неделя позже">→</button>
+        </div>
       </div>
 
       {error && <p className="text-[12px] text-red-600 mb-2">{error}</p>}
