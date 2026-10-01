@@ -146,7 +146,7 @@ export default function MeasurerCalendar({ meId, isOwner, refreshKey, onChanged 
       <div className="bg-white rounded-xl border border-[#e4e4e0] p-3 sm:p-4">
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <button onClick={() => setMonth(m => shiftMonth(m, -1))} className={navBtn} aria-label="Месяц раньше">←</button>
-          <p className="text-[15px] font-bold capitalize min-w-[130px] text-center">{MONTHS[mIdx]} {y}</p>
+          <p className="text-[15px] font-bold first-letter:uppercase min-w-[130px] text-center">{MONTHS[mIdx]} {y}</p>
           <button onClick={() => setMonth(m => shiftMonth(m, 1))} className={navBtn} aria-label="Месяц позже">→</button>
           {month !== today.slice(0, 7) && <button onClick={() => { setMonth(today.slice(0, 7)); setSelected(today) }} className={navBtn}>Сегодня</button>}
           {isOwner && data && data.measurers.length > 0 && (
@@ -172,7 +172,7 @@ export default function MeasurerCalendar({ meId, isOwner, refreshKey, onChanged 
                 className={`min-h-[52px] sm:min-h-[72px] rounded-lg border p-1 text-left align-top flex flex-col
                   ${isSel ? 'border-[#111110] ring-1 ring-[#111110]' : 'border-[#f0f0ec]'}
                   ${!c.inMonth ? 'opacity-40' : ''} ${c.offs.length ? 'bg-[#f5f5f3]' : !c.working ? 'bg-[#fafaf8]' : 'bg-white'}`}>
-                <span className={`text-[12px] font-semibold ${isToday ? 'bg-[#111110] text-white rounded px-1' : ''}`}>{Number(c.date.slice(8))}</span>
+                <span className={`self-start text-[12px] font-semibold ${isToday ? 'bg-[#111110] text-white rounded-full min-w-[20px] text-center px-1' : ''}`}>{Number(c.date.slice(8))}</span>
                 {c.offs.length > 0 && <span className="text-[10px] leading-tight">🌴{who ? '' : ` ${c.offs.map(o => o.name).join(', ')}`}</span>}
                 {c.items.length > 0 && (
                   <>
@@ -199,7 +199,7 @@ export default function MeasurerCalendar({ meId, isOwner, refreshKey, onChanged 
 
       {day && (
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4 space-y-3">
-          <p className="text-[14px] font-bold capitalize">{dayTitle(selected)}{selected === today ? ' · сегодня' : ''}</p>
+          <p className="text-[14px] font-bold first-letter:uppercase">{dayTitle(selected)}{selected === today ? ' · сегодня' : ''}</p>
           {day.length === 0 && <p className="text-[12px] text-[#c4c4be]">Замерщиков нет.</p>}
           {day.map(({ m, plan, off }) => {
             const route = dayRouteUrl(plan.busy.filter(b => b.status !== 'done').map(b => (b as CalBooking).address))

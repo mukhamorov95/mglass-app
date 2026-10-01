@@ -377,7 +377,7 @@ export default function MeasurerCabinetPage() {
           <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Дальше</p>
           {upcoming.length === 0 ? <p className="text-[12px] text-[#c4c4be]">Назначенных замеров впереди нет.</p> : upcoming.map(([d, items]) => (
             <div key={d} className="space-y-2">
-              <p className="text-[12px] font-bold capitalize text-[#4b4b47]">{dayTitle(d)} · {items.length}</p>
+              <p className="text-[12px] font-bold first-letter:uppercase text-[#4b4b47]">{dayTitle(d)} · {items.length}</p>
               {items.map(activeCard)}
             </div>
           ))}
