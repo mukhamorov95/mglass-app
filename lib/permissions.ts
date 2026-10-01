@@ -1,5 +1,7 @@
 // Shared types and constants — no server dependencies, safe for client components
 
+import type { ManagerHome } from './managerHome'
+
 // mglass_only — закупщик считает только для внутреннего клиента M GLASS.
 // all_clients — закупщик (напр. Вера) считает для ВСЕХ B2B-клиентов, как менеджер.
 // null — обычный режим роли (для закупщика калькулятор закрыт).
@@ -16,6 +18,8 @@ export type UserPermissions = {
   // контур MGlass (B2C) + B2B как у менеджера, с переключателем вкладок в сайдбаре.
   // Даёт доступ к менеджерским маршрутам В ДОПОЛНЕНИЕ к контуру закупщика/логиста.
   manager_workspace?: boolean
+  // Начальный экран: куда уводить с «/» (У2). Пусто — общая панель.
+  home_route?: ManagerHome | null
 }
 
 export const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -26,4 +30,5 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   see_earnings:      true,
   b2b_client_scope:  null,
   manager_workspace: false,
+  home_route:        null,
 }
