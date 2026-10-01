@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { calcFinancialModel, savedProfit } from '@/lib/pricing/financialModel'
 import { kpFromQuick } from '@/lib/kp/fromQuick'
 import { discountPercentOf } from '@/lib/calcInvariants'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
@@ -24,7 +24,8 @@ type DealLink =
   | { kind: 'none' }
   | { kind: 'failed'; reason: string; dealId: number | null }
 
-type CartItem = { title: string; productPrice: number; installTotal: number; sections: number; perSection: number; delivery: number; lift: number; total: number }
+// glassCost/hwCost — себестоимость позиции; у корзин, сохранённых до 01.10.2026, их нет.
+type CartItem = { title: string; productPrice: number; installTotal: number; sections: number; perSection: number; delivery: number; lift: number; total: number; glassCost?: number; hwCost?: number }
 
 // Вынесен на уровень модуля: компоненты нельзя создавать внутри рендера (static-components)
 const Row = ({ label, value, bold, accent }: { label: string; value: string; bold?: boolean; accent?: boolean }) => (
@@ -131,7 +132,7 @@ export default function QuickCalcPage() {
   // ── cart ───────────────────────────────────────────────
   function addToCart() {
     if (!curHasData) return
-    setCart(c => [...c, { title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total }])
+    setCart(c => [...c, { title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total, glassCost, hwCost }])
     setTitle(''); setGlass(''); setHw(''); setPerSection(''); setSections('1'); setDelivery(''); setLift('')
   }
   const removeCart = (i: number) => setCart(c => c.filter((_, j) => j !== i))
@@ -139,7 +140,7 @@ export default function QuickCalcPage() {
   // Текущий состав: cart + незакоммиченное текущее изделие, если в нём есть данные.
   function currentList(): CartItem[] {
     const list: CartItem[] = [...cart]
-    if (curHasData) list.push({ title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total })
+    if (curHasData) list.push({ title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total, glassCost, hwCost })
     return list
   }
 
@@ -182,18 +183,24 @@ export default function QuickCalcPage() {
     try {
       const { saveCalculation } = await import('@/lib/saveCalculation')
       const label = list.length === 1 ? list[0].title : `Быстрый расчёт (${list.length} изд.)`
+      // Себестоимость — по всей сохраняемой корзине; у позиции из старой корзины её нет —
+      // тогда прибыль не известна, и в запись идёт 0, а не цена целиком.
+      const materialsCost = list.every(c => c.glassCost != null && c.hwCost != null)
+        ? list.reduce((s, c) => s + (c.glassCost as number) + (c.hwCost as number), 0)
+        : null
+      const saved = savedProfit(finalGrand, materialsCost, taxN) ?? { profit: 0, margin: 0 }
       const res = await saveCalculation({
         product_type: 'quick',
         input_data: snapshot,
-        cost_breakdown: { directCost, productPrice, installTotal, delivery: deliveryN, lift: liftN },
+        cost_breakdown: { directCost, productPrice, installTotal, delivery: deliveryN, lift: liftN, materialsCost },
         financial_breakdown: { marginPct: marginN, taxPct: taxN, designerMarkupPct, measureDisc, extraDisc, grand, finalGrand },
         base_price: grand,
         // Колонка — проценты; рубли скидок лежат в financial_breakdown.
         discount: discountPercentOf(measureDisc + extraDisc, grandWithDesigner),
         partner_percent: 0,
         final_price: finalGrand,
-        margin: marginN,
-        profit: Math.max(0, Math.round(finalGrand - directCost)),
+        margin: saved.margin,
+        profit: saved.profit,
         client_text: [label, objectAddress && `Адрес: ${objectAddress}`].filter(Boolean).join(' · '),
         client_name: clientName.trim() || undefined,
         client_phone: clientPhone.trim() || undefined,

@@ -230,6 +230,7 @@ export default async function CfoDashboardPage() {
                 { href: '/cfo/model',   label: 'Финмодель — факт и сценарии' },
                 { href: '/cfo/b2b',     label: 'B2B аналитика (оборот/материал/закалка)' },
                 { href: '/cfo/order-economics', label: 'Честная экономика заказа (раскрой + труд)' },
+                { href: '/cfo/order-economics/retail', label: 'Фонды розничного заказа (душевые)' },
                 { href: '/cfo/margins', label: 'Таблица маржинальности' },
                 { href: '/cfo/unit',    label: 'Unit-экономика заказов' },
                 { href: '/admin/cfo',   label: 'Финмодели и ДДС' },
