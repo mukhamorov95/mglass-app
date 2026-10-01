@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     final_price: Number(b.final_price),
     base_price: Number(b.base_price),
     margin: Number(b.margin),
+    discount: b.discount ?? null,
     client_name: b.client_name,
     client_phone: b.client_phone,
     deal_id: b.deal_id ?? null,
@@ -121,6 +122,7 @@ export async function PATCH(req: NextRequest) {
     final_price: Number(b.final_price),
     base_price: Number(b.base_price),
     margin: Number(b.margin),
+    discount: b.discount ?? null,
     client_name: b.client_name,
     client_phone: b.client_phone,
     // Расчёт уже в сделке — клиент известен из карточки.

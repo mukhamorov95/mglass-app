@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkCalculation, phoneDigits } from '@/lib/calcInvariants'
+import { checkCalculation, phoneDigits, discountPercentOf } from '@/lib/calcInvariants'
 
 const base = { final_price: 50000, base_price: 40000, margin: 40 }
 
@@ -68,5 +68,25 @@ describe('инварианты расчёта', () => {
     expect(phoneDigits('+7 (999) 123-45-67')).toBe('79991234567')
     expect(phoneDigits('—')).toBe('')
     expect(phoneDigits(undefined)).toBe('')
+  })
+})
+
+describe('скидка — в процентах (быстрый расчёт слал рубли, 01.10.2026)', () => {
+  it('рубли вместо процентов не проходят и объясняют, почему', () => {
+    const r = checkCalculation({ ...base, product_type: 'quick', discount: 43413 })
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain('в процентах')
+  })
+  it('проценты проходят, 0 и 100 — границы', () => {
+    for (const d of [0, 10, 99.99, 100]) expect(checkCalculation({ ...base, product_type: 'quick', discount: d }).ok).toBe(true)
+  })
+  it('отрицательная скидка — ошибка', () => expect(checkCalculation({ ...base, product_type: 'quick', discount: -1 }).ok).toBe(false))
+  it('без скидки в запросе — не проверяем', () => expect(checkCalculation({ ...base, product_type: 'quick' }).ok).toBe(true))
+  it('43 413 ₽ от 434 125 ₽ — ровно 10%', () => expect(discountPercentOf(43413, 434125)).toBe(10))
+  it('два знака, как в колонке', () => expect(discountPercentOf(1000, 30000)).toBe(3.33))
+  it('нет базы или скидки — 0, больше базы — 100', () => {
+    expect(discountPercentOf(500, 0)).toBe(0)
+    expect(discountPercentOf(0, 1000)).toBe(0)
+    expect(discountPercentOf(2000, 1000)).toBe(100)
   })
 })

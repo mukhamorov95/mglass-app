@@ -20,7 +20,7 @@ import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, isAllClientsScope, hasB2BSalesScope, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
-import { toast } from '@/lib/toast'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { confirmDialog } from '@/lib/dialog'
 import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
@@ -1511,10 +1511,14 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         updated_at: new Date().toISOString(),
       }).eq('id', editingOrderId)
       if (error) { console.error('B2B update error:', error); setSaveError(error.message); setSaving(false); return }
-      const { error: notesErr } = await sb.rpc('patch_order_notes_shallow', {
-        p_order_id: editingOrderId, p_patch: notesPatch,
-      })
-      if (notesErr) { console.error('B2B notes patch error:', notesErr); setSaveError(notesErr.message); setSaving(false); return }
+      // Через сервер: из браузера функция пускает только цех и владельца, менеджер получал 403.
+      const notesRes = await fetch(`/api/b2b-orders/${editingOrderId}/quote-notes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ patch: notesPatch }),
+      }).catch(() => null)
+      if (!notesRes?.ok) {
+        const reason = notesRes ? await responseError(notesRes) : NETWORK_ERROR
+        setSaveError(`Позиции и суммы сохранены, а заметки просчёта — нет: ${reason}`); setSaving(false); return
+      }
       savedId = editingOrderId
     } else {
       const { data: saved, error } = await sb.from('b2b_orders').insert({

@@ -18,6 +18,7 @@ export type CalcCheckInput = {
   client_phone?: string
   deal_id?: number | null
   amo_lead_id?: number | null
+  discount?: number | null
   input_data?: Record<string, unknown>
 }
 
@@ -41,6 +42,12 @@ export function checkCalculation(p: CalcCheckInput): CalcCheck {
   if (!Number.isFinite(p.margin) || p.margin > 95 || p.margin < -100) {
     return { ok: false, error: `Маржа ${p.margin}% — похоже на ошибку расчёта` }
   }
+  // calculations.discount — проценты (numeric(5,2)), их так и показывают «Расчёты» и печать.
+  // Быстрый расчёт до 01.10.2026 слал туда рубли: от 1000 ₽ база отвечала «numeric field
+  // overflow», меньше — легло бы «−500%».
+  if (p.discount != null && (!Number.isFinite(p.discount) || p.discount < 0 || p.discount > 100)) {
+    return { ok: false, error: `Скидка ${p.discount} — должна быть в процентах, от 0 до 100` }
+  }
 
   // Расчёт внутри сделки: клиент уже известен из карточки, спрашивать нечего.
   // Сделка AmoCRM — то же самое: клиент ведётся там (решение владельца 30.09).
@@ -54,4 +61,10 @@ export function checkCalculation(p: CalcCheckInput): CalcCheck {
   }
 
   return { ok: true }
+}
+
+// Скидка в рублях → проценты от суммы, с которой её сняли. Два знака — как в колонке.
+export function discountPercentOf(discountRub: number, baseRub: number): number {
+  if (!(baseRub > 0) || !(discountRub > 0)) return 0
+  return Math.min(100, Math.round((discountRub / baseRub) * 10000) / 100)
 }
