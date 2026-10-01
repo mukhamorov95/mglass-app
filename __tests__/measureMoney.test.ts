@@ -41,11 +41,11 @@ describe('долг компании замерщику', () => {
 describe('итоги «Заработка»', () => {
   const rows: EarningRow[] = [
     { status: 'done', visit_price: 2500, actual_price: null, measurer_fee: 2500, visit_payment: 'onsite', fee_status: 'pending' },
-    { status: 'done', visit_price: 2500, actual_price: 3500, measurer_fee: 3500, visit_payment: 'company', fee_status: 'paid' },
+    { status: 'done', visit_price: 2500, actual_price: 3500, measurer_fee: 3500, visit_payment: 'company', fee_status: 'paid', is_repeat: true },
     { status: 'done', visit_price: 3000, actual_price: null, measurer_fee: 3000, visit_payment: 'company', fee_status: 'pending' },
     { status: 'done', visit_price: 2000, actual_price: null, measurer_fee: 2000, visit_payment: 'unpaid', fee_status: 'pending' },
     { status: 'done', visit_price: 0, actual_price: null, measurer_fee: 0, visit_payment: null, fee_status: 'pending' },
-    { status: 'scheduled', visit_price: 9999, actual_price: null, measurer_fee: 9999, visit_payment: null, fee_status: 'pending' },
+    { status: 'scheduled', visit_price: 9999, actual_price: null, measurer_fee: 9999, visit_payment: null, fee_status: 'pending', is_repeat: true },
   ]
   const s = summarizeEarnings(rows)
 
@@ -56,6 +56,10 @@ describe('итоги «Заработка»', () => {
     expect(s.unpaid).toEqual({ count: 1, sum: 2000 })
     expect(s.unmarked).toEqual({ count: 1, sum: 0 })
     expect(s.noPrice).toBe(1)
+  })
+
+  it('повторные — из выполненных, назначенный повторный не считается', () => {
+    expect(s.repeat).toBe(1)
   })
 
   it('тождество оплат сходится в штуках и рублях', () => {
