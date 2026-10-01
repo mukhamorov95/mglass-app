@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { kpFromQuick } from '@/lib/kp/fromQuick'
+import { discountPercentOf } from '@/lib/calcInvariants'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { useAmoLeadFromUrl } from '@/lib/useAmoLead'
 import { AmoLeadBanner } from '@/components/AmoLeadBanner'
@@ -187,7 +188,8 @@ export default function QuickCalcPage() {
         cost_breakdown: { directCost, productPrice, installTotal, delivery: deliveryN, lift: liftN },
         financial_breakdown: { marginPct: marginN, taxPct: taxN, designerMarkupPct, measureDisc, extraDisc, grand, finalGrand },
         base_price: grand,
-        discount: measureDisc + extraDisc,
+        // Колонка — проценты; рубли скидок лежат в financial_breakdown.
+        discount: discountPercentOf(measureDisc + extraDisc, grandWithDesigner),
         partner_percent: 0,
         final_price: finalGrand,
         margin: marginN,
