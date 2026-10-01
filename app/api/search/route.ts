@@ -7,8 +7,9 @@ import { parseQuery, toGroups, quickActions, type SearchPayload } from '@/lib/se
 // Поиск с любого экрана (У4). Изоляция в три слоя:
 // 1) RLS вызывающего — app_search работает как SECURITY INVOKER;
 // 2) группа ищется, только если роль может открыть её карточку (canAccessRoute);
-// 3) правила страниц поверх RLS: «только M GLASS» у B2B и свои расчёты у менеджера —
-//    RLS расчётов пропускает всех сотрудников (две политики чтения складываются через OR).
+// 3) правила страниц поверх RLS: «только M GLASS» у B2B и свои расчёты у менеджера.
+//    До миграции 20260930_calculations_rls_isolation RLS расчётов пропускал всех
+//    сотрудников; после неё фильтр совпадает с политикой и остаётся второй линией.
 export async function GET(req: NextRequest) {
   const user = await getSessionUser()
   if (!user) return NextResponse.json({ error: 'Нужно войти' }, { status: 401 })
