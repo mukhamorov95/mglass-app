@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { buildMeasureMessage } from '@/lib/measure/message'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 // Диктовка/вставка менеджера → структурированная заявка на замер.
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
@@ -22,6 +23,9 @@ const SYSTEM = `Ты — диспетчер замеров стекольной 
 }`
 
 export async function POST(req: NextRequest) {
+  const guard = await requirePageAccess('/measure-requests')
+  if (guard instanceof NextResponse) return guard
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

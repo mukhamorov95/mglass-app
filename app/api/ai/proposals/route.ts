@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 const LIST_COLUMNS = [
   'id', 'created_at', 'updated_at',
@@ -26,6 +27,9 @@ const LIST_COLUMNS = [
 ].join(', ')
 
 export async function GET(req: NextRequest) {
+  const guard = await requirePageAccess('/admin/ai-proposals')
+  if (guard instanceof NextResponse) return guard
+
   // ── Auth — any authenticated role can read ────────────────────────────────
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()

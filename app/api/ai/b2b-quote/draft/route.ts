@@ -18,10 +18,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { runCreateB2BQuickQuoteRuntime } from '@/lib/ai-tools/createB2BQuickQuoteRuntime'
 import type { B2BQuickQuoteInput } from '@/lib/ai-tools/b2bQuickQuoteTool'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 const ALLOWED_ROLES = new Set(['admin', 'manager', 'buyer'])
 
 export async function POST(req: NextRequest) {
+  const guard = await requirePageAccess('/admin/ai-b2b-quote')
+  if (guard instanceof NextResponse) return guard
+
   // ── Auth ──────────────────────────────────────────────────────────────────
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()

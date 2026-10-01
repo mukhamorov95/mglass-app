@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { requireOwner } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -21,6 +22,10 @@ const SCHEMA = {
 } as const
 
 export async function POST(req: Request) {
+  // Экрана, который его вызывает, нет — только владелец.
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })

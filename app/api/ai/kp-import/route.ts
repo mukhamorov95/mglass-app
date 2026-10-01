@@ -7,6 +7,7 @@ import { kpImportWarnings, kpReconcileNotes } from '@/lib/kp/importCheck'
 import { createServiceClient } from '@/lib/supabase-service'
 import { safeFileName, sourcePath } from '@/lib/kp/sourceFile'
 import { randomUUID } from 'crypto'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 // Старое КП (PDF или фото) → наша структура. Владелец: «делал КП пять месяцев
 // назад, хочу подгрузить, отредактировать под нас, сохранить и отправить».
@@ -36,6 +37,9 @@ const SYS = [
 ].join(' ')
 
 export async function POST(req: Request) {
+  const guard = await requirePageAccess('/kp')
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })

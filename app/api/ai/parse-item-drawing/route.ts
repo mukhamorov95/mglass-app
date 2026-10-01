@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 // Разбор чертежа (PDF/фото) в параметры ОДНОЙ позиции B2B-калькулятора под
 // текущий тип: стекло/зеркало, зеркало+свет, лофт. (Многодетальный разбор — в parse-drawing.)
@@ -33,6 +34,9 @@ const KIND_HINT: Record<string, string> = {
 }
 
 export async function POST(req: Request) {
+  const guard = await requirePageAccess('/calculator/b2b')
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })

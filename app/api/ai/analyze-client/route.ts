@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -20,6 +21,9 @@ function parseNotes(n: string | null): Record<string, unknown> {
 }
 
 export async function POST(req: Request) {
+  const guard = await requirePageAccess('/b2b-crm')
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

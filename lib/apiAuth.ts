@@ -40,13 +40,18 @@ export async function requireRole(allowed: Role[]): Promise<Role | NextResponse>
 // manager_workspace берём из профиля, как middleware: закупщик с кабинетом
 // менеджера проходит, тот же закупщик без него — нет.
 export async function requirePageAccess(pathname: string): Promise<Role | NextResponse> {
+  return requireAnyPageAccess([pathname])
+}
+
+// Эндпоинт, которым пользуются несколько экранов: пускает, если открыт хотя бы один.
+export async function requireAnyPageAccess(pathnames: string[]): Promise<Role | NextResponse> {
   const user = await getSessionUser()
   if (!user) return NextResponse.json({ error: 'Нужно войти' }, { status: 401 })
   const profile = await getUserProfile()
   if (!profile) return forbidden()
   const { role, permissions } = profile
   const opts = { b2bScope: permissions.b2b_client_scope ?? null, managerWorkspace: permissions.manager_workspace === true }
-  if (!canAccessRoute(role, pathname, opts)) return forbidden()
+  if (!pathnames.some(p => canAccessRoute(role, p, opts))) return forbidden()
   return role
 }
 

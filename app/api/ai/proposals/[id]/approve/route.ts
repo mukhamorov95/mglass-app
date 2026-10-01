@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import type { AgentApprovalSnapshot } from '@/lib/ai-tools/agentActionLogTypes'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 const ALLOWED_ROLES = new Set(['admin', 'manager'])
 
@@ -24,6 +25,9 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const guard = await requirePageAccess('/admin/ai-proposals')
+  if (guard instanceof NextResponse) return guard
+
   // ── Auth ──────────────────────────────────────────────────────────────────
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()

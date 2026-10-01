@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { buildContentGeneratorPrompt, DAILY_CONTENT_PROMPT } from '@/lib/contentGeneratorPrompt'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
 
 export const maxDuration = 120
 
@@ -20,6 +21,9 @@ function extractJSON(text: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const guard = await requireAnyPageAccess(['/marketing/daily', '/marketing/video-factory'])
+  if (guard instanceof NextResponse) return guard
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

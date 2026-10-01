@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
 import { reconcileKp } from '@/lib/kpReconcile'
 import { KP_SCHEMA } from '@/lib/kp/schema'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -10,6 +11,9 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 // передан existing — обновляем его новой репликой, не затирая уже заполненное.
 
 export async function POST(req: Request) {
+  const guard = await requirePageAccess('/kp')
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
