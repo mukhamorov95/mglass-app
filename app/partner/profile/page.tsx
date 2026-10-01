@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import LegalEntities from './LegalEntities'
+import CounterSettings from './CounterSettings'
 
 // Профиль партнёра: контакты/скидка (read-only) + свои юрлица (партнёр ведёт сам, A7).
 // Доступ гейтит app/partner/layout.
@@ -36,7 +37,7 @@ export default async function PartnerProfilePage() {
   return (
     <div className="wrap">
       <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.02em', marginBottom: 4 }}>Профиль</div>
-      <div className="cap" style={{ marginBottom: 16 }}>Ваши данные. Контакты и скидку меняет менеджер; юрлица для счёта вы ведёте сами.</div>
+      <div className="cap" style={{ marginBottom: 16 }}>Ваши данные. Контакты и скидку меняет менеджер; наценку прилавка и юрлица для счёта вы ведёте сами.</div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-h"><h3>Контакты</h3></div>
@@ -50,6 +51,8 @@ export default async function PartnerProfilePage() {
           </div>
         </div>
       </div>
+
+      <CounterSettings />
 
       <LegalEntities />
     </div>
