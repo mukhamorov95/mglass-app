@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { PRODUCTION_DAYS, matchProductionDays } from '@/lib/kp/importCheck'
 import type { KpSourceFile } from '@/lib/kp/sourceFile'
+import type { KpSection } from './[id]/print/KpDocument'
 
 interface ISpeechRecognition extends EventTarget {
   lang: string; continuous: boolean; interimResults: boolean
@@ -28,6 +29,9 @@ type Form = {
   spec_note: string; vat_label: string; vat_note: string
   production_days: string; warranty: string; vat: string
   photo_url: string | null
+  // Лист 3 «Схема комплектации» из строк расчёта (lib/kp/bomSections.ts). Нет — печать
+  // берёт типовой текст по виду изделия.
+  sections?: KpSection[]
   // Исходник, из которого собрано это КП (старый файл клиента). Лежит в content,
   // поэтому доезжает до истории и обратно в форму при правке.
   source_file?: KpSourceFile | null
@@ -133,7 +137,7 @@ export default function KpPage() {
       // Раньше ключ стирался при чтении: перезагрузка страницы или возврат на неё
       // оставляли пустую форму, и КП, который менеджер уже считал сделанным,
       // исчезал. Стираем только после сохранения или явной очистки.
-      const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number; deal_id?: number; amo_lead_id?: number; client_name?: string; client_phone?: string; client_address?: string }
+      const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number; deal_id?: number; amo_lead_id?: number; client_name?: string; client_phone?: string; client_address?: string; sections?: KpSection[] }
       // Из карточки сделки: клиент и связь уже подставлены — менеджер их не вводит заново.
       if (typeof p.deal_id === 'number') dealIdRef.current = p.deal_id
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -153,6 +157,7 @@ export default function KpPage() {
         })) : f.items,
         subtotal: p.subtotal != null ? String(p.subtotal) : f.subtotal,
         total: p.total != null ? String(p.total) : f.total,
+        ...(Array.isArray(p.sections) && p.sections.length ? { sections: p.sections } : {}),
       }))
     } catch { /* ignore */ }
   }, [])
@@ -564,6 +569,15 @@ export default function KpPage() {
                   )}
                 </div>
               </div>
+              {form.sections?.length ? (
+                <div className="col-span-3">
+                  <label className={L}>Состав (лист 3 КП) — из расчёта</label>
+                  <div className="space-y-1 text-[12px] text-[#6b6b66]">
+                    {form.sections.map((x, i) => <div key={i}><span className="font-semibold text-[#111110]">{x.n} · {x.title}</span> — {x.desc}</div>)}
+                  </div>
+                  <button onClick={() => set({ sections: undefined })} className="mt-1 text-[12px] text-red-500">заменить типовым текстом</button>
+                </div>
+              ) : null}
             </div>
 
             {/* actions */}
