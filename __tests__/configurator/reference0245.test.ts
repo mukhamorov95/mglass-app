@@ -3,7 +3,7 @@ import { computeKitQuantities, computeKitPrice, type Library, type LibraryItem, 
 import { planOrderCutting } from '@/lib/configurator/orderPlan'
 import { buildWithVariant } from '@/lib/configurator/quoteContract'
 import { getModel } from '@/lib/configurator/arrangement'
-import { supplierColorToFinish } from '@/lib/configurator/pricing'
+import { rowFinish } from '@/lib/supplier/colorCode'
 import av24 from '../fixtures/configurator/av24-0245-rows.json'
 
 // Эталон — заказ 0245-0, высота 2 200, вся фурнитура чёрная, АВ24 −25 %.
@@ -131,7 +131,7 @@ describe('Эталон 0245, высота 2 200, чёрный — фурниту
 // ── Слой Б: справочник → цена цвета ─────────────────────────────────
 // Владелец: «движок должен понимать код цвета, чтобы подставлять стоимость этого цвета».
 // Строка АВ24 «FDPP-503.8 PVC/BL» несёт цвет кодом после «/»; у части строк поле color —
-// тот же код без слова («BL», «TP», «BZ»). Сегодня распознаётся только слово.
+// тот же код без слова («BL», «TP», «BZ»). С Э2 цвет читается по коду (lib/supplier/colorCode.ts).
 describe('Цвет строки АВ24 распознаётся по коду артикула', () => {
   const blackRows = ROWS.filter(r => /\/BL$/.test(r.article))
 
@@ -139,8 +139,9 @@ describe('Цвет строки АВ24 распознаётся по коду а
     expect(blackRows.length).toBeGreaterThanOrEqual(20)
   })
 
-  it.fails('каждая «…/BL» — чёрный — ждёт Э2', () => {
-    const wrong = blackRows.filter(r => supplierColorToFinish(r.color ?? '') !== 'black').map(r => r.article)
+  it('каждая «…/BL» — чёрный', () => {
+    const axis = (a: string) => (/^FDPP-/.test(a) ? 'consumable' as const : 'hardware' as const)
+    const wrong = blackRows.filter(r => rowFinish('av24', r, axis(r.article)) !== 'black').map(r => r.article)
     expect(wrong).toEqual([])
   })
 })

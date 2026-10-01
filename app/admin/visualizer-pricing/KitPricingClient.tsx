@@ -5,7 +5,8 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type GlassTint } from '@/components/configurator/scene/assembly'
-import { GLASS_TYPE_IDS, supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
+import { GLASS_TYPE_IDS, type Tier } from '@/lib/configurator/pricing'
+import { pricesByFinish, colorAxisOfRole, rowCost, type SupplierRowLike } from '@/lib/supplier/colorCode'
 import {
   computeKitQuantities, computeKitPrice, kitChoices, requiredRoles, defaultKitFor,
   ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm, ROLE_GROUPS, autoShapeForRole, piecesForRole,
@@ -290,41 +291,56 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
     const res = await fetch(`/api/admin/supplier-catalog/variants?id=${rowId}`)
     if (!res.ok) return
     const { variants, name, supplier, base, imageUrl, specs } = await res.json() as {
-      variants: { color: string; cost_price: number }[]; name: string; supplier: string; base: string
+      variants: SupplierRowLike[]; name: string; supplier: string; base: string
       imageUrl?: string; specs?: Record<string, string>
     }
-    const byFinish: Record<string, number> = {}
-    for (const v of variants) {
-      const f = supplierColorToFinish(v.color)
-      if (f && !(f in byFinish)) byFinish[f] = Math.round(v.cost_price)
-    }
-    if (Object.keys(byFinish).length === 0 && variants.length) byFinish[finishId] = Math.round(variants[0].cost_price)
     const label = name.length > 60 ? name.slice(0, 60) + '…' : name
     const shortName = name.split('.')[0].slice(0, 48)
+    const ref = { supplier, base, label }
+    const sameRef = (r?: { supplier: string; base: string }) => r?.supplier === supplier && r.base === base
 
     edit(s => {
       const slot = (s.kits[code] ?? { slots: [] }).slots[target.si]
       if (!slot) return
       const isBar = ROLE_META[slot.role].kind === 'bar'
+      // Цвет — по коду артикула, у уплотнителей своя ось (прозрачный подходит к любой фурнитуре).
+      const byFinish = pricesByFinish(supplier, variants, colorAxisOfRole(slot.role))
+      if (Object.keys(byFinish).length === 0 && variants.length) byFinish[finishId] = rowCost(variants[0])
+      // Хлыст каждой длины — свой артикул: та же длина заменяется, новая добавляется.
+      const putStock = (it: Pick<LibraryItem, 'stocks'>) => {
+        const len = parseLengthMm(name)
+        const rest = (it.stocks ?? []).filter(st => st.len !== len)
+        it.stocks = [...rest, { len, prices: byFinish, ref }].sort((a, b) => a.len - b.len)
+      }
+      const enrich = (it: { image?: string; specs?: Record<string, string> }) => {
+        if (imageUrl) it.image = imageUrl
+        if (specs && Object.keys(specs).length) it.specs = specs
+      }
       if (target.itemId) {          // обновляем цены существующей позиции
         const it = s.library.items.find(x => x.id === target.itemId)
         if (!it) return
-        if (isBar) it.stocks = [{ len: parseLengthMm(name), prices: byFinish }, ...(it.stocks ?? [])]
-        else it.prices = { ...it.prices, ...byFinish }
-        it.ref = { supplier, base, label }
-        if (imageUrl) it.image = imageUrl
-        if (specs && Object.keys(specs).length) it.specs = specs
+        if (isBar) putStock(it)
+        else { it.prices = { ...it.prices, ...byFinish }; it.ref = ref }
+        enrich(it)
         return
       }
-      const id = uid('it')
-      s.library.items.push({
-        id, name: shortName, role: slot.role, ref: { supplier, base, label },
-        ...(imageUrl ? { image: imageUrl } : {}),
-        ...(specs && Object.keys(specs).length ? { specs } : {}),
-        ...(isBar ? { stocks: [{ len: parseLengthMm(name), prices: byFinish }] } : { prices: byFinish }),
-      })
+      // Та же деталь уже есть в библиотеке (другая модель её выбрала) — берём её, а не копию:
+      // копии одной позиции гасят общий раскрой на заказ и расходятся в ценах при переоценке.
+      const existing = s.library.items.find(x => x.role === slot.role && (sameRef(x.ref) || (x.stocks ?? []).some(st => sameRef(st.ref))))
+      const id = existing?.id ?? uid('it')
+      if (existing) {
+        if (isBar) putStock(existing)
+        else existing.prices = { ...existing.prices, ...byFinish }
+        enrich(existing)
+      } else {
+        const it: LibraryItem = { id, name: shortName, role: slot.role, ...(isBar ? {} : { prices: byFinish, ref }) }
+        if (isBar) { it.ref = ref; putStock(it) }
+        enrich(it)
+        s.library.items.push(it)
+      }
       const k = s.kits[code]!
       const sl = k.slots[target.si]
+      if (sl.entries.some(e => e.itemId === id)) return
       sl.entries.push({ itemId: id, qty: { mode: 'role' }, ...(sl.entries.length === 0 ? { primary: true } : {}) })
     })
   }
