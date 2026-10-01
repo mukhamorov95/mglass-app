@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server'
 import { canAccessRoute, isOwnerRole, normalizeRole, type Role, type B2BScope } from './lib/getRole'
 import { classifyDevice } from './lib/deviceClass'
+import { isDeviceAllowed } from './lib/deviceLimits'
 import { routeKey, isTrackablePageRequest } from './lib/routeKey'
 import { OWNER_2FA_COOKIE, isOwner2faEnabled, owner2faSecret, verifyOwner2faCookie } from './lib/owner2faCookie'
 
@@ -146,8 +147,11 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
           const { data: reg } = await supabase.from('user_devices')
             .select('device_id')
             .eq('user_id', user.id).eq('device_class', cls).is('revoked_at', null)
-            .maybeSingle()
-          if (reg && reg.device_id !== deviceId) {
+            .limit(10)
+          // Лимит считается по числу активных устройств класса (решение владельца
+          // 01.10: два компьютера), а не по «есть хоть одно другое».
+          const active = (reg ?? []) as { device_id: string }[]
+          if (!isDeviceAllowed(active.map(d => d.device_id), deviceId, cls)) {
             const url = request.nextUrl.clone()
             url.pathname = '/device-limit'
             return redirect(url)
@@ -164,6 +168,9 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
           { user_id: user.id, day: nowIso.slice(0, 10), last_seen: nowIso },
           { onConflict: 'user_id,day' },
         )
+        // Тем же тиком — «устройство живо». Через функцию: политики UPDATE на
+        // user_devices нет, прямой запрос из браузера молча менял 0 строк.
+        await supabase.rpc('touch_device', { p_device_id: deviceId })
       } catch { /* fail-open: проверка безопасности не должна ронять приложение */ }
     }
   }
