@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import Pagination from '@/components/Pagination'
-import AssignInstallationButton from '@/components/AssignInstallationButton'
+import { buildInstallationHref } from '@/components/AssignInstallationButton'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
@@ -19,7 +19,9 @@ import { toast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { promptDialog } from '@/lib/dialog'
 import { writeFailure } from '@/lib/rlsWrite'
 import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
-import { notesForCopy } from '@/lib/b2b/orderNotes'
+import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
+import RowMenu, { type MenuItem } from '@/components/RowMenu'
+import { buildTelegramWorkText } from '@/lib/b2b/telegramWorkText'
 
 
 const PAGE_SIZE = 50
@@ -190,83 +192,6 @@ function isToday(iso: string | null | undefined): boolean {
   if (!iso) return false
   const d = new Date(iso), now = new Date()
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
-}
-
-// ─── Telegram helpers ─────────────────────────────────────────────────────────
-
-function formatTelegramRub(value: number): string {
-  // Dot as thousands separator, no ₽ symbol — matches Telegram work text convention.
-  return Math.round(value).toLocaleString('ru-RU').replace(/\s/g, '.') + ' руб'
-}
-
-function formatTelegramClientName(name: string): string {
-  if (!name?.trim()) return 'Без клиента'
-  const n = name.trim()
-  if (/^m[\s-]?glass$/i.test(n) || /^мгласс$/i.test(n)) return 'МГЛАСС'
-  return n
-}
-
-function normalizeGlassGrade(materialName: string): string {
-  if (/м1|m1/i.test(materialName)) return 'м1'
-  if (/прозрачн/i.test(materialName)) return 'м1'
-  return materialName.trim().toLowerCase()
-}
-
-function normalizeMirrorType(materialName: string): string {
-  const n = materialName.trim().toLowerCase()
-  if (/серебр|silver|сильвер/.test(n)) return 'сильвер'
-  if (/осветл/.test(n)) return 'осветленное'
-  if (/crystal|кристал|vision|вижн/.test(n)) return 'кристал вижн'
-  // Strip leading "зеркало " prefix — we already add "Зеркало" in the label
-  return n.replace(/^зеркало\s+/i, '').trim() || n
-}
-
-type TgGroup = { label: string; qty: number }
-
-function buildTelegramPositionLines(quote: Quote): string[] {
-  if (quote.items.length === 0) return ['Расчёт B2B - см. PDF']
-
-  const groups = new Map<string, TgGroup>()
-
-  for (const item of quote.items) {
-    const qty       = item.quantity ?? 1
-    const matName   = (item.materialName || '').trim()
-    const isGlass   = item.category !== 'зеркало'
-    const thickness = item.thickness ?? 0
-    const thStr     = thickness > 0 ? `${thickness}мм` : ''
-
-    let key: string
-    let label: string
-
-    if (isGlass) {
-      const grade      = normalizeGlassGrade(matName)
-      const tempSuffix = (item.hasTempering ?? false) ? ' закаленное' : ''
-      key   = `glass|${matName}|${thickness}|${item.hasTempering ?? false}`
-      label = `Стекло ${thStr} ${grade}${tempSuffix}`.replace(/\s{2,}/g, ' ').trim()
-    } else {
-      // Mirror: derive shape from dimensions — equal width/height → round, otherwise rectangular
-      const mirrorType = normalizeMirrorType(matName)
-      const w     = item.width  ?? 0
-      const h     = item.height ?? 0
-      const shape = w > 0 && h > 0 && w === h ? 'круглое' : 'прямоугольное'
-      key   = `mirror|${matName}|${thickness}|${shape}`
-      label = `Зеркало ${thStr} ${mirrorType} ${shape}`.replace(/\s{2,}/g, ' ').trim()
-    }
-
-    const g = groups.get(key)
-    if (g) { g.qty += qty } else { groups.set(key, { label, qty }) }
-  }
-
-  return Array.from(groups.values()).map(g => `${g.label} - ${g.qty} шт`)
-}
-
-function buildTelegramWorkText(quote: Quote): string {
-  const quoteNumber = quote.custom_number?.trim() || `00${quote.id}`
-  const clientName  = formatTelegramClientName(quote.client_name ?? '')
-  const finalPrice  = finalTotalOf(quote)
-  const lines       = [quoteNumber, clientName, ...buildTelegramPositionLines(quote)]
-  lines.push('', `🥝${formatTelegramRub(finalPrice)}`)
-  return lines.join('\n')
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -624,26 +549,12 @@ export default function B2BQuotesPage() {
 
   // ── Duplicate / Delete ─────────────────────────────────────────────────────
   async function duplicateQuote(q: Quote) {
-    const sb = createClient()
-    const { data: { user } } = await sb.auth.getUser()
     // Автор дубля — текущий пользователь (не исходный менеджер). Копия/«из шаблона» —
-    // обычный черновик: следы жизни исходного заказа (токен ссылки клиента, ответ,
-    // согласование, этапы, оплата, история) не переносим — lib/b2b/orderNotes.ts.
-    const newNotes = JSON.stringify(notesForCopy(parseNotes(q.notes), { at: new Date().toISOString(), managerName: currentUserName ?? null }))
-    const { data, error } = await sb.from('b2b_orders').insert({
-      client_id: q.client_id, client_name: q.client_name,
-      discount_percent: q.discount_percent, margin_percent: q.margin_percent,
-      items: q.items, total_area: q.total_area, total_weight: q.total_weight,
-      total_cost_net: q.total_cost_net ?? 0, total_cost_vat: q.total_cost_vat ?? 0,
-      total_sale_inc_vat: q.total_sale_inc_vat, total_after_discount: q.total_after_discount,
-      notes: newNotes,
-      created_by: user?.id ?? null,
-      created_by_name: currentUserName ?? null,
-    }).select().single()
-    if (!error && data) {
-      setQuotes(prev => [{ ...data, items: q.items }, ...prev])
-      showToast(isTemplate(q) ? 'Просчёт создан из шаблона' : 'Расчёт скопирован как черновик')
-    } else showError('Копия не создана', error?.message ?? 'Сервер не вернул новую запись')
+    // обычный черновик: следы жизни исходного заказа не переносим (lib/b2b/duplicateOrder).
+    const { data, error } = await duplicateOrder(createClient(), q, { managerName: currentUserName ?? null })
+    if (error || !data) { showError('Копия не создана', error ?? undefined); return }
+    setQuotes(prev => [{ ...(data as unknown as Quote), items: q.items }, ...prev])
+    showToast(isTemplate(q) ? 'Просчёт создан из шаблона' : 'Расчёт скопирован как черновик')
   }
 
   // А2: ссылка на КП для клиента — выдаём и сразу кладём в буфер обмена.
@@ -1108,93 +1019,38 @@ export default function B2BQuotesPage() {
                           Запустить в работу →
                         </button>
                       )}
-                      {status === 'sent' && (<>
+                      {status === 'sent' && (
                         <button onClick={() => requestStatusChange(quote.id, 'agreed')}
-                          className="text-[11px] font-medium px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors whitespace-nowrap">
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors whitespace-nowrap">
                           Согласовано
                         </button>
-                        <button onClick={() => requestStatusChange(quote.id, 'rejected')}
-                          className="text-[11px] font-medium px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors whitespace-nowrap">
-                          Отказ
-                        </button>
-                      </>)}
-                      {(status === 'rejected' || status === 'sent') && (
+                      )}
+                      {status === 'rejected' && (
                         <button onClick={() => requestStatusChange(quote.id, 'quote')}
-                          className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
-                          ↩ Черновик
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
+                          ↩ Вернуть в черновик
                         </button>
                       )}
 
-                      {/* PDF */}
-                      <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" download
-                        title="Скачать КП в PDF"
-                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
-                        📄 PDF
-                      </a>
-                      {/* ТГ — copy Telegram work text to clipboard */}
-                      <button
-                        onClick={() => copyTelegramText(quote)}
-                        title="Скопировать текст для Telegram"
-                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
-                        {copiedId === quote.id ? '✓' : 'ТГ'}
-                      </button>
-                      {/* А4: одна карточка сделки */}
-                      <Link href={`/b2b-deal/${quote.id}`}
-                        title="Карточка сделки: документы, деньги, производство, клиент"
-                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
-                        🗂
-                      </Link>
-                      {/* А2: ссылка клиенту с согласованием */}
-                      <button onClick={() => shareQuote(quote)} disabled={sharing === quote.id}
-                        title="Ссылка на КП для клиента: он видит цены и может согласовать"
-                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] disabled:opacity-40 transition-colors whitespace-nowrap">
-                        {sharing === quote.id ? '…' : '🔗'}
-                      </button>
-                      {/* КП */}
-                      <Link href={`/b2b-quotes/${quote.id}/kp`} target="_blank"
-                        title="Открыть КП для печати"
-                        className="text-[11px] text-[#c4c4be] hover:text-violet-500 px-1.5 py-1 rounded hover:bg-violet-50 transition-colors">
-                        КП
-                      </Link>
-                      {/* Счёт-спецификация (КП + счёт с реквизитами и QR) */}
-                      <Link href={`/b2b-quotes/${quote.id}/invoice`} target="_blank"
-                        title="Счёт-спецификация (счёт с реквизитами и QR)"
-                        className="text-[11px] text-[#c4c4be] hover:text-emerald-600 px-1.5 py-1 rounded hover:bg-emerald-50 transition-colors">
-                        Счёт
-                      </Link>
-                      {/* Назначить монтаж — открывает форму /installations предзаполненной */}
-                      <AssignInstallationButton
-                        orderNo={quote.custom_number}
-                        clientName={quote.client_name}
-                        orderTotal={finalPrice}
-                        label="🔧"
-                        className="text-[11px] text-[#c4c4be] hover:text-amber-600 px-1.5 py-1 rounded hover:bg-amber-50 transition-colors" />
-                      {/* Редактировать в калькуляторе (та же запись; для копии — кнопка ⧉ рядом) */}
-                      <Link href={`/calculator/b2b?orderId=${quote.id}`}
-                        title="Редактировать в калькуляторе"
-                        className="text-[11px] text-[#c4c4be] hover:text-purple-500 px-1.5 py-1 rounded hover:bg-purple-50 transition-colors">
-                        🧮
-                      </Link>
-                      {/* Duplicate / «из шаблона» */}
-                      <button onClick={() => duplicateQuote(quote)}
-                        title={isTemplate(quote) ? 'Создать просчёт из шаблона' : 'Дублировать расчёт'}
-                        className="text-[11px] text-[#c4c4be] hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50 transition-colors">
-                        {isTemplate(quote) ? '＋' : '⧉'}
-                      </button>
-                      {/* А3: шаблон повторяющегося заказа */}
-                      <button onClick={() => toggleTemplate(quote)}
-                        title={isTemplate(quote) ? 'Убрать из шаблонов' : 'Сохранить как шаблон'}
-                        className={`text-[11px] px-1.5 py-1 rounded transition-colors ${
-                          isTemplate(quote) ? 'text-amber-500 hover:bg-amber-50' : 'text-[#c4c4be] hover:text-amber-500 hover:bg-amber-50'}`}>
-                        {isTemplate(quote) ? '★' : '☆'}
-                      </button>
-                      {/* Delete */}
-                      <button onClick={() => setDeletingId(quote.id)} title="Удалить"
-                        className="text-[#c4c4be] hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      {/* Остальное — в «⋯»: действия названы словами, опасное отдельно (У5) */}
+                      <RowMenu items={[
+                        { kind: 'link', label: '🗂 Карточка заказа', href: `/b2b-deal/${quote.id}` },
+                        { kind: 'divider' },
+                        { kind: 'link', label: '📄 КП — печать', href: `/b2b-quotes/${quote.id}/kp`, newTab: true },
+                        { kind: 'link', label: '🧾 Счёт-спецификация', href: `/b2b-quotes/${quote.id}/invoice`, newTab: true },
+                        { kind: 'link', label: '⬇ Скачать КП в PDF', href: `/api/quotes/${quote.id}/pdf`, newTab: true, external: true },
+                        { label: sharing === quote.id ? '🔗 Готовлю ссылку…' : '🔗 Ссылка клиенту', onClick: () => shareQuote(quote), disabled: sharing === quote.id },
+                        { label: copiedId === quote.id ? '✓ Текст скопирован' : '✈️ Текст для Telegram', onClick: () => copyTelegramText(quote) },
+                        { kind: 'divider' },
+                        { kind: 'link', label: '🧮 Открыть в калькуляторе', href: `/calculator/b2b?orderId=${quote.id}` },
+                        { label: isTemplate(quote) ? '＋ Создать из шаблона' : '⧉ Дублировать', onClick: () => duplicateQuote(quote) },
+                        { label: isTemplate(quote) ? '★ Убрать из шаблонов' : '☆ Сохранить как шаблон', onClick: () => toggleTemplate(quote) },
+                        { kind: 'link', label: '🔧 Назначить монтаж', href: buildInstallationHref({ orderNo: quote.custom_number, clientName: quote.client_name, orderTotal: finalPrice }) },
+                        ...(status === 'sent' ? [{ label: '✕ Отметить отказ', onClick: () => requestStatusChange(quote.id, 'rejected') }] : []),
+                        ...(status === 'rejected' || status === 'sent' ? [{ label: '↩ Вернуть в черновик', onClick: () => requestStatusChange(quote.id, 'quote') }] : []),
+                        { kind: 'divider' },
+                        { label: '🗑 Удалить просчёт', onClick: () => setDeletingId(quote.id), danger: true },
+                      ] as MenuItem[]} />
                     </div>
                   </div>
                 </div>
