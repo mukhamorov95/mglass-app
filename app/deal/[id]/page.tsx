@@ -53,6 +53,7 @@ type B2BInvoice = { id: number; invoice_no: string; amount: number; status: stri
 type Measure = {
   id: number; status: string; is_repeat: boolean | null; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string
   visit_price: number | null; actual_price: number | null; price_note: string | null; visit_payment: 'onsite' | 'company' | 'unpaid' | null; measurer_fee: number | null; result_note: string | null
+  cancel_reason?: string | null; cancelled_by_name?: string | null
 }
 type Payment = { id: number; kind: string; amount: number; paid_at: string; entered_by_name: string | null; note: string | null; invoice_id: number | null }
 type Invoice = {
@@ -749,6 +750,7 @@ export default function DealPage() {
                   {m.visit_payment && <> · {PAYMENT_LABEL[m.visit_payment]}</>}
                 </p>
                 {m.result_note && <p className="text-[12px] text-[#111110] whitespace-pre-line">📝 Итог замера: {m.result_note}</p>}
+                {m.status === 'cancelled' && m.cancel_reason && <p className="text-[12px] text-[#6b6b66]">✕ Почему отменён: {m.cancel_reason}{m.cancelled_by_name ? ` — ${m.cancelled_by_name}` : ''}</p>}
                 {Array.isArray(m.photos) && m.photos.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {m.photos.map((u, i) => (
