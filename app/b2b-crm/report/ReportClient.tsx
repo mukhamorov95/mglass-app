@@ -38,6 +38,8 @@ const rub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const pct = (n: number) => `${n.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
 const day = (k: string) => `${k.slice(8, 10)}.${k.slice(5, 7)}.${k.slice(0, 4)}`
 const monthLabel = (k: string) => `${MONTHS[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`
+// «из N заказа/заказов» — родительный падеж: из 1, 21, 121 заказа; из 2, 5, 11 заказов.
+const ordersGen = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'заказа' : 'заказов')
 const ordersWord = (n: number) => {
   const m10 = n % 10, m100 = n % 100
   if (m10 === 1 && m100 !== 11) return 'заказ'
@@ -290,7 +292,7 @@ export default function ReportClient({ initial }: {
               <Tile label="Отмечено оплат"
                 value={paidError ? '—' : paidSum == null ? (liveIds.length ? '…' : rub(0)) : rub(paidSum)}
                 sub={paidError ? paidError : paid == null ? undefined
-                  : `у ${paidCount} из ${liveIds.length} ${ordersWord(liveIds.length)} на ${rub(liveSum)}; без отметки — не значит «не оплачен»`} />
+                  : `у ${paidCount} из ${liveIds.length} ${ordersGen(liveIds.length)} на ${rub(liveSum)}; без отметки — не значит «не оплачен»`} />
             </div>
 
             {orders.length === 0 ? (
