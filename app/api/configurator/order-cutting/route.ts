@@ -9,13 +9,14 @@ import type { MDims, MVariant } from '@/components/configurator/scene/assembly'
 import type { Tier } from '@/lib/configurator/pricing'
 
 // Общий раскрой на заказ: несколько изделий → сколько сэкономит объединённый раскрой
-// профиля/трубы против поштучного. Себестоимость внутри — только owner/buyer.
+// профиля/трубы против поштучного. Себестоимость внутри — тем, кто видит себестоимость
+// комплекта (canSeeKitCost: менеджер считает заказ в «Расчёте»), и закупке.
 export const maxDuration = 30
 
-type ItemIn = { model: string; dims: MDims; variant?: MVariant; finishId?: string; choice?: Record<string, string> }
+type ItemIn = { model: string; dims: MDims; variant?: MVariant; finishId?: string; choice?: Record<string, string>; qtyChoice?: Record<string, number> }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireRole(['admin', 'ceo', 'buyer'])
+  const guard = await requireRole(['admin', 'ceo', 'manager', 'commercial', 'cfo', 'buyer'])
   if (guard instanceof NextResponse) return guard
   const body = await req.json().catch(() => null) as { tier?: string; version?: number; items?: ItemIn[] } | null
   const items = (body?.items ?? []).filter(i => i?.model && i.dims && M_MODELS.some(m => m.code === i.model))
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   const inputs: OrderItemInput[] = items.map(i => {
     const model = getModel(i.model)
     const q = computeKitQuantities(buildWithVariant(model, i.dims, 8, i.variant), 8, model, rates.capMargin)
-    return { q, lib: library, kit: kits[i.model] ?? { slots: [] }, finishId: i.finishId ?? 'chrome', opts: { choice: i.choice as Partial<Record<RoleId, string>> | undefined } }
+    return { q, lib: library, kit: kits[i.model] ?? { slots: [] }, finishId: i.finishId ?? 'chrome', opts: { choice: i.choice as Partial<Record<RoleId, string>> | undefined, qtyChoice: i.qtyChoice as Partial<Record<RoleId, number>> | undefined } }
   })
 
   const report = planOrderCutting(inputs, rates.kerf ?? 0)

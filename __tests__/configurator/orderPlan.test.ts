@@ -59,4 +59,22 @@ describe('П7 — общий раскрой на заказ', () => {
     const r = planOrderCutting([item({ width: 1100, height: 2100 })])
     expect(r.saving).toBe(0)
   })
+
+  it('пул — по позиции И цвету: чёрный и хромовый профиль не кроятся из одного хлыста', () => {
+    const black: OrderItemInput = { ...item({ width: 1000, height: 2000 }), finishId: 'black' }
+    const r = planOrderCutting([item({ width: 1000, height: 2000 }), black])
+    const profiles = r.cuts.filter(c => c.role === 'profile')
+    expect(profiles.map(c => c.finishId).sort()).toEqual(['black', 'chrome'])
+  })
+
+  it('берётся меньшее из общего и поштучного — экономия не подрезается до нуля', () => {
+    for (const ws of [[1000, 1000], [900, 1200, 1500], [1400, 1400, 1400, 1400], [700, 1900]]) {
+      const r = planOrderCutting(ws.map(w => item({ width: w, height: 2000 })))
+      for (const c of r.cuts) {
+        expect(c.pooledCost).toBeLessThanOrEqual(c.perItemCost)
+        expect(c.saving).toBe(c.perItemCost - c.pooledCost)
+        expect(c.plan.reduce((s, b) => s + b.price, 0)).toBeCloseTo(c.pooledCost, 6)
+      }
+    }
+  })
 })

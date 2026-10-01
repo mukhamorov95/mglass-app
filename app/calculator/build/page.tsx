@@ -66,7 +66,11 @@ type Price = {
 }
 // marks — янтарные метки на момент расчёта («цена хрома», «стекло подменено»): сумма есть,
 // но взята не та цена. Сохраняются с расчётом, чтобы закупка видела их и потом.
-type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number; marks?: string[] }
+// req — параметры душевой, по которым считали: корзина = заказ, общий раскрой профиля и
+// трубы на все душевые заказа пересчитывается по ним (у зеркал req нет).
+type ShowerReq = { model: string; dims: MDims; finishId: string; choice: Record<string, string>; qtyChoice: Record<string, number>; variant?: MVariant }
+type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number; marks?: string[]; req?: ShowerReq }
+type OrderCut = { saving: number; cuts: { name: string; finishId: string; perItemBars: number; pooledBars: number; saving: number }[] }
 
 const SUPPLIER: Record<string, string> = { av24: 'АВ24', vetro: 'Ветро' }
 const dateRu = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(2, 4)}`
@@ -143,6 +147,7 @@ export default function BuildCalcPage() {
   const [discount, setDiscount] = useState('0')
 
   const [cart, setCart] = useState<CartItem[]>([])
+  const [orderCutAt, setOrderCutAt] = useState<{ key: string; cut: OrderCut } | null>(null)
   const [clientName, setClientName] = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [objectAddress, setObjectAddress] = useState('')
@@ -331,7 +336,31 @@ export default function BuildCalcPage() {
 
   const title = () => `${model.code} ${model.name} · ${isCorner ? `${numOr(String(dims.width))}×${numOr(String(dims.width2 ?? 0))}×${numOr(String(dims.height))}` : `${numOr(String(dims.width))}×${numOr(String(dims.height))}`} мм`
   const marks = priceMarks(price)
-  const currentItem = (): CartItem => ({ title: title(), cost, productPrice: Math.round(productPrice), install, delivery: deliveryN, lift: liftN, total: grand, ...(marks.length ? { marks } : {}) })
+  const currentReq: ShowerReq = { model: code, dims, finishId, choice, qtyChoice, variant: mVariant }
+  const currentItem = (): CartItem => ({ title: title(), cost, productPrice: Math.round(productPrice), install, delivery: deliveryN, lift: liftN, total: grand, ...(marks.length ? { marks } : {}), req: currentReq })
+
+  // Корзина = заказ: профиль и труба всех душевых кроятся из общих хлыстов. Экономия —
+  // себестоимости, строкой; цену клиенту не меняет (это решает менеджер скидкой).
+  const orderReqs = useMemo(() => {
+    const list = cart.map(i => i.req).filter((r): r is ShowerReq => !!r)
+    if (product === 'shower' && usable && grand > 0 && !priceDirty) list.push(currentReq)
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, product, usable, grand, priceDirty, paramsKey])
+  const orderKey = JSON.stringify(orderReqs)
+  useEffect(() => {
+    if (orderReqs.length < 2) return
+    const ctrl = new AbortController()
+    fetch('/api/configurator/order-cutting', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+      body: JSON.stringify({ tier: 'budget', items: orderReqs }),
+    }).then(r => (r.ok ? r.json() : null))
+      .then((d: OrderCut | null) => { if (d) setOrderCutAt({ key: orderKey, cut: { saving: d.saving, cuts: d.cuts } }) })
+      .catch(() => {})
+    return () => ctrl.abort()
+  }, [orderReqs, orderKey])
+  // Показываем только раскрой, посчитанный для нынешнего состава заказа.
+  const orderCut = orderReqs.length >= 2 && orderCutAt?.key === orderKey ? orderCutAt.cut : null
 
   function addMore() {
     if (usable && grand > 0) setCart(c => [...c, currentItem()])
@@ -360,7 +389,7 @@ export default function BuildCalcPage() {
       const res = await saveCalculation({
         product_type: 'build',
         input_data: snapshot,
-        cost_breakdown: { glassCost, hwCost, directCost: cost, productPrice, installTotal: install, delivery: deliveryN, lift: liftN, sections },
+        cost_breakdown: { glassCost, hwCost, directCost: cost, productPrice, installTotal: install, delivery: deliveryN, lift: liftN, sections, ...(orderCut ? { orderCutSaving: orderCut.saving } : {}) },
         financial_breakdown: { marginPct: m, taxPct: tx, discountPct: discPct, total },
         base_price: total, discount: 0, partner_percent: 0, final_price: total, margin: m,
         profit: Math.max(0, Math.round(total - cost)),
@@ -733,6 +762,18 @@ export default function BuildCalcPage() {
             )}
             {saveMsg && <p className={`text-center text-[13px] font-semibold rounded-lg px-3 py-1.5 ${saveMsg.includes('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{saveMsg}</p>}
             {cart.length > 0 && <p className="text-[11px] text-[#9a9a95] text-center">В корзине {cart.length}. «Сохранить» соберёт КП из всех.</p>}
+            {orderCut && (
+              <div className="text-[11px] text-[#6b6b66] bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 space-y-0.5">
+                <div className="flex justify-between gap-2">
+                  <span>Общий раскрой на заказ ({orderReqs.length} душ.)</span>
+                  <span className="font-mono">{orderCut.saving >= 1 ? `−${RUB(orderCut.saving)}` : '0 ₽'}</span>
+                </div>
+                {orderCut.cuts.filter(c => c.saving >= 1).map((c, i) => (
+                  <div key={i} className="text-[#9a9a95]">{c.name}: хлыстов {c.perItemBars} → {c.pooledBars}</div>
+                ))}
+                {orderCut.saving < 1 && <div className="text-[#9a9a95]">Общих хлыстов не выходит — кроим по душевым.</div>}
+              </div>
+            )}
           </div>
           </div>
         </div>

@@ -105,19 +105,37 @@ describe('Эталон 0245, высота 2 200, чёрный — фурниту
     })
   })
 
-  // Профиль М7: движок кладёт низ и под дверь (1 469 вместо 819) и не умеет брать хлысты
-  // разной длины в одном плане (2 × 2,2 м + 1 × 3 м). Выходит 3 × 3 м = 2 340 ₽ против
-  // 3 × 2,2 м = 1 980 ₽ у владельца. Закрывают Э5 (смешанные хлысты) и Э8 (низ по решению 3).
-  it.fails('М7: фурнитура = 15 349 ₽ — ждёт Э5 и Э8', () => {
+  // Э5: хлысты разной длины в одном плане. Куски профиля М7 — 2200, 2200, 1469, 916:
+  // эвристики кроили 3 × 3 м = 2 340 ₽, точный раскрой — 2 × 2,2 м + 1 × 3 м.
+  it('М7: профиль кроится смешанными хлыстами 2 × 2,2 м + 1 × 3 м (Э5)', () => {
+    const p = price(M7, KIT_M7).lines.find(l => l.itemId === 'profile')!
+    const bars = p.plan!.reduce<Record<number, number>>((a, b) => ({ ...a, [b.len]: (a[b.len] ?? 0) + 1 }), {})
+    expect(bars).toEqual({ 2200: 2, 3000: 1 })
+    expect(Math.abs(p.total - (2 * costOf('FDPA-55.22 AL/BL') + costOf('FDPA-55.3 AL/BL')))).toBeLessThanOrEqual(1)
+  })
+
+  // Профиль М7: движок кладёт низ и под дверь (1 469 вместо 819) — у владельца 3 × 2,2 м
+  // = 1 980 ₽. Смешанные хлысты (Э5) уже есть; остаётся низ по решению 3 — Э8.
+  it.fails('М7: фурнитура = 15 349 ₽ — ждёт Э8', () => {
     const p = price(M7, KIT_M7)
     expect(p.missing).toEqual([])
     expect(Math.abs(p.hardwareCost - REF_M7)).toBeLessThanOrEqual(2)
   })
 
   // Обе душевые одной закупкой: общий хлыст профиля под низ и одна полоса нижнего
-  // уплотнителя на обе двери — минус 743 ₽. Общий раскрой ключуется по позиции и цвету и
-  // отдаёт min(общий, поштучный) — Э5.
-  it.fails('Обе сразу: 30 986 ₽ — ждёт Э5 и Э8', () => {
+  // уплотнителя на обе двери — минус 743 ₽. Общий раскрой (позиция + цвет, min(общий,
+  // поштучный)) — Э5; ждёт низа по решению 3 — Э8.
+  it('Обе сразу: общий раскрой не дороже поштучного и честно показывает экономию (Э5)', () => {
+    const cut = planOrderCutting([
+      { q: qOf(M4), lib: LIB, kit: KIT_M4, finishId: 'black' },
+      { q: qOf(M7), lib: LIB, kit: KIT_M7, finishId: 'black' },
+    ])
+    expect(cut.pooledTotal).toBeLessThanOrEqual(cut.perItemTotal)
+    expect(cut.saving).toBe(cut.perItemTotal - cut.pooledTotal)
+    for (const c of cut.cuts) expect(c.finishId).toBe('black')
+  })
+
+  it.fails('Обе сразу: 30 986 ₽ — ждёт Э8', () => {
     const a = price(M4, KIT_M4)
     const b = price(M7, KIT_M7)
     const cut = planOrderCutting([
