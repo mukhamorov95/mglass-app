@@ -6,6 +6,7 @@ import {
   SUPER_CATS, readDraft, writeDraft, retailLine, retailQuote, describeSpec,
   type CounterSpec, type SuperCat,
 } from '@/lib/partner/counter'
+import { leadTimeText } from '@/lib/partner/leadTime'
 
 // Прилавок точки на стройрынке: покупатель называет размер — партнёр за минуту
 // показывает ему цену. Крупно — цена покупателю (закупка партнёра × наценка точки).
@@ -164,9 +165,9 @@ export default function PartnerCounterPage() {
     <div className="top">
       <div>
         <h1>Прилавок</h1>
-        <div className="cap">{markup != null
+        {!loading && linked && <div className="cap">{markup != null
           ? <>Цена покупателю с вашей наценкой {markup.toLocaleString('ru-RU')}% · <Link href="/partner/profile#counter" style={{ color: 'var(--blue)' }}>изменить</Link></>
-          : <span style={{ color: '#dc2626' }}>Наценка не загрузилась — цену покупателю не показываем. Обновите страницу.</span>}</div>
+          : <span style={{ color: '#dc2626' }}>Наценка не загрузилась — цену покупателю не показываем. Обновите страницу.</span>}</div>}
       </div>
     </div>
   )
@@ -255,6 +256,7 @@ export default function PartnerCounterPage() {
                 <span className="tnum" style={big}>{retail ? fmt(retail.total) : busy ? '…' : '—'}</span>
               </div>
 
+              <div className="cap" style={{ marginTop: 4 }}>Срок изготовления — {leadTimeText(list)}</div>
               <button className="rm" onClick={() => setShowCost(v => !v)} style={{ marginTop: 8, padding: 0, fontSize: 13 }}>
                 {showCost ? 'Скрыть мою закупку' : 'Показать мою закупку'}
               </button>

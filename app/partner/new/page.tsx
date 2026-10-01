@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
-import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { leadTimeText } from '@/lib/partner/leadTime'
 import { SUPER_CATS, readDraft, type SuperCat } from '@/lib/partner/counter'
 
 // Партнёрский калькулятор (дизайн 1-в-1 из прототипа, .pcab). Форма и НАБОР полей —
@@ -424,7 +424,7 @@ export default function PartnerNewQuotePage() {
                   {list.length > 0 && (
                     <div className="info" style={{ marginTop: 0, marginBottom: 8 }}>
                       <span>🗓️</span>
-                      <span>Срок изготовления — ориентировочно <b>{DEFAULT_WORKING_DAYS} рабочих дней</b> после запуска в работу. Точный срок подтвердит менеджер (сварные изделия — до 25 раб. дней).</span>
+                      <span>Срок изготовления — ориентировочно <b>{leadTimeText(list)}</b> после запуска в работу. Точный срок подтвердит менеджер.</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 10 }}>
