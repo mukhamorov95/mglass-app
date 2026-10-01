@@ -63,29 +63,32 @@ export default function MeasureHistory({ meId, isMeasurer }: { meId: string; isM
     .filter(r => kind === 'all' || (kind === 'repeat') === !!r.is_repeat)
     .sort((a, b) => (b.scheduled_at ?? b.created_at).localeCompare(a.scheduled_at ?? a.created_at))
   const repeats = mine.filter(r => r.is_repeat).length
-  const chip = (on: boolean) => `text-[12px] rounded-full px-3 py-1 border ${on ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white border-[#e4e4e0] text-[#4b4b47] hover:bg-[#f5f5f3]'}`
+  const chip = (on: boolean) => `shrink-0 whitespace-nowrap text-[12px] rounded-full px-3 py-1.5 sm:py-1 border ${on ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white border-[#e4e4e0] text-[#4b4b47] hover:bg-[#f5f5f3]'}`
   const inp = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110]'
+  const row = 'flex items-center gap-1.5 overflow-x-auto sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0 [scrollbar-width:none]'
 
   return (
     <div className="space-y-3">
-      <div className="bg-white rounded-xl border border-[#e4e4e0] p-3 space-y-2">
+      <div className="bg-white rounded-xl border border-[#e4e4e0] p-3 space-y-2 overflow-hidden">
         <input value={q} onChange={e => { setQ(e.target.value); if (e.target.value && preset === 'month') pick('all') }} type="search"
           placeholder="🔎 Адрес, телефон, № заказа, клиент"
           className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
-        <div className="flex flex-wrap items-center gap-1.5">
+        {/* Каждая группа — одна строка; на телефоне листается вбок, а не съедает пол-экрана. */}
+        <div className={row}>
           {PRESETS.map(([k, l]) => <button key={k} onClick={() => pick(k)} className={chip(preset === k)}>{l}</button>)}
-          {preset === 'custom' && (
-            <span className="flex items-center gap-1 text-[12px]">
-              <input type="date" value={range.from} onChange={e => setRange(r => ({ ...r, from: e.target.value }))} className={inp} />
-              —
-              <input type="date" value={range.to} onChange={e => setRange(r => ({ ...r, to: e.target.value }))} className={inp} />
-            </span>
-          )}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {STATUSES.map(([k, l]) => <button key={k} onClick={() => setStatus(k)} className={chip(status === k)}>{l}</button>)}
-          <span className="w-px h-5 bg-[#e4e4e0] mx-1" />
-          {([['all', 'Все'], ['new', '📐 Новые'], ['repeat', '🔁 Повторные']] as const).map(([k, l]) => (
+        {preset === 'custom' && (
+          <div className="flex items-center gap-1 text-[12px]">
+            <input type="date" value={range.from} onChange={e => setRange(r => ({ ...r, from: e.target.value }))} className={inp} />
+            —
+            <input type="date" value={range.to} onChange={e => setRange(r => ({ ...r, to: e.target.value }))} className={inp} />
+          </div>
+        )}
+        <div className={row}>
+          {STATUSES.map(([k, l]) => <button key={k} onClick={() => setStatus(k)} className={chip(status === k)}>{k ? l : 'Все статусы'}</button>)}
+        </div>
+        <div className={row}>
+          {([['all', 'Новые и повторные'], ['new', '📐 Новые'], ['repeat', '🔁 Повторные']] as const).map(([k, l]) => (
             <button key={k} onClick={() => setKind(k)} className={chip(kind === k)}>{l}</button>
           ))}
         </div>

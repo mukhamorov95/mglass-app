@@ -1132,6 +1132,14 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
 
       </aside>
 
+      {/* Полоса под кнопкой меню: без неё «☰» висит поверх карточек при прокрутке. */}
+      {measurerBar && (
+        <div className="fixed top-0 inset-x-0 h-12 z-30 lg:hidden bg-white/95 backdrop-blur border-b border-[#e4e4e0] flex items-center pl-14 pr-4">
+          <span className="text-[14px] font-semibold text-[#111110] truncate">
+            {MEASURER_TABS.find(t => active(t.href))?.label ?? 'Замеры'}
+          </span>
+        </div>
+      )}
       {measurerBar && (
         <nav aria-label="Замеры" className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white/95 backdrop-blur border-t border-[#e4e4e0] pb-[env(safe-area-inset-bottom)]">
           <div className="grid grid-cols-3">
