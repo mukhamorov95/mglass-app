@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const today = mskDate(now)
   const fromParam = req.nextUrl.searchParams.get('from')
   const from = fromParam && DATE_RE.test(fromParam) ? fromParam : today
-  const days = Math.min(Math.max(Number(req.nextUrl.searchParams.get('days')) || 7, 1), 31)
+  const days = Math.min(Math.max(Number(req.nextUrl.searchParams.get('days')) || 7, 1), 42) // 42 — сетка месяца по неделям
   const to = addDays(from, days - 1)
 
   const svc = createServiceClient()

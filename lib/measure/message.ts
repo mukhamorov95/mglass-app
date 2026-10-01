@@ -124,3 +124,28 @@ export function buildMeasureMessage(p: MeasureMessageInput): string {
 
   return [head, who.join('\n'), what.join('\n'), terms.join('\n')].join('\n\n')
 }
+
+// Маршрут дня в Яндекс.Картах: от того места, где замерщик сейчас, по адресам в
+// порядке времени. Пустая первая точка — «моё местоположение».
+export function dayRouteUrl(addresses: (string | null | undefined)[]): string | null {
+  const pts = addresses.map(a => tidy(a)).filter(Boolean)
+  if (!pts.length) return null
+  return `https://yandex.ru/maps/?rtext=~${pts.map(encodeURIComponent).join('~')}&rtt=auto`
+}
+
+// Предупредить клиента перед выездом: готовый текст в WhatsApp. Отправляет сам
+// замерщик со своего телефона — приложение только собирает ссылку.
+export function clientHeadsUpText(p: { measurer_name?: string | null; scheduled_at: string; address?: string | null; today: string }): string {
+  const d = new Date(new Date(p.scheduled_at).getTime() + MSK_OFFSET_MS)
+  const date = d.toISOString().slice(0, 10)
+  const tomorrow = new Date(new Date(`${p.today}T00:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10)
+  const day = date === p.today ? 'сегодня' : date === tomorrow ? 'завтра' : `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+  const who = tidy(p.measurer_name) ? `${tidy(p.measurer_name)}, замерщик M-Glass` : 'замерщик M-Glass'
+  const where = tidy(p.address) ? ` по адресу ${tidy(p.address)}` : ''
+  return `Здравствуйте! Это ${who}. Буду у вас ${day} в ${hhmm(d)}${where}. Если планы поменялись — напишите или позвоните, пожалуйста.`
+}
+
+export function whatsAppUrl(phone: string | null | undefined, text: string): string | null {
+  const k = phoneKey(phone)
+  return k ? `https://wa.me/7${k}?text=${encodeURIComponent(text)}` : null
+}

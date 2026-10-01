@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildMeasureMessage, splitScope, tidy, messagePhone, formatMeasureWhen } from '@/lib/measure/message'
+import { buildMeasureMessage, splitScope, tidy, messagePhone, formatMeasureWhen, dayRouteUrl, clientHeadsUpText, whatsAppUrl } from '@/lib/measure/message'
 
 describe('splitScope', () => {
   it('разбирает заявку 0171-0 так, как её ввели 30.09 — «- » и запятые в одну строку', () => {
@@ -103,5 +103,27 @@ describe('buildMeasureMessage', () => {
     expect(msg.startsWith('🔁 ЗАМЕР ПОВТОРНЫЙ · 0171-0')).toBe(true)
     expect(msg).toContain('💬 Примечание: домофон 12, после 18:00')
     expect(msg).toContain('🔗 amoCRM: https://mglass.amocrm.ru/leads/detail/1')
+  })
+})
+
+describe('день замерщика: маршрут и предупреждение клиента', () => {
+  it('маршрут — от текущего места по адресам по порядку, пустые пропускаем', () => {
+    const url = dayRouteUrl(['Красногорск, ул Соловьиная 2', null, 'Мытищи'])!
+    expect(url.startsWith('https://yandex.ru/maps/?rtext=~')).toBe(true)
+    expect(decodeURIComponent(url)).toContain('~Красногорск, ул Соловьиная 2~Мытищи&rtt=auto')
+    expect(dayRouteUrl([null, ''])).toBeNull()
+  })
+
+  it('текст клиенту: сегодня / завтра / дата, время по Москве', () => {
+    const base = { measurer_name: 'Сергей', address: 'ул. Булатниковская, 9к1', today: '2026-10-02' }
+    expect(clientHeadsUpText({ ...base, scheduled_at: '2026-10-02T09:00:00Z' }))
+      .toBe('Здравствуйте! Это Сергей, замерщик M-Glass. Буду у вас сегодня в 12:00 по адресу ул. Булатниковская, 9к1. Если планы поменялись — напишите или позвоните, пожалуйста.')
+    expect(clientHeadsUpText({ ...base, scheduled_at: '2026-10-03T07:30:00Z' })).toContain('завтра в 10:30')
+    expect(clientHeadsUpText({ ...base, scheduled_at: '2026-10-05T07:30:00Z' })).toContain('пн 5 окт в 10:30')
+  })
+
+  it('WhatsApp — номер +7 и текст в ссылке; без номера ссылки нет', () => {
+    expect(whatsAppUrl('8 (926) 418-69-72', 'Привет')).toBe('https://wa.me/79264186972?text=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82')
+    expect(whatsAppUrl(null, 'x')).toBeNull()
   })
 })

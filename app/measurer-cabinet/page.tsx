@@ -11,6 +11,7 @@ import MeasurerAvailability from '@/components/measure/MeasurerAvailability'
 import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
 import SettleForm from '@/components/measure/SettleForm'
 import MeasurerEarnings from '@/components/measure/MeasurerEarnings'
+import MeasurerCalendar from '@/components/measure/MeasurerCalendar'
 import type { VisitPayment } from '@/lib/measure/money'
 
 // Кабинет замерщика, две вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
@@ -47,6 +48,7 @@ type MReq = {
   photos: string[] | null
   created_at: string
 }
+type Tab = 'measures' | 'earnings' | 'calendar'
 type Me = { id: string; name: string; role: string; scope: string }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -65,7 +67,7 @@ export default function MeasurerCabinetPage() {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState<number | null>(null)
   const [boardKey, setBoardKey] = useState(0)
-  const [tab, setTab] = useState<'measures' | 'earnings'>('measures')
+  const [tab, setTab] = useState<Tab>('measures')
   // Открытая форма у карточки: взять/перенести (booking) или сложность (issue).
   const [openFor, setOpenFor] = useState<{ id: number; kind: 'book' | 'issue' | 'done' } | null>(null)
   const [bookVal, setBookVal] = useState<BookingValue>(EMPTY_BOOKING)
@@ -83,12 +85,15 @@ export default function MeasurerCabinetPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
-  // Ссылка …/measurer-cabinet#earnings открывает сразу «Заработок».
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (window.location.hash === '#earnings') setTab('earnings') }, [])
-  function switchTab(t: 'measures' | 'earnings') {
+  // Ссылки …/measurer-cabinet#earnings и #calendar открывают сразу нужную вкладку.
+  useEffect(() => {
+    const h = window.location.hash.slice(1)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (h === 'earnings' || h === 'calendar') setTab(h)
+  }, [])
+  function switchTab(t: Tab) {
     setTab(t)
-    try { history.replaceState(null, '', t === 'earnings' ? '#earnings' : window.location.pathname) } catch { /* без адресной строки */ }
+    try { history.replaceState(null, '', t === 'measures' ? window.location.pathname : `#${t}`) } catch { /* без адресной строки */ }
   }
 
   const isOwner = me?.role === 'admin' || me?.role === 'ceo'
@@ -265,8 +270,8 @@ export default function MeasurerCabinetPage() {
           <span className="px-2.5 py-1 rounded-full bg-[#f0f0ec] text-[#6b6b66]">Дальше: {active.length - todays.length - overdue.length}</span>
           {overdue.length > 0 && <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-700">Не отмечены: {overdue.length}</span>}
         </div>
-        <div className="flex gap-1 mt-3 -mb-4">
-          {([['measures', '📏 Замеры'], ['earnings', '💰 Заработок']] as const).map(([k, l]) => (
+        <div className="flex gap-1 mt-3 -mb-4 overflow-x-auto">
+          {([['measures', '📏 Замеры'], ['earnings', '💰 Заработок'], ['calendar', '📅 Календарь']] as const).map(([k, l]) => (
             <button key={k} onClick={() => switchTab(k)}
               className={`text-[13px] font-semibold px-4 py-2 border-b-2 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95] hover:text-[#111110]'}`}>
               {l}
@@ -289,6 +294,7 @@ export default function MeasurerCabinetPage() {
           </div>
         )}
         {tab === 'earnings' && me && <MeasurerEarnings meId={me.id} isOwner={isOwner} />}
+        {tab === 'calendar' && me && <MeasurerCalendar meId={me.id} isOwner={isOwner} refreshKey={boardKey} onChanged={() => setBoardKey(k => k + 1)} />}
         {tab === 'measures' && <>
         {isOwner && measurers.length === 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
