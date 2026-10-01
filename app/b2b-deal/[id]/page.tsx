@@ -11,6 +11,7 @@ import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { parseNotes } from '@/lib/b2b/publicQuote'
 import { isShipped } from '@/lib/b2b/todayPriorities'
 import { stageDayKey } from '@/lib/production/dayLists'
+import DealActions from './DealActions'
 
 const TONE_TEXT: Record<MarginTone, string> = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-500' }
 
@@ -141,6 +142,29 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
       )}
+
+      <Section title="Действия">
+        <DealActions
+          dealId={dealId}
+          orderTotal={total}
+          managerName={(order.created_by_name as string | null) ?? null}
+          quote={{
+            id: dealId,
+            custom_number: (order.custom_number as string | null) ?? null,
+            client_name: (order.client_name as string) ?? '',
+            client_id: (order.client_id as number | null) ?? null,
+            discount_percent: discount,
+            margin_percent: Number(order.margin_percent) || 0,
+            items,
+            total_area: Number(order.total_area) || 0,
+            total_weight: Number(order.total_weight) || 0,
+            total_cost_net: Number(order.total_cost_net) || 0,
+            total_sale_inc_vat: Number(order.total_sale_inc_vat) || 0,
+            total_after_discount: Number(order.total_after_discount) || 0,
+            notes: (order.notes as string | null) ?? null,
+          }}
+        />
+      </Section>
 
       <Section title="Документы">
         <div className="flex flex-wrap gap-2 text-[12px]">
