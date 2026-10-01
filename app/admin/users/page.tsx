@@ -4,6 +4,7 @@ import { useEffect, useState, Fragment } from 'react'
 import { PRODUCTION_STAGES } from '@/lib/productionStages'
 import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
+import { MANAGER_HOMES, type ManagerHome } from '@/lib/managerHome'
 
 type User = {
   id: string
@@ -160,6 +161,19 @@ export default function UsersPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: u.id, permissions: updated }),
     })
+  }
+
+  // Начальный экран менеджера (У2): B2B-менеджер начинает день с просчётов,
+  // розничный — со сделок AmoCRM. Пусто — общая панель, как было.
+  async function setHomeRoute(u: User, home: ManagerHome | null) {
+    const updated = { ...resolvePerms(u.permissions), home_route: home }
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, permissions: updated } : x))
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id, permissions: updated }),
+    })
+    if (!res.ok) setError('Не удалось сохранить начальный экран')
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -628,12 +642,26 @@ export default function UsersPage() {
                               </button>
                             </div>
                           ) : (
-                            <button
-                              onClick={() => toggleExpandPerms(u.id)}
-                              className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${permsExpanded ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}
-                              title="Настроить разделы доступа">
-                              {permsExpanded ? '▲ Скрыть' : '▼ Права'}
-                            </button>
+                            <div className="flex flex-col items-center gap-1">
+                              <button
+                                onClick={() => toggleExpandPerms(u.id)}
+                                className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${permsExpanded ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}
+                                title="Настроить разделы доступа">
+                                {permsExpanded ? '▲ Скрыть' : '▼ Права'}
+                              </button>
+                              {u.role === 'manager' && (
+                                <select
+                                  value={perms.home_route ?? ''}
+                                  onChange={e => setHomeRoute(u, (e.target.value || null) as ManagerHome | null)}
+                                  title="Куда попадает человек со входа в приложение"
+                                  className="text-[10px] font-medium px-2 py-1 rounded-full border border-[#e4e4e0] bg-white cursor-pointer outline-none focus:border-[#111110]">
+                                  <option value="">Вход: общая панель</option>
+                                  {MANAGER_HOMES.map(h => (
+                                    <option key={h.value} value={h.value}>Вход: {h.label}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>

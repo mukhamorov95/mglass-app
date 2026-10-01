@@ -3,6 +3,7 @@ import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server
 import { canAccessRoute, isOwnerRole, normalizeRole, type Role, type B2BScope } from './lib/getRole'
 import { classifyDevice } from './lib/deviceClass'
 import { isDeviceAllowed } from './lib/deviceLimits'
+import { normalizeManagerHome } from './lib/managerHome'
 import { routeKey, isTrackablePageRequest } from './lib/routeKey'
 import { OWNER_2FA_COOKIE, isOwner2faEnabled, owner2faSecret, verifyOwner2faCookie } from './lib/owner2faCookie'
 
@@ -240,6 +241,22 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       const url = request.nextUrl.clone()
       url.pathname = '/production-app'
       return redirect(url)
+    }
+
+    // Начальный экран менеджера (У2): B2B — просчёты, розница — сделки AmoCRM.
+    // Значение спрашиваем у базы, а не у куки: владелец меняет его в /admin/users,
+    // и человек должен увидеть новый вход сразу, а не через час.
+    if (pathname === '/' && (role === 'manager' || mgrWs)) {
+      const { data: hp } = await supabase
+        .from('users').select('permissions').eq('id', user.id).maybeSingle()
+      const home = normalizeManagerHome(
+        ((hp?.permissions ?? null) as { home_route?: unknown } | null)?.home_route,
+      )
+      if (home && role && canAccessRoute(role, home, { b2bScope: b2bScope ?? null, managerWorkspace: mgrWs ?? false })) {
+        const url = request.nextUrl.clone()
+        url.pathname = home
+        return redirect(url)
+      }
     }
 
     if (role && !canAccessRoute(role, pathname, { b2bScope: b2bScope ?? null, managerWorkspace: mgrWs ?? false })) {
