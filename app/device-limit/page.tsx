@@ -67,9 +67,9 @@ export default function DeviceLimitPage() {
           Места для этого компьютера не осталось
         </h1>
         <p className="text-[13px] text-[#6b6b66] leading-relaxed mb-4">
-          {info
-            ? `Правило безопасности: на аккаунт одновременно ${info.limit === 1 ? 'одно устройство' : `${info.limit} устройства`} типа «${info.deviceClassLabel.toLowerCase()}». Сейчас места заняты:`
-            : 'Правило безопасности: ограниченное число устройств на аккаунт.'}
+          {!info
+            ? 'Правило безопасности: ограниченное число устройств на аккаунт.'
+            : `Правило безопасности: на аккаунт одновременно ${info.limit === 1 ? 'одно устройство' : `${info.limit} устройства`} типа «${info.deviceClassLabel.toLowerCase()}».${others.length > 0 ? ' Сейчас места заняты:' : ''}`}
         </p>
 
         {others.length > 0 && (
