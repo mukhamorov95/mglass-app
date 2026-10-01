@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getModel } from '@/lib/configurator/arrangement'
-import { computeKitQuantities, computeKitPrice, piecesForRole, type RoleId } from '@/lib/configurator/kit'
+import { canSplice, computeKitQuantities, computeKitPrice, piecesForRole, type RoleId } from '@/lib/configurator/kit'
 import { buildWithVariant } from '@/lib/configurator/quoteContract'
 import type { MVariant } from '@/components/configurator/scene/assembly'
 import { resolveTierData } from '@/lib/configurator/priceVersion'
@@ -128,7 +128,8 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
   // менеджер должен видеть до заказа: у поставщика может быть длина подлиннее.
   const spliced = price.lines.flatMap(l => {
     const longest = Math.max(0, ...(byId.get(l.itemId)?.stocks ?? []).map(st => st.len))
-    if (l.unit !== 'хлыст' || longest <= 0) return []
+    // Жёсткий профиль и трубу не стыкуют: их кусок длиннее хлыста — остановка (missing), не пометка.
+    if (l.unit !== 'хлыст' || longest <= 0 || !canSplice(l.role)) return []
     return piecesForRole(q, kit, l.role).filter(p => p > longest).map(p => ({ label: l.label, piece: Math.round(p), stock: longest }))
   })
   const { stops, notes } = buildStops({

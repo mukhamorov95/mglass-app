@@ -98,9 +98,12 @@ export function buildStops(inp: StopInput): { stops: BuildStop[]; notes: BuildNo
     stops.push({ kind: 'oversize', text: `${m.label}: кусок длиннее хлыста — стык или другая длина` })
   }
 
+  const splices = new Map<string, number>()
   for (const x of inp.spliced ?? []) {
-    notes.push({ kind: 'splice', text: `${x.label}: кусок ${x.piece} длиннее хлыста ${x.stock} — набран со стыком` })
+    const text = `${x.label}: кусок ${x.piece} длиннее хлыста ${x.stock} — набран со стыком`
+    splices.set(text, (splices.get(text) ?? 0) + 1)
   }
+  for (const [text, n] of splices) notes.push({ kind: 'splice', text: n > 1 ? `${text} (×${n})` : text })
 
   const [lo, hi] = inp.heightRange ?? [0, Infinity]
   if (inp.heightMm < lo || inp.heightMm > hi) notes.push({ kind: 'nonstandard', text: `Высота ${inp.heightMm} вне сетки модели ${lo}–${hi} — нестандарт` })

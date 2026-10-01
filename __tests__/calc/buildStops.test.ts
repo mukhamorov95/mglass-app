@@ -97,6 +97,11 @@ describe('buildStops', () => {
     expect(r.notes[0]).toEqual({ kind: 'splice', text: 'Уплотнитель магнитный 180°: кусок 2310 длиннее хлыста 2200 — набран со стыком' })
   })
 
+  it('одинаковые стыки сворачиваются в одну строку', () => {
+    const x = { label: 'Уплотнитель нижний', piece: 2310, stock: 2200 }
+    expect(buildStops(base({ spliced: [x, x] })).notes.map(n => n.text)).toEqual(['Уплотнитель нижний: кусок 2310 длиннее хлыста 2200 — набран со стыком (×2)'])
+  })
+
   it('нет цены цвета и кусок длиннее хлыста — стопы', () => {
     const r = buildStops(base({
       lines: [{ ...HINGE, chromeFallback: true }, HANDLE],
