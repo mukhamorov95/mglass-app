@@ -91,6 +91,7 @@ export async function GET(req: NextRequest) {
   // Отгрузка — отметка стадии в notes; история 2024–2025 — импорт без стадий.
   // Читаем только для заказов этого клиента.
   const shipped = new Set<number>()
+  const packaged = new Set<number>()
   const historical = new Set<number>()
   for (let i = 0; i < mine.length; i += 200) {
     const ids = mine.slice(i, i + 200).map(r => r.id)
@@ -99,7 +100,9 @@ export async function GET(req: NextRequest) {
     for (const r of (data ?? []) as { id: number; notes: string | null }[]) {
       try {
         const n = JSON.parse(r.notes ?? '{}')
+        // Те же отметки и порядок, что в «B2B Заказах»: отгружен, иначе готов / упакован.
         if (n?.stages?.shipped) shipped.add(r.id)
+        else if (n?.stages?.packaged) packaged.add(r.id)
         if (n?.historical === true) historical.add(r.id)
       } catch { /* notes не JSON — отметки нет */ }
     }
@@ -124,6 +127,7 @@ export async function GET(req: NextRequest) {
       amount: r.amount,
       byName: r.byName,
       shipped: shipped.has(r.id),
+      packaged: packaged.has(r.id),
       historical: historical.has(r.id),
       clientName: r.client_name,
     })),
