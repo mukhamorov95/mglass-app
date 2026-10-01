@@ -149,7 +149,7 @@ export function BoardGrid({ data, dur, loading, pick }: {
         <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 ${loading ? 'opacity-60' : ''}`}>
           {days.map(d => (
             <div key={d.date} className={`rounded-lg p-2.5 border ${d.isToday ? 'border-[#111110]' : 'border-[#e4e4e0]'} ${d.isPast ? 'bg-[#fafaf8] opacity-70' : 'bg-white'}`}>
-              <p className="text-[12px] font-bold capitalize mb-1.5">
+              <p className="text-[12px] font-bold first-letter:uppercase mb-1.5">
                 {dayLabel(d.date)}
                 {d.isToday && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-600">сегодня</span>}
               </p>
