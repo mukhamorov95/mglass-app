@@ -25,7 +25,7 @@ const data: BoardData = {
     },
     {
       id: 7, measurer_id: 'm-sergey', measurer_name: 'Сергей', scheduled_at: mskToIso('2026-10-05', '10:00'), duration_min: 90,
-      status: 'scheduled', address: 'Мытищи', mine: false, deal_number: null, client_name: null,
+      status: 'scheduled', address: 'Мытищи', mine: false, deal_number: null, client_name: null, travel_min: 120,
     },
   ],
 }
@@ -53,18 +53,22 @@ describe('доска занятости — что видно в сетке', ()
     expect(out).toContain('📍 Мытищи')
   })
 
+  it('дорога, которую замерщик заложил сам, видна на доске', () => {
+    expect(out).toContain('🚗 дорога до него 120 мин')
+  })
+
   it('отпуск Глеба и воскресенье', () => {
     expect(out).toContain('🌴 выходной')
     expect(out).toContain('не работает по графику')
   })
 
   it('окна «когда можно начать» и размер пула', () => {
-    expect(out).toContain('14:30–18:30')
+    expect(out).toContain('14:30–16:30')
     expect(out).toContain('В пуле ждут замерщика: <b class="text-amber-700">2</b>')
   })
 
   it('в режиме выбора окно — кнопка, выбранное подсвечено', () => {
     const picked = html({ durationMin: 90, selected: { measurerId: 'm-sergey', measurerName: 'Сергей', date: '2026-10-02', time: '15:00' }, onPick: () => {} })
-    expect(picked).toMatch(/<button[^>]*bg-emerald-600[^>]*>14:30–18:30<\/button>/)
+    expect(picked).toMatch(/<button[^>]*bg-emerald-600[^>]*>14:30–16:30<\/button>/)
   })
 })

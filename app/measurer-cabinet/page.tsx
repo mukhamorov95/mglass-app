@@ -32,6 +32,7 @@ type MReq = {
   measurer_name: string | null
   scheduled_at: string | null
   duration_min: number | null
+  travel_min: number | null
   status: string
   issue_text: string | null
   issue_solution: string | null
@@ -47,7 +48,7 @@ const byTime = (a: MReq, b: MReq) => (a.scheduled_at ?? '').localeCompare(b.sche
 const WEEKDAY = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
 const MONTH = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
 const dayTitle = (date: string) => { const d = new Date(`${date}T00:00:00Z`); return `${WEEKDAY[d.getUTCDay()]}, ${d.getUTCDate()} ${MONTH[d.getUTCMonth()]}` }
-const EMPTY_BOOKING: BookingValue = { measurerId: '', date: '', time: '', durationMin: 90 }
+const EMPTY_BOOKING: BookingValue = { measurerId: '', date: '', time: '', durationMin: 90, travelMin: 60 }
 
 export default function MeasurerCabinetPage() {
   const [me, setMe] = useState<Me | null>(null)
@@ -121,13 +122,13 @@ export default function MeasurerCabinetPage() {
     setOpenFor({ id: r.id, kind: 'book' })
     setBookVal({
       measurerId: isMeasurer ? me!.id : (r.measurer_id ?? (measurers.length === 1 ? measurers[0].id : '')),
-      date: at.slice(0, 10) || today, time: at.slice(11, 16), durationMin: r.duration_min || 90,
+      date: at.slice(0, 10) || today, time: at.slice(11, 16), durationMin: r.duration_min || 90, travelMin: r.travel_min ?? 60,
     })
   }
 
   async function submitBooking(r: MReq) {
     const label = `${dayTitle(bookVal.date)}, ${bookVal.time}`
-    await act(r, { action: 'schedule', measurer_id: bookVal.measurerId, date: bookVal.date, time: bookVal.time, duration_min: bookVal.durationMin },
+    await act(r, { action: 'schedule', measurer_id: bookVal.measurerId, date: bookVal.date, time: bookVal.time, duration_min: bookVal.durationMin, travel_min: bookVal.travelMin },
       r.status === 'new'
         ? `Заявка ${r.deal_number || `#${r.id}`} взята: ${label}. Она в «Дальше» и на доске — менеджер видит время.`
         : `Замер перенесён на ${label}.`)

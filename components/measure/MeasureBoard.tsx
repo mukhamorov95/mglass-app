@@ -134,7 +134,7 @@ export function BoardGrid({ data, dur, loading, pick }: {
         )}
         <p>
           {data.poolCount > 0 ? <>В пуле ждут замерщика: <b className="text-amber-700">{data.poolCount}</b> · </> : null}
-          <span className="text-[#9a9a95]">Зелёное — когда можно начать замер ({dur} мин, между замерами {TRAVEL_MIN} мин на дорогу).</span>
+          <span className="text-[#9a9a95]">Зелёное — когда можно начать замер на {dur} мин; дорога от предыдущего — {TRAVEL_MIN} мин или сколько заложил замерщик (🚗).</span>
         </p>
       </div>
 
@@ -168,6 +168,7 @@ export function BoardGrid({ data, dur, loading, pick }: {
                       const to = from + (b.duration_min || DEFAULT_DURATION_MIN)
                       return (
                         <div key={b.id} className={`border-l-2 pl-1.5 mt-1 ${bb.mine ? 'border-[#111110]' : 'border-[#c4c4be]'}`}>
+                          {b.travel_min != null && b.travel_min !== TRAVEL_MIN && <p className="text-[10px] text-blue-700">🚗 дорога до него {b.travel_min} мин</p>}
                           <p className="text-[11px]">
                             <span className="font-mono font-semibold">{fromMin(from)}–{fromMin(to)}</span>
                             {' '}{STATUS_MARK[b.status ?? ''] ?? ''}

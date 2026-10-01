@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         const open = full || mine
         return {
           id: b.id, measurer_id: b.measurer_id, measurer_name: b.measurer_name,
-          scheduled_at: b.scheduled_at, duration_min: b.duration_min, status: b.status,
+          scheduled_at: b.scheduled_at, duration_min: b.duration_min, travel_min: b.travel_min, status: b.status,
           address: b.address, mine,
           deal_number: open ? b.deal_number : null,
           client_name: open ? b.client_name : null,

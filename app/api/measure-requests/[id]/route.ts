@@ -46,10 +46,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (!measurerId) return NextResponse.json({ error: 'Выбери замерщика' }, { status: 400 })
       const ok = await tryBook(svc, {
         requestId: row.id, measurerId, date: b.date, time: b.time,
-        durationMin: b.duration_min ?? row.duration_min, force: b.force,
+        durationMin: b.duration_min ?? row.duration_min, travelMin: b.travel_min, force: b.force,
       })
       if (ok instanceof NextResponse) return ok
-      patch = { status: 'scheduled', measurer_id: ok.measurer.id, measurer_name: ok.measurer.name, scheduled_at: ok.startIso, duration_min: ok.durationMin }
+      patch = { status: 'scheduled', measurer_id: ok.measurer.id, measurer_name: ok.measurer.name, scheduled_at: ok.startIso, duration_min: ok.durationMin, travel_min: ok.travelMin }
       break
     }
     case 'unassign':

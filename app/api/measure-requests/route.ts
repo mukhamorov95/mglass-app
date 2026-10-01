@@ -66,12 +66,12 @@ export async function POST(req: NextRequest) {
   if (booking) {
     const ok = await tryBook(svc, {
       measurerId: String(booking.measurer_id ?? ''), date: booking.date, time: booking.time,
-      durationMin: booking.duration_min, force: booking.force,
+      durationMin: booking.duration_min, travelMin: booking.travel_min, force: booking.force,
     })
     if (ok instanceof NextResponse) return ok
     sched = {
       status: 'scheduled', measurer_id: ok.measurer.id, measurer_name: ok.measurer.name,
-      scheduled_at: ok.startIso, duration_min: ok.durationMin,
+      scheduled_at: ok.startIso, duration_min: ok.durationMin, travel_min: ok.travelMin,
     }
   }
 
