@@ -9,6 +9,7 @@ import { effectiveItemTotal, type FacetPrice, type B2BOrderItem } from '@/lib/b2
 import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial, B2BService } from '@/lib/types'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { previewWriteGuard } from '@/lib/partnerPreview'
 
 // Партнёрский просчёт. КРИТИЧНО: считает СЕРВЕР через ЕДИНЫЙ движок computeQuoteItem —
 // тот же, что у менеджера (/calculator/b2b). Включает авто-надбавки за габариты/
@@ -47,6 +48,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const specs = Array.isArray(body?.items) ? (body.items as ItemSpec[]) : []
   const save = body?.save === true
+  if (save) {
+    const blocked = await previewWriteGuard(svc, user.id)
+    if (blocked) return blocked
+  }
   const editId = Number(body?.editId) || null   // редактирование существующего просчёта
   const comment = typeof body?.comment === 'string' ? body.comment.slice(0, 500) : ''
   if (specs.length === 0) return NextResponse.json({ error: 'Нет позиций' }, { status: 400 })

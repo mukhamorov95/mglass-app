@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { recommendedMarkup, normalizeSettingsInput } from '@/lib/partner/counter'
+import { previewWriteGuard } from '@/lib/partnerPreview'
 
 // Настройки прилавка партнёра: наценка точки и шапка КП его покупателю.
 // Таблица закрыта для браузера (RLS без политик) — только здесь, строго своя строка
@@ -43,6 +44,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const r = await own()
   if ('error' in r) return r.error
+  const blocked = await previewWriteGuard(r.svc, r.userId, { allowOnTest: true })
+  if (blocked) return blocked
   const body = await req.json().catch(() => ({})) as Record<string, unknown>
   const v = normalizeSettingsInput(body)
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })

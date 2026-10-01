@@ -5,6 +5,7 @@ import { resolvePartnerClient } from '@/lib/partnerClient'
 import { notifyAdmins } from '@/lib/telegram'
 import { pushNotification } from '@/lib/partnerNotify'
 import { appUrl } from '@/lib/appUrl'
+import { previewWriteGuard } from '@/lib/partnerPreview'
 
 // A17: гарантия/сервис — заявки на рекламацию. GET — свои заявки. POST — создать
 // по своему заказу (тип + описание). Менеджеру сигнал в Telegram, партнёру запись
@@ -48,6 +49,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
   const svc = svcClient()
+  const blocked = await previewWriteGuard(svc, user.id)
+  if (blocked) return blocked
   const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
