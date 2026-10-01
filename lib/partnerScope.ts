@@ -1,15 +1,12 @@
 import { createServiceClient } from '@/lib/supabase-service'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
-// id карточки b2b_clients, привязанной к учётке партнёра (или null, если не привязан).
-// Единая точка «кто этот партнёр» для серверных проверок доступа кабинета.
+// id карточки b2b_clients, к которой относится учётка партнёра (или null).
+// Резолв — через resolvePartnerClient: основной логин, участник команды (A6)
+// и режим «Смотреть как партнёр» решаются одинаково во всём кабинете.
 export async function getPartnerClientId(userId: string): Promise<number | null> {
-  const svc = createServiceClient()
-  const { data } = await svc
-    .from('b2b_clients')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle()
-  return (data as { id: number } | null)?.id ?? null
+  const client = await resolvePartnerClient(createServiceClient(), userId)
+  return client?.id ?? null
 }
 
 // Виден ли заказ этому партнёру (client_id заказа == карточка партнёра).
