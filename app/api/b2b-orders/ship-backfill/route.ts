@@ -92,11 +92,14 @@ export async function POST(req: NextRequest) {
 
     if (it.date < today && o.client_id && partnerClient.has(o.client_id as number)) {
       const number = (o.custom_number as string | null)?.trim() || `#${it.order_id}`
-      await svc.from('partner_notifications').upsert({
+      const { error: muteErr } = await svc.from('partner_notifications').upsert({
         client_id: o.client_id, order_id: it.order_id, kind: 'shipped',
         title: `Заказ отгружен · ${number}`, link: `/partner/order/${it.order_id}`,
         read_at: nowIso, emailed_at: nowIso,
       }, { onConflict: 'client_id,order_id,kind', ignoreDuplicates: true })
+      // До 01.10 эта запись молча отвергалась базой (частичный индекс) — партнёру ушло бы
+      // письмо о старой отгрузке. Сбой видно в журнале.
+      if (muteErr) console.error('[ship-backfill] письмо партнёру не погашено', it.order_id, muteErr.message)
     }
     done.push(it.order_id)
   }

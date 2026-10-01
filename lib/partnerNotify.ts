@@ -29,10 +29,16 @@ export async function pushNotification(svc: SupabaseClient, n: {
     client_id: n.clientId, order_id: n.orderId ?? null, kind: n.kind,
     title: n.title, body: n.body ?? null, link: n.link ?? null,
   }
-  const { data } = await svc
+  const { data, error } = await svc
     .from('partner_notifications')
     .upsert(row, { onConflict: 'client_id,order_id,kind', ignoreDuplicates: true })
     .select('id')
+  // Ошибку не путать с дубликатом: с 24.08 по 01.10 каждая запись отвергалась базой
+  // (частичный индекс), а пустой ответ читался как «уже было» — партнёр не получил ничего.
+  if (error) {
+    console.error('[partnerNotify] запись уведомления не прошла:', error.message, { clientId: n.clientId, orderId: n.orderId, kind: n.kind })
+    return false
+  }
   return Array.isArray(data) && data.length > 0
 }
 
