@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  SALES_ZONE_TABLE, AMO_STAGE_SPELLINGS, normalizeStageName, stageZone,
+  SALES_ZONE_TABLE, normalizeStageName, stageZone,
   findSalesPipeline, zoneBreakdown,
 } from '@/lib/salesZones'
 
@@ -22,11 +22,6 @@ describe('таблица зон = SYSTEM.md', () => {
 
   it('каждая строка таблицы находит свою зону', () => {
     for (const [name, zone] of SALES_ZONE_TABLE) expect(stageZone(name), name).toBe(zone)
-  })
-
-  it('написания AmoCRM ведут только в существующие строки таблицы', () => {
-    const table = new Set(SALES_ZONE_TABLE.map(([n]) => n))
-    for (const target of Object.values(AMO_STAGE_SPELLINGS)) expect(table.has(target), target).toBe(true)
   })
 })
 
@@ -54,7 +49,7 @@ describe('этапы воронки «Продажи» в AmoCRM (снимок 0
     ['согласование после замера', 2],
     ['Чертежи в Работу', 2],
     ['Чертежи готовы', null],
-    ['Согласование после отправки чертежа клиенту', 2],
+    ['Согласование после отправки чертежа клиенту', null],
     ['Кп отправлено', 2],
     ['Счет выставлен - ждем оплату', 2],
     ['оплата сделана, чертежи не готовы', 3],
@@ -63,14 +58,20 @@ describe('этапы воронки «Продажи» в AmoCRM (снимок 0
     ['Заказ в работе', 3],
     ['Готово к Монтажу', 3],
     ['Монтаж назначен', 3],
-    ['Монтаж начат и в процессе', 3],
+    ['Монтаж начат и в процессе', null],
     ['Рекламация', 3],
     ['оплата остатка', 3],
-    ['оплата дизайнерам', 3],
+    ['оплата дизайнерам', null],
     ['отложенный спрос', null],
   ]
   it.each(live)('%s → %s', (name, zone) => {
     expect(stageZone(name)).toBe(zone)
+  })
+
+  it('написания amo, отличные от таблицы словами, зоны не получают (решение владельца 01.10)', () => {
+    for (const n of ['Согласование после отправки чертежа клиенту', 'Монтаж начат и в процессе', 'оплата дизайнерам']) {
+      expect(stageZone(n), n).toBeNull()
+    }
   })
 
   it('этап не из таблицы зоны не получает, даже если в названии есть слово из неё', () => {
@@ -119,9 +120,9 @@ describe('zoneBreakdown', () => {
 
   it('одноимённый этап другой воронки в зону не попадает', () => {
     const z = zoneBreakdown(open, PIPELINES)
-    expect([z.zone1, z.zone2, z.zone3]).toEqual([2, 1, 1])
+    expect([z.zone1, z.zone2, z.zone3]).toEqual([2, 1, 0])
     expect(z.otherPipelines).toEqual([{ pipeline: 'Партнёры', count: 3 }, { pipeline: 'Квалификация', count: 1 }])
-    expect(z.unzonedStages).toEqual([{ stage: 'отложенный спрос', count: 2 }])
+    expect(z.unzonedStages).toEqual([{ stage: 'отложенный спрос', count: 2 }, { stage: 'оплата дизайнерам', count: 1 }])
   })
 
   it('тождество: «Продажи» = зоны + вне таблицы; все = «Продажи» + другие воронки', () => {

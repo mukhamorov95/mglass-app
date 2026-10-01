@@ -30,13 +30,9 @@ export const SALES_ZONE_TABLE: ReadonlyArray<readonly [string, Zone]> = [
   ['Оплата дизайнером', 3],
 ]
 
-// Этапы AmoCRM, которые расходятся с таблицей не только регистром, «ё» и знаками
-// (сверка с воронкой 01.10.2026). Это те же этапы, что строки таблицы, — не новые.
-export const AMO_STAGE_SPELLINGS: Readonly<Record<string, string>> = {
-  'Согласование после отправки чертежа клиенту': 'Согласование после отправки чертежей',
-  'Монтаж начат и в процессе': 'Монтаж начат / в процессе',
-  'оплата дизайнерам': 'Оплата дизайнером',
-}
+// Этапы AmoCRM, которые расходятся с таблицей словами, а не регистром, «ё» и знаками
+// («…чертежа клиенту», «Монтаж начат и в процессе», «оплата дизайнерам»), зоны не получают —
+// решение владельца 01.10.2026: показываются строкой «вне зон», пока этап не переименуют в amo.
 
 export function normalizeStageName(name: string): string {
   return name
@@ -49,10 +45,6 @@ export function normalizeStageName(name: string): string {
 }
 
 const ZONE_BY_STAGE = new Map<string, Zone>(SALES_ZONE_TABLE.map(([name, zone]) => [normalizeStageName(name), zone]))
-for (const [amoName, tableName] of Object.entries(AMO_STAGE_SPELLINGS)) {
-  const zone = ZONE_BY_STAGE.get(normalizeStageName(tableName))
-  if (zone) ZONE_BY_STAGE.set(normalizeStageName(amoName), zone)
-}
 
 // Точное совпадение после нормализации, а не «содержит слово»: раньше «замер» отправлял
 // в зону 2 любой этап с этим словом, в том числе этапы других воронок и будущие этапы.
