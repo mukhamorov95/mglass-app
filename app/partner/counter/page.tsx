@@ -82,7 +82,10 @@ export default function PartnerCounterPage() {
     // Зеркало на рынке чаще всего 4 мм, стекло под закалку — 6 мм.
     const want = sc === 'зеркало' ? 4 : 6
     const t = ths.includes(want) ? want : (ths[0] ?? null)
-    setSuperCat(sc); setThickness(t); setMatId(cm.find(m => m.thickness === t)?.id ?? null)
+    // Самое ходовое на рынке — серебро и прозрачное, а не первое по алфавиту.
+    const atT = cm.filter(m => m.thickness === t)
+    const pref = atT.find(m => /серебро|прозрачн/i.test(m.name)) ?? atT[0]
+    setSuperCat(sc); setThickness(t); setMatId(pref?.id ?? null)
     if (sc === 'зеркало') setTempering(false)
   }
 
