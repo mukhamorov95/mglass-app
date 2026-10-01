@@ -1,0 +1,236 @@
+<title>GLASMEN на Авито</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Onest:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Раскладка: одна колонка документа ~68 знаков; карточки объявлений — сетка, на телефоне в одну колонку.
+   Акцент — зелень торца флоат-стекла; нейтрали — палитра проекта M-Glass. */
+:root {
+  --bg: #f5f5f3;
+  --surface: #ffffff;
+  --fg: #111110;
+  --muted: #6f6f6a;
+  --line: #e4e4e0;
+  --edge: #2f6f62;
+  --edge-soft: #e3efeb;
+  --warn: #8a5a00;
+  --warn-soft: #fbf1dd;
+  --display: 'Onest', 'Golos Text', system-ui, sans-serif;
+  --body: 'Golos Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121413; --surface: #1a1d1c; --fg: #ecece8; --muted: #a2a6a3; --line: #2b2f2d;
+    --edge: #7cc3b1; --edge-soft: #1f2e2a; --warn: #e2b55a; --warn-soft: #2e2615; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121413; --surface: #1a1d1c; --fg: #ecece8; --muted: #a2a6a3; --line: #2b2f2d;
+  --edge: #7cc3b1; --edge-soft: #1f2e2a; --warn: #e2b55a; --warn-soft: #2e2615; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); padding-inline: 16px; padding-block: 28px 64px; }
+.wrap { max-width: 920px; margin: 0 auto; display: grid; gap: 40px; }
+.doc { max-width: 68ch; display: grid; gap: 14px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.08; }
+h2 { font-size: 24px; line-height: 1.2; }
+h3 { font-size: 18px; line-height: 1.3; }
+p { margin: 0; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--edge); }
+.lede { font-size: 18px; color: var(--muted); max-width: 60ch; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+section { display: grid; gap: 16px; }
+.state { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.state > div { background: var(--surface); padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.state b { font: 600 26px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.state span { font-size: 13px; color: var(--muted); }
+.state .bad b { color: var(--warn); }
+ol.steps, ul.plain { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
+.today { background: var(--edge-soft); border-radius: 10px; padding: 18px 20px; display: grid; gap: 12px; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { font: 500 12px/1.3 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+.ads { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+.ad { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.ad-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 13px; }
+.ad-num { font: 500 13px var(--mono); color: var(--edge); }
+.ad-rubric { color: var(--muted); }
+.ad-meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.ad-meta .price { color: var(--fg); font-weight: 500; }
+details summary { cursor: pointer; font-size: 14px; color: var(--edge); }
+.ad-text { white-space: pre-wrap; word-break: break-word; font: 13px/1.5 var(--body); margin: 10px 0 0; padding: 12px; background: var(--bg); border-radius: 8px; max-height: 340px; overflow: auto; }
+button.copy { justify-self: start; font: 500 14px var(--body); color: var(--surface); background: var(--edge); border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+button.copy:focus-visible, details summary:focus-visible { outline: 2px solid var(--edge); outline-offset: 2px; }
+button.copy.done { background: var(--fg); }
+.decisions { counter-reset: d; list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.decisions li { display: grid; grid-template-columns: 2.2em 1fr; gap: 4px 10px; }
+.decisions li::before { counter-increment: d; content: counter(d); font: 600 15px/1.5 var(--mono); color: var(--edge); }
+.decisions li > div { min-width: 0; display: grid; gap: 2px; }
+.decisions .rec { font-size: 14px; color: var(--muted); }
+.note { background: var(--warn-soft); color: var(--fg); border-radius: 10px; padding: 14px 16px; font-size: 15px; }
+.note b { color: var(--warn); }
+.weeks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.weeks > div { border-top: 3px solid var(--edge); padding-top: 8px; display: grid; gap: 4px; min-width: 0; font-size: 15px; }
+.weeks .stop { border-top-color: var(--warn); }
+.weeks b { font-family: var(--display); }
+footer { font-size: 13px; color: var(--muted); display: grid; gap: 6px; max-width: 68ch; }
+@media (max-width: 640px) {
+  .state, .weeks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  button.copy { transition: background-color .15s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header class="doc">
+    <div class="eyebrow">Производство · Авито · 01.10.2026</div>
+    <h1>GLASMEN на Авито</h1>
+    <p class="lede">Кабинет производства становится витриной цеха: детали из стекла и зеркала по чертежам и размерам заказчика, всё с одного адреса в Мытищах. Мерило — деньги с клиентов, пришедших с Авито, а не число контактов.</p>
+  </header>
+
+  <section>
+    <h2>Где мы сейчас</h2>
+    <div class="state">
+      <div><b>0</b><span>активных объявлений (118 не опубликованы, 93 в архиве)</span></div>
+      <div class="bad"><b>20 %</b><span>уровень сервиса — низкий, нужно от 41 %</span></div>
+      <div class="bad"><b>2</b><span>непрочитанных чата</span></div>
+      <div><b>5,0</b><span>рейтинг, 12 отзывов — уже наш актив</span></div>
+    </div>
+  </section>
+
+  <section class="today">
+    <h2>Сегодня, 15 минут</h2>
+    <ol class="steps">
+      <li>Ответить на 2 непрочитанных чата в GLASMEN.</li>
+      <li>Включить уведомления Авито Pro на телефоне для кабинета GLASMEN.</li>
+      <li>Решить по звонкам: телефон в объявлениях и ответ с 10 до 18 — или только сообщения. Пропущенный звонок роняет уровень сервиса так же, как молчание в чате.</li>
+      <li>118 неопубликованных не включать пачкой. Сначала посмотреть, что в них: старые объявления розницы станут дублями M GLASS.</li>
+      <li>Сказать авитологу о разделе категорий (таблица ниже).</li>
+    </ol>
+  </section>
+
+  <section class="doc">
+    <h2>Раздел с M GLASS</h2>
+    <p>У Авито два правила, на которых держится всё остальное. Одна компания в одной категории размещается только с одного профиля. Одно и то же предложение с двух профилей — дубль, даже если фото и текст разные.</p>
+  </section>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th></th><th>M GLASS — розница</th><th>GLASMEN — производство</th></tr></thead>
+      <tbody>
+        <tr><td class="muted">Направление</td><td>Товары</td><td>Услуги</td></tr>
+        <tr><td class="muted">Категория</td><td>Ремонт и строительство</td><td>Оборудование, производство → Производство, обработка</td></tr>
+        <tr><td class="muted">Что ставит</td><td>душевые, перегородки, зеркала с подсветкой</td><td>детали по чертежам, зеркала по размеру, закалённое стекло, фацет, фартуки, столы, полки</td></tr>
+        <tr><td class="muted">Не ставит</td><td>зеркало по размеру без подсветки</td><td>стекло для душевых и перегородки</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="doc">
+    <h2>Кто мы на Авито</h2>
+    <p>«Производство стекла и зеркал в Мытищах: детали по вашим чертежам и размерам». Чем берём:</p>
+    <ul class="plain">
+      <li><b>Цена по чертежу в тот же день.</b> Фото чертежа из чата читает разбор в калькуляторе B2B, цену считает движок прайса.</li>
+      <li><b>Своё производство:</b> резка, кромка, сверление, фигурный рез. Закалка — у партнёра, так и пишем.</li>
+      <li><b>Открытый прайс</b> прямо в объявлении. Частнику — прайс без скидки, компаниям и стекольщикам — B2B-условия.</li>
+      <li><b>Кабинет заказчика для постоянных:</b> второй заказ — без переписки, по своей цене.</li>
+      <li><b>Счёт и документы с НДС</b> для компаний и ИП.</li>
+    </ul>
+    <p class="muted">Покупатели по отдаче: мебельные производства, стекольщики без станка и закалки, монтажники и дизайнеры, торговое оборудование, частник с размерами.</p>
+  </section>
+
+  <section>
+    <div class="doc">
+      <h2>Первая волна — 7 объявлений</h2>
+      <p>Одно объявление — одно предложение. «Цветное зеркало», «зеркала для шкафов-купе», «матовое стекло» отдельно не ставим: Авито сочтёт их дублями №2 и №3. Их ключевые слова уже в текстах. Цены посчитаны движком по прайсу на 01.10. В поле цены отметить «начальная цена». Телефонов и ссылок в тексте нет: Авито это запрещает.</p>
+    </div>
+    <div class="ads">
+<!--CARDS-->
+    </div>
+    <p class="note"><b>Фото — только свои.</b> 5–8 кадров на объявление, первое — само изделие крупно: кромка, отверстия, фацет под светом, стопка нарезанных деталей, изделие на месте. Картинки из интернета Авито отклоняет, и покупатель им не верит.</p>
+  </section>
+
+  <section class="doc">
+    <h2>Ответы — главный рычаг</h2>
+    <ul class="plain">
+      <li>Уровень сервиса считается по <b>чатам</b> (ответ в течение 3 суток) и <b>звонкам</b> (с 10:00 до 18:00). Итог — по худшему показателю за последние 30 дней.</li>
+      <li>Ниже 41 % Авито опускает объявления в поиске и убирает их из рекомендаций. Продвижение при этом работает слабее.</li>
+      <li>Автоответчик и сброшенный звонок считаются пропущенными. Сообщения чат-ботов Авито ответом не считаются.</li>
+      <li>Первый ответ — в течение часа в рабочее время, даже если цена ещё считается: «Получил, считаю, пришлю цену сегодня». Заказ уходит к тому, кто ответил первым.</li>
+      <li>После заказа — попросить отзыв на Авито. Только настоящие: без покупки и без скидки за «пятёрку».</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Деньги и контрольные точки</h2>
+    <div class="weeks">
+      <div><b>Недели 1–2</b><span>7 объявлений без платного продвижения. Смотрим, что собирает просмотры само.</span></div>
+      <div><b>Недели 3–4</b><span>Продвигаем 2–3 лучших по контактам с дневным лимитом.</span></div>
+      <div><b>Через 2 месяца</b><span>Расход ≤ 10 % выручки клиентов с Авито — продолжаем и добавляем объявления.</span></div>
+      <div class="stop"><b>Стоп-линия</b><span>Расход > 25 % выручки два месяца подряд: честная маржа производства ≈ 29 %.</span></div>
+    </div>
+    <p class="doc muted">Цены размещения и продвижения Авито показывает только внутри кабинета (раздел «Тариф»). Известно: в Услугах просмотр стоит от 50 копеек. Подписка «Расширенная» даёт API и автозагрузку. Она нужна, когда приложение начнёт само сообщать о новых чатах.</p>
+  </section>
+
+  <section class="doc">
+    <h2>Решения за вами</h2>
+    <ol class="decisions">
+      <li><div><b>Бюджет пилота и тариф.</b><span class="rec">Рекомендация: 4 недели без подписки, продвижение с 3-й недели с дневным лимитом; «Расширенная» — когда понадобятся уведомления в приложении.</span></div></li>
+      <li><div><b>Имя кабинета.</b><span class="rec">Сейчас «GLASMEN - изготовление зеркал», латиница. Предложение: оставить имя (12 отзывов), подпись — «стекло и зеркала по чертежам». Что будет с отзывами при смене имени, не проверено.</span></div></li>
+      <li><div><b>Минимальная сумма заказа для частников.</b><span class="rec">У стекла без закалки минимума нет: кусок 300×300 стоит 162 ₽.</span></div></li>
+      <li><div><b>Цена рифлёного и состаренного.</b><span class="rec">У нас рифлёное «Мору» — 11 165–20 250 ₽ за м², состаренное зеркало — 12 000 ₽ за м². У конкурента на Авито рифлёное «от 2 200 р/м²». В первую волну не ставим.</span></div></li>
+      <li><div><b>Закалка стекла заказчика</b><span class="rec">— брать или нет. От этого зависит объявление про давальческую закалку.</span></div></li>
+      <li><div><b>Кто и когда снимает цех и изделия.</b><span class="rec">Без фото объявления не опубликовать.</span></div></li>
+      <li><div><b>Звонки:</b><span class="rec">телефон и ответ с 10 до 18 — или только сообщения.</span></div></li>
+      <li><div><b>Раздел с M GLASS</b><span class="rec">— подтвердить авитологу.</span></div></li>
+    </ol>
+  </section>
+
+  <section class="doc">
+    <h2>Чего Авито не даст</h2>
+    <ul class="plain">
+      <li><b>Постоянных клиентов.</b> В рознице Авито — 64 % сделок и 9 % денег. Постоянные B2B держатся на кабинете и отношениях, Авито — только вход.</li>
+      <li><b>Победы объёмом.</b> У Московской стекольной фабрики 637 отзывов и тысячи объявлений. Выигрываем точной ценой по чертежу в тот же день и кабинетом для повторных заказов.</li>
+      <li><b>Быстрой закалки.</b> Своей печи нет: закалённое — 7–10 рабочих дней, у конкурентов с печью — 1–7.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>Источники: кабинет GLASMEN (01.10); API Авито для M GLASS — объявления, статистика и операции за 90 дней, только чтение; правила — support.avito.ru (статьи 2244, 2890, 4296, 4310, 4321, 4343, 4453) и avito.ru/legal; рубрики и конкуренты — страницы Авито и снимки Wayback; цены — движок прайса производства.</p>
+    <p>Полная версия с этапами и граблями — docs/avito-b2b/AVITO_B2B_ROUTE.md; тексты объявлений — docs/avito-b2b/LISTINGS.md.</p>
+  </footer>
+</div>
+
+<script>
+document.querySelectorAll('button.copy').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var el = document.getElementById(btn.dataset.target);
+    var text = el.textContent;
+    function done(label) {
+      btn.textContent = label;
+      btn.classList.add('done');
+      setTimeout(function () { btn.textContent = 'Скопировать текст'; btn.classList.remove('done'); }, 2000);
+    }
+    function selectFallback() {
+      var details = el.closest('details');
+      if (details) details.open = true;
+      var range = document.createRange();
+      range.selectNodeContents(el);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      done('Текст выделен — скопируйте');
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Скопировано'); }, selectFallback);
+    } else {
+      selectFallback();
+    }
+  });
+});
+</script>
