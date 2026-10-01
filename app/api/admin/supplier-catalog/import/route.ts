@@ -8,13 +8,14 @@ import { createServiceClient } from '@/lib/supabase-service'
 // Доступ — владелец + логист-закупщик (buyer).
 
 type InRow = { category?: string; article?: string; name?: string; color?: string; unit?: string; retail_price?: number; url?: string }
+type Fav = { article: string; color: string }
 
 export async function POST(req: NextRequest) {
   const guard = await requireRole(['admin', 'ceo', 'buyer'])
   if (guard instanceof NextResponse) return guard
   const body = await req.json().catch(() => null) as {
     supplier?: string; title?: string; discount_percent?: number; site_url?: string
-    rows?: InRow[]; reset?: boolean; source_file?: string
+    rows?: InRow[]; reset?: boolean; source_file?: string; carry?: Fav[]
   } | null
   const supplier = (body?.supplier || '').trim().toLowerCase()
   if (!supplier || !Array.isArray(body?.rows)) {
@@ -36,7 +37,14 @@ export async function POST(req: NextRequest) {
   if (!src) return NextResponse.json({ error: 'поставщик не найден — задай название и скидку' }, { status: 400 })
   const disc = Number(src.discount_percent) || 0
 
+  // Замена прайса удаляет строки, а с ними и звёзды владельца («наши позиции»). Первый батч
+  // запоминает отмеченные строки до удаления и отдаёт их браузеру; браузер шлёт этот список
+  // с каждым следующим батчем, и звезда возвращается той же строке нового прайса.
+  let carry: Fav[] = Array.isArray(body.carry) ? body.carry.filter(f => f && typeof f.article === 'string') : []
   if (body.reset) {
+    const { data: favs, error: favErr } = await supa.from('supplier_price_rows').select('article,color').eq('supplier', supplier).eq('is_favorite', true)
+    if (favErr) return NextResponse.json({ error: `звёзды не прочитаны, прайс не тронут: ${favErr.message}` }, { status: 500 })
+    carry = (favs ?? []).map(f => ({ article: f.article as string, color: (f.color ?? '') as string }))
     const { error } = await supa.from('supplier_price_rows').delete().eq('supplier', supplier)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
@@ -66,8 +74,17 @@ export async function POST(req: NextRequest) {
     })
     .filter(r => { const k = `${r.article}|${r.color}`; if (seen.has(k)) return false; seen.add(k); return true })
 
-  if (rows.length === 0) return NextResponse.json({ ok: true, inserted: 0 })
+  if (rows.length === 0) return NextResponse.json({ ok: true, inserted: 0, carry })
   const { error } = await supa.from('supplier_price_rows').upsert(rows, { onConflict: 'supplier,article,color' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true, inserted: rows.length })
+  // Звезда — отдельным обновлением: в общем upsert строки без поля is_favorite получили бы NULL.
+  const inBatch = new Set(rows.map(r => `${r.article}|${r.color}`))
+  let starred = 0
+  for (const f of carry) {
+    if (!inBatch.has(`${f.article}|${f.color}`)) continue
+    const { error: starErr } = await supa.from('supplier_price_rows').update({ is_favorite: true })
+      .eq('supplier', supplier).eq('article', f.article).eq('color', f.color)
+    if (!starErr) starred += 1
+  }
+  return NextResponse.json({ ok: true, inserted: rows.length, starred, carry })
 }

@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
+import { articleBase } from '@/lib/supplier/colorCode'
 
-// Варианты позиции по цветам: по id выбранной строки берём базовый артикул
-// (без цветового суффикса после последнего «/») и возвращаем все его цвета
-// у того же поставщика — чтобы разом заполнить цены визуализатора по цветам.
+// Варианты позиции по цветам: по id выбранной строки берём базовый артикул (без кода
+// цвета; у АВ24 материал остаётся в базе — FDP-115 BR и FDP-115 SUS304 разные петли)
+// и возвращаем все его цвета у того же поставщика — чтобы разом заполнить цены по цветам.
+// Цвет и себестоимость строк разбирает вызывающий (lib/supplier/colorCode.ts).
 
 export async function GET(req: NextRequest) {
   const guard = await requireRole(['admin', 'ceo', 'buyer'])
@@ -17,18 +19,20 @@ export async function GET(req: NextRequest) {
     .select('supplier,article,name,url,image_url,specs').eq('id', id).maybeSingle()
   if (!row) return NextResponse.json({ error: 'не найдено' }, { status: 404 })
 
-  const slash = row.article.lastIndexOf('/')
-  const base = slash > 0 ? row.article.slice(0, slash) : row.article
+  const base = articleBase(row.supplier, row.article)
   const esc = base.replace(/[%_]/g, (s: string) => `\\${s}`)
 
   const { data: variants } = await supa.from('supplier_price_rows')
-    .select('id,color,cost_price,retail_price')
+    .select('id,article,name,color,cost_price,retail_price,discount_percent')
     .eq('supplier', row.supplier)
     .or(`article.eq.${base},article.ilike.${esc}/%`)
-    .order('color')
+    .order('article')
 
+  // Ровно эта база: у Ветро длина в середине артикула («ПР-004/1500/Black») — префикс
+  // захватил бы соседние длины.
+  const own = (variants ?? []).filter(v => v.article === base || articleBase(row.supplier, v.article) === base)
   return NextResponse.json({
-    supplier: row.supplier, base, name: row.name, variants: variants ?? [],
+    supplier: row.supplier, base, name: row.name, variants: own,
     url: row.url ?? '', imageUrl: row.image_url ?? '', specs: row.specs ?? {},
   })
 }

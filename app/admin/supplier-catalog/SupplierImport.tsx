@@ -78,6 +78,8 @@ export function SupplierImport({ sources, onClose, onDone }: { sources: Source[]
     if (!parsed?.length || !effSupplier) return
     setBusy(true); setProgress(0); setMsg('Загружаю…')
     const BATCH = 700
+    // Звёзды владельца, снятые первым батчем замены: возвращаются строкам нового прайса.
+    let carry: { article: string; color: string }[] = []
     try {
       for (let i = 0; i < parsed.length; i += BATCH) {
         const chunk = parsed.slice(i, i + BATCH)
@@ -90,9 +92,12 @@ export function SupplierImport({ sources, onClose, onDone }: { sources: Source[]
             reset: first && replace,
             source_file: fileName,
             rows: chunk,
+            carry,
           }),
         })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Ошибка загрузки')
+        const out = await res.json().catch(() => ({})) as { error?: string; carry?: { article: string; color: string }[] }
+        if (!res.ok) throw new Error(out.error ?? 'Ошибка загрузки')
+        if (Array.isArray(out.carry)) carry = out.carry
         setProgress(Math.min(parsed.length, i + BATCH))
       }
       setMsg(`Готово: загружено ${parsed.length} позиций`)

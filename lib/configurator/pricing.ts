@@ -66,9 +66,11 @@ export function computeQuantities(assembly: Assembly, thickness: number): Quanti
 
 // ── Справочник цен (СЕБЕСТОИМОСТЬ) — подгруппы фурнитуры ────────────
 export type PriceByColor = Record<string, number>           // finishId → ₽/шт
-export type BarStock = { len: number; prices: PriceByColor } // хлыст: длина мм + цена по цвету
-
 export type CatalogRef = { supplier: string; base: string; label?: string }  // связь со справочником поставщиков
+// Хлыст: длина мм + цена по цвету. Каждая длина у поставщика — свой артикул (FDPA-55.22 —
+// 2,2 м, FDPA-55.3 — 3 м), поэтому у хлыста своя ссылка: по ней переоценка находит цену
+// именно этой длины, а не первой строки позиции.
+export type BarStock = { len: number; prices: PriceByColor; ref?: CatalogRef }
 
 export type PieceItem = {
   key: string

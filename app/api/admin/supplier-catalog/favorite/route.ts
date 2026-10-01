@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 
 // Отметка «наша позиция» — логист помечает строки справочника, которые компания
 // реально закупает. Влияет только на выдачу справочника (наверху + фильтр).
+// updated_at не трогаем: это дата цены, а звезда цену не меняет.
 export async function POST(req: NextRequest) {
   const guard = await requireRole(['admin', 'ceo', 'buyer'])
   if (guard instanceof NextResponse) return guard
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   }
   const supa = createServiceClient()
   const { error } = await supa.from('supplier_price_rows')
-    .update({ is_favorite: body.favorite, updated_at: new Date().toISOString() })
+    .update({ is_favorite: body.favorite })
     .eq('id', body.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, id: body.id, favorite: body.favorite })

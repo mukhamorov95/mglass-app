@@ -1,6 +1,7 @@
 import 'server-only'
 import { createServiceClient } from '@/lib/supabase-service'
-import { supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
+import type { Tier } from '@/lib/configurator/pricing'
+import { rowFinish, colorAxisOfRole } from '@/lib/supplier/colorCode'
 import { ROLE_META, type Library, type LibraryItem, type ModelKit, type RoleId } from '@/lib/configurator/kit'
 import { getKitStore } from '@/lib/configurator/kitStore'
 import { isDefect, similarity, tokens } from '@/lib/supplier/similar'
@@ -77,11 +78,12 @@ export async function findSavings(tier: Tier, minSavePct = 5): Promise<SavingsRe
       .map(r => ({
         rowId: r.id as number, supplier: r.supplier as string, name: r.name as string,
         color: (r.color ?? '') as string, cost: Math.round(Number(r.cost_price)),
+        finish: rowFinish(r.supplier as string, { article: (r.article ?? '') as string, color: r.color as string | null }, colorAxisOfRole(it.role)),
         url: (r.url ?? '') as string, imageUrl: (r.image_url ?? '') as string,
         match: similarity(it.name, r.name ?? ''),
       }))
       // Цвет должен совпадать с базовым, иначе сравним хром с золотом и «сэкономим» на бумаге.
-      .filter(a => a.match >= 0.6 && (supplierColorToFinish(a.color) ?? BASE_FINISH) === BASE_FINISH)
+      .filter(a => a.match >= 0.6 && (a.finish ?? BASE_FINISH) === BASE_FINISH)
       .sort((a, b) => a.cost - b.cost)
 
     const best = alts[0]
