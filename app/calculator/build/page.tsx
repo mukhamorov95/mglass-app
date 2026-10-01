@@ -14,6 +14,7 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { FINANCE_FALLBACK } from '@/lib/pricing/pickFinance'
 import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
 import { kpSectionsFromBom, type BomItem } from '@/lib/kp/bomSections'
+import { drawingToRequest, type DrawingApply, type ShowerDrawingParse } from '@/lib/calc/drawingParse'
 
 // Вкладка «Расчёт» — два экрана. Экран 1: только выбор модели. Экран 2: слева крупный
 // настоящий 3D-визуализатор, справа параметры (габариты → стекло/цвет фурнитуры →
@@ -132,6 +133,12 @@ export default function BuildCalcPage() {
   const [byDrawing, setByDrawing] = useState(false)
   const [panelOver, setPanelOver] = useState<Record<number, { w?: string; h?: string }>>({})
   const [drawn, setDrawn] = useState<Record<string, string>>({})
+  // ИИ-разбор чертежа (Ч2): какие душевые нашлись и какая применена — с «откуда взято».
+  const [drawingOpts, setDrawingOpts] = useState<DrawingApply[]>([])
+  const [drawingFrom, setDrawingFrom] = useState<DrawingApply | null>(null)
+  const [drawingState, setDrawingState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [drawingErr, setDrawingErr] = useState<string | null>(null)
+  const [showEvidence, setShowEvidence] = useState(false)
 
   const [price, setPrice] = useState<Price | null>(null)
   const [specGlass, setSpecGlass] = useState(false)
@@ -212,13 +219,45 @@ export default function BuildCalcPage() {
 
   function pickModel(c: string) {
     setCode(c); setDims(defaultsFor(c)); setChoice({}); setQtyChoice({}); setKitChoices(null); setPrice(null)
-    setByDrawing(false); setPanelOver({}); setDrawn({})
+    setByDrawing(false); setPanelOver({}); setDrawn({}); setDrawingFrom(null); setDrawingOpts([])
     marginTouched.current = false; taxTouched.current = false
     setMargin(String(FINANCE_FALLBACK.marginPct)); setTax(String(FINANCE_FALLBACK.taxPct)); setPerSection('6500'); setDelivery('5000'); setLift(''); setDiscount('0')
     setProfileFrame('partial')
     setScreen('detail')
   }
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
+
+  // Прочитанное с чертежа ставится в поля «Расчёта»; цену считает тот же /api/calc/build.
+  // Другая модель — как выбор карточки (сброс вариантов и чисел), затем значения чертежа.
+  function applyDrawing(a: DrawingApply, all: DrawingApply[]) {
+    const c = a.code ?? code
+    if (c !== code || screen === 'models') pickModel(c)
+    setDims({ ...defaultsFor(c), ...a.dims })
+    if (a.finishId && BUDGET_FINISHES.has(a.finishId)) setFinishId(a.finishId as FinishId)
+    if (a.glassId && GLASS_TYPES.some(g => g.id === a.glassId)) setGlassId(a.glassId)
+    setDrawn(a.drawn); setPanelOver({}); setByDrawing(true)
+    setDrawingFrom(a); setDrawingOpts(all); setProduct('shower')
+  }
+  async function parseDrawing(file: File) {
+    setDrawingState('loading'); setDrawingErr(null)
+    const fd = new FormData(); fd.append('file', file)
+    try {
+      const r = await fetch('/api/ai/parse-shower-drawing', { method: 'POST', body: fd })
+      const d = await r.json().catch(() => null) as { parsed?: ShowerDrawingParse; detail?: string } | null
+      if (!r.ok || !d?.parsed) { setDrawingState('error'); setDrawingErr(d?.detail ?? 'Чертёж не разобран — введите размеры вручную.'); return }
+      const all = (d.parsed.showers ?? []).map(drawingToRequest)
+      if (!d.parsed.is_shower_drawing || all.length === 0) { setDrawingState('error'); setDrawingErr('На файле не нашлось душевой — введите размеры вручную.'); return }
+      setDrawingState('idle')
+      applyDrawing(all[0], all)
+    } catch { setDrawingState('error'); setDrawingErr('Чертёж не отправлен — проверьте сеть.') }
+  }
+  const drawingUpload = (
+    <label className={`inline-flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] cursor-pointer hover:bg-[#f0f0ec] ${drawingState === 'loading' ? 'opacity-50 pointer-events-none' : ''}`}>
+      {drawingState === 'loading' ? 'Читаю чертёж…' : 'Загрузить чертёж (PDF/фото)'}
+      <input type="file" accept="application/pdf,image/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void parseDrawing(f) }} />
+    </label>
+  )
 
   useEffect(() => {
     if (product !== 'mirror' || mirrorModels) return
@@ -274,6 +313,7 @@ export default function BuildCalcPage() {
       if (p.byDrawing === true) setByDrawing(true)
       if (p.panelOver && typeof p.panelOver === 'object') setPanelOver(p.panelOver as Record<number, { w?: string; h?: string }>)
       if (p.drawn && typeof p.drawn === 'object') setDrawn(p.drawn as Record<string, string>)
+      if (p.drawingFrom && typeof p.drawingFrom === 'object') setDrawingFrom(p.drawingFrom as DrawingApply)
       // Сохранённые маржа и налог — решение по этому расчёту: настройки их не перебивают.
       if (p.margin != null) marginTouched.current = true
       if (p.tax != null) taxTouched.current = true
@@ -362,8 +402,12 @@ export default function BuildCalcPage() {
 
   const title = () => `${model.code} ${model.name} · ${isCorner ? `${numOr(String(dims.width))}×${numOr(String(dims.width2 ?? 0))}×${numOr(String(dims.height))}` : `${numOr(String(dims.width))}×${numOr(String(dims.height))}`} мм`
   const marks = priceMarks(price)
-  const stops = (price?.stops ?? []).filter(x => byDrawing || ALWAYS_STOP.has(x.kind))
-  const notes = byDrawing ? (price?.notes ?? []) : []
+  const fromDrawing = byDrawing ? drawingFrom : null
+  const stops = [
+    ...(fromDrawing?.stops ?? []).map(text => ({ kind: 'drawing', text })),
+    ...(price?.stops ?? []).filter(x => byDrawing || ALWAYS_STOP.has(x.kind)),
+  ]
+  const notes = byDrawing ? [...(fromDrawing?.notes ?? []).map(text => ({ kind: 'drawing', text })), ...(price?.notes ?? [])] : []
   // Роли, чей артикул можно сверить с подписью на чертеже, — то, что реально в расчёте.
   const drawnRoles = [...new Set((price?.lines ?? []).map(l => l.role))]
   const currentReq: ShowerReq = { model: code, dims, finishId, choice, qtyChoice, variant: mVariant }
@@ -414,7 +458,7 @@ export default function BuildCalcPage() {
     // иначе в КП приезжало бы лишнее изделие, которого менеджер не добавлял.
     if (product === 'shower' && usable && grand > 0) list.push(currentItem())
     if (!list.length) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500); return }
-    const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, ...(byDrawing ? { byDrawing, panelOver, drawn } : {}), margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
+    const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, ...(byDrawing ? { byDrawing, panelOver, drawn, ...(drawingFrom ? { drawingFrom } : {}) } : {}), margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
     const total = list.reduce((s, i) => s + i.total, 0)
     const sig = JSON.stringify(snapshot) + '|' + total
     if (sig === lastSavedSigRef.current) { setSaveMsg('Уже сохранено ✓'); setTimeout(() => setSaveMsg(null), 2500); return }
@@ -482,6 +526,12 @@ export default function BuildCalcPage() {
                 {product === 'shower' ? 'Выберите модель душевой перегородки.' : 'Выберите модель зеркала.'}
               </p>
             </div>
+            {product === 'shower' && (
+              <div className="flex flex-col items-end gap-1">
+                {drawingUpload}
+                {drawingState === 'error' && drawingErr && <span className="text-[11px] text-[#c2410c]">{drawingErr}</span>}
+              </div>
+            )}
             {cart.length > 0 && (
               <button onClick={save} disabled={saving}
                 className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
@@ -695,6 +745,32 @@ export default function BuildCalcPage() {
                 </label>
                 {byDrawing && (
                   <>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {drawingUpload}
+                      {drawingState === 'error' && drawingErr && <span className="text-[11px] text-[#c2410c]">{drawingErr}</span>}
+                    </div>
+                    {drawingOpts.length > 1 && (
+                      <div className="flex flex-wrap gap-1">
+                        {drawingOpts.map(o => (
+                          <button key={o.sheet} type="button" onClick={() => applyDrawing(o, drawingOpts)}
+                            className={`text-[11px] px-2 py-1 rounded-md border ${drawingFrom?.sheet === o.sheet ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
+                            {o.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {fromDrawing && fromDrawing.evidence.length > 0 && (
+                      <div>
+                        <button type="button" onClick={() => setShowEvidence(v => !v)} className="text-[11px] text-[#6b6b66]">
+                          {showEvidence ? '▾' : '▸'} С чертежа: {fromDrawing.title} — откуда взято ({fromDrawing.evidence.length})
+                        </button>
+                        {showEvidence && fromDrawing.evidence.map((e, i) => (
+                          <div key={i} className="text-[11px] text-[#9a9a95] pl-3">
+                            {ROLE_META[e.field as RoleId]?.label ?? e.field}: <span className="text-[#4b4b47]">{e.value}</span> ← {e.evidence}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[11px] text-[#9a9a95]">Пустое поле — из габаритов модели. Стекло считается по размерам чертежа.</p>
                     {(price?.glassLines ?? []).map((g, k) => { const i = g.index ?? k; return (
                       <div key={i} className="grid grid-cols-[1fr_5rem_5rem] gap-2 items-center">

@@ -19,7 +19,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 export { countHoleSignals } from '@/lib/ai/parseSignals'
 
 export type ParseLogRow = {
-  route:              'ai/parse-drawing' | 'b2b/parse-pdf'
+  route:              'ai/parse-drawing' | 'b2b/parse-pdf' | 'ai/parse-shower-drawing'
   userId?:            string | null
   userName?:          string | null
   file?:              { name?: string; type?: string; size?: number } | null
