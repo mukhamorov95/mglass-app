@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const esc = base.replace(/[%_]/g, (s: string) => `\\${s}`)
 
   const { data: variants } = await supa.from('supplier_price_rows')
-    .select('id,article,name,color,cost_price,retail_price,discount_percent')
+    .select('id,article,name,color,cost_price,retail_price,discount_percent,updated_at')
     .eq('supplier', row.supplier)
     .or(`article.eq.${base},article.ilike.${esc}/%`)
     .order('article')

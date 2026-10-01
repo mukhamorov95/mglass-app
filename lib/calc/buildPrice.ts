@@ -52,6 +52,8 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
     priced.find(m => m.name === glassName && Math.round(m.thickness) === thickness && isGlass(m)) ??
     priced.find(m => m.name === DEFAULT_GLASS && Math.round(m.thickness) === thickness && isGlass(m)) ??
     priced.find(m => Math.round(m.thickness) === thickness && isGlass(m))
+  // Запрошенного стекла нет в справочнике — считаем по другому, но говорим об этом.
+  const glassSubstituted = glassMat && glassMat.name !== glassName ? `${glassName} → ${glassMat.name}` : null
   // Скидка M GLASS (производство → M-Glass): та же, что в «Расчёте B2B».
   const mgDiscount = Number(mgClient?.discount_percent) || 0
 
@@ -114,5 +116,6 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
     glassThickness: glassMat ? glassMat.thickness : thickness,
     glassDiscountPct: mgDiscount,
     glassLines,
+    glassSubstituted,
   }
 }
