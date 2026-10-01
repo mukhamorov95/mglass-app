@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { renderDocCanvas } from '@/lib/pdfCapture'
-import { leadTimeText } from '@/lib/partner/leadTime'
+import { leadTimeText, isMirrorCategory } from '@/lib/partner/leadTime'
 import { readDraft, retailQuote, describeSpec, type CounterSpec } from '@/lib/partner/counter'
 
 // КП покупателю точки — от имени партнёра, с его розничной ценой. Ни бренда, ни цен
@@ -12,7 +12,7 @@ import { readDraft, retailQuote, describeSpec, type CounterSpec } from '@/lib/pa
 // Имя покупателя живёт только в этом поле: не уходит на сервер и не пишется в
 // браузер — персональные данные чужого клиента нам хранить незачем (152-ФЗ).
 
-type Priced = { material: string; thickness: number; lineTotal: number }
+type Priced = { material: string; category?: string; thickness: number; lineTotal: number }
 type Settings = { markupPct: number; kpName: string; kpPhone: string; kpNote: string }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -82,6 +82,7 @@ export default function CounterKpPage() {
   )
 
   const retail = retailQuote(items.map(i => i.lineTotal), settings.markupPct)
+  const lead = leadTimeText(specs.map((sp, i) => ({ ...sp, isMirror: isMirrorCategory(items[i].category) })))
   const seller = settings.kpName || defaults.name
   const phone = settings.kpPhone || defaults.phone
 
@@ -158,7 +159,7 @@ export default function CounterKpPage() {
           </table>
 
           <div style={{ marginTop: 14, fontSize: 12.5 }}>
-            Срок изготовления — {leadTimeText(specs)}{leadTimeText(specs).startsWith('срок') ? '' : ' с момента оплаты'}. Изделия режутся точно по размерам, указанным в предложении.
+            Срок изготовления — {lead}{lead.startsWith('срок') ? '' : ' с момента оплаты'}. Изделия режутся точно по размерам, указанным в предложении.
           </div>
           {settings.kpNote && <div style={{ marginTop: 10, fontSize: 12.5, whiteSpace: 'pre-wrap' }}>{settings.kpNote}</div>}
         </div>

@@ -122,6 +122,7 @@ export async function POST(req: NextRequest) {
   // позиции после скидки (по нему прилавок считает розницу точки) и итог заказа.
   const safeItems = items.map(it => ({
     material: it.materialName,
+    category: it.category,
     thickness: it.thickness,
     width: it.width, height: it.height, quantity: it.quantity,
     price: it.saleIncVat,

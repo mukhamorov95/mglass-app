@@ -17,10 +17,17 @@ const svc = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE
 
 // ── Допущения (меняются здесь) ──
 const DISC = 10                      // скидка партнёру, решено 01.10
-const SMALL_ORDER = { below: 3000, fee: 500 }   // доплата за мелкий заказ — рекомендация, ждёт «да»
-const TRIP = { yauza: 1500, melnitsa: 4000 }   // ❓ рейс: Яуза в Мытищах рядом с цехом, Мельница — МКАД 41 км
+const SMALL_ORDER = { below: 3000, fee: 500 }   // доплата за мелкий заказ — на пилоте НЕ ставим (01.10), считаем как вариант
+// Рейс на «Яузу» (владелец 01.10: 12 км, 25 мин в одну сторону): туда-обратно 24 км и ≈1,1 ч с разгрузкой.
+// Бензин 10 л/100 км × 65 ₽/л, износ 8 ₽/км, час водителя 600 ₽ — допущения, поправить.
+const YAUZA_TRIP = Math.round(24 * 0.10 * 65 + 24 * 8 + 1.1 * 600)
+const TRIP = { yauza: YAUZA_TRIP, melnitsa: 4000 }   // ❓ «Мельница» (МКАД 41 км) — маршрут не строили
 const ONE_TIME = { samples: 22100, banner: 8000 }   // образцы M2 + зеркала (расчёт №134); баннер — ❓ допущение
-const B2C = { check: 117000, contribution: 0.21, partnerReward: 0.05 }  // душевая: чек 114–120 тыс (факт), маржа 40 % минус накладные 19 % = 21 %
+// Душевая под ключ M-Glass: чек 114–120 тыс (факт). Маржа 40 % по справочнику, в ней накладные 19 %, из них
+// маркетинг 5 % — покупателя привёл партнёр, на рекламу не тратились. Остаётся 26 % минус вознаграждение партнёру
+// (владелец 01.10: 10–15 %).
+const B2C = { check: 117000, contribution: 0.26 }
+const REWARDS = [0.10, 0.15]
 const ORDERS = {   // заказов точки в месяц, 12 месяцев
   'осторожный': [3, 5, 7, 9, 10, 12, 13, 14, 15, 16, 17, 18],
   'базовый':    [6, 10, 15, 20, 25, 30, 34, 38, 42, 45, 48, 50],
@@ -64,14 +71,14 @@ async function main() {
   })
   const avg = (f: (p: typeof pos[number]) => number) => pos.reduce((s, p) => s + f(p) * p.share, 0)
   const order = { pays: avg(p => p.pays), keep: avg(p => p.keep), fee: avg(p => p.feeKeep), retail: avg(p => p.retail), saleEx: avg(p => p.saleEx) }
-  const showerKeep = B2C.check * (B2C.contribution - B2C.partnerReward)
+  const showerKeep = (reward: number) => B2C.check * (B2C.contribution - reward)
 
   type Row = { m: number; orders: number; buy: number; keepB2B: number; fee: number; showers: number; keepB2C: number; trips: number; tripCost: number; oneTime: number; net: number; cum: number }
-  function run(name: keyof typeof ORDERS, tripCost: number, withFee: boolean, withShowers: boolean): Row[] {
+  function run(name: keyof typeof ORDERS, tripCost: number, withFee: boolean, withShowers: boolean, reward = REWARDS[0]): Row[] {
     let cum = 0
     return ORDERS[name].map((o, i) => {
       const sh = withShowers ? SHOWERS[name][i] : 0
-      const keepB2B = o * order.keep, fee = withFee ? o * order.fee : 0, keepB2C = sh * showerKeep
+      const keepB2B = o * order.keep, fee = withFee ? o * order.fee : 0, keepB2C = sh * showerKeep(reward)
       const tr = trips(o), tc = tr * tripCost, one = i === 0 ? ONE_TIME.samples + ONE_TIME.banner : 0
       const net = keepB2B + fee + keepB2C - tc - one
       cum += net
@@ -80,20 +87,21 @@ async function main() {
   }
   const payback = (rows: Row[]) => rows.find(r => r.cum >= 0)?.m ?? null
   const year = (rows: Row[]) => rows.reduce((s, r) => s + r.net, 0)
-  const out: Record<string, unknown> = { pos, order, showerKeep }
+  const out: Record<string, unknown> = { pos, order, showerKeep10: showerKeep(REWARDS[0]), showerKeep15: showerKeep(REWARDS[1]), trip: TRIP, check: B2C.check }
   for (const n of Object.keys(ORDERS) as (keyof typeof ORDERS)[]) {
     for (const [mk, tc] of Object.entries(TRIP)) {
-      const full = run(n, tc, true, true)
-      out[`${n}|${mk}`] = { payback: payback(full), year: Math.round(year(full)), m12: Math.round(full[11].net), buyYear: Math.round(full.reduce((s, r) => s + r.buy, 0)),
-        noFee: Math.round(year(run(n, tc, false, true))), noShowers: Math.round(year(run(n, tc, true, false))), bare: Math.round(year(run(n, tc, false, false))), rows: full }
+      const main = run(n, tc, false, true)            // решение 01.10: без доплаты, вознаграждение 10 %
+      out[`${n}|${mk}`] = { payback: payback(main), year: Math.round(year(main)), m12: Math.round(main[11].net), buyYear: Math.round(main.reduce((s, r) => s + r.buy, 0)),
+        reward15: Math.round(year(run(n, tc, false, true, REWARDS[1]))), withFee: Math.round(year(run(n, tc, true, true))),
+        bare: Math.round(year(run(n, tc, false, false))), showersYear: main.reduce((s, r) => s + r.showers, 0), rows: main }
     }
   }
   writeFileSync('outputs/points-model.json', JSON.stringify(out, null, 1))
   for (const k of Object.keys(out).filter(k => k.includes('|'))) {
-    const v = out[k] as { payback: number | null; year: number; m12: number; buyYear: number; noFee: number; noShowers: number; bare: number }
-    console.log(k, JSON.stringify({ payback: v.payback, year: v.year, m12: v.m12, buyYear: v.buyYear, noFee: v.noFee, noShowers: v.noShowers, bare: v.bare }))
+    const v = out[k] as { payback: number | null; year: number; m12: number; buyYear: number; reward15: number; withFee: number; bare: number }
+    console.log(k, JSON.stringify({ payback: v.payback, year: v.year, m12: v.m12, buyYear: v.buyYear, reward15: v.reward15, withFee: v.withFee, bare: v.bare }))
   }
-  console.log('order', JSON.stringify(order), 'showerKeep', showerKeep)
+  console.log('order', JSON.stringify(order), 'trip', JSON.stringify(TRIP), 'shower10', showerKeep(REWARDS[0]), 'shower15', showerKeep(REWARDS[1]))
   console.log(JSON.stringify(pos.map(p => ({ k: p.key, pays: p.pays, keep: p.keep, small: p.small, retail: p.retail }))))
 }
 main()
