@@ -9,7 +9,7 @@ export type SearchGroup = { key: 'orders' | 'clients' | 'deals' | 'calcs'; title
 export type QuickAction = { label: string; href: string }
 
 // Текст для ilike без подстановочных знаков; цифры — отдельно, для номеров и телефонов.
-// «+7 (926) 418-69-72» → digits «9264186972»: в deals.phone_key номер хранится без 7/8.
+// «+7 (900) 123-45-67» → digits «9001234567»: в deals.phone_key номер хранится без 7/8.
 export function parseQuery(raw: string): { q: string; digits: string } {
   const text = raw.trim().slice(0, 60)
   const q = text.replace(/[%_\\]/g, '').replace(/\s+/g, ' ').trim()

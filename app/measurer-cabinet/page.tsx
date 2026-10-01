@@ -12,6 +12,7 @@ import BookingPicker, { type BookingValue } from '@/components/measure/BookingPi
 import SettleForm from '@/components/measure/SettleForm'
 import MeasurerEarnings from '@/components/measure/MeasurerEarnings'
 import MeasurerCalendar from '@/components/measure/MeasurerCalendar'
+import OwnerSummary from '@/components/measure/OwnerSummary'
 import type { VisitPayment } from '@/lib/measure/money'
 
 // Кабинет замерщика, две вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
@@ -338,6 +339,7 @@ export default function MeasurerCabinetPage() {
         {tab === 'earnings' && me && <MeasurerEarnings meId={me.id} isOwner={isOwner} />}
         {tab === 'calendar' && me && <MeasurerCalendar meId={me.id} isOwner={isOwner} refreshKey={boardKey} onChanged={() => setBoardKey(k => k + 1)} />}
         {tab === 'measures' && <>
+        {isOwner && <OwnerSummary refreshKey={boardKey} />}
         {isOwner && measurers.length === 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
             В приложении нет пользователей с ролью «Замерщик» — брать заявки и вести график некому. Заведи замерщиков в «Пользователях» с ролью «Замерщик».

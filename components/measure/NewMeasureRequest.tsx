@@ -243,7 +243,7 @@ export default function NewMeasureRequest({ me, measurers, onCreated, onClose }:
       <div className="rounded-lg bg-[#fafaf8] border border-[#f0f0ec] p-3 space-y-2">
         <p className="text-[12px] text-[#4b4b47]">Есть текст из amo или переписки? Вставь или надиктуй — поля ниже заполнятся сами.</p>
         <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={3}
-          placeholder={'0171-0 Шамиль +79264186972, г Москва ЖК Welton Tower корп. 3, кв. 138.\nДушевая перегородка, зеркало в чёрной раме. Выезд 3000, платит компания'}
+          placeholder={'0123-4 Иван +79001234567, г Москва ЖК Пример корп. 3, кв. 138.\nДушевая перегородка, зеркало в чёрной раме. Выезд 3000, платит компания'}
           className={inp} />
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={parse} disabled={parsing || !raw.trim()}
@@ -263,17 +263,17 @@ export default function NewMeasureRequest({ me, measurers, onCreated, onClose }:
         <p className={step}>Клиент и объект</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className={lbl}>Клиент *</label>
-            <input value={f.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Галина" className={inp} /></div>
+            <input value={f.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Анна" className={inp} /></div>
           <div><label className={lbl}>Телефон *</label>
-            <input value={f.phone} onChange={e => set('phone', e.target.value)} inputMode="tel" placeholder="+7 951 441-83-41" className={inp} /></div>
+            <input value={f.phone} onChange={e => set('phone', e.target.value)} inputMode="tel" placeholder="+7 900 123-45-67" className={inp} /></div>
           <div className="sm:col-span-2"><label className={lbl}>Адрес *</label>
-            <input value={f.address} onChange={e => set('address', e.target.value)} placeholder="Москва, ул. Булатниковская, 9к1, кв. 12" className={inp} /></div>
+            <input value={f.address} onChange={e => set('address', e.target.value)} placeholder="Москва, ул. Примерная, 1, кв. 10" className={inp} /></div>
           <div className="sm:col-span-2"><label className={lbl}>Что мерить * — каждое изделие с новой строки</label>
             <textarea value={f.scope} onChange={e => set('scope', e.target.value)} rows={3}
               placeholder={'Душевая перегородка\nЗеркало в чёрной алюминиевой раме\nЗеркало с подсветкой, отверстия под смеситель'}
               className={`${inp} resize-y`} /></div>
           <div className="sm:col-span-2"><label className={lbl}>Примечание для замерщика</label>
-            <input value={f.notes} onChange={e => set('notes', e.target.value)} placeholder="связь через Пашу, домофон 12, удобно после 18:00" className={inp} /></div>
+            <input value={f.notes} onChange={e => set('notes', e.target.value)} placeholder="связь через жену, домофон 12, удобно после 18:00" className={inp} /></div>
         </div>
       </div>
 

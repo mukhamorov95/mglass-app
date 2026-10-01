@@ -12,9 +12,9 @@ describe('parseQuery', () => {
     expect(parseQuery('0908-4')).toEqual({ q: '0908-4', digits: '09084' })
   })
   it('телефон в любом виде → 10 цифр без 7/8, как phone_key', () => {
-    expect(parseQuery('+7 (926) 418-69-72').digits).toBe('9264186972')
-    expect(parseQuery('89264186972').digits).toBe('9264186972')
-    expect(parseQuery('418-69-72').digits).toBe('4186972')
+    expect(parseQuery('+7 (900) 123-45-67').digits).toBe('9001234567')
+    expect(parseQuery('89001234567').digits).toBe('9001234567')
+    expect(parseQuery('123-45-67').digits).toBe('1234567')
   })
   it('имя — только текст, подстановочные знаки ilike вырезаны', () => {
     expect(parseQuery('ООО 100%_Стекло\\')).toEqual({ q: 'ООО 100Стекло', digits: '' })
