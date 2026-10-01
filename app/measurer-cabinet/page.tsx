@@ -10,11 +10,12 @@ import MeasureBoard from '@/components/measure/MeasureBoard'
 import MeasurerAvailability from '@/components/measure/MeasurerAvailability'
 import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
 import SettleForm from '@/components/measure/SettleForm'
+import MeasurerEarnings from '@/components/measure/MeasurerEarnings'
 import type { VisitPayment } from '@/lib/measure/money'
 
-// Кабинет замерщика: сегодня (куда ехать, кому звонить, что мерить) → пул новых
-// заявок («Взять» в своё свободное окно) → дальше по дням → занятость всех
-// замерщиков → мой график (часы, выходные) → деньги месяца и история.
+// Кабинет замерщика, две вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
+// мерить) → пул новых заявок («Взять» в своё свободное окно) → дальше по дням →
+// занятость всех замерщиков → мой график. «Заработок»: период, оплаты, гонорар.
 // Владелец видит то же по всем замерщикам и может назначить любого.
 
 type MReq = {
@@ -64,6 +65,7 @@ export default function MeasurerCabinetPage() {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState<number | null>(null)
   const [boardKey, setBoardKey] = useState(0)
+  const [tab, setTab] = useState<'measures' | 'earnings'>('measures')
   // Открытая форма у карточки: взять/перенести (booking) или сложность (issue).
   const [openFor, setOpenFor] = useState<{ id: number; kind: 'book' | 'issue' | 'done' } | null>(null)
   const [bookVal, setBookVal] = useState<BookingValue>(EMPTY_BOOKING)
@@ -81,6 +83,13 @@ export default function MeasurerCabinetPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
+  // Ссылка …/measurer-cabinet#earnings открывает сразу «Заработок».
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (window.location.hash === '#earnings') setTab('earnings') }, [])
+  function switchTab(t: 'measures' | 'earnings') {
+    setTab(t)
+    try { history.replaceState(null, '', t === 'earnings' ? '#earnings' : window.location.pathname) } catch { /* без адресной строки */ }
+  }
 
   const isOwner = me?.role === 'admin' || me?.role === 'ceo'
   const isMeasurer = me?.role === 'measurer'
@@ -99,17 +108,6 @@ export default function MeasurerCabinetPage() {
     }
     return [...groups.entries()]
   }, [active, today])
-
-  // Деньги месяца: замерщику — свои, владельцу — по всем замерщикам.
-  const money = useMemo(() => {
-    const month = today.slice(0, 7)
-    const done = assigned.filter(r => r.status === 'done' && r.scheduled_at && mskDate(r.scheduled_at).startsWith(month))
-    const earned = done.reduce((s, r) => s + (Number(r.measurer_fee) || 0), 0)
-    const paid = done.filter(r => r.fee_status === 'paid').reduce((s, r) => s + (Number(r.measurer_fee) || 0), 0)
-    return { count: done.length, earned, paid, pending: earned - paid }
-  }, [assigned, today])
-  const history = useMemo(() => assigned.filter(r => r.status === 'done' || r.status === 'issue')
-    .sort((a, b) => (b.scheduled_at ?? '').localeCompare(a.scheduled_at ?? '')).slice(0, 30), [assigned])
 
   async function act(r: MReq, body: Record<string, unknown>, done?: string) {
     setBusy(r.id); setError(''); setNotice('')
@@ -267,6 +265,14 @@ export default function MeasurerCabinetPage() {
           <span className="px-2.5 py-1 rounded-full bg-[#f0f0ec] text-[#6b6b66]">Дальше: {active.length - todays.length - overdue.length}</span>
           {overdue.length > 0 && <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-700">Не отмечены: {overdue.length}</span>}
         </div>
+        <div className="flex gap-1 mt-3 -mb-4">
+          {([['measures', '📏 Замеры'], ['earnings', '💰 Заработок']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => switchTab(k)}
+              className={`text-[13px] font-semibold px-4 py-2 border-b-2 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95] hover:text-[#111110]'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="px-5 pt-4 space-y-4 max-w-[1100px]">
@@ -282,6 +288,8 @@ export default function MeasurerCabinetPage() {
             <button onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-800">✕</button>
           </div>
         )}
+        {tab === 'earnings' && me && <MeasurerEarnings meId={me.id} isOwner={isOwner} />}
+        {tab === 'measures' && <>
         {isOwner && measurers.length === 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
             В приложении нет пользователей с ролью «Замерщик» — брать заявки и вести график некому. Заведи замерщиков в «Пользователях» с ролью «Замерщик».
@@ -338,52 +346,7 @@ export default function MeasurerCabinetPage() {
         <MeasureBoard title="Все замерщики — занятость" refreshKey={boardKey} />
         <MeasurerAvailability onChanged={() => setBoardKey(k => k + 1)} />
 
-        {/* Деньги месяца */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-[#111110] text-white rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#8a8a85]">Выполнено за месяц</p>
-            <p className="text-[20px] font-bold font-mono mt-1">{money.count}</p>
-          </div>
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a9a95]">Гонорар за месяц</p>
-            <p className="text-[18px] font-bold font-mono mt-1">{fmt(money.earned)}</p>
-          </div>
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a9a95]">Выплачено</p>
-            <p className="text-[18px] font-bold font-mono text-emerald-700 mt-1">{fmt(money.paid)}</p>
-          </div>
-          <div className={`rounded-xl p-4 border ${money.pending > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-[#e4e4e0]'}`}>
-            <p className={`text-[10px] font-bold uppercase tracking-widest ${money.pending > 0 ? 'text-amber-700' : 'text-[#9a9a95]'}`}>Ожидает выплаты</p>
-            <p className={`text-[18px] font-bold font-mono mt-1 ${money.pending > 0 ? 'text-amber-700' : ''}`}>{fmt(money.pending)}</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">Выполненные и сложности</p>
-          {history.length === 0 ? <p className="text-[12px] text-[#c4c4be]">Пока пусто.</p> : (
-            <div className="space-y-2">
-              {history.map(r => (
-                <div key={r.id} className="border border-[#f0f0ec] rounded-lg p-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-medium">{r.status === 'done' ? '✅' : '⚠️'} {r.deal_number || `#${r.id}`} · {tidy(r.client_name)}</span>
-                    {r.scheduled_at && <span className="text-[11px] text-[#9a9a95]">{dayTitle(mskDate(r.scheduled_at))}</span>}
-                    {isOwner && r.measurer_name && <span className="text-[11px] text-[#9a9a95]">· {r.measurer_name}</span>}
-                    <span className="text-[12px] font-mono ml-auto">{fmt(r.measurer_fee)}</span>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${r.fee_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                      {r.fee_status === 'paid' ? 'выплачено' : 'к выплате'}
-                    </span>
-                    {isOwner && r.status === 'done' && r.fee_status !== 'paid' && (
-                      <button onClick={async () => { if (await confirmDialog({ title: 'Отметить выплату?', text: `${fmt(r.measurer_fee)} замерщику ${r.measurer_name ?? ''} за ${r.deal_number || `#${r.id}`}.`, confirmLabel: 'Выплачено' })) act(r, { action: 'fee_paid' }, 'Выплата отмечена.') }}
-                        disabled={busy === r.id}
-                        className="text-[11px] font-semibold bg-emerald-600 text-white rounded-lg px-2 py-1 hover:bg-emerald-700 disabled:opacity-40">💰 Выплачено</button>
-                    )}
-                  </div>
-                  {r.issue_text && <p className="text-[12px] text-red-600 mt-1">⚠️ {r.issue_text}{r.issue_solution ? ` → 💡 ${r.issue_solution}` : ''}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        </>}
       </div>
     </div>
   )
