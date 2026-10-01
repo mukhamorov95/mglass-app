@@ -6,7 +6,7 @@ import {
   SUPER_CATS, readDraft, writeDraft, retailLine, retailQuote, describeSpec,
   type CounterSpec, type SuperCat,
 } from '@/lib/partner/counter'
-import { leadTimeText } from '@/lib/partner/leadTime'
+import { leadTimeText, isMirrorCategory } from '@/lib/partner/leadTime'
 
 // Прилавок точки на стройрынке: покупатель называет размер — партнёр за минуту
 // показывает ему цену. Крупно — цена покупателю (закупка партнёра × наценка точки).
@@ -256,7 +256,7 @@ export default function PartnerCounterPage() {
                 <span className="tnum" style={big}>{retail ? fmt(retail.total) : busy ? '…' : '—'}</span>
               </div>
 
-              <div className="cap" style={{ marginTop: 4 }}>Срок изготовления — {leadTimeText(list)}</div>
+              <div className="cap" style={{ marginTop: 4 }}>Срок изготовления — {leadTimeText(list.map(sp => ({ ...sp, isMirror: isMirrorCategory(materials.find(m => m.id === sp.materialId)?.category) })))}</div>
               <button className="rm" onClick={() => setShowCost(v => !v)} style={{ marginTop: 8, padding: 0, fontSize: 13 }}>
                 {showCost ? 'Скрыть мою закупку' : 'Показать мою закупку'}
               </button>
