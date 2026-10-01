@@ -10,7 +10,10 @@ type DealData = {
   user: { id: number; name: string; email: string }
   today: { newLeads: number; callsMade: number; messagesSent: number; cardsMoved: number }
   activeLeads: number
+  salesLeads: number
   zone1: number; zone2: number; zone3: number
+  unzonedStages: { stage: string; count: number }[]
+  otherPipelines: { pipeline: string; count: number }[]
   staleZone1: StaleInfo[]; staleZone2: StaleInfo[]
   staleZone3: StaleInfo[]; invoiceStale: StaleInfo[]
   domain: string
@@ -153,13 +156,30 @@ export default function ManagerPage() {
         {/* Зоны */}
         <div className="mb-5">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">
-            Всего активных: <span className="text-[#111110] text-[13px]">{data.activeLeads}</span>
+            Воронка «Продажи», открытые: <span className="text-[#111110] text-[13px]">{data.salesLeads}</span>
+            <span className="normal-case tracking-normal font-normal"> · всего активных во всех воронках {data.activeLeads}</span>
           </p>
           <div className="grid grid-cols-3 gap-3">
             <ZoneBadge zone={1} count={data.zone1} />
             <ZoneBadge zone={2} count={data.zone2} />
             <ZoneBadge zone={3} count={data.zone3} />
           </div>
+          {(data.unzonedStages?.length > 0 || data.otherPipelines?.length > 0) && (
+            <div className="mt-2 text-[11px] text-[#9a9a95] space-y-0.5">
+              {data.unzonedStages?.length > 0 && (
+                <p>
+                  В «Продажах» вне зон — этапа нет в таблице зон:{' '}
+                  {data.unzonedStages.map(u => `${u.stage} ${u.count}`).join(', ')}
+                </p>
+              )}
+              {data.otherPipelines?.length > 0 && (
+                <p>
+                  Другие воронки, в зоны не входят:{' '}
+                  {data.otherPipelines.map(o => `${o.pipeline} ${o.count}`).join(', ')}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Требуют внимания */}

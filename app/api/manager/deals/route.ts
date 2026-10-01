@@ -4,26 +4,10 @@ import { amoGet, amoGetAll, getPipelines, getUsers, getDomain } from '@/lib/amoc
 import type { AmoEvent, AmoNote, AmoLead } from '@/lib/amocrm'
 import { mskDay, mskDayStart } from '@/lib/amoActivity'
 import { AMO_CLOSED_STATUSES } from '@/lib/amoLead'
+import { findSalesPipeline, salesStageMap, zoneBreakdown } from '@/lib/salesZones'
 
 export const runtime     = 'nodejs'
 export const maxDuration = 60
-
-function stageZone(name: string): 1 | 2 | 3 | null {
-  const n = name.toLowerCase()
-  if (n.includes('новая заявка') || n.includes('назначен ответственный') ||
-      n.includes('проработка') || n.includes('разговор состоялся') ||
-      n.includes('долгострой') || n.includes('готов купить')) return 1
-  if (n.includes('замер') || n.includes('согласование') ||
-      n.includes('чертежи в работу') || n.startsWith('кп') ||
-      n.includes('счёт выставлен') || n.includes('счет выставлен') ||
-      n.includes('ждём оплату') || n.includes('ждем оплату')) return 2
-  if (n.includes('оплата сделана') || n.includes('оплата получена') ||
-      n.includes('счёт оплачен') || n.includes('счет оплачен') ||
-      n.includes('заказ в работе') || n.includes('к монтажу') ||
-      n.includes('монтаж') || n.includes('рекламация') ||
-      n.includes('оплата остатка') || n.includes('оплата дизайнером')) return 3
-  return null
-}
 
 export async function GET() {
   const supabase = await createClient()
@@ -77,13 +61,11 @@ export async function GET() {
   const todayEvents = eventsData?._embedded?.events ?? []
   const todayNotes  = notesData?._embedded?.notes ?? []
 
-  // Stage map
-  const stageMap = new Map<number, { name: string; zone: 1 | 2 | 3 | null }>()
-  for (const p of pipelines) {
-    for (const s of p._embedded?.statuses ?? []) {
-      stageMap.set(s.id, { name: s.name, zone: stageZone(s.name) })
-    }
-  }
+  // Зоны — только воронка «Продажи», как в lib/salesMonitor.ts. Раньше этапы брались из всех
+  // воронок по id и по слову в названии: «Партнёры / Разговор состоялся» шёл в зону 1,
+  // а 552 из 558 открытых сделок владельца лежат вне «Продаж» (замер 01.10.2026).
+  const salesPipeline = findSalesPipeline(pipelines)
+  const stageMap = salesStageMap(salesPipeline)
 
   const activeLeads = allLeads.filter(l =>
     l.responsible_user_id === amoUserId &&
@@ -107,6 +89,7 @@ export async function GET() {
   const invoiceStale: StaleInfo[] = []
 
   for (const lead of activeLeads) {
+    if (lead.pipeline_id !== salesPipeline?.id) continue
     const stage = stageMap.get(lead.status_id)
     if (!stage) continue
     const daysStale = Math.floor((nowTs - lead.updated_at) / DAY)
@@ -122,6 +105,7 @@ export async function GET() {
   }
 
   const sort = (a: StaleInfo, b: StaleInfo) => b.daysStale - a.daysStale
+  const zones = zoneBreakdown(activeLeads, pipelines)
   const domain = getDomain()
   const amoUser = amoUsers.find(u => u.id === amoUserId)
 
@@ -129,9 +113,12 @@ export async function GET() {
     user: amoUser ?? { id: amoUserId, name: user.email ?? 'Менеджер', email: user.email ?? '' },
     today: { newLeads, callsMade, messagesSent, cardsMoved },
     activeLeads: activeLeads.length,
-    zone1: activeLeads.filter(l => stageMap.get(l.status_id)?.zone === 1).length,
-    zone2: activeLeads.filter(l => stageMap.get(l.status_id)?.zone === 2).length,
-    zone3: activeLeads.filter(l => stageMap.get(l.status_id)?.zone === 3).length,
+    salesLeads: zones.sales,
+    zone1: zones.zone1,
+    zone2: zones.zone2,
+    zone3: zones.zone3,
+    unzonedStages: zones.unzonedStages,
+    otherPipelines: zones.otherPipelines,
     staleZone1: staleZone1.sort(sort).slice(0, 5),
     staleZone2: staleZone2.sort(sort).slice(0, 5),
     staleZone3: staleZone3.sort(sort).slice(0, 5),
