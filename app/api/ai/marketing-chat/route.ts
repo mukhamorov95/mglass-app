@@ -1,11 +1,16 @@
+import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages/messages'
 import { createClient } from '@/lib/supabase-server'
 import { MARKETING_SYSTEM_PROMPT } from '@/lib/marketingManagerPrompt'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 export async function POST(req: Request) {
+  const guard = await requirePageAccess('/marketing/ai')
+  if (guard instanceof NextResponse) return guard
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response('Unauthorized', { status: 401 })

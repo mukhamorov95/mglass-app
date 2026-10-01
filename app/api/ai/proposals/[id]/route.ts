@@ -8,12 +8,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  // ── Auth — any authenticated role can read ────────────────────────────────
+  const guard = await requirePageAccess('/admin/ai-proposals')
+  if (guard instanceof NextResponse) return guard
+
+  // ── Auth — тот, кому открыт экран /admin/ai-proposals ─────────────────────────────────
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })

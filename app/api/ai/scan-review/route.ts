@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 // Ревизия списка изделий по заметкам менеджера: какие позиции убрать
 // (ложные срабатывания — бра вместо зеркала и т.п.). Текстовый вызов, без картинок.
@@ -20,6 +21,9 @@ const REVIEW_SCHEMA: Anthropic.Tool.InputSchema = {
 }
 
 export async function POST(req: Request) {
+  const guard = await requirePageAccess('/design-scan')
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })

@@ -1,9 +1,11 @@
+import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import type { MessageParam, ToolUseBlock } from '@anthropic-ai/sdk/resources/messages/messages'
 import { AI_TOOLS, executeTool } from '@/lib/ai-tools'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { buildSalesManagerPrompt } from '@/lib/salesManagerPrompt'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -29,6 +31,9 @@ async function getSystemPrompt(): Promise<string> {
 }
 
 export async function POST(req: Request) {
+  const guard = await requireAnyPageAccess(['/ai-assistant', '/ai-sales'])
+  if (guard instanceof NextResponse) return guard
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response('Unauthorized', { status: 401 })

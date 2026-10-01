@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { transcribeRu } from '@/lib/transcribe'
+import { requireOwner } from '@/lib/apiAuth'
 
 // Голос → текст для модуля КП. Принимает audio (multipart form-data, поле 'file'),
 // шлёт в OpenAI Whisper (запасной — Groq), возвращает расшифровку. Только залогиненным.
 export async function POST(req: Request) {
+  // Экрана, который его вызывает, нет — только владелец.
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })

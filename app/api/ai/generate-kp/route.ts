@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -17,6 +18,9 @@ const PRODUCT_LABELS: Record<string, string> = {
 }
 
 export async function POST(req: Request) {
+  const guard = await requireAnyPageAccess(['/ai-sales', '/kp-generator'])
+  if (guard instanceof NextResponse) return guard
+
   try {
     // Единственный ai-роут без авторизации (найдено аудитом 20.07): ходил
     // service-ключом и отдавал calculations по id кому угодно.

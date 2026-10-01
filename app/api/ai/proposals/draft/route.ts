@@ -17,10 +17,14 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { runCreateCommercialProposalRuntime } from '@/lib/ai-tools/createCommercialProposalRuntime'
 import type { AgentActionLogInsert } from '@/lib/ai-tools/agentActionLogTypes'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 const ALLOWED_ROLES = new Set(['admin', 'manager'])
 
 export async function POST(req: NextRequest) {
+  const guard = await requirePageAccess('/admin/ai-proposals')
+  if (guard instanceof NextResponse) return guard
+
   // ── Auth ──────────────────────────────────────────────────────────────────
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 // Скан дизайн-проекта: браузер рендерит страницы PDF в JPEG и шлёт пачками,
 // модель ищет изделия из стекла/зеркал и возвращает их с привязкой к странице
@@ -67,6 +68,9 @@ bbox указывай аккуратно по той странице, где и
 Рассматривай КАЖДУЮ страницу отдельно и внимательно: сначала заполни page_report по каждой странице, потом перечисли изделия в items.`
 
 export async function POST(req: Request) {
+  const guard = await requirePageAccess('/design-scan')
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
 import { countHoleSignals, logDrawingParse } from '@/lib/ai/parseLog'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 // 5-страничный PDF + большой tool-JSON на десятки деталей — дефолтного времени не хватает.
 export const maxDuration = 120
@@ -66,6 +67,9 @@ const SYS =
   '— Если файл вообще не чертёж деталей — is_drawing=false и items пустой.'
 
 export async function POST(req: Request) {
+  const guard = await requirePageAccess('/calculator/b2b')
+  if (guard instanceof NextResponse) return guard
+
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })

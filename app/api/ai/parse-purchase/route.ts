@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 // Диктовка сотрудника цеха → заявка на закупку, разложенная по полям.
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
@@ -16,6 +17,9 @@ const SYSTEM = `Ты — помощник цеха стекольного про
 Не выдумывай ссылку и количество, если их нет. title обязателен.`
 
 export async function POST(req: NextRequest) {
+  const guard = await requirePageAccess('/production-app/buy')
+  if (guard instanceof NextResponse) return guard
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
