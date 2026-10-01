@@ -69,10 +69,13 @@ export const PROFILE_SIDES: RoleId[] = ['profile-wall', 'profile-floor', 'profil
 
 // Куски для bar-роли: общий «Профиль» собирает стороны, у которых нет своего слота.
 export function piecesForRole(q: KitQuantities, kit: ModelKit, role: RoleId): number[] {
-  const own = q.barPieces[role] ?? []
+  // Низ только под неподвижными стёклами — вариант модели (решение 3 маршрута); без него
+  // профиль идёт сквозным и под дверью, как раньше.
+  const src = kit.floorProfile === 'fixed-only' && q.fixedFloor ? { ...q.barPieces, ...q.fixedFloor } : q.barPieces
+  const own = src[role] ?? []
   if (role !== 'profile') return own
   const sides = PROFILE_SIDES.filter(r => !kit.slots.some(sl => sl.role === r))
-  return [...own, ...sides.flatMap(r => q.barPieces[r] ?? [])]
+  return [...own, ...sides.flatMap(r => src[r] ?? [])]
 }
 
 export const groupOfRole = (role: RoleId) => ROLE_GROUPS.find(g => g.roles.includes(role)) ?? ROLE_GROUPS[0]
@@ -184,6 +187,10 @@ export type ModelKit = {
   // Роли, которые геометрия требует, а в изделии их осознанно НЕТ (владелец так собирает).
   // Без этого списка удалённая роль вечно висела бы предупреждением «нет позиции».
   excluded?: RoleId[]
+  // Нижний профиль: 'through' — сквозной по всей стенке и под дверью (как рисует 3D);
+  // 'fixed-only' — только под неподвижными стёклами, как собирает владелец (заказ 0245).
+  // Пусто = 'through'. Решение 3 маршрута SHOWROOM_COST_ROUTE.
+  floorProfile?: 'through' | 'fixed-only'
 }
 
 // Комплект из базы → ModelKit. Литерал обязан перечислить ВСЕ поля типа: getKit отдавал
@@ -199,6 +206,7 @@ export function normalizeKit(raw: unknown): ModelKit | null {
     excluded: Array.isArray(r.excluded)
       ? [...new Set(r.excluded.filter((x): x is RoleId => typeof x === 'string' && isRole(x)))]
       : undefined,
+    floorProfile: r.floorProfile === 'fixed-only' || r.floorProfile === 'through' ? r.floorProfile : undefined,
   }
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) as ModelKit
 }
@@ -220,6 +228,9 @@ export type KitQuantities = {
   profilePieces: number[]        // куски профиля, мм (сводно — для раскроя и совместимости)
   tubePieces: number[]
   barPieces: Record<string, number[]>   // куски по КАЖДОЙ bar-роли
+  // Те же роли, если низ профиля режется только под неподвижными стёклами (дверной проём
+  // вырезан). Есть только у моделей с распашной дверью над нижним профилем.
+  fixedFloor?: Record<string, number[]>
   roleQty: Record<RoleId, number>
   swingDoors: number
   slideDoors: number
@@ -238,11 +249,44 @@ function doorCounts(model?: MModel): { swing: number; slide: number } {
   return { swing, slide }
 }
 
+// Проём распашной двери на нижнем профиле: отрезок вдоль оси профиля, мм от его центра.
+// Дверь в геометрии цены приоткрыта, поэтому проём восстанавливается от петлевой кромки:
+// она стоит на линии профиля, закрытое полотно идёт от неё на ширину двери.
+const ON_LINE_M = 0.03
+const MIN_FLOOR_PIECE_MM = 30
+function doorGaps(assembly: Assembly, m: Assembly['metal'][number]): [number, number][] {
+  const dir: [number, number] = [Math.cos(m.rotY), -Math.sin(m.rotY)]
+  const half = m.size[0] / 2
+  const gaps: [number, number][] = []
+  for (const g of assembly.glass) {
+    if (g.role !== 'door' || !assembly.hardware.some(h => h.key.startsWith(`${g.key}-h`))) continue  // только распашные
+    const L = g.size[0]
+    const od: [number, number] = [Math.cos(g.rotY), -Math.sin(g.rotY)]
+    const ph: [number, number] = [g.pos[0] - (L / 2) * od[0], g.pos[2] - (L / 2) * od[1]]
+    const rx = ph[0] - m.pos[0], rz = ph[1] - m.pos[2]
+    const along = rx * dir[0] + rz * dir[1]
+    const across = Math.abs(rx * dir[1] - rz * dir[0])
+    if (across > ON_LINE_M || Math.abs(along) > half + ON_LINE_M) continue
+    const sign = od[0] * dir[0] + od[1] * dir[1] >= 0 ? 1 : -1
+    const a = Math.max(-half, Math.min(along, along + sign * L)), b = Math.min(half, Math.max(along, along + sign * L))
+    if (b > a) gaps.push([a, b])
+  }
+  return gaps
+}
+function cutGaps(lenM: number, gaps: [number, number][]): number[] {
+  let segs: [number, number][] = [[-lenM / 2, lenM / 2]]
+  for (const [a, b] of gaps) segs = segs.flatMap(([x, y]) => (b <= x || a >= y ? [[x, y]] : [[x, a], [b, y]] as [number, number][]))
+  return segs.map(([x, y]) => mm(y - x)).filter(l => l >= MIN_FLOOR_PIECE_MM)
+}
+
 export function computeKitQuantities(assembly: Assembly, thickness: number, model?: MModel, capMargin = CAP_MARGIN_MM): KitQuantities {
   const glassM2 = round2(assembly.glass.reduce((s, g) => s + g.size[0] * g.size[1], 0))
 
   // Кусок металла → своя bar-роль. Стойка меряется по высоте, остальное по длине.
+  // Параллельно — те же куски с вырезанным проёмом двери у нижнего профиля (fixedFloor).
   const barPieces: Record<string, number[]> = {}
+  const altPieces: Record<string, number[]> = {}
+  const touched = new Set<string>()
   for (const m of assembly.metal) {
     const spec = (m as { spec?: string }).spec
     const fallback: RoleId = m.kind === 'rail' ? 'tube' : 'profile'
@@ -250,7 +294,12 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
     const len = mm(m.kind === 'post' ? m.size[1] : m.size[0])
     if (len <= 0) continue
     ;(barPieces[role] ??= []).push(len)
+    const isFloor = m.kind === 'profile' && m.pos[1] < 0.05
+    const gaps = isFloor ? doorGaps(assembly, m) : []
+    if (gaps.length) touched.add(role)
+    ;(altPieces[role] ??= []).push(...(gaps.length ? cutGaps(m.size[0], gaps) : [len]))
   }
+  const fixedFloor = touched.size ? Object.fromEntries([...touched].map(r => [r, altPieces[r]])) : undefined
   const profilePieces = ROLES.filter(r => r.startsWith('profile')).flatMap(r => barPieces[r] ?? [])
   const tubePieces = ROLES.filter(r => r.startsWith('tube')).flatMap(r => barPieces[r] ?? [])
 
@@ -296,7 +345,7 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
   // вручную там, где нужно («задать своё N»). Остаётся 0, если её не задали.
   for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
 
-  return { thickness, sections: assembly.glass.length, glassM2, doorWidths, profilePieces, tubePieces, barPieces, roleQty, swingDoors, slideDoors }
+  return { thickness, sections: assembly.glass.length, glassM2, doorWidths, profilePieces, tubePieces, barPieces, ...(fixedFloor ? { fixedFloor } : {}), roleQty, swingDoors, slideDoors }
 }
 
 // ── Раскрой хлыстов ───────────────────────────────────────────────
