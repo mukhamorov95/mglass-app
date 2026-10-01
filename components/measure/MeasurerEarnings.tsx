@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { confirmDialog } from '@/lib/dialog'
-import { mskToday, sendMeasure } from '@/lib/measure/client'
+import { periodRange, sendMeasure } from '@/lib/measure/client'
 import { PAYMENT_LABEL, companyOwes, finalPrice, type EarningsSummary, type VisitPayment } from '@/lib/measure/money'
 import SettleForm, { type SettleRow } from '@/components/measure/SettleForm'
 
@@ -38,20 +38,9 @@ const PAY_TONE: Record<VisitPayment, string> = {
   onsite: 'bg-emerald-50 text-emerald-700', company: 'bg-blue-50 text-blue-700', unpaid: 'bg-red-50 text-red-700',
 }
 
-function period(kind: 'month' | 'prev' | 'year'): { from: string; to: string } {
-  const t = mskToday()
-  const [y, m] = t.split('-').map(Number)
-  if (kind === 'year') return { from: `${y}-01-01`, to: t }
-  if (kind === 'month') return { from: `${t.slice(0, 7)}-01`, to: t }
-  const py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1
-  const last = new Date(Date.UTC(py, pm, 0)).getUTCDate()
-  const mm = String(pm).padStart(2, '0')
-  return { from: `${py}-${mm}-01`, to: `${py}-${mm}-${last}` }
-}
-
 export default function MeasurerEarnings({ meId, isOwner }: { meId: string; isOwner: boolean }) {
   const [preset, setPreset] = useState<'month' | 'prev' | 'year' | 'custom'>('month')
-  const [range, setRange] = useState(period('month'))
+  const [range, setRange] = useState(() => periodRange('month'))
   const [who, setWho] = useState('')
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState('')
@@ -71,7 +60,7 @@ export default function MeasurerEarnings({ meId, isOwner }: { meId: string; isOw
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
-  function pick(kind: 'month' | 'prev' | 'year') { setPreset(kind); setRange(period(kind)) }
+  function pick(kind: 'month' | 'prev' | 'year') { setPreset(kind); setRange(periodRange(kind)) }
 
   async function feePaid(r: Row) {
     const yes = await confirmDialog({ title: 'Отметить выплату?', text: `${fmt(r.measurer_fee)} замерщику ${r.measurer_name ?? ''} за ${r.deal_number || `#${r.id}`}.`, confirmLabel: 'Выплачено' })
@@ -128,7 +117,7 @@ export default function MeasurerEarnings({ meId, isOwner }: { meId: string; isOw
       {s && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-            {tile('Сделано замеров', s.done, 'bg-[#111110] text-white border-[#111110]')}
+            {tile('Сделано замеров', s.done, 'bg-[#111110] text-white border-[#111110]', s.repeat ? `из них 🔁 повторных ${s.repeat}` : undefined)}
             {tile('💵 Оплачено на объекте', s.onsite, 'bg-emerald-50 text-emerald-800 border-emerald-200',
               s.done.count ? `${Math.round((s.onsite.count / s.done.count) * 100)}% замеров` : undefined)}
             {tile('🏢 Оплачено на компанию', s.company, 'bg-blue-50 text-blue-800 border-blue-200')}

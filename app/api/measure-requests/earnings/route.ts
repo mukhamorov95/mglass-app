@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 // Потолок выборки: упрись — итоги неполные, и экран обязан это сказать (truncated).
 const LIMIT = 2000
-const COLS = 'id, deal_number, client_name, address, scheduled_at, status, measurer_id, measurer_name, manager_name, visit_price, actual_price, price_note, visit_payment, payer, measurer_fee, fee_status, fee_paid_at, result_note'
+const COLS = 'id, is_repeat, deal_number, client_name, address, scheduled_at, status, measurer_id, measurer_name, manager_name, visit_price, actual_price, price_note, visit_payment, payer, measurer_fee, fee_status, fee_paid_at, result_note'
 
 // «Заработок» замерщика за период: выполненные замеры по дате замера (МСК), итоги
 // считает lib/measure/money.ts. Service-role — после requireMeasureActor: замерщик

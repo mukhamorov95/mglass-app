@@ -28,3 +28,15 @@ export async function sendMeasure<T = Record<string, unknown>>(
 
 // Сегодняшняя дата по Москве — для min у полей даты.
 export const mskToday = () => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10)
+
+// Готовые периоды «Заработка» и «Истории»: этот месяц, прошлый, год (по сегодня).
+export type PeriodPreset = 'month' | 'prev' | 'year'
+export function periodRange(kind: PeriodPreset, today = mskToday()): { from: string; to: string } {
+  const [y, m] = today.split('-').map(Number)
+  if (kind === 'year') return { from: `${y}-01-01`, to: today }
+  if (kind === 'month') return { from: `${today.slice(0, 7)}-01`, to: today }
+  const py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1
+  const last = new Date(Date.UTC(py, pm, 0)).getUTCDate()
+  const mm = String(pm).padStart(2, '0')
+  return { from: `${py}-${mm}-01`, to: `${py}-${mm}-${last}` }
+}

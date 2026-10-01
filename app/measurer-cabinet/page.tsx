@@ -13,12 +13,14 @@ import SettleForm from '@/components/measure/SettleForm'
 import MeasurerEarnings from '@/components/measure/MeasurerEarnings'
 import MeasurerCalendar from '@/components/measure/MeasurerCalendar'
 import OwnerSummary from '@/components/measure/OwnerSummary'
+import MeasureHistory from '@/components/measure/MeasureHistory'
 import type { VisitPayment } from '@/lib/measure/money'
 
-// Кабинет замерщика, две вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
+// Кабинет замерщика, четыре вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
 // мерить) → пул новых заявок («Взять» в своё свободное окно) → дальше по дням →
-// занятость всех замерщиков → мой график. «Заработок»: период, оплаты, гонорар.
-// Владелец видит то же по всем замерщикам и может назначить любого.
+// занятость всех замерщиков → мой график. «Календарь» — месяц и день. «История» —
+// период, поиск, статус, новые/повторные. «Заработок»: период, оплаты, гонорар.
+// Владелец видит то же по всем замерщикам, сводку месяца и может назначить любого.
 
 type MReq = {
   id: number
@@ -50,7 +52,7 @@ type MReq = {
   photos: string[] | null
   created_at: string
 }
-type Tab = 'measures' | 'earnings' | 'calendar'
+type Tab = 'measures' | 'history' | 'earnings' | 'calendar'
 type Me = { id: string; name: string; role: string; scope: string }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -94,7 +96,7 @@ export default function MeasurerCabinetPage() {
   useEffect(() => {
     const h = window.location.hash.slice(1)
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (h === 'earnings' || h === 'calendar') setTab(h)
+    if (h === 'history' || h === 'earnings' || h === 'calendar') setTab(h)
   }, [])
   function switchTab(t: Tab) {
     setTab(t)
@@ -309,7 +311,7 @@ export default function MeasurerCabinetPage() {
           {overdue.length > 0 && <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-700">Не отмечены: {overdue.length}</span>}
         </div>
         <div className="flex gap-1 mt-3 -mb-4 overflow-x-auto">
-          {([['measures', '📏 Замеры'], ['earnings', '💰 Заработок'], ['calendar', '📅 Календарь']] as const).map(([k, l]) => (
+          {([['measures', '📏 Замеры'], ['calendar', '📅 Календарь'], ['history', '🗂 История'], ['earnings', '💰 Заработок']] as const).map(([k, l]) => (
             <button key={k} onClick={() => switchTab(k)}
               className={`text-[13px] font-semibold px-4 py-2 border-b-2 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95] hover:text-[#111110]'}`}>
               {l}
@@ -336,6 +338,7 @@ export default function MeasurerCabinetPage() {
             <button onClick={() => { setNotice(''); setDoneId(null) }} className="text-emerald-500 hover:text-emerald-800">✕</button>
           </div>
         )}
+        {tab === 'history' && me && <MeasureHistory meId={me.id} isMeasurer={isMeasurer} />}
         {tab === 'earnings' && me && <MeasurerEarnings meId={me.id} isOwner={isOwner} />}
         {tab === 'calendar' && me && <MeasurerCalendar meId={me.id} isOwner={isOwner} refreshKey={boardKey} onChanged={() => setBoardKey(k => k + 1)} />}
         {tab === 'measures' && <>

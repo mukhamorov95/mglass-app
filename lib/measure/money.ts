@@ -45,6 +45,7 @@ export function companyOwes(r: { status: string; visit_payment: VisitPayment | n
 
 export type EarningRow = PriceFields & {
   status: string
+  is_repeat?: boolean | null
   visit_payment: VisitPayment | null
   fee_status: string
 }
@@ -55,6 +56,7 @@ export type EarningsSummary = {
   company: Bucket
   unpaid: Bucket
   unmarked: Bucket
+  repeat: number                 // из сделанных — повторных (владелец 01.10: новые и повторные раздельно)
   noPrice: number
   fee: { total: number; onsite: number; paidOut: number; owed: number; notSet: number }
 }
@@ -64,13 +66,14 @@ export type EarningsSummary = {
 // fee.total = fee.onsite + fee.paidOut + fee.owed.
 export function summarizeEarnings(rows: EarningRow[]): EarningsSummary {
   const b = (): Bucket => ({ count: 0, sum: 0 })
-  const out: EarningsSummary = { done: b(), onsite: b(), company: b(), unpaid: b(), unmarked: b(), noPrice: 0, fee: { total: 0, onsite: 0, paidOut: 0, owed: 0, notSet: 0 } }
+  const out: EarningsSummary = { done: b(), onsite: b(), company: b(), unpaid: b(), unmarked: b(), repeat: 0, noPrice: 0, fee: { total: 0, onsite: 0, paidOut: 0, owed: 0, notSet: 0 } }
   for (const r of rows) {
     if (r.status !== 'done') continue
     const price = finalPrice(r)
     const fee = num(r.measurer_fee)
     const bucket = r.visit_payment ? out[r.visit_payment] : out.unmarked
     out.done.count++; out.done.sum += price
+    if (r.is_repeat) out.repeat++
     bucket.count++; bucket.sum += price
     if (price === 0) out.noPrice++
     out.fee.total += fee
