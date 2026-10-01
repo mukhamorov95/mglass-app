@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { createPaymentLink, paymentsEnabled } from '@/lib/payments/provider'
 import { appUrl } from '@/lib/appUrl'
+import { previewWriteGuard } from '@/lib/partnerPreview'
 
 // A2: инициировать онлайн-оплату по своему заказу. Пока эквайринг не подключён —
 // 501 «оплата онлайн ещё не подключена» (кнопка в кабинете и так скрыта). Когда
@@ -26,6 +27,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const blocked = await previewWriteGuard(svc, user.id)
+  if (blocked) return blocked
   const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 

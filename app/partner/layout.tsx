@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import PartnerNav from './PartnerNav'
 import PartnerTheme from './PartnerTheme'
 import RegisterSW from './RegisterSW'
+import PreviewBanner from './PreviewBanner'
 
 // Кабинет партнёра: только роль 'partner' (и владельцы — для проверки).
 // Собственная дизайн-система (.pcab, светлая+тёмная), своё левое меню —
@@ -22,6 +23,7 @@ export default async function PartnerLayout({ children }: { children: React.Reac
   if (!role || (role !== 'partner' && !isOwnerRole(role))) redirect('/')
   return (
     <div className="pcab">
+      <PreviewBanner />
       <PartnerTheme />
       <RegisterSW />
       <PartnerNav />

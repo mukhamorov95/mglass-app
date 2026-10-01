@@ -5,6 +5,7 @@ import { notifyAdmins } from '@/lib/telegram'
 import { pushNotification } from '@/lib/partnerNotify'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { appUrl } from '@/lib/appUrl'
+import { previewWriteGuard } from '@/lib/partnerPreview'
 
 // A3: партнёр согласует чертёж (или отправляет на доработку) прямо в кабинете.
 // Строго по своему заказу. Решение кладём в notes.drawing_approval; менеджеру —
@@ -21,6 +22,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const blocked = await previewWriteGuard(svc, user.id)
+  if (blocked) return blocked
   const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 

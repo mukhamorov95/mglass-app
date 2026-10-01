@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { reconcileClientOrders } from '@/lib/partnerNotify'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { previewWriteGuard } from '@/lib/partnerPreview'
 
 // Колокольчик кабинета партнёра. GET — список своих уведомлений (+ опортунистическая
 // сверка транзиций заказов, чтобы лента была свежей и без крона). POST — отметить
@@ -42,6 +43,8 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = svcClient()
+  const blocked = await previewWriteGuard(svc, user.id)
+  if (blocked) return blocked
   const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
   if (!client) return NextResponse.json({ error: 'Не привязан' }, { status: 403 })
 

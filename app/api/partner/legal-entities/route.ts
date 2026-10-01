@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { previewWriteGuard } from '@/lib/partnerPreview'
 
 // A7: партнёр сам ведёт свои юрлица (реквизиты для счёта/договора). Строго свои.
 // Эти же реквизиты подставляются в счёт-спецификацию (A1). Основное юрлицо
@@ -43,6 +44,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
   const svc = svcClient()
+  const blocked = await previewWriteGuard(svc, user.id)
+  if (blocked) return blocked
   const client = await ownClient(svc, user.id)
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 

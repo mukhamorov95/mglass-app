@@ -51,6 +51,15 @@ export default function B2BAccessPage() {
       await load()
     } finally { setBusy(false) }
   }
+  async function preview(clientId: number) {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/partner/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { alert(d.error || 'Не удалось включить просмотр'); return }
+      window.location.href = '/partner'
+    } finally { setBusy(false) }
+  }
   function copy(text: string) { navigator.clipboard?.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }
 
   const filtered = rows.filter(r => r.name.toLowerCase().includes(q.toLowerCase()))
@@ -94,6 +103,8 @@ export default function B2BAccessPage() {
                       : <p className="text-[12px] text-[#9a9a95] mt-0.5">Доступа нет</p>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => preview(r.id)} disabled={busy} title="Открыть кабинет глазами этого клиента — только просмотр"
+                      className="text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#111110] hover:border-[#111110]">👁 Смотреть как партнёр</button>
                     {r.linked ? (
                       <button onClick={() => unlink(r.id)} disabled={busy}
                         className="text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#9a9a95] hover:text-red-600 hover:border-red-300">Отозвать</button>
