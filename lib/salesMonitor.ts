@@ -5,6 +5,7 @@ import {
   getUsers, getPipelines, getLeads, getEvents, getLeadNotes,
   type AmoUser, type AmoEvent, type AmoNote, type AmoLead,
 } from '@/lib/amocrm'
+import { findSalesPipeline, salesStageMap } from '@/lib/salesZones'
 
 // ── Moscow timezone helper ─────────────────────────────────────────────────────
 // Vercel servers run UTC. todayStart must be 00:00:00 Europe/Moscow, not UTC.
@@ -48,43 +49,7 @@ function noteBelongsToManager(
   return false
 }
 
-// ── Stage → zone mapping (воронка "Продажи", точные названия этапов) ──────────
-// Зона 1 — квалификация:  Получена новая заявка … Готов купить
-// Зона 2 — продажа:       Замер назначен … Счёт выставлен — ждём оплату
-// Зона 3 — производство:  Оплата сделана … Оплата дизайнером
-
-function stageZone(name: string): 1 | 2 | 3 | null {
-  const n = name.toLowerCase()
-
-  // Зона 1: квалификация / прогрев
-  if (n.includes('новая заявка')       ||
-      n.includes('назначен ответственный') ||
-      n.includes('проработка')         ||
-      n.includes('разговор состоялся') ||
-      n.includes('долгострой')         ||
-      n.includes('готов купить')) return 1
-
-  // Зона 2: замер → чертежи → кп → счёт
-  if (n.includes('замер')              ||
-      n.includes('согласование')       ||
-      n.includes('чертежи в работу')   ||
-      n.startsWith('кп')              ||
-      n.includes('счёт выставлен')    || n.includes('счет выставлен') ||
-      n.includes('ждём оплату')       || n.includes('ждем оплату')) return 2
-
-  // Зона 3: производство / монтаж / оплаты
-  if (n.includes('оплата сделана')     ||
-      n.includes('оплата получена')    ||
-      n.includes('счёт оплачен')      || n.includes('счет оплачен') ||
-      n.includes('заказ в работе')     ||
-      n.includes('к монтажу')          ||
-      n.includes('монтаж')             ||
-      n.includes('рекламация')         ||
-      n.includes('оплата остатка')     ||
-      n.includes('оплата дизайнером')) return 3
-
-  return null
-}
+// Зоны воронки «Продажи» — lib/salesZones.ts (общая таблица с /manager).
 
 // ── Activity window helpers ────────────────────────────────────────────────────
 
@@ -241,17 +206,11 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     getLeads({}),
   ])
 
-  // Find the main "Продажи" sales pipeline by name (or via AMOCRM_SALES_PIPELINE_ID env var)
-  const salesPipeline = pipelines.find(p =>
-    p.name.toLowerCase().includes('продаж') ||
-    String(p.id) === (process.env.AMOCRM_SALES_PIPELINE_ID ?? '')
-  ) ?? pipelines[0]
-
-  // Stage map: only from the sales pipeline — other pipelines have different stage names
-  const stageMap = new Map<number, { name: string; zone: 1 | 2 | 3 | null }>()
-  for (const s of salesPipeline?._embedded?.statuses ?? []) {
-    stageMap.set(s.id, { name: s.name, zone: stageZone(s.name) })
-  }
+  // Воронка «Продажи» (по AMOCRM_SALES_PIPELINE_ID или по имени). Без запасного «первая
+  // воронка»: первой в аккаунте стоит «Квалификация», и отчёт посчитал бы зоны по ней.
+  const salesPipeline = findSalesPipeline(pipelines)
+  if (!salesPipeline) console.error('[salesMonitor] воронка «Продажи» не найдена — зоны не посчитаны')
+  const stageMap = salesStageMap(salesPipeline)
 
   // Filter to sales pipeline only — removes B2B and other pipeline leads from counts
   const salesLeads = salesPipeline
