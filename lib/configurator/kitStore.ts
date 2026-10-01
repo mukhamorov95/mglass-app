@@ -13,7 +13,7 @@ import type { Tier } from '@/lib/configurator/pricing'
 // Первое открытие тарифа переносит то, что уже набито в старой схеме подгрупп, —
 // позиции становятся библиотекой, комплекты моделей собираются по геометрии.
 
-export async function getLibrary(tier: Tier): Promise<{ library: Library; rates: KitRates; seeded: boolean }> {
+export async function getLibrary(tier: Tier): Promise<{ library: Library; rates: KitRates; seeded: boolean; updatedAt: string | null }> {
   const legacy = await getPricing(tier)
   const rates: KitRates = {
     glassPerM2: legacy.glassPerM2,
@@ -23,21 +23,29 @@ export async function getLibrary(tier: Tier): Promise<{ library: Library; rates:
   }
   try {
     const supabase = createServiceClient()
-    const { data } = await supabase.from('configurator_library').select('items, rates').eq('tier', tier).maybeSingle()
+    const { data } = await supabase.from('configurator_library').select('items, rates, updated_at').eq('tier', tier).maybeSingle()
     if (data?.items && Array.isArray(data.items) && data.items.length > 0) {
-      return { library: { items: data.items }, rates: { ...rates, ...(data.rates ?? {}) }, seeded: false }
+      return { library: { items: data.items }, rates: { ...rates, ...(data.rates ?? {}) }, seeded: false, updatedAt: data.updated_at ?? null }
     }
   } catch { /* таблицы ещё нет — отдаём перенос из старой схемы */ }
-  return { library: libraryFromUnitPrices(legacy), rates, seeded: true }
+  return { library: libraryFromUnitPrices(legacy), rates, seeded: true, updatedAt: null }
 }
 
-export async function saveLibrary(tier: Tier, library: Library, rates: KitRates, updatedBy: string): Promise<void> {
+export async function saveLibrary(tier: Tier, library: Library, rates: KitRates, updatedBy: string): Promise<string> {
   const supabase = createServiceClient()
+  const updatedAt = new Date().toISOString()
   const { error } = await supabase.from('configurator_library').upsert(
-    { tier, items: library.items, rates, updated_by: updatedBy, updated_at: new Date().toISOString() },
+    { tier, items: library.items, rates, updated_by: updatedBy, updated_at: updatedAt },
     { onConflict: 'tier' },
   )
   if (error) throw new Error(error.message)
+  return updatedAt
+}
+
+// Когда библиотеку тарифа меняли последний раз — для защиты от сохранения из устаревшей вкладки.
+export async function libraryUpdatedAt(tier: Tier): Promise<string | null> {
+  const { data } = await createServiceClient().from('configurator_library').select('updated_at').eq('tier', tier).maybeSingle()
+  return data?.updated_at ?? null
 }
 
 export async function getKit(tier: Tier, code: string, library: Library): Promise<{ kit: ModelKit; seeded: boolean }> {
@@ -79,7 +87,7 @@ export async function saveAllKits(tier: Tier, kits: Record<string, ModelKit>, up
   if (error) throw new Error(error.message)
 }
 
-export async function getKitStore(tier: Tier): Promise<{ library: Library; rates: KitRates; kits: Record<string, ModelKit>; seeded: boolean }> {
-  const { library, rates, seeded } = await getLibrary(tier)
-  return { library: library ?? emptyLibrary(), rates, kits: await getAllKits(tier, library), seeded }
+export async function getKitStore(tier: Tier): Promise<{ library: Library; rates: KitRates; kits: Record<string, ModelKit>; seeded: boolean; updatedAt: string | null }> {
+  const { library, rates, seeded, updatedAt } = await getLibrary(tier)
+  return { library: library ?? emptyLibrary(), rates, kits: await getAllKits(tier, library), seeded, updatedAt }
 }

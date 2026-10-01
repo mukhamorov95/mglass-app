@@ -12,8 +12,8 @@ export default async function Page() {
     getKitStore('budget'), getKitStore('premium'), getFinance('budget'), getFinance('premium'),
   ])
   const initial: Record<Tier, TierStore> = {
-    budget: { library: budget.library, rates: budget.rates, kits: budget.kits },
-    premium: { library: premium.library, rates: premium.rates, kits: premium.kits },
+    budget: { library: budget.library, rates: budget.rates, kits: budget.kits, updatedAt: budget.updatedAt },
+    premium: { library: premium.library, rates: premium.rates, kits: premium.kits, updatedAt: premium.updatedAt },
   }
   const finance: Record<Tier, Finance> = { budget: finBudget, premium: finPremium }
   return <KitPricingClient initial={initial} finance={finance} />
