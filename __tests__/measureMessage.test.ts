@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildMeasureMessage, splitScope, tidy, messagePhone, formatMeasureWhen, dayRouteUrl, clientHeadsUpText, whatsAppUrl } from '@/lib/measure/message'
+import { buildMeasureMessage, splitScope, tidy, messagePhone, formatMeasureWhen, dayRouteUrl, clientHeadsUpText, whatsAppUrl, buildMeasureResultMessage } from '@/lib/measure/message'
 
 describe('splitScope', () => {
   it('разбирает заявку 0171-0 так, как её ввели 30.09 — «- » и запятые в одну строку', () => {
@@ -125,5 +125,43 @@ describe('день замерщика: маршрут и предупрежде�
   it('WhatsApp — номер +7 и текст в ссылке; без номера ссылки нет', () => {
     expect(whatsAppUrl('8 (926) 418-69-72', 'Привет')).toBe('https://wa.me/79264186972?text=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82')
     expect(whatsAppUrl(null, 'x')).toBeNull()
+  })
+})
+
+describe('«Замер готов» для группы', () => {
+  it('новый: шапка как тема группы, итог, файлы, цена с поправкой и оплата', () => {
+    expect(buildMeasureResultMessage({
+      deal_number: '0171-0', client_name: 'Шамиль', phone: '+79264186972', address: 'Москва, Welton Tower, кв. 138',
+      scope: 'Душевая перегородка\nЗеркало в чёрной раме', is_repeat: false,
+      result_note: 'Стена завалена на 15 мм', photos: ['https://x/1.jpg', 'https://x/2.pdf'],
+      visit_price: 3000, actual_price: 3500, price_note: 'две душевые', visit_payment: 'onsite',
+      scheduled_at: '2026-10-02T09:00:00Z', measurer_name: 'Сергей', manager_name: 'Яна',
+    })).toBe([
+      '✅ НОВЫЙ ЗАМЕР ГОТОВ · 0171-0',
+      '',
+      '👤 Клиент: Шамиль',
+      '📞 Телефон: +79264186972',
+      '📍 Адрес: Москва, Welton Tower, кв. 138',
+      '',
+      '📏 Мерили:',
+      '1. Душевая перегородка',
+      '2. Зеркало в чёрной раме',
+      '',
+      '📝 Итог: Стена завалена на 15 мм',
+      '📎 Файлы:',
+      'https://x/1.jpg',
+      'https://x/2.pdf',
+      '',
+      '💰 Выезд: 3 500 ₽ (менеджер закладывал 3 000 ₽: две душевые) · оплачено замерщику на объекте',
+      '🗓 Замер: пт 2 окт, 12:00 · Сергей',
+      '👔 Менеджер: Яна',
+    ].join('\n'))
+  })
+
+  it('повторный — своя шапка; без итога и файлов блок пропускается', () => {
+    const msg = buildMeasureResultMessage({ client_name: 'Елена', address: 'Красногорск', scope: 'Душевая', is_repeat: true, visit_price: 0 })
+    expect(msg.startsWith('✅ ПОВТОРНЫЙ ЗАМЕР ГОТОВ')).toBe(true)
+    expect(msg).not.toContain('📝')
+    expect(msg).toContain('💰 Выезд: цена не указана')
   })
 })

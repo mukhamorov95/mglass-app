@@ -31,6 +31,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const address = (text(b.address, 500) || (deal.address as string) || '').trim()
   if (!address) return NextResponse.json({ error: 'Адрес объекта обязателен для замера' }, { status: 400 })
 
+  // Новый или повторный — в аналитике раздельно (владелец 01.10). Повторный ссылается
+  // на прежний замер этой же сделки: указанный, иначе последний не отменённый.
+  const is_repeat = b.is_repeat === true
+  let repeat_of: number | null = null
+  if (is_repeat) {
+    let q = svc.from('measure_requests').select('id').eq('deal_id', dealId).neq('status', 'cancelled')
+    if (b.repeat_of != null && b.repeat_of !== '') q = q.eq('id', Number(b.repeat_of))
+    const { data: orig, error: origErr } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (origErr) return NextResponse.json({ error: `Прежний замер не прочитан: ${origErr.message}` }, { status: 500 })
+    repeat_of = (orig?.id as number | undefined) ?? null
+  }
+
   // Цена выезда и гонорар — сразу из карточки (владелец 01.10); гонорар не указан —
   // равен цене выезда, как в форме «Заявки на замер».
   const visit_price = money(b.visit_price)
@@ -42,10 +54,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     notes: text(b.notes),
     visit_price,
     payer: text(b.payer, 200),
+    is_repeat,
   }
   const { data, error } = await svc.from('measure_requests').insert({
     deal_id: dealId,
     ...fields,
+    repeat_of,
     structured_text: buildMeasureMessage({ ...fields, manager_name: actor.name }),
     manager_id: actor.userId,
     manager_name: actor.name,

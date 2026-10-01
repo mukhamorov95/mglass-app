@@ -1,20 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { buildMeasureMessage } from '@/lib/measure/message'
-import { REQ_COLS, loadMeasurers, money, requireMeasureActor, text, tryBook } from '@/lib/measure/server'
+import { DATE_RE, REQ_COLS, loadMeasurers, money, requireMeasureActor, text, tryBook } from '@/lib/measure/server'
+import { periodFilter, searchFilters } from '@/lib/measure/search'
 
 export const dynamic = 'force-dynamic'
 
+const STATUSES = new Set(['new', 'scheduled', 'done', 'issue', 'cancelled'])
+
 // Заявки на замер. Service-role — после requireMeasureActor: круг видимости
 // (all / measurer / own) задаёт фильтр запроса, а не фильтр по результату.
-export async function GET() {
+// ?q= — поиск (адрес, телефон, № заказа, клиент), ?from=&to= — период (МСК), ?status=a,b.
+export async function GET(req: NextRequest) {
   const actor = await requireMeasureActor()
   if (actor instanceof NextResponse) return actor
   const svc = createServiceClient()
+  const sp = req.nextUrl.searchParams
+  const search = (sp.get('q') ?? '').trim().slice(0, 100)
+  const from = sp.get('from') ?? '', to = sp.get('to') ?? ''
+  const statuses = (sp.get('status') ?? '').split(',').filter(x => STATUSES.has(x))
+  const filtered = !!search || DATE_RE.test(from) || statuses.length > 0
+  const LIMIT = filtered ? 500 : 300
 
-  let q = svc.from('measure_requests').select(REQ_COLS).order('created_at', { ascending: false }).limit(300)
+  let q = svc.from('measure_requests').select(REQ_COLS).order('created_at', { ascending: false }).limit(LIMIT)
   if (actor.scope === 'measurer') q = q.or(`status.eq.new,measurer_id.eq.${actor.userId}`)
   else if (actor.scope === 'own') q = q.eq('manager_id', actor.userId)
+  for (const f of searchFilters(search)) q = q.or(f)
+  if (DATE_RE.test(from) && DATE_RE.test(to) && from <= to) q = q.or(periodFilter(from, to))
+  if (statuses.length) q = q.in('status', statuses)
   const { data, error } = await q
   if (error) return NextResponse.json({ error: `Заявки не загрузились: ${error.message}` }, { status: 500 })
 
@@ -23,6 +36,8 @@ export async function GET() {
     return NextResponse.json({
       me: { id: actor.userId, name: actor.name, role: actor.role, scope: actor.scope, canCreate: actor.canCreate },
       requests: data ?? [],
+      // Упёрлись в потолок — список неполный, экран обязан это сказать.
+      truncated: (data?.length ?? 0) >= LIMIT,
       measurers: measurers.map(m => ({ id: m.id, name: m.name, schedule: m.schedule })),
     })
   } catch (e) {
@@ -61,6 +76,15 @@ export async function POST(req: NextRequest) {
   if (leadId !== null && !Number.isInteger(leadId)) return NextResponse.json({ error: 'Некорректный лид' }, { status: 400 })
 
   const svc = createServiceClient()
+  // Повторный замер — к какому замеру он повторный (новые и повторные в аналитике раздельно).
+  let repeatOf: number | null = null
+  if (fields.is_repeat && b.repeat_of != null && b.repeat_of !== '') {
+    repeatOf = Number(b.repeat_of)
+    if (!Number.isInteger(repeatOf)) return NextResponse.json({ error: 'Некорректный исходный замер' }, { status: 400 })
+    const { data: orig, error: origErr } = await svc.from('measure_requests').select('id').eq('id', repeatOf).maybeSingle()
+    if (origErr) return NextResponse.json({ error: `Исходный замер не прочитан: ${origErr.message}` }, { status: 500 })
+    if (!orig) return NextResponse.json({ error: 'Исходный замер не найден' }, { status: 400 })
+  }
   const booking = b.booking as Record<string, unknown> | null | undefined
   let sched: Record<string, unknown> = { status: 'new' }
   if (booking) {
@@ -79,6 +103,7 @@ export async function POST(req: NextRequest) {
     ...fields,
     ...sched,
     lead_id: leadId,
+    repeat_of: repeatOf,
     raw_text: text(b.raw_text, 5000),
     structured_text: buildMeasureMessage({ ...fields, manager_name: actor.name }),
     manager_id: actor.userId,

@@ -51,7 +51,7 @@ type Contract = Doc & { kp_id: number | null; make_sum: number | null; install_s
 // розничный счёт ниже: type Invoice.
 type B2BInvoice = { id: number; invoice_no: string; amount: number; status: string; issued_at: string | null; paid_at: string | null }
 type Measure = {
-  id: number; status: string; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string
+  id: number; status: string; is_repeat: boolean | null; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string
   visit_price: number | null; actual_price: number | null; price_note: string | null; visit_payment: 'onsite' | 'company' | 'unpaid' | null; measurer_fee: number | null; result_note: string | null
 }
 type Payment = { id: number; kind: string; amount: number; paid_at: string; entered_by_name: string | null; note: string | null; invoice_id: number | null }
@@ -131,7 +131,7 @@ export default function DealPage() {
   const [tab, setTab] = useState<'calcs' | 'docs' | 'money'>('calcs')
   const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: B2BInvoice[]; measures: Measure[] } | null>(null)
   const [measuring, setMeasuring] = useState(false)
-  const [measureForm, setMeasureForm] = useState<{ address: string; scope: string; visit_price: string; payer: string; measurer_fee: string; notes: string } | null>(null)
+  const [measureForm, setMeasureForm] = useState<{ kind: 'new' | 'repeat'; address: string; scope: string; visit_price: string; payer: string; measurer_fee: string; notes: string } | null>(null)
   const [payments, setPayments] = useState<Payment[] | null>(null)
   const [files, setFiles] = useState<DealFile[] | null>(null)
   const [payForm, setPayForm] = useState({ kind: 'prepay', amount: '', paid_at: new Date().toISOString().slice(0, 10), invoice_id: '' })
@@ -341,6 +341,9 @@ export default function DealPage() {
   }
   function openTab(k: 'calcs' | 'docs' | 'money') { setTab(k) }
 
+  // Последний не отменённый замер сделки: есть — новая заявка по умолчанию повторная.
+  const priorMeasure = docs?.measures.find(m => m.status !== 'cancelled') ?? null
+
   // Отправить на замер: заявка с данными сделки. Замерщик увидит её в своём кабинете;
   // отметка и файлы вернутся сюда через deal_id. Цена выезда и гонорар — сразу здесь.
   async function sendMeasure() {
@@ -357,7 +360,7 @@ export default function DealPage() {
     setMeasuring(true)
     try {
       const r = await sendOrToast('Заявка на замер не отправлена', `/api/deals/${id}/measure`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...measureForm, address: addr, measurer_fee: measureForm.measurer_fee.trim() || undefined }) },
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...measureForm, is_repeat: measureForm.kind === 'repeat', address: addr, measurer_fee: measureForm.measurer_fee.trim() || undefined }) },
         'Нажмите «Отправить на замер» ещё раз')
       if (r) {
         setMeasureForm(null)
@@ -544,7 +547,7 @@ export default function DealPage() {
         <Link href="/contracts" className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec]">
           📝 Договор
         </Link>
-        <button onClick={() => setMeasureForm(f => f ? null : { address: deal.address ?? '', scope: '', visit_price: '', payer: '', measurer_fee: '', notes: '' })}
+        <button onClick={() => setMeasureForm(f => f ? null : { kind: priorMeasure ? 'repeat' : 'new', address: deal.address ?? '', scope: '', visit_price: '', payer: '', measurer_fee: '', notes: '' })}
           disabled={measuring}
           className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
           📐 Отправить на замер
@@ -576,6 +579,19 @@ export default function DealPage() {
           <div className="flex items-center justify-between gap-3">
             <p className="text-[13px] font-semibold text-[#111110]">📐 Заявка на замер</p>
             <button onClick={() => setMeasureForm(null)} className="text-[12px] text-[#9a9a95] hover:text-[#111110]">Закрыть</button>
+          </div>
+          <div className="space-y-1">
+            <div className="flex flex-wrap gap-2">
+              {([['new', '📐 Новый — объект, где ещё не были'], ['repeat', '🔁 Повторный — доснять или перемерить']] as const).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setMeasureForm(f => f ? { ...f, kind: k } : f)}
+                  className={`text-[12px] rounded-lg px-3 py-1.5 border ${measureForm.kind === k ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white border-[#e4e4e0] text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>{label}</button>
+              ))}
+            </div>
+            <p className="text-[11px] text-[#9a9a95]">
+              {priorMeasure
+                ? `В этой сделке уже был замер${priorMeasure.scheduled_at ? ` ${date(priorMeasure.scheduled_at)}` : ''} — повторный привяжется к нему.`
+                : 'В этой сделке замеров ещё не было.'} Новые и повторные считаются раздельно.
+            </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {([
@@ -721,7 +737,7 @@ export default function DealPage() {
             return (
               <div key={m.id} className="space-y-1.5">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-full ${st.tone}`}>{st.emoji} {st.label}</span>
+                  <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-full ${st.tone}`}>{st.emoji} {st.label}{m.is_repeat ? ' · 🔁 повторный' : ''}</span>
                   <span className="text-[11px] text-[#9a9a95]">
                     {m.scheduled_at ? `на ${date(m.scheduled_at)}` : date(m.created_at)}{m.measurer_name ? ` · ${m.measurer_name}` : ''}
                   </span>
