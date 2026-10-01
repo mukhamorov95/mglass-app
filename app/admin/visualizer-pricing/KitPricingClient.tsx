@@ -26,7 +26,8 @@ const SHAPES = SHAPE_LIST
 // тарифа (правится один раз), комплект модели держит порядок вариантов, ★ по умолчанию
 // и правило количества. Количество ролей приходит из геометрии — руками не вводится.
 
-export type TierStore = { library: Library; rates: KitRates; kits: Record<string, ModelKit> }
+// updatedAt — с какой версии библиотеки вкладка начала: сервер не даст затереть более новую.
+export type TierStore = { library: Library; rates: KitRates; kits: Record<string, ModelKit>; updatedAt?: string | null }
 
 const GLASS_LABEL: Record<string, string> = {
   clear: 'Прозрачное М1', crystal: 'Осветлённое Crystal Vision', bronze: 'Тонированная бронза', graphite: 'Тонированная графит',
@@ -358,9 +359,11 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
     try {
       const res = await fetch('/api/admin/configurator-kits', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier, library: cur.library, rates: cur.rates, kits: cur.kits }),
+        body: JSON.stringify({ tier, library: cur.library, rates: cur.rates, kits: cur.kits, baseUpdatedAt: cur.updatedAt ?? null }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Ошибка сохранения')
+      const out = await res.json().catch(() => ({})) as { error?: string; updatedAt?: string | null }
+      if (!res.ok) throw new Error(out.error ?? 'Ошибка сохранения')
+      if (out.updatedAt) setStore(st => ({ ...st, [tier]: { ...st[tier], updatedAt: out.updatedAt } }))
       setDirty(false); setMsg('Сохранено')
     } catch (e) { setMsg(e instanceof Error ? e.message : 'Ошибка') }
     finally { setSaving(false) }

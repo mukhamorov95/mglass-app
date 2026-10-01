@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createClient } from '@/lib/supabase-server'
-import { getKitStore, saveLibrary, saveKit, saveAllKits } from '@/lib/configurator/kitStore'
+import { getKitStore, saveLibrary, saveKit, saveAllKits, libraryUpdatedAt } from '@/lib/configurator/kitStore'
 import { isRole, type Library, type ModelKit, type KitRates } from '@/lib/configurator/kit'
 import { M_MODELS } from '@/lib/configurator/arrangement'
 import type { Tier } from '@/lib/configurator/pricing'
@@ -26,6 +26,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null) as {
     tier?: string; library?: Library; rates?: KitRates; code?: string; kit?: ModelKit
     kits?: Record<string, ModelKit>
+    baseUpdatedAt?: string | null
   } | null
   if (!body || !isTier(body.tier ?? null)) return NextResponse.json({ error: 'tier обязателен' }, { status: 400 })
   const tier = body.tier as Tier
@@ -45,10 +46,21 @@ export async function PUT(req: NextRequest) {
     }
   }
 
+  // Вкладка пишет библиотеку и комплекты целиком. Открытая до чужого сохранения (переоценка,
+  // чистка, другой человек) затёрла бы его молча — поэтому сверяем, с какой версии она начинала.
+  // Вкладка, открытая до этой защиты, версию не присылает — ей тоже нужно обновиться.
+  if (body.library || body.kits) {
+    const current = await libraryUpdatedAt(tier)
+    if (current && (!body.baseUpdatedAt || new Date(current).getTime() > new Date(body.baseUpdatedAt).getTime())) {
+      return NextResponse.json({ error: 'Прайс изменили после того, как вы открыли страницу. Обновите страницу — ваши правки не сохранены.', conflict: true }, { status: 409 })
+    }
+  }
+
   const { data: { user } } = await (await createClient()).auth.getUser()
   const by = user?.email ?? 'owner'
-  if (body.library && body.rates) await saveLibrary(tier, body.library, body.rates, by)
+  let updatedAt: string | null = null
+  if (body.library && body.rates) updatedAt = await saveLibrary(tier, body.library, body.rates, by)
   if (body.kits) await saveAllKits(tier, body.kits, by)          // все комплекты разом («во все модели», копирование тарифа)
   else if (body.kit && body.code) await saveKit(tier, body.code, body.kit, by)
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, updatedAt })
 }
