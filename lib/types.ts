@@ -123,6 +123,7 @@ export type B2BClient = {
   crm_manager?: string | null
   crm_next_contact?: string | null  // DATE in DB, arrives as ISO string
   crm_notes?: string | null
+  crm_source?: string | null       // B2B_SOURCES; null — не указан
   // Реквизиты для «Счёт-спецификации» (заполняются один раз, автоподставляются в счёт)
   full_name?: string | null          // Полное юр. наименование покупателя
   inn?: string | null
@@ -159,11 +160,12 @@ export type B2BCRM = {
   manager_name: string | null
   next_contact_date: string | null
   crm_notes: string | null
+  source: string | null
 }
 
 const EMPTY_CRM: B2BCRM = {
   segment: null, status: null, score: null, city: null,
-  manager_name: null, next_contact_date: null, crm_notes: null,
+  manager_name: null, next_contact_date: null, crm_notes: null, source: null,
 }
 
 // Primary path: reads direct DB columns. Falls back to JSON parsing when the
@@ -178,6 +180,7 @@ export function clientToCRM(c: B2BClient): B2BCRM {
       manager_name:      c.crm_manager       ?? null,
       next_contact_date: c.crm_next_contact  ?? null,
       crm_notes:         c.crm_notes         ?? null,
+      source:            c.crm_source        ?? null,
     }
   }
   return parseCRM(c.notes)
@@ -197,6 +200,7 @@ export function parseCRM(notes: string | null): B2BCRM {
         manager_name:      p.crm_manager      ?? null,
         next_contact_date: p.crm_next_contact ?? null,
         crm_notes:         p.crm_note         ?? null,
+        source:            null,
       }
     }
   } catch {}
@@ -230,6 +234,26 @@ export const B2B_SEGMENTS = [
   { value: 'office',       label: 'Офисы' },
   { value: 'other',        label: 'Другое' },
 ] as const
+
+// Откуда пришёл клиент. Список повторяет check-ограничение b2b_clients.crm_source
+// (миграция 20261001_b2b_clients_crm_source.sql) — менять оба места вместе.
+export const B2B_SOURCES = [
+  { value: 'avito',           label: 'Авито' },
+  { value: 'referral',        label: 'Рекомендация' },
+  { value: 'partner_program', label: 'Партнёрская программа' },
+  { value: 'website',         label: 'Сайт / поиск' },
+  { value: 'yandex_maps',     label: 'Яндекс Карты' },
+  { value: '2gis',            label: '2ГИС' },
+  { value: 'exhibition',      label: 'Выставка' },
+  { value: 'cold_call',       label: 'Холодный обзвон' },
+  { value: 'retail',          label: 'Из розницы M-Glass' },
+  { value: 'other',           label: 'Другое' },
+] as const
+
+export function sourceLabel(v: string | null | undefined): string {
+  if (!v) return 'Не указан'
+  return B2B_SOURCES.find(s => s.value === v)?.label ?? v
+}
 
 export const B2B_STATUSES = [
   { value: 'new',       label: 'Новый',     color: 'bg-blue-50 text-blue-700' },

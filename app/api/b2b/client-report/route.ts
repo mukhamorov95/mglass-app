@@ -4,7 +4,7 @@ import { canAccessRoute, isOwnerRole } from '@/lib/getRole'
 import { launchedOrders } from '@/lib/liveOrders'
 import { mskDayKey } from '@/lib/time'
 import {
-  buildGroups, buildNameIndex, attribute, summarize, byMonth, ranking, isDayKey, groupKeyOf, UNKNOWN_KEY,
+  buildGroups, buildNameIndex, attribute, summarize, byMonth, ranking, bySource, isDayKey, groupKeyOf, UNKNOWN_KEY,
   type ReportClientCard, type ReportEntity, type ReportOrderRow,
 } from '@/lib/b2b/clientReport'
 
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   if (from > to) return NextResponse.json({ error: 'Начало периода позже конца' }, { status: 400 })
 
   const [cardsRes, entRes] = await Promise.all([
-    sb.from('b2b_clients').select('id, name'),
+    sb.from('b2b_clients').select('id, name, crm_source'),
     sb.from('b2b_client_legal_entities').select('client_id, full_name'),
   ])
   if (cardsRes.error || entRes.error) {
@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
       summary: summarize(attributed),
       byNameCount: attributed.filter(r => r.byName).length,
       ranking: ranking(attributed, groups),
+      bySource: bySource(attributed, groups, cardsById),
     })
   }
 

@@ -9,7 +9,7 @@ import { canonicalClient, isOwnRetail, orderAmount } from '@/lib/liveOrders'
 // У истории 2024–2025 ссылки на карточку почти нет (1614 из 1927 заказов) — такие
 // заказы привязываются по точному названию клиента или его юрлица.
 
-export type ReportClientCard = { id: number; name: string }
+export type ReportClientCard = { id: number; name: string; crm_source?: string | null }
 export type ReportEntity = { client_id: number; full_name: string | null }
 export type ReportOrderRow = {
   id: number
@@ -124,6 +124,37 @@ export function ranking(rows: AttributedOrder[], groups: Map<string, ClientGroup
     })
   }
   return out.sort((a, b) => b.sum - a.sum || b.orders - a.orders)
+}
+
+// Откуда пришли деньги: заказы периода по источнику клиента (b2b_clients.crm_source).
+// Источник группы — метка самой старой карточки, где она стоит: у MR GLASS три карточки.
+// Заказ без карточки — отдельная строка: источник у него узнать неоткуда.
+export const NO_SOURCE = 'none'
+export const NO_CARD = 'no_card'
+export type SourceRow = { source: string; clients: number; orders: number; sum: number }
+
+export function bySource(
+  rows: AttributedOrder[],
+  groups: Map<string, ClientGroup>,
+  cardsById: Map<number, ReportClientCard>,
+): SourceRow[] {
+  const sourceOf = (key: string) => {
+    const g = groups.get(key)
+    if (!g) return NO_CARD
+    const id = [...g.cardIds].sort((a, b) => a - b).find(i => cardsById.get(i)?.crm_source)
+    return (id != null && cardsById.get(id)?.crm_source) || NO_SOURCE
+  }
+  const m = new Map<string, SourceRow & { keys: Set<string> }>()
+  for (const r of rows) {
+    const src = sourceOf(r.groupKey)
+    const e = m.get(src) ?? { source: src, clients: 0, orders: 0, sum: 0, keys: new Set<string>() }
+    if (r.groupKey !== UNKNOWN_KEY) e.keys.add(r.groupKey)
+    e.orders++; e.sum += r.amount
+    m.set(src, e)
+  }
+  return [...m.values()]
+    .map(({ keys, ...e }) => ({ ...e, clients: keys.size }))
+    .sort((a, b) => b.sum - a.sum || b.orders - a.orders)
 }
 
 // Периоды — по календарю Москвы; ключи дат YYYY-MM-DD, обе границы включительно.

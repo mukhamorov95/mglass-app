@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       if (body.createInCrm) {
         // сразу заводим карточку в B2B-клиентах (CRM) и привязываем
         const { data: created, error: cErr } = await sb.from('b2b_clients')
-          .insert({ name, active: true, discount_percent: 0, organization_id: 1, crm_status: 'new', notes: 'Приведён по партнёрской программе' })
+          .insert({ name, active: true, discount_percent: 0, organization_id: 1, crm_status: 'new', crm_source: 'partner_program', notes: 'Приведён по партнёрской программе' })
           .select('id').single()
         if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
         b2bClientId = created.id
