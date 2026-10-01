@@ -12,6 +12,8 @@ import { materialLabel, materialLabelShort } from '@/lib/materialLabel'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
+import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
+import PointBadge from '@/components/PointBadge'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -577,6 +579,8 @@ function buildProductionMessage(order: Order): string {
 
 export default function B2BOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  // Клиенты-точки на рынке: их заказы — с пометкой и первыми в срочных группах и фильтрах.
+  const [pointClients, setPointClients] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -865,7 +869,7 @@ export default function B2BOrdersPage() {
         return acc
       }
 
-      const [ordersData, { data: mats }, { data: varData }] = await Promise.all([
+      const [ordersData, { data: mats }, { data: varData }, points] = await Promise.all([
         fetchAllOrders(),
         sb.from('b2b_materials')
           .select('id,name,category,thickness,sheet_width,sheet_height,cost_price,waste_percent,supplier_id,supplier_material_name')
@@ -875,7 +879,9 @@ export default function B2BOrdersPage() {
           .eq('active', true)
           .order('sort_order')
           .order('id'),
+        loadPointClientIds(sb),
       ])
+      setPointClients(points)
 
       const groupedVariants: Record<number, SheetVariantMin[]> = {}
       for (const v of (varData ?? []) as SheetVariantMin[]) {
@@ -920,7 +926,7 @@ export default function B2BOrdersPage() {
 
   const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null
 
-  const filteredOrders = useMemo(() => {
+  const filteredOrdersBase = useMemo(() => {
     const filtered = orders.filter(o => {
       const pn = o.parsedNotes
       const stages = pn.stages ?? {}
@@ -984,6 +990,12 @@ export default function B2BOrdersPage() {
 
     return filtered
   }, [orders, search, stageFilter, deadlineFilter, dateFrom, dateTo, boardFilter])
+
+  // Заказы точек — первыми внутри выбранного этапа/фильтра, дальше порядок как был.
+  const filteredOrders = useMemo(
+    () => pointsFirst(filteredOrdersBase, o => o.client_id != null && pointClients.has(o.client_id)),
+    [filteredOrdersBase, pointClients],
+  )
 
   // Internal B2B registry: group by month of effective launch date (column
   // launched_at, fallback notes.launched_at). Orders without any launch date go
@@ -1059,13 +1071,12 @@ export default function B2BOrdersPage() {
           )
         })
       : orders
-    return {
-      overdue:  base.filter(o => getDeadlineStatus(o).status === 'overdue'),
-      today:    base.filter(o => getDeadlineStatus(o).status === 'today'),
-      tomorrow: base.filter(o => getDeadlineStatus(o).status === 'tomorrow'),
-      ready:    base.filter(o => getDeadlineStatus(o).status === 'ready'),
-    }
-  }, [orders, search])
+    const by = (st: string) => pointsFirst(
+      base.filter(o => getDeadlineStatus(o).status === st),
+      o => o.client_id != null && pointClients.has(o.client_id),
+    )
+    return { overdue: by('overdue'), today: by('today'), tomorrow: by('tomorrow'), ready: by('ready') }
+  }, [orders, search, pointClients])
 
   function toggleMonth(key: string) {
     setExpandedMonths(prev => {
@@ -2390,6 +2401,7 @@ export default function B2BOrdersPage() {
                       onClick={() => setExpanded(isOpen ? null : order.id)}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
+                          {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}
                           <span className="text-[13px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-px rounded flex-shrink-0">
                             {order.custom_number?.trim() || `00${order.id}`}
                           </span>
@@ -2570,6 +2582,7 @@ export default function B2BOrdersPage() {
                                 кл.{order.client_order_number}
                               </span>
                             )}
+                            {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}
                             <span className="text-[13px] font-semibold text-[#111110] truncate">{order.client_name}</span>
                             {ds.status !== 'normal' && ds.status !== 'unknown' && (
                               <span className={`text-[10px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${DEADLINE_BADGE[ds.status]}`}>
@@ -2756,6 +2769,7 @@ export default function B2BOrdersPage() {
                                         кл.{order.client_order_number}
                                       </span>
                                     )}
+                                    {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}
                                     <p className="text-[14px] font-bold text-[#111110]">{order.client_name}</p>
                                     {ds.status !== 'normal' && ds.status !== 'unknown' && (
                                       <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>

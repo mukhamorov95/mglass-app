@@ -13,6 +13,8 @@ import {
 } from '@/lib/cuttingOptimizer'
 import { PROD_SINCE } from '@/lib/orderFlags'
 import { addWorkingDays, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
+import PointBadge from '@/components/PointBadge'
 
 // Агрегированный экран станции: задачи этого этапа из ВСЕХ заказов, собранные
 // в партии по «материал + толщина». Для резки — со сводным раскроем (листы).
@@ -28,7 +30,7 @@ type Item = {
   hasTriplex?: boolean; triplexLayers?: number
   triplexGlasses?: { materialId?: number; materialName?: string; thickness?: number }[]
 }
-type OrderRow = { id: number; client_name: string; custom_number: string | null; items: Item[]; notes: string | null; launched_at: string | null }
+type OrderRow = { id: number; client_id: number | null; client_name: string; custom_number: string | null; items: Item[]; notes: string | null; launched_at: string | null }
 type MatRow = { name: string; thickness: number; sheet_width: number | null; sheet_height: number | null; pattern_direction: string | null }
 
 // А4: срок отгрузки заказа (из А1). Партия кроится по срочности, а не по числу листов.
@@ -47,9 +49,10 @@ type Batch = {
   totalPieces: number
   totalAreaM2: number
   result: MaterialCuttingResult | null      // только для резки
-  orders: { orderId: number; number: string; client: string; taskId: number; size: string; qty: number }[]
+  orders: { orderId: number; number: string; client: string; taskId: number; size: string; qty: number; point: boolean }[]
   taskIds: number[]
   minDeadlineMs: number | null              // самый ранний срок среди заказов партии
+  hasPoint: boolean                         // в партии есть заказ точки — её режут первой
 }
 
 export default function StationBatchesPage() {
@@ -84,12 +87,13 @@ export default function StationBatchesPage() {
     if (tasks.length === 0) { setBatches([]); setLoading(false); return }
 
     const orderIds = [...new Set(tasks.map(t => t.order_id))]
-    const [{ data: orderRows }, { data: matRows }, { data: cfg }, { data: poRows }] = await Promise.all([
-      sb.from('b2b_orders').select('id,client_name,custom_number,items,notes,launched_at').in('id', orderIds).gte('created_at', PROD_SINCE),
+    const [{ data: orderRows }, { data: matRows }, { data: cfg }, { data: poRows }, points] = await Promise.all([
+      sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes,launched_at').in('id', orderIds).gte('created_at', PROD_SINCE),
       isCutting ? sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,pattern_direction').eq('active', true) : Promise.resolve({ data: [] as MatRow[] }),
       isCutting ? sb.from('cutting_settings').select('*').eq('id', 1).single() : Promise.resolve({ data: null }),
       // Заявки на материал по этим заказам (для гейта резки по приходу материала)
       isCutting ? sb.from('purchase_orders').select('b2b_order_ids,status').overlaps('b2b_order_ids', orderIds) : Promise.resolve({ data: [] as { b2b_order_ids: number[] | null; status: string | null }[] }),
+      loadPointClientIds(sb),
     ])
 
     // Заказ ждёт материал, если по нему ЕСТЬ заявка, но НИ ОДНА не «забрана/закрыта».
@@ -143,7 +147,8 @@ export default function StationBatchesPage() {
         g.pieces.push({ id: `${t.id}-${i}`, width: item.width, height: item.height, label: `${item.width}×${item.height}`, orderId: order.id, orderClientName: order.client_name, materialKey: key, canRotate: true })
       }
       m.area += (item.width * item.height * qty) / 1_000_000
-      m.orders.push({ orderId: order.id, number: order.custom_number?.trim() || `#${order.id}`, client: order.client_name, taskId: t.id, size: `${item.width}×${item.height}${t.layer_note ? ` · ${t.layer_note}` : ''}`, qty })
+      const point = order.client_id != null && points.has(order.client_id)
+      m.orders.push({ orderId: order.id, number: order.custom_number?.trim() || `#${order.id}`, client: order.client_name, taskId: t.id, size: `${item.width}×${item.height}${t.layer_note ? ` · ${t.layer_note}` : ''}`, qty, point })
       const dl = orderDeadlineMs(order)
       if (dl != null) m.minDeadlineMs = m.minDeadlineMs == null ? dl : Math.min(m.minDeadlineMs, dl)
     }
@@ -151,12 +156,12 @@ export default function StationBatchesPage() {
     const results = isCutting ? runCuttingOptimizer(groups, settings) : []
     const resByKey = new Map(results.map(r => [r.materialKey, r]))
 
-    const out: Batch[] = [...groups.entries()].map(([key, g]) => {
+    const sorted: Batch[] = [...groups.entries()].map(([key, g]) => {
       const m = meta.get(key)!
       return {
         key, label: g.materialLabel, totalPieces: g.pieces.length, totalAreaM2: m.area,
-        result: resByKey.get(key) ?? null, orders: m.orders, taskIds: [...new Set(m.orders.map(o => o.taskId))],
-        minDeadlineMs: m.minDeadlineMs,
+        result: resByKey.get(key) ?? null, orders: pointsFirst(m.orders, o => o.point), taskIds: [...new Set(m.orders.map(o => o.taskId))],
+        minDeadlineMs: m.minDeadlineMs, hasPoint: m.orders.some(o => o.point),
       }
       // А4: сначала самое срочное по сроку отгрузки; при равенстве — крупные партии
       // (больше листов) вперёд. Заказы без срока — в конец.
@@ -165,6 +170,8 @@ export default function StationBatchesPage() {
       if (ad !== bd) return ad - bd
       return (b.result?.sheetsNeeded ?? b.totalPieces) - (a.result?.sheetsNeeded ?? a.totalPieces)
     })
+    // Партии с заказом точки — первыми, дальше прежний порядок (решение владельца 01.10).
+    const out = pointsFirst(sorted, b => b.hasPoint)
 
     setBatches(out)
     setLoading(false)
@@ -225,6 +232,7 @@ export default function StationBatchesPage() {
                 <button className="min-w-0 text-left flex-1" onClick={() => setExpanded(p => { const n = new Set(p); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n })}>
                   <p className="text-[15px] font-bold text-[#111110] truncate flex items-center gap-2">
                     <span className="truncate">{b.label}</span>
+                    {b.hasPoint && <PointBadge />}
                     {(() => {
                       const dm = b.minDeadlineMs
                       if (dm == null) return null
@@ -267,7 +275,7 @@ export default function StationBatchesPage() {
                     <div key={`${o.taskId}-${i}`} className="px-4 py-2.5 flex items-center justify-between gap-2">
                       <Link href={`/p/o/${o.orderId}`} className="min-w-0">
                         <p className="text-[13px] font-semibold text-[#111110] truncate">
-                          {o.number} <span className="text-[#9a9a95] font-normal">· {o.client}</span>
+                          {o.point && <PointBadge className="mr-1.5 align-middle" />}{o.number} <span className="text-[#9a9a95] font-normal">· {o.client}</span>
                         </p>
                         <p className="text-[12px] text-[#6b6b66]">{o.size} мм{o.qty > 1 ? ` × ${o.qty}` : ''}{waitMat && <span className="text-amber-600 font-medium"> · ⏳ ждёт материал</span>}</p>
                       </Link>

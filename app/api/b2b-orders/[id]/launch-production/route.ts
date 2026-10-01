@@ -6,6 +6,7 @@ import { buildProductionTasks } from '@/lib/productionRouting'
 import { parseNotes } from '@/lib/orderFlags'
 import { makeDaysFor } from '@/lib/contractDeadlines'
 import { addWorkingDays } from '@/lib/b2b/deadline'
+import { pointLaunchGate, orderTotal } from '@/lib/b2b/points'
 
 // POST — generates production_tasks rows for a B2B order's items when it's
 // launched into production. Called best-effort from app/b2b-quotes/page.tsx
@@ -34,10 +35,14 @@ export async function POST(
 
   const { data: order, error: orderErr } = await svc
     .from('b2b_orders')
-    .select('id, items, notes, launched_at')
+    .select('id, client_id, items, notes, launched_at, total_after_discount, total_sale_inc_vat')
     .eq('id', orderId)
     .single()
   if (orderErr || !order) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
+
+  // Задачи цеху = заказ в работе. Заказ точки — только после 100 % оплаты.
+  const gate = await pointLaunchGate(svc, { client_id: order.client_id as number | null, notes: order.notes, total: orderTotal(order) })
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   const items = Array.isArray(order.items) ? order.items : []
 
