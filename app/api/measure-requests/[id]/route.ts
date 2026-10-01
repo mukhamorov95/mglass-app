@@ -1,14 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { ALLOWED_FROM, denyAction, type MeasureAction } from '@/lib/measure/access'
-import { REQ_COLS, requireMeasureActor, text, tryBook, type MeasureRequestRow } from '@/lib/measure/server'
+import { VISIT_PAYMENTS, applyActualPrice, type VisitPayment } from '@/lib/measure/money'
+import { REQ_COLS, money, requireMeasureActor, text, tryBook, type MeasureRequestRow } from '@/lib/measure/server'
 
 export const dynamic = 'force-dynamic'
 
 const STATUS_RU: Record<string, string> = {
   new: 'ждёт замерщика', scheduled: 'назначен', done: 'выполнен', issue: 'сложность', cancelled: 'отменён',
 }
-const ACTIONS = new Set<MeasureAction>(['schedule', 'unassign', 'done', 'issue', 'cancel', 'reopen', 'fee_paid'])
+const ACTIONS = new Set<MeasureAction>(['schedule', 'unassign', 'done', 'settle', 'issue', 'cancel', 'reopen', 'fee_paid'])
+
+// Деньги выполненного замера: как оплачен выезд и цена замерщика с причиной
+// (цена менеджера visit_price не меняется — lib/measure/money.ts).
+function settlement(row: MeasureRequestRow, b: Record<string, unknown>, requirePayment: boolean): Record<string, unknown> | string {
+  const patch: Record<string, unknown> = {}
+  if (b.visit_payment !== undefined) {
+    if (!VISIT_PAYMENTS.includes(b.visit_payment as VisitPayment)) return 'Отметь, как оплачен выезд: на объекте, на компанию или не оплачен'
+    patch.visit_payment = b.visit_payment
+  } else if (requirePayment) return 'Отметь, как оплачен выезд: на объекте, на компанию или не оплачен'
+  if (b.actual_price !== undefined && b.actual_price !== null && b.actual_price !== '') {
+    const price = money(b.actual_price)
+    const note = text(b.price_note, 500)
+    if (price !== Number(row.visit_price) && !note) return 'Цена другая — напиши коротко почему (менеджер заложил одну, вышла другая)'
+    Object.assign(patch, applyActualPrice(row, price, note))
+  }
+  return patch
+}
 
 // Действие над заявкой. Service-role — после requireMeasureActor + denyAction;
 // запись с замком по updated_at: если заявку изменили между чтением и записью
@@ -56,9 +74,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     case 'reopen':
       patch = { status: 'new', measurer_id: null, measurer_name: null, scheduled_at: null }
       break
-    case 'done':
-      patch = { status: 'done' }
+    case 'done': {
+      const s = settlement(row, b, true)
+      if (typeof s === 'string') return NextResponse.json({ error: s }, { status: 400 })
+      patch = { status: 'done', ...s }
       break
+    }
+    case 'settle': {
+      const s = settlement(row, b, false)
+      if (typeof s === 'string') return NextResponse.json({ error: s }, { status: 400 })
+      if (!Object.keys(s).length) return NextResponse.json({ error: 'Нечего менять' }, { status: 400 })
+      patch = s
+      break
+    }
     case 'issue': {
       const issue = text(b.issue_text, 1000)
       if (!issue) return NextResponse.json({ error: 'Опиши сложность' }, { status: 400 })
@@ -69,6 +97,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       patch = { status: 'cancelled' }
       break
     case 'fee_paid':
+      if (row.visit_payment === 'onsite') {
+        return NextResponse.json({ error: 'Выезд оплачен замерщику на объекте — компании выплачивать нечего' }, { status: 409 })
+      }
       patch = { fee_status: 'paid', fee_paid_at: now }
       break
     default:

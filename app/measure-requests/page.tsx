@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildMeasureMessage, formatMeasureWhen, splitScope, tidy } from '@/lib/measure/message'
 import { sendMeasure } from '@/lib/measure/client'
+import { PAYMENT_LABEL, type VisitPayment } from '@/lib/measure/money'
 import { confirmDialog, type ConfirmOptions } from '@/lib/dialog'
 import MeasureBoard, { type BoardPick } from '@/components/measure/MeasureBoard'
 import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
@@ -40,6 +41,9 @@ type MReq = {
   travel_min: number | null
   status: string
   issue_text: string | null
+  actual_price: number | null
+  price_note: string | null
+  visit_payment: VisitPayment | null
   created_at: string
 }
 
@@ -439,6 +443,13 @@ export default function MeasureRequestsPage() {
                       </ol>
                     )}
                     {r.issue_text && <p className="text-[12px] text-red-600 mt-1">⚠️ {r.issue_text}</p>}
+                    {r.status === 'done' && (
+                      <p className="text-[12px] text-[#6b6b66] mt-1">
+                        💰 Выезд {Number(r.visit_price) > 0 ? `${Number(r.visit_price).toLocaleString('ru-RU')} ₽` : 'цена не указана'}
+                        {r.actual_price != null && <> → <b className="text-[#111110]">{Number(r.actual_price).toLocaleString('ru-RU')} ₽</b>{r.price_note ? ` (замерщик: ${r.price_note})` : ''}</>}
+                        {' · '}{r.visit_payment ? PAYMENT_LABEL[r.visit_payment] : <span className="text-amber-700">оплата не отмечена</span>}
+                      </p>
+                    )}
 
                     {me?.canCreate && (
                       <div className={`flex items-center gap-1.5 flex-wrap mt-2 ${busyId === r.id ? 'opacity-50 pointer-events-none' : ''}`}>

@@ -51,7 +51,8 @@ export type MeasureRow = {
   measurer_id: string | null
 }
 
-export type MeasureAction = 'schedule' | 'unassign' | 'done' | 'issue' | 'cancel' | 'reopen' | 'fee_paid' | 'attach'
+// settle — поправить у выполненного цену замерщика и как оплачен выезд.
+export type MeasureAction = 'schedule' | 'unassign' | 'done' | 'settle' | 'issue' | 'cancel' | 'reopen' | 'fee_paid' | 'attach'
 
 // Своя ли заявка для менеджерской стороны: создал её или видит все.
 export function ownsRequest(a: MeasureActor, r: MeasureRow): boolean {
@@ -79,6 +80,7 @@ export function denyAction(a: MeasureActor, r: MeasureRow, action: MeasureAction
     case 'unassign':
       return mineAsMeasurer || ownsRequest(a, r) ? null : 'Это не ваш замер'
     case 'done':
+    case 'settle':
     case 'issue':
     case 'attach':
       return mineAsMeasurer || a.scope === 'all' ? null
@@ -95,6 +97,7 @@ export const ALLOWED_FROM: Record<Exclude<MeasureAction, 'attach'>, string[]> = 
   schedule: ['new', 'scheduled', 'issue'],
   unassign: ['scheduled', 'issue'],
   done: ['scheduled', 'issue'],
+  settle: ['done'],
   issue: ['scheduled', 'done'],
   cancel: ['new', 'scheduled', 'issue'],
   reopen: ['cancelled'],
