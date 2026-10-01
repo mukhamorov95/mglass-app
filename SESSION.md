@@ -1,4 +1,4 @@
-## Задача (01.10): утечка себестоимости из /api/calc/build — закрыта гейтом страницы
+## Задача (01.10): утечка себестоимости из /api/calc/build — закрыта гейтом страницы (PR #780)
 - Проблема: /api/calc/build, /api/calc/mirror (и витрина /api/calc/mirror/models) проверяли только сессию;
   middleware не гейтит /api/*, и партнёр/цех/замерщик получали ₽/м² стекла, скидку M GLASS, закупку фурнитуры.
 - Исправление: lib/apiAuth.ts requirePageAccess(path) — canAccessRoute с b2bScope/managerWorkspace из профиля
