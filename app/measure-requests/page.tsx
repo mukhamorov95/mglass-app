@@ -37,6 +37,7 @@ type MReq = {
   measurer_id: string | null
   scheduled_at: string | null
   duration_min: number | null
+  travel_min: number | null
   status: string
   issue_text: string | null
   created_at: string
@@ -61,7 +62,7 @@ const EMPTY_FIELDS: Fields = {
 }
 
 const DRAFT_KEY = 'mglass_measure_request_draft'
-const EMPTY_BOOKING: BookingValue = { measurerId: '', date: '', time: '', durationMin: 90 }
+const EMPTY_BOOKING: BookingValue = { measurerId: '', date: '', time: '', durationMin: 90, travelMin: 60 }
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   new:       { label: '🆕 Ждёт замерщика', cls: 'bg-amber-50 text-amber-700' },
@@ -189,7 +190,7 @@ export default function MeasureRequestsPage() {
     try {
       const body: Record<string, unknown> = { ...fields, raw_text: rawText || null, measurer_fee: fee.trim() || undefined }
       if (when === 'book') {
-        body.booking = { measurer_id: booking.measurerId, date: booking.date, time: booking.time, duration_min: booking.durationMin }
+        body.booking = { measurer_id: booking.measurerId, date: booking.date, time: booking.time, duration_min: booking.durationMin, travel_min: booking.travelMin }
       }
       const r = await sendMeasure<{ request: MReq }>('/api/measure-requests', 'POST', body,
         b => ({ ...b, booking: { ...(b.booking as Record<string, unknown>), force: true } }))
@@ -223,7 +224,7 @@ export default function MeasureRequestsPage() {
     setAssignFor(r.id)
     setAssignVal({
       measurerId: r.measurer_id ?? (measurers.length === 1 ? measurers[0].id : ''),
-      date: at.slice(0, 10), time: at.slice(11, 16), durationMin: r.duration_min || 90,
+      date: at.slice(0, 10), time: at.slice(11, 16), durationMin: r.duration_min || 90, travelMin: r.travel_min ?? 60,
     })
   }
 
@@ -460,7 +461,7 @@ export default function MeasureRequestsPage() {
                         <BookingPicker value={assignVal} onChange={setAssignVal} measurers={measurers} excludeRequestId={r.id} />
                         <div className="flex items-center gap-2">
                           <button disabled={!assignVal.measurerId || !assignVal.date || !assignVal.time || busyId === r.id}
-                            onClick={() => act(r, { action: 'schedule', measurer_id: assignVal.measurerId, date: assignVal.date, time: assignVal.time, duration_min: assignVal.durationMin })}
+                            onClick={() => act(r, { action: 'schedule', measurer_id: assignVal.measurerId, date: assignVal.date, time: assignVal.time, duration_min: assignVal.durationMin, travel_min: assignVal.travelMin })}
                             className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-40">
                             ✅ Назначить
                           </button>

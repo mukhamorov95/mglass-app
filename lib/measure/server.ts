@@ -8,7 +8,7 @@ import { isOwnerRole } from '@/lib/getRole'
 import { measureActorFrom, type MeasureActor } from '@/lib/measure/access'
 import { DEFAULT_DURATION_MIN, DEFAULT_SCHEDULE, addDays, checkBooking, mskToIso, type Booking, type DayOff, type Schedule } from '@/lib/measure/slots'
 
-export const REQ_COLS = 'id, deal_id, lead_id, deal_number, client_name, phone, amo_url, address, scope, notes, visit_price, payer, is_repeat, manager_id, manager_name, measurer_id, measurer_name, scheduled_at, duration_min, status, issue_text, issue_solution, measurer_fee, fee_status, fee_paid_at, photos, created_at, updated_at'
+export const REQ_COLS = 'id, deal_id, lead_id, deal_number, client_name, phone, amo_url, address, scope, notes, visit_price, payer, is_repeat, manager_id, manager_name, measurer_id, measurer_name, scheduled_at, duration_min, travel_min, status, issue_text, issue_solution, measurer_fee, fee_status, fee_paid_at, actual_price, price_note, visit_payment, photos, created_at, updated_at'
 
 export type MeasureRequestRow = {
   id: number
@@ -30,12 +30,16 @@ export type MeasureRequestRow = {
   measurer_name: string | null
   scheduled_at: string | null
   duration_min: number | null
+  travel_min: number | null
   status: string
   issue_text: string | null
   issue_solution: string | null
   measurer_fee: number
   fee_status: string
   fee_paid_at: string | null
+  actual_price: number | null
+  price_note: string | null
+  visit_payment: 'onsite' | 'company' | 'unpaid' | null
   photos: string[] | null
   created_at: string
   updated_at: string
@@ -106,15 +110,21 @@ export async function tryBook(svc: SupabaseClient, p: {
   date: unknown
   time: unknown
   durationMin?: unknown
+  travelMin?: unknown
   force?: unknown
-}): Promise<{ measurer: Measurer; startIso: string; durationMin: number } | NextResponse> {
+}): Promise<{ measurer: Measurer; startIso: string; durationMin: number; travelMin: number | null } | NextResponse> {
   if (typeof p.date !== 'string' || !DATE_RE.test(p.date)) return NextResponse.json({ error: 'Укажи дату замера' }, { status: 400 })
   if (typeof p.time !== 'string' || !TIME_RE.test(p.time)) return NextResponse.json({ error: 'Укажи время замера (ЧЧ:ММ)' }, { status: 400 })
   const dur = Number(p.durationMin) || DEFAULT_DURATION_MIN
   if (dur < 15 || dur > 480) return NextResponse.json({ error: 'Длительность замера — от 15 минут до 8 часов' }, { status: 400 })
+  // Дорога до замера от предыдущего: не указана — null (по умолчанию час), иначе 0–600 мин.
+  const travel = p.travelMin == null || p.travelMin === '' ? null : Number(p.travelMin)
+  if (travel !== null && (!Number.isInteger(travel) || travel < 0 || travel > 600)) {
+    return NextResponse.json({ error: 'Дорога до замера — от 0 до 600 минут' }, { status: 400 })
+  }
 
   try {
-    return await checkedBooking(svc, { ...p, date: p.date, time: p.time }, dur)
+    return await checkedBooking(svc, { ...p, date: p.date, time: p.time }, dur, travel)
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
@@ -124,7 +134,8 @@ async function checkedBooking(
   svc: SupabaseClient,
   p: { requestId?: number; measurerId: string; date: string; time: string; force?: unknown },
   dur: number,
-): Promise<{ measurer: Measurer; startIso: string; durationMin: number } | NextResponse> {
+  travel: number | null,
+): Promise<{ measurer: Measurer; startIso: string; durationMin: number; travelMin: number | null } | NextResponse> {
   const measurers = await loadMeasurers(svc)
   const measurer = measurers.find(m => m.id === p.measurerId)
   if (!measurer) return NextResponse.json({ error: 'Замерщик не найден или не активен' }, { status: 400 })
@@ -136,7 +147,7 @@ async function checkedBooking(
   ])
   const conflicts = checkBooking({
     startIso, durationMin: dur, measurerId: measurer.id, schedule: measurer.schedule,
-    daysOff, bookings, excludeId: p.requestId,
+    daysOff, bookings, excludeId: p.requestId, travelMin: travel ?? undefined,
   })
   const hard = conflicts.filter(c => c.hard)
   if (hard.length) {
@@ -145,7 +156,7 @@ async function checkedBooking(
   if (conflicts.length && p.force !== true) {
     return NextResponse.json({ needsConfirm: true, warning: `${measurer.name}: ${conflicts.map(c => c.message).join('; ')}`, conflicts }, { status: 409 })
   }
-  return { measurer, startIso, durationMin: dur }
+  return { measurer, startIso, durationMin: dur, travelMin: travel }
 }
 
 // Занятость замерщиков в окне дат (по Москве, включительно).

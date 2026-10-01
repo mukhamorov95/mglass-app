@@ -24,13 +24,14 @@ describe('московское время', () => {
 describe('planDay', () => {
   it('пустой рабочий день — одно окно от начала до «конец минус длительность»', () => {
     const d = planDay({ date: '2026-10-02', measurerId: M, daysOff: [], bookings: [] })
-    expect(d.starts.map(s => [fromMin(s.from), fromMin(s.to)])).toEqual([['09:00', '18:30']])
+    // пн–пт 9–18: последний замер на 1,5 ч начинается в 16:30
+    expect(d.starts.map(s => [fromMin(s.from), fromMin(s.to)])).toEqual([['09:00', '16:30']])
   })
 
   it('замер 12:00–13:30 вырезает окно с запасом на дорогу с обеих сторон', () => {
     const d = planDay({ date: '2026-10-02', measurerId: M, daysOff: [], bookings: [book(1, '2026-10-02', '12:00')] })
     // начать можно до 12:00 − 60 − 90 = 09:30 и с 13:30 + 60 = 14:30
-    expect(d.starts.map(s => [fromMin(s.from), fromMin(s.to)])).toEqual([['09:00', '09:30'], ['14:30', '18:30']])
+    expect(d.starts.map(s => [fromMin(s.from), fromMin(s.to)])).toEqual([['09:00', '09:30'], ['14:30', '16:30']])
     expect(d.busy).toHaveLength(1)
   })
 
@@ -55,7 +56,25 @@ describe('planDay', () => {
 
   it('сегодня: прошедшее время не предлагаем', () => {
     const d = planDay({ date: '2026-10-02', measurerId: M, daysOff: [], bookings: [], notBeforeMin: 16 * 60 })
-    expect(d.starts.map(s => [fromMin(s.from), fromMin(s.to)])).toEqual([['16:00', '18:30']])
+    expect(d.starts.map(s => [fromMin(s.from), fromMin(s.to)])).toEqual([['16:00', '16:30']])
+  })
+
+  it('у стоящего замера своя дорога до него — окно перед ним короче', () => {
+    // до замера в 15:00 замерщик заложил 2 часа дороги: начать раньше можно не позже 15:00 − 120 − 90 = 11:30
+    const d = planDay({ date: '2026-10-02', measurerId: M, daysOff: [], bookings: [book(1, '2026-10-02', '15:00', { travel_min: 120 })] })
+    expect(d.starts.map(s => [fromMin(s.from), fromMin(s.to)])).toEqual([['09:00', '11:30']])
+  })
+
+  it('дорога до нового замера от предыдущего — своя оценка', () => {
+    const one = [book(1, '2026-10-02', '09:00')]
+    const d60 = planDay({ date: '2026-10-02', measurerId: M, daysOff: [], bookings: one })
+    const d120 = planDay({ date: '2026-10-02', measurerId: M, daysOff: [], bookings: one, travelMin: 120 })
+    expect(fromMin(d60.starts[0].from)).toBe('11:30')
+    expect(fromMin(d120.starts[0].from)).toBe('12:30')
+  })
+
+  it('суббота по умолчанию нерабочая', () => {
+    expect(planDay({ date: '2026-10-03', measurerId: M, daysOff: [], bookings: [] }).working).toBe(false)
   })
 
   it('день забит — окон нет', () => {
@@ -83,7 +102,21 @@ describe('checkBooking', () => {
 
   it('впритык без дороги — предупреждение, не отказ', () => {
     const c = checkBooking({ startIso: mskToIso('2026-10-02', '14:00'), measurerId: M, daysOff: [], bookings })
-    expect(c.map(x => [x.kind, x.hard])).toEqual([['travel', false]])
+    expect(c).toEqual([{ kind: 'travel', hard: false, message: 'после замера 12:00–13:30 (Красногорск) всего 30 мин, а на дорогу заложено 60' }])
+  })
+
+  it('дорога от предыдущего — по оценке замерщика', () => {
+    const at = mskToIso('2026-10-02', '15:00') // после 12:00–13:30 — 90 мин
+    expect(checkBooking({ startIso: at, measurerId: M, daysOff: [], bookings, travelMin: 60 })).toEqual([])
+    expect(checkBooking({ startIso: at, measurerId: M, daysOff: [], bookings, travelMin: 120 })[0]).toMatchObject({ kind: 'travel', hard: false })
+  })
+
+  it('дорога до следующего — по его собственной оценке', () => {
+    const next = (travel_min: number | null) => [book(5, '2026-10-02', '14:00', { travel_min })]
+    const at = mskToIso('2026-10-02', '12:00') // закончится в 13:30, до следующего 30 мин
+    expect(checkBooking({ startIso: at, measurerId: M, daysOff: [], bookings: next(30) })).toEqual([])
+    expect(checkBooking({ startIso: at, measurerId: M, daysOff: [], bookings: next(null) })[0])
+      .toMatchObject({ kind: 'travel', message: 'до замера 14:00–15:30 останется 30 мин, а на дорогу туда заложено 60' })
   })
 
   it('перенос самого себя не конфликтует с собой', () => {
@@ -95,8 +128,8 @@ describe('checkBooking', () => {
     const off: DayOff[] = [{ measurer_id: M, date_from: '2026-10-15', date_to: '2026-10-25', note: 'отпуск' }]
     expect(checkBooking({ startIso: mskToIso('2026-10-16', '10:00'), measurerId: M, daysOff: off, bookings: [] })[0])
       .toMatchObject({ kind: 'day_off', hard: true })
-    expect(checkBooking({ startIso: mskToIso('2026-10-02', '19:30'), measurerId: M, daysOff: [], bookings: [] }))
-      .toEqual([{ kind: 'outside_hours', hard: false, message: 'вне рабочих часов 09:00–20:00' }])
+    expect(checkBooking({ startIso: mskToIso('2026-10-02', '17:00'), measurerId: M, daysOff: [], bookings: [] }))
+      .toEqual([{ kind: 'outside_hours', hard: false, message: 'вне рабочих часов 09:00–18:00' }])
     expect(checkBooking({ startIso: mskToIso('2026-10-04', '10:00'), measurerId: M, daysOff: [], bookings: [] })[0])
       .toMatchObject({ kind: 'not_working_day', hard: false })
   })

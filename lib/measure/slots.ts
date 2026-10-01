@@ -3,11 +3,12 @@
 // браузера (в России нет перехода на летнее время, смещение постоянное).
 
 export const DEFAULT_DURATION_MIN = 90
-// Между двумя замерами в разных местах — дорога. Нехватка запаса — предупреждение,
-// а не запрет: замерщик может знать, что объекты рядом.
+// Дорога до замера от предыдущего — по умолчанию час (владелец 01.10). Кто ставит
+// замер вторым и дальше в день, оценивает её сам: она хранится в travel_min замера
+// и дальше считается от неё. Нехватка дороги — предупреждение, а не запрет.
 export const TRAVEL_MIN = 60
-// Догадка до решения владельца (Р2 маршрута): замерщик правит свои часы в кабинете.
-export const DEFAULT_SCHEDULE: Schedule = { work_days: [1, 2, 3, 4, 5, 6], work_from: '09:00', work_to: '20:00' }
+// Владелец 01.10: пн–пт 9–18; субботу замерщик добавляет себе сам в «Моём графике».
+export const DEFAULT_SCHEDULE: Schedule = { work_days: [1, 2, 3, 4, 5], work_from: '09:00', work_to: '18:00' }
 
 export type Schedule = { work_days: number[]; work_from: string; work_to: string }
 export type DayOff = { id?: number; measurer_id: string; date_from: string; date_to: string; note?: string | null }
@@ -16,6 +17,8 @@ export type Booking = {
   measurer_id: string | null
   scheduled_at: string | null
   duration_min: number | null
+  // Оценка дороги до этого замера от предыдущего; null — по умолчанию TRAVEL_MIN.
+  travel_min?: number | null
   address?: string | null
   status?: string
 }
@@ -80,6 +83,7 @@ export function planDay(p: {
   daysOff: DayOff[]
   bookings: Booking[]
   durationMin?: number
+  // Дорога до НОВОГО замера от предыдущего; до уже стоящих — их собственная travel_min.
   travelMin?: number
   notBeforeMin?: number
 }): DayPlan {
@@ -96,8 +100,8 @@ export function planDay(p: {
   let starts: Interval[] = [{ from: Math.max(toMin(sch.work_from), p.notBeforeMin ?? 0), to: toMin(sch.work_to) - dur }]
   for (const b of busy) {
     const iv = bookingInterval(b)
-    // Нельзя начать в (начало чужого − дорога − длительность; конец чужого + дорога).
-    const cutFrom = iv.from - travel - dur
+    // Нельзя начать в (начало стоящего − дорога до него − длительность; конец стоящего + дорога до нового).
+    const cutFrom = iv.from - (b.travel_min ?? TRAVEL_MIN) - dur
     const cutTo = iv.to + travel
     starts = starts.flatMap(s => {
       if (cutTo <= s.from || cutFrom >= s.to) return [s]
@@ -149,10 +153,13 @@ export function checkBooking(p: {
   for (const b of same) {
     const iv = bookingInterval(b)
     const where = b.address ? ` (${b.address})` : ''
+    const after = b.travel_min ?? TRAVEL_MIN
     if (from < iv.to && iv.from < to) {
       out.push({ kind: 'overlap', hard: true, message: `пересекается с замером ${fromMin(iv.from)}–${fromMin(iv.to)}${where}` })
-    } else if (from < iv.to + travel && iv.from - travel < to) {
-      out.push({ kind: 'travel', hard: false, message: `меньше ${travel} мин на дорогу до/после замера ${fromMin(iv.from)}–${fromMin(iv.to)}${where}` })
+    } else if (iv.to <= from && from < iv.to + travel) {
+      out.push({ kind: 'travel', hard: false, message: `после замера ${fromMin(iv.from)}–${fromMin(iv.to)}${where} всего ${from - iv.to} мин, а на дорогу заложено ${travel}` })
+    } else if (to <= iv.from && iv.from - after < to) {
+      out.push({ kind: 'travel', hard: false, message: `до замера ${fromMin(iv.from)}–${fromMin(iv.to)}${where} останется ${iv.from - to} мин, а на дорогу туда заложено ${after}` })
     }
   }
 
