@@ -25,6 +25,8 @@ function settlement(row: MeasureRequestRow, b: Record<string, unknown>, requireP
     if (price !== Number(row.visit_price) && !note) return 'Цена другая — напиши коротко почему (менеджер заложил одну, вышла другая)'
     Object.assign(patch, applyActualPrice(row, price, note))
   }
+  // Итог для менеджера — что увидел на объекте; пустая строка стирает.
+  if (b.result_note !== undefined) patch.result_note = text(b.result_note, 2000)
   return patch
 }
 

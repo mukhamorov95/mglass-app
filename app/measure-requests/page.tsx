@@ -44,6 +44,8 @@ type MReq = {
   actual_price: number | null
   price_note: string | null
   visit_payment: VisitPayment | null
+  result_note: string | null
+  photos: string[] | null
   created_at: string
 }
 
@@ -449,6 +451,12 @@ export default function MeasureRequestsPage() {
                         {r.actual_price != null && <> → <b className="text-[#111110]">{Number(r.actual_price).toLocaleString('ru-RU')} ₽</b>{r.price_note ? ` (замерщик: ${r.price_note})` : ''}</>}
                         {' · '}{r.visit_payment ? PAYMENT_LABEL[r.visit_payment] : <span className="text-amber-700">оплата не отмечена</span>}
                       </p>
+                    )}
+                    {r.result_note && <p className="text-[12px] text-[#111110] mt-1 whitespace-pre-line">📝 Итог замера: {r.result_note}</p>}
+                    {Array.isArray(r.photos) && r.photos.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {r.photos.map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-[12px] text-blue-700 hover:underline">📎 файл {i + 1}</a>)}
+                      </div>
                     )}
 
                     {me?.canCreate && (

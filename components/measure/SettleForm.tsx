@@ -16,6 +16,7 @@ export type SettleRow = {
   price_note: string | null
   visit_payment: VisitPayment | null
   payer: string | null
+  result_note?: string | null
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -34,6 +35,7 @@ export default function SettleForm({ r, mode, onDone, onCancel }: {
   const [pay, setPay] = useState<VisitPayment | ''>(r.visit_payment ?? '')
   const [price, setPrice] = useState(r.actual_price != null ? String(r.actual_price) : '')
   const [note, setNote] = useState(r.price_note ?? '')
+  const [result, setResult] = useState(r.result_note ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -47,6 +49,8 @@ export default function SettleForm({ r, mode, onDone, onCancel }: {
     setBusy(true); setError('')
     try {
       const body: Record<string, unknown> = { action: mode, visit_payment: pay }
+      // Итог шлём, только если его тронули: иначе форма без итога в данных стёрла бы его.
+      if (result !== (r.result_note ?? '')) body.result_note = result
       // Поле пустое: при закрытии — цена менеджера; при правке — вернуть цену менеджера.
       if (typed !== null) { body.actual_price = typed; body.price_note = note }
       else if (mode === 'settle' && r.actual_price != null) body.actual_price = managerPrice
@@ -82,6 +86,12 @@ export default function SettleForm({ r, mode, onDone, onCancel }: {
             </button>
           ))}
         </div>
+      </div>
+      <div>
+        <p className="text-[#4b4b47] mb-1">Итог для менеджера <span className="text-[#9a9a95]">— что увидел, что важно для чертежа (по желанию)</span></p>
+        <textarea value={result} onChange={e => setResult(e.target.value)} rows={2} maxLength={2000}
+          placeholder="Стена завалена на 15 мм, ниша 1180, розетка справа на 1200 — учесть; клиент хочет чёрный профиль"
+          className={`${inp} w-full resize-y`} />
       </div>
       {error && <p className="text-red-600">{error}</p>}
       <div className="flex items-center gap-2">
