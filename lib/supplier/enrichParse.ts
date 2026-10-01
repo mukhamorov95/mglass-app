@@ -44,6 +44,15 @@ export function pickImage(html: string, base: string): string {
 // («30х10х1.5 мм», «длина 2,2 м», «для стекла 8 мм») — их и потребляет 3D.
 export function pickSpecs(html: string, name: string): Record<string, string> {
   const specs: Record<string, string> = {}
+  // АВ24 отдаёт характеристики не таблицей, а парами блоков «имя — значение». Там и
+  // лежит то, что нужно расчёту по чертежу: «Диаметр выреза: 2x ∅10», «Нагрузка: до 35 кг
+  // на 2 петли», «Толщина стекла». Раньше эти пары терялись — specs брались из названия.
+  const pairs = html.matchAll(/product-features__name[^>]*>([\s\S]*?)<\/div>\s*<div[^>]*product-features__value[^>]*>([\s\S]*?)<\/div>/gi)
+  for (const m of pairs) {
+    const k = decode(m[1]).replace(/:$/, ''), v = decode(m[2])
+    if (k && v && k.length < 60 && v.length < 120 && !(k in specs)) specs[k] = v
+    if (Object.keys(specs).length >= 20) break
+  }
   const rows = html.match(/<tr[\s\S]{0,400}?<\/tr>/gi) ?? []
   for (const row of rows) {
     const cells = row.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)

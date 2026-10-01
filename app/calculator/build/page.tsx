@@ -9,7 +9,7 @@ import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
 import type { MDims, GlassTint, HardwareChoice, MVariant } from '@/components/configurator/scene/assembly'
-import type { KitChoices } from '@/lib/configurator/kit'
+import { ROLE_META, type KitChoices, type RoleId } from '@/lib/configurator/kit'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { FINANCE_FALLBACK } from '@/lib/pricing/pickFinance'
 import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
@@ -57,21 +57,26 @@ type KitLine = {
   plan?: { len: number; price: number; pieces: number[]; rest: number }[]
   ref?: { supplier: string; base: string; asOf?: string }; chromeFallback?: boolean
 }
-type GlassLine = { label: string; w: number; h: number; areaM2: number; pricePerM2: number; listTotal: number; total: number; minPriceApplied: boolean }
+type GlassLine = { index?: number; label: string; w: number; h: number; areaM2: number; pricePerM2: number; listTotal: number; total: number; minPriceApplied: boolean }
 type Price = {
   glassCost: number; hardwareCost: number; sections: number; lines: KitLine[]
   glassLines?: GlassLine[]; glassSource?: string | null; glassThickness?: number; glassDiscountPct?: number
   missing: { label: string; reason: string }[]; complete: boolean
   marginPct?: number; taxPct?: number; marginSource?: 'модель' | 'тариф'
   glassSubstituted?: string | null
+  stops?: Stop[]; notes?: Stop[]
 }
+type Stop = { kind: string; text: string }
+// Без чертежа менеджер прикидывает цену: «проверь отверстие на чертеже» ему не к чему.
+// Тяжёлая дверь и кусок длиннее хлыста — остановка в любом расчёте.
+const ALWAYS_STOP = new Set(['door-weight', 'oversize'])
 // marks — янтарные метки на момент расчёта («цена хрома», «стекло подменено»): сумма есть,
 // но взята не та цена. Сохраняются с расчётом, чтобы закупка видела их и потом.
 // req — параметры душевой, по которым считали: корзина = заказ, общий раскрой профиля и
 // трубы на все душевые заказа пересчитывается по ним (у зеркал req нет).
 type ShowerReq = { model: string; dims: MDims; finishId: string; choice: Record<string, string>; qtyChoice: Record<string, number>; variant?: MVariant }
 // bom — состав душевой названиями (без цен): из него собирается лист 3 КП.
-type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number; marks?: string[]; req?: ShowerReq; bom?: BomItem }
+type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number; marks?: string[]; stops?: string[]; req?: ShowerReq; bom?: BomItem }
 type OrderCut = { saving: number; cuts: { name: string; finishId: string; perItemBars: number; pooledBars: number; saving: number }[] }
 
 const SUPPLIER: Record<string, string> = { av24: 'АВ24', vetro: 'Ветро' }
@@ -122,6 +127,11 @@ export default function BuildCalcPage() {
   const [kitChoices, setKitChoices] = useState<KitChoices | null>(null)
   const [choice, setChoice] = useState<Record<string, string>>({})
   const [qtyChoice, setQtyChoice] = useState<Record<string, number>>({})
+  // Расчёт по чертежу (Ч1): размеры панелей и артикулы, как они на чертеже. Пустое поле —
+  // берётся из геометрии и комплекта. Расхождения — остановки до закалки, а не другая цена.
+  const [byDrawing, setByDrawing] = useState(false)
+  const [panelOver, setPanelOver] = useState<Record<number, { w?: string; h?: string }>>({})
+  const [drawn, setDrawn] = useState<Record<string, string>>({})
 
   const [price, setPrice] = useState<Price | null>(null)
   const [specGlass, setSpecGlass] = useState(false)
@@ -187,11 +197,22 @@ export default function BuildCalcPage() {
   const mVariant = useMemo<MVariant>(
     () => (code === 'М1' ? { mount: 'perp90', profileFrame, glassSpan: 'panel' } : {}),
     [code, profileFrame])
-  const paramsKey = useMemo(() => JSON.stringify({ code, dims, finishId, g: glass.b2b, choice, qtyChoice, mVariant }), [code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant])
+  const drawingReq = useMemo(() => {
+    if (!byDrawing) return {}
+    const n = Math.max(-1, ...Object.keys(panelOver).map(Number)) + 1
+    const panels = Array.from({ length: n }, (_, i) => {
+      const w = numOr(panelOver[i]?.w ?? ''), h = numOr(panelOver[i]?.h ?? '')
+      return w > 0 || h > 0 ? { w, h } : null
+    })
+    const marked = Object.fromEntries(Object.entries(drawn).map(([r, v]) => [r, v.trim()]).filter(([, v]) => v))
+    return { ...(panels.some(Boolean) ? { panels } : {}), ...(Object.keys(marked).length ? { drawn: marked } : {}) }
+  }, [byDrawing, panelOver, drawn])
+  const paramsKey = useMemo(() => JSON.stringify({ code, dims, finishId, g: glass.b2b, choice, qtyChoice, mVariant, drawingReq }), [code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant, drawingReq])
   const priceDirty = pricedKey !== paramsKey   // цена ещё не догнала параметры
 
   function pickModel(c: string) {
     setCode(c); setDims(defaultsFor(c)); setChoice({}); setQtyChoice({}); setKitChoices(null); setPrice(null)
+    setByDrawing(false); setPanelOver({}); setDrawn({})
     marginTouched.current = false; taxTouched.current = false
     setMargin(String(FINANCE_FALLBACK.marginPct)); setTax(String(FINANCE_FALLBACK.taxPct)); setPerSection('6500'); setDelivery('5000'); setLift(''); setDiscount('0')
     setProfileFrame('partial')
@@ -250,6 +271,9 @@ export default function BuildCalcPage() {
       if (p.profileFrame === 'partial' || p.profileFrame === 'perimeter') setProfileFrame(p.profileFrame)
       if (p.choice && typeof p.choice === 'object') setChoice(p.choice as Record<string, string>)
       if (p.qtyChoice && typeof p.qtyChoice === 'object') setQtyChoice(p.qtyChoice as Record<string, number>)
+      if (p.byDrawing === true) setByDrawing(true)
+      if (p.panelOver && typeof p.panelOver === 'object') setPanelOver(p.panelOver as Record<number, { w?: string; h?: string }>)
+      if (p.drawn && typeof p.drawn === 'object') setDrawn(p.drawn as Record<string, string>)
       // Сохранённые маржа и налог — решение по этому расчёту: настройки их не перебивают.
       if (p.margin != null) marginTouched.current = true
       if (p.tax != null) taxTouched.current = true
@@ -299,7 +323,7 @@ export default function BuildCalcPage() {
       setState('loading')
       fetch('/api/calc/build', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-        body: JSON.stringify({ model: code, thickness: THICKNESS, finishId, glassType: glass.b2b, dims, choice, qtyChoice, variant: mVariant }),
+        body: JSON.stringify({ model: code, thickness: THICKNESS, finishId, glassType: glass.b2b, dims, choice, qtyChoice, variant: mVariant, ...drawingReq }),
       }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((res: { full?: boolean; price?: Price }) => {
           // Только последний запрос доживает (остальные оборваны abort), значит key актуален.
@@ -314,7 +338,7 @@ export default function BuildCalcPage() {
         }).catch((e: unknown) => { if ((e as Error)?.name !== 'AbortError') { setPrice(null); setState('error') } })
     }, 400)
     return () => { clearTimeout(t); ctrl.abort() }
-  }, [screen, code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant, paramsKey])
+  }, [screen, code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant, drawingReq, paramsKey])
 
   const glassCost = price?.glassCost ?? 0
   const hwCost = price?.hardwareCost ?? 0
@@ -338,13 +362,17 @@ export default function BuildCalcPage() {
 
   const title = () => `${model.code} ${model.name} · ${isCorner ? `${numOr(String(dims.width))}×${numOr(String(dims.width2 ?? 0))}×${numOr(String(dims.height))}` : `${numOr(String(dims.width))}×${numOr(String(dims.height))}`} мм`
   const marks = priceMarks(price)
+  const stops = (price?.stops ?? []).filter(x => byDrawing || ALWAYS_STOP.has(x.kind))
+  const notes = byDrawing ? (price?.notes ?? []) : []
+  // Роли, чей артикул можно сверить с подписью на чертеже, — то, что реально в расчёте.
+  const drawnRoles = [...new Set((price?.lines ?? []).map(l => l.role))]
   const currentReq: ShowerReq = { model: code, dims, finishId, choice, qtyChoice, variant: mVariant }
   const currentBom = (): BomItem => ({
     title: title(), glass: `${glass.label.toLowerCase()} ${THICKNESS} мм, закалённое`, finish: finish.label.toLowerCase(),
     panels: price?.glassLines?.length || undefined,
     lines: (price?.lines ?? []).map(l => ({ role: l.role, label: l.label, qty: l.qty, unit: l.unit })),
   })
-  const currentItem = (): CartItem => ({ title: title(), cost, productPrice: Math.round(productPrice), install, delivery: deliveryN, lift: liftN, total: grand, ...(marks.length ? { marks } : {}), req: currentReq, bom: currentBom() })
+  const currentItem = (): CartItem => ({ title: title(), cost, productPrice: Math.round(productPrice), install, delivery: deliveryN, lift: liftN, total: grand, ...(marks.length ? { marks } : {}), ...(stops.length ? { stops: stops.map(x => x.text) } : {}), req: currentReq, bom: currentBom() })
 
   // Корзина = заказ: профиль и труба всех душевых кроятся из общих хлыстов. Экономия —
   // себестоимости, строкой; цену клиенту не меняет (это решает менеджер скидкой).
@@ -386,7 +414,7 @@ export default function BuildCalcPage() {
     // иначе в КП приезжало бы лишнее изделие, которого менеджер не добавлял.
     if (product === 'shower' && usable && grand > 0) list.push(currentItem())
     if (!list.length) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500); return }
-    const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
+    const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, ...(byDrawing ? { byDrawing, panelOver, drawn } : {}), margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
     const total = list.reduce((s, i) => s + i.total, 0)
     const sig = JSON.stringify(snapshot) + '|' + total
     if (sig === lastSavedSigRef.current) { setSaveMsg('Уже сохранено ✓'); setTimeout(() => setSaveMsg(null), 2500); return }
@@ -654,6 +682,50 @@ export default function BuildCalcPage() {
                     </select>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* По чертежу: размеры стекла и подписи артикулов с чертежа клиента/дизайнера.
+                Цена фурнитуры остаётся по комплекту; расхождение — остановка до закалки. */}
+            {product === 'shower' && (
+              <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-2">
+                <label className="flex items-center justify-between gap-2 cursor-pointer">
+                  <span className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest">По чертежу</span>
+                  <input type="checkbox" checked={byDrawing} onChange={e => setByDrawing(e.target.checked)} />
+                </label>
+                {byDrawing && (
+                  <>
+                    <p className="text-[11px] text-[#9a9a95]">Пустое поле — из габаритов модели. Стекло считается по размерам чертежа.</p>
+                    {(price?.glassLines ?? []).map((g, k) => { const i = g.index ?? k; return (
+                      <div key={i} className="grid grid-cols-[1fr_5rem_5rem] gap-2 items-center">
+                        <span className="text-[12px] text-[#6b6b66]">{g.label}</span>
+                        <input type="number" className={fld} placeholder={String(g.w)} value={panelOver[i]?.w ?? ''}
+                          onChange={e => setPanelOver(p => ({ ...p, [i]: { ...p[i], w: e.target.value } }))} />
+                        <input type="number" className={fld} placeholder={String(g.h)} value={panelOver[i]?.h ?? ''}
+                          onChange={e => setPanelOver(p => ({ ...p, [i]: { ...p[i], h: e.target.value } }))} />
+                      </div>
+                    ) })}
+                    <p className="text-[11px] text-[#9a9a95] pt-1">Артикул, как подписан на чертеже:</p>
+                    {drawnRoles.map(r => (
+                      <div key={r} className="grid grid-cols-[1fr_8rem] gap-2 items-center">
+                        <span className="text-[12px] text-[#6b6b66]">{ROLE_META[r as RoleId]?.label ?? r}</span>
+                        <input className={fld} placeholder="напр. SD-210" value={drawn[r] ?? ''}
+                          onChange={e => setDrawn(p => ({ ...p, [r]: e.target.value }))} />
+                      </div>
+                    ))}
+                  </>
+                )}
+                {!priceDirty && stops.length > 0 && (
+                  <div className="rounded-lg bg-[#fef2f2] border border-[#fecaca] p-2 space-y-1">
+                    <p className="text-[11px] font-semibold text-[#b91c1c]">До закалки — остановиться и сверить</p>
+                    {stops.map((x, i) => <p key={i} className="text-[12px] text-[#7f1d1d]">• {x.text}</p>)}
+                  </div>
+                )}
+                {!priceDirty && notes.length > 0 && (
+                  <div className="text-[11px] text-amber-700 space-y-0.5">
+                    {notes.map((x, i) => <div key={i}>{x.text}</div>)}
+                  </div>
+                )}
               </div>
             )}
 
