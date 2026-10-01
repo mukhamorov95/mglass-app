@@ -1,0 +1,3061 @@
+{
+ "_source": "configurator_library + configurator_model_kits, tier=budget, живые данные 01.10.2026 (последняя правка библиотеки 02.09). Регрессионные ворота кода: при смене данных фикстуру не обновлять",
+ "finance": {
+  "marginPct": 40,
+  "taxPct": 12,
+  "minMarginPct": 25,
+  "source": "financial_settings · shower_budget"
+ },
+ "library": {
+  "items": [
+   {
+    "id": "it-a5k9x7",
+    "ref": {
+     "base": "Balge-004",
+     "label": "Balge-004/CP. Петля стекло-стекло 135°-180°",
+     "supplier": "vetro"
+    },
+    "name": "Balge-004/CP",
+    "role": "hinge",
+    "prices": {
+     "gold": 3492,
+     "rose": 4288,
+     "black": 3313,
+     "satin": 3568,
+     "white": 3990,
+     "brgold": 4147,
+     "bronze": 3313,
+     "brrose": 3990,
+     "chrome": 2988,
+     "gunmetal": 4035
+    }
+   },
+   {
+    "id": "it-brac2d",
+    "ref": {
+     "base": "FDP-115 SUS304",
+     "label": "Петля Европа FDP-115 стекло-стекло 180° без крышек, нержавей…",
+     "supplier": "av24"
+    },
+    "name": "Петля Европа FDP-115 стекло-стекло 180° без крыш",
+    "role": "hinge",
+    "prices": {
+     "gold": 1425,
+     "black": 1162,
+     "satin": 1275,
+     "chrome": 1162
+    }
+   },
+   {
+    "id": "it-26ouk",
+    "ref": {
+     "base": "FDR-30 AL",
+     "label": "Ручка кноб FDR-30 квадратная, алюминий/хром",
+     "supplier": "av24"
+    },
+    "name": "Ручка кноб FDR-30 квадратная, алюминий/хром",
+    "role": "handle",
+    "prices": {
+     "black": 338,
+     "chrome": 292
+    }
+   },
+   {
+    "id": "profile",
+    "name": "Профиль для стекла FDPA-51",
+    "role": "profile",
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "gold": 788,
+       "black": 638,
+       "satin": 788,
+       "white": 825,
+       "brgold": 1088,
+       "bronze": 788,
+       "chrome": 712,
+       "gunmetal": 975
+      }
+     }
+    ]
+   },
+   {
+    "id": "tube",
+    "name": "Труба FDT-352, 30х10х1",
+    "role": "tube",
+    "stocks": [
+     {
+      "len": 2000,
+      "prices": {
+       "gold": 2400,
+       "rose": 3000,
+       "black": 1650,
+       "satin": 1650,
+       "white": 1950,
+       "brgold": 2925,
+       "bronze": 2700,
+       "chrome": 2175,
+       "gunmetal": 2775
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-7o49hw",
+    "ref": {
+     "base": "FDC-30 SUS304",
+     "label": "Крепление FDC-30 трубы 30х10 к стене, нержавейка/полированны…",
+     "supplier": "av24"
+    },
+    "name": "Крепление FDC-30 трубы 30х10 к стене, нержавейка",
+    "role": "mount-wall",
+    "prices": {
+     "gold": 465,
+     "rose": 488,
+     "satin": 390,
+     "white": 412,
+     "brgold": 442,
+     "bronze": 458,
+     "chrome": 352,
+     "gunmetal": 488
+    }
+   },
+   {
+    "id": "it-83sqvl",
+    "ref": {
+     "base": "FDC-33 SUS304",
+     "label": "Держатель стекла FDC-33 торцевой 30х10 горизонтальный, нержа…",
+     "supplier": "av24"
+    },
+    "name": "Держатель стекла FDC-35 сквозной 30х10 горизонта",
+    "role": "mount-glass",
+    "image": "https://av24.su/wa-data/public/shop/products/55/29/2955/images/43626/43626.750x0.jpg",
+    "specs": {
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 608,
+     "rose": 615,
+     "black": 622,
+     "satin": 518,
+     "white": 592,
+     "brgold": 638,
+     "bronze": 540,
+     "chrome": 540,
+     "gunmetal": 742
+    }
+   },
+   {
+    "id": "it-flxwqq",
+    "ref": {
+     "base": "FDC-34 SUS304",
+     "label": "Крепление FDC-34 трубы 30х10 к стеклу, нержавейка/полированн…",
+     "supplier": "av24"
+    },
+    "name": "Крепление FDC-34 трубы 30х10 к стеклу, нержавейк",
+    "role": "mount-corner",
+    "prices": {
+     "gold": 592,
+     "rose": 615,
+     "black": 570,
+     "satin": 570,
+     "white": 578,
+     "brgold": 712,
+     "bronze": 502,
+     "chrome": 570,
+     "gunmetal": 848
+    }
+   },
+   {
+    "id": "it-4vzqdc",
+    "ref": {
+     "base": "FDPA-500.1 AL",
+     "label": "Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м, для п-образного…",
+     "supplier": "av24"
+    },
+    "name": "Заглушка верхняя FDPA-500",
+    "role": "cap",
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 112,
+       "rose": 262,
+       "black": 158,
+       "satin": 255,
+       "white": 262,
+       "brgold": 338,
+       "bronze": 262,
+       "chrome": 158,
+       "gunmetal": 338
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-fhf94p",
+    "ref": {
+     "base": "FDPP-402.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ Ч-образный прозрачный 2.2 м, ус 18 мм по…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ Ч-образный прозрачный 2",
+    "role": "seal-hinge",
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 202
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-6ay6sp",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-magnet",
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-5pm2ru",
+    "ref": {
+     "base": "FDPP-406.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ нижний прозрачный 2.2 м под стекло 8 мм …",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ нижний прозрачный 2",
+    "role": "seal-bottom",
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 262
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-7v0ihn",
+    "ref": {
+     "base": "FDC-33 SUS304",
+     "label": "Держатель стекла FDC-33 торцевой 30х10 горизонтальный, нержа…",
+     "supplier": "av24"
+    },
+    "name": "Держатель стекла FDC-33 торцевой 30х10 горизонта",
+    "role": "mount-glass",
+    "image": "https://av24.su/wa-data/public/shop/products/55/29/2955/images/43626/43626.750x0.jpg",
+    "specs": {
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 608,
+     "rose": 615,
+     "satin": 518,
+     "white": 592,
+     "brgold": 638,
+     "bronze": 540,
+     "chrome": 540,
+     "gunmetal": 742
+    }
+   },
+   {
+    "id": "it-diss40",
+    "ref": {
+     "base": "FDC-30 SUS304",
+     "label": "Крепление FDC-30 трубы 30х10 к стене, нержавейка/полированны…",
+     "supplier": "av24"
+    },
+    "name": "Крепление FDC-30 трубы 30х10 к стене, нержавейка",
+    "role": "mount-wall",
+    "image": "https://av24.su/wa-data/public/shop/products/63/29/2963/images/43578/43578.750x0.jpg",
+    "specs": {
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 465,
+     "rose": 488,
+     "satin": 390,
+     "white": 412,
+     "brgold": 442,
+     "bronze": 458,
+     "chrome": 352,
+     "gunmetal": 488
+    }
+   },
+   {
+    "id": "it-305us2",
+    "ref": {
+     "base": "FDPA-51.22 AL",
+     "label": "Профиль для стекла FDPA-51.22, 19х12х1,75, для стекла 8 мм, …",
+     "supplier": "av24"
+    },
+    "name": "Профиль для стекла FDPA-51",
+    "role": "profile",
+    "image": "https://av24.su/wa-data/public/shop/products/30/79/7930/images/42835/42835.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Сечение": "19х12х1,75 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "gold": 788,
+       "black": 638,
+       "satin": 788,
+       "white": 825,
+       "brgold": 1088,
+       "bronze": 788,
+       "chrome": 712,
+       "gunmetal": 975
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-8yeefi",
+    "ref": {
+     "base": "FDPA-501 SUS304",
+     "label": "Заглушка торцевая FDPA-501 для опорного профиля 19х13х2, нер…",
+     "supplier": "av24"
+    },
+    "name": "Заглушка торцевая FDPA-501 для опорного профиля ",
+    "role": "cap-end",
+    "image": "https://av24.su/wa-data/public/shop/products/51/38/3851/images/16321/16321.750x0.jpg",
+    "specs": {
+     "Сечение": "19х13х2 мм"
+    },
+    "prices": {
+     "gold": 120,
+     "black": 105,
+     "satin": 98,
+     "white": 120,
+     "brgold": 142,
+     "bronze": 142,
+     "chrome": 98
+    }
+   },
+   {
+    "id": "it-4ryy6n",
+    "ref": {
+     "base": "FDT-351 SUS304",
+     "label": "Труба FDT-351, 30х10х1.5 мм 1 м, нержавейка/полированный8K",
+     "supplier": "av24"
+    },
+    "name": "Труба FDT-351, 30х10х1",
+    "role": "tube",
+    "image": "https://av24.su/wa-data/public/shop/products/04/33/3304/images/41745/41745.750x0.jpg",
+    "specs": {
+     "Длина": "1 м",
+     "Сечение": "30х10х1.5 мм"
+    },
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 1275,
+       "black": 825,
+       "satin": 1050,
+       "white": 1050,
+       "brgold": 1200,
+       "bronze": 1500,
+       "chrome": 1050,
+       "gunmetal": 1275
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-b7cx5w",
+    "ref": {
+     "base": "FDC-35 SUS304",
+     "label": "Держатель стекла FDC-35 сквозной 30х10 горизонтальный, нержа…",
+     "supplier": "av24"
+    },
+    "name": "Держатель стекла FDC-35 сквозной 30х10 горизонта",
+    "role": "mount-glass",
+    "image": "https://av24.su/wa-data/public/shop/products/52/29/2952/images/50613/50613.750x0.JPG",
+    "specs": {
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 698,
+     "rose": 698,
+     "black": 622,
+     "satin": 682,
+     "white": 712,
+     "brgold": 742,
+     "bronze": 735,
+     "chrome": 622,
+     "gunmetal": 938
+    }
+   },
+   {
+    "id": "it-6plrs2",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-magnet",
+    "image": "https://av24.su/wa-data/public/shop/products/59/55/5559/images/18545/18545.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-4pqfjx",
+    "ref": {
+     "base": "FDP-115 SUS304",
+     "label": "Петля Европа FDP-115 стекло-стекло 180° без крышек, нержавей…",
+     "supplier": "av24"
+    },
+    "name": "Петля Европа FDP-115 стекло-стекло 180° без крыш",
+    "role": "hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/97/46/4697/images/30858/30858.750x0.jpg",
+    "specs": {
+     "Угол": "180°"
+    },
+    "prices": {
+     "gold": 1425,
+     "black": 1162,
+     "satin": 1275,
+     "chrome": 1162
+    }
+   },
+   {
+    "id": "it-3y3aw7",
+    "ref": {
+     "base": "FDR-30 SUS304",
+     "label": "Ручка кноб FDR-30 квадратная, нержавейка/полированный FDR-30…",
+     "supplier": "av24"
+    },
+    "name": "Ручка кноб FDR-30 квадратная, нержавейка/полиров",
+    "role": "handle",
+    "image": "https://av24.su/wa-data/public/shop/products/98/40/4098/images/26714/26714.750x0.jpg",
+    "prices": {
+     "rose": 900,
+     "black": 742,
+     "satin": 698,
+     "white": 742,
+     "brgold": 1125,
+     "bronze": 825,
+     "chrome": 675,
+     "gunmetal": 1125
+    }
+   },
+   {
+    "id": "it-bbdgkv",
+    "ref": {
+     "base": "FDT-352 SUS304",
+     "label": "Труба FDT-352, 30х10х1.5 мм 2 м, нержавейка/полированный8K",
+     "supplier": "av24"
+    },
+    "name": "Труба FDT-352, 30х10х1",
+    "role": "tube",
+    "image": "https://av24.su/wa-data/public/shop/products/02/40/4002/images/41747/41747.750x0.jpg",
+    "specs": {
+     "Длина": "2 м",
+     "Сечение": "30х10х1.5 мм"
+    },
+    "stocks": [
+     {
+      "len": 2000,
+      "prices": {
+       "gold": 2400,
+       "rose": 3000,
+       "black": 1650,
+       "satin": 1650,
+       "white": 1950,
+       "brgold": 2925,
+       "bronze": 2700,
+       "chrome": 2175,
+       "gunmetal": 2775
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-b94oq3",
+    "ref": {
+     "base": "FDC-35 SUS304",
+     "label": "Держатель стекла FDC-35 сквозной 30х10 горизонтальный, нержа…",
+     "supplier": "av24"
+    },
+    "name": "Держатель стекла FDC-35 сквозной 30х10 горизонта",
+    "role": "mount-glass",
+    "image": "https://av24.su/wa-data/public/shop/products/52/29/2952/images/50613/50613.750x0.JPG",
+    "specs": {
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 698,
+     "rose": 698,
+     "black": 622,
+     "satin": 682,
+     "white": 712,
+     "brgold": 742,
+     "bronze": 735,
+     "chrome": 622,
+     "gunmetal": 938
+    }
+   },
+   {
+    "id": "it-9qfrfq",
+    "ref": {
+     "base": "FDPA-500.1 AL",
+     "label": "Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м, для п-образного…",
+     "supplier": "av24"
+    },
+    "name": "Заглушка верхняя FDPA-500",
+    "role": "cap",
+    "image": "https://av24.su/wa-data/public/shop/products/31/26/2631/images/43385/43385.750x0.jpg",
+    "specs": {
+     "Длина": "1 м",
+     "Сечение": "19х13х2 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 262,
+       "rose": 262,
+       "black": 158,
+       "satin": 255,
+       "white": 262,
+       "brgold": 338,
+       "bronze": 262,
+       "chrome": 158,
+       "gunmetal": 338
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-4cp1qo",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-magnet",
+    "image": "https://av24.su/wa-data/public/shop/products/59/55/5559/images/18545/18545.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-5opxud",
+    "ref": {
+     "base": "FDPP-406.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ нижний прозрачный 2.2 м под стекло 8 мм …",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ нижний прозрачный 2",
+    "role": "seal-bottom",
+    "image": "https://av24.su/wa-data/public/shop/products/73/55/5573/images/18577/18577.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 262
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-dkic27",
+    "ref": {
+     "base": "FDPP-402.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ Ч-образный прозрачный 2.2 м, ус 18 мм по…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ Ч-образный прозрачный 2",
+    "role": "seal-hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/67/55/5567/images/18560/18560.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 202
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-gbqu9q",
+    "ref": {
+     "base": "FDPA-500.1 AL",
+     "label": "Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м, для п-образного…",
+     "supplier": "av24"
+    },
+    "name": "Заглушка верхняя FDPA-500",
+    "role": "cap",
+    "image": "https://av24.su/wa-data/public/shop/products/31/26/2631/images/43385/43385.750x0.jpg",
+    "specs": {
+     "Длина": "1 м",
+     "Сечение": "19х13х2 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 262,
+       "rose": 262,
+       "black": 158,
+       "satin": 255,
+       "white": 262,
+       "brgold": 338,
+       "bronze": 262,
+       "chrome": 158,
+       "gunmetal": 338
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-34d8b2",
+    "ref": {
+     "base": "FDS-15 AL",
+     "label": "Раздвижная система Венера FDS-15 для стеклянных дверей, алюм…",
+     "supplier": "av24"
+    },
+    "name": "Раздвижная система Венера FDS-15 для стеклянных ",
+    "role": "handle-slide",
+    "image": "https://av24.su/wa-data/public/shop/products/56/52/5256/images/27490/27490.750x0.png",
+    "prices": {
+     "chrome": 2212
+    }
+   },
+   {
+    "id": "it-fafm00",
+    "ref": {
+     "base": "FDS-1 SUS304",
+     "label": "Раздвижная система Альфа α FDS-1, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Раздвижная система Альфа α FDS-1, нержавейка/пол",
+    "role": "handle-slide",
+    "image": "https://av24.su/wa-data/public/shop/products/10/29/2910/images/9474/9474.750x0.jpg",
+    "prices": {
+     "gold": 3675,
+     "rose": 3675,
+     "black": 3375,
+     "satin": 2925,
+     "white": 4125,
+     "brgold": 4492,
+     "bronze": 4200,
+     "chrome": 3150,
+     "gunmetal": 4492
+    }
+   },
+   {
+    "id": "it-4agwke",
+    "ref": {
+     "base": "FDS-30 SUS304",
+     "label": "Ролик FDS-30 с креплением к стеклу, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Ролик FDS-30 с креплением к стеклу, нержавейка/п",
+    "role": "roller",
+    "image": "https://av24.su/wa-data/public/shop/products/37/77/7737/images/34287/34287.750x0.jpg",
+    "prices": {
+     "gold": 712,
+     "rose": 638,
+     "satin": 488,
+     "white": 742,
+     "brgold": 712,
+     "bronze": 638,
+     "chrome": 518,
+     "gunmetal": 712
+    }
+   },
+   {
+    "id": "it-fur3bb",
+    "ref": {
+     "base": "FDT-352 SUS304",
+     "label": "Труба FDT-352, 30х10х1.5 мм 2 м, нержавейка/полированный8K",
+     "supplier": "av24"
+    },
+    "name": "Труба FDT-352, 30х10х1",
+    "role": "tube",
+    "image": "https://av24.su/wa-data/public/shop/products/02/40/4002/images/41747/41747.750x0.jpg",
+    "specs": {
+     "Длина": "2 м",
+     "Сечение": "30х10х1.5 мм"
+    },
+    "stocks": [
+     {
+      "len": 2000,
+      "prices": {
+       "gold": 2400,
+       "rose": 3000,
+       "black": 1650,
+       "satin": 1650,
+       "white": 1950,
+       "brgold": 2925,
+       "bronze": 2700,
+       "chrome": 2175,
+       "gunmetal": 2775
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-17sojk",
+    "ref": {
+     "base": "FDC-32 SUS304",
+     "label": "Соединитель FDC-32 трубы 30х10 угловой 90° вертикальный, нер…",
+     "supplier": "av24"
+    },
+    "name": "Соединитель FDC-32 трубы 30х10 угловой 90° верти",
+    "role": "mount-wall",
+    "image": "https://av24.su/wa-data/public/shop/products/49/29/2949/images/43651/43651.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 578,
+     "rose": 540,
+     "black": 488,
+     "satin": 488,
+     "white": 540,
+     "brgold": 690,
+     "bronze": 540,
+     "chrome": 495,
+     "gunmetal": 705
+    }
+   },
+   {
+    "id": "it-d5g6yv",
+    "ref": {
+     "base": "FDPP-407.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2.2 м, ус 16 мм. п…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2",
+    "role": "seal-bottom",
+    "image": "https://av24.su/wa-data/public/shop/products/64/55/5564/images/18557/18557.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 240
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-3xtcco",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-bottom",
+    "image": "https://av24.su/wa-data/public/shop/products/59/55/5559/images/18545/18545.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-5mzprf",
+    "ref": {
+     "base": "FDPP-406.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ нижний прозрачный 2.2 м под стекло 8 мм …",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ нижний прозрачный 2",
+    "role": "seal-bottom",
+    "image": "https://av24.su/wa-data/public/shop/products/73/55/5573/images/18577/18577.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 262
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-avbz4u",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-magnet",
+    "image": "https://av24.su/wa-data/public/shop/products/59/55/5559/images/18545/18545.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-3obxie",
+    "ref": {
+     "base": "FDPP-407.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2.2 м, ус 16 мм. п…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2",
+    "role": "seal-hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/64/55/5564/images/18557/18557.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 240
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-efkste",
+    "ref": {
+     "base": "FDC-32 SUS304",
+     "label": "Соединитель FDC-32 трубы 30х10 угловой 90° вертикальный, нер…",
+     "supplier": "av24"
+    },
+    "name": "Соединитель FDC-32 трубы 30х10 угловой 90° верти",
+    "role": "mount-corner",
+    "image": "https://av24.su/wa-data/public/shop/products/49/29/2949/images/43651/43651.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 578,
+     "rose": 540,
+     "black": 488,
+     "satin": 488,
+     "white": 540,
+     "brgold": 690,
+     "bronze": 540,
+     "chrome": 495,
+     "gunmetal": 705
+    }
+   },
+   {
+    "id": "it-9fkotq",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-magnet",
+    "image": "https://av24.su/wa-data/public/shop/products/59/55/5559/images/18545/18545.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-b4t3h7",
+    "ref": {
+     "base": "FDPP-407.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2.2 м, ус 16 мм. п…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2",
+    "role": "seal-hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/64/55/5564/images/18557/18557.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 240
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-3az98u",
+    "ref": {
+     "base": "FDS-1 SUS304",
+     "label": "Раздвижная система Альфа α FDS-1, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Раздвижная система Альфа α FDS-1, нержавейка/пол",
+    "role": "handle-slide",
+    "image": "https://av24.su/wa-data/public/shop/products/10/29/2910/images/9474/9474.750x0.jpg",
+    "prices": {
+     "gold": 3675,
+     "rose": 3675,
+     "black": 3375,
+     "satin": 2925,
+     "white": 4125,
+     "brgold": 4492,
+     "bronze": 4200,
+     "chrome": 3150,
+     "gunmetal": 4492
+    }
+   },
+   {
+    "id": "it-3xxbl5",
+    "ref": {
+     "base": "FDS-30 SUS304",
+     "label": "Ролик FDS-30 с креплением к стеклу, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Ролик FDS-30 с креплением к стеклу, нержавейка/п",
+    "role": "roller",
+    "image": "https://av24.su/wa-data/public/shop/products/37/77/7737/images/34287/34287.750x0.jpg",
+    "prices": {
+     "gold": 712,
+     "rose": 638,
+     "satin": 488,
+     "white": 742,
+     "brgold": 712,
+     "bronze": 638,
+     "chrome": 518,
+     "gunmetal": 712
+    }
+   },
+   {
+    "id": "it-8eaz9v",
+    "ref": {
+     "base": "FDT-352 SUS304",
+     "label": "Труба FDT-352, 30х10х1.5 мм 2 м, нержавейка/полированный8K",
+     "supplier": "av24"
+    },
+    "name": "Труба FDT-352, 30х10х1",
+    "role": "tube",
+    "image": "https://av24.su/wa-data/public/shop/products/02/40/4002/images/41747/41747.750x0.jpg",
+    "specs": {
+     "Длина": "2 м",
+     "Сечение": "30х10х1.5 мм"
+    },
+    "stocks": [
+     {
+      "len": 2000,
+      "prices": {
+       "gold": 2400,
+       "rose": 3000,
+       "black": 1650,
+       "satin": 1650,
+       "white": 1950,
+       "brgold": 2925,
+       "bronze": 2700,
+       "chrome": 2175,
+       "gunmetal": 2775
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-1a8eic",
+    "ref": {
+     "base": "FDPA-51.22 AL",
+     "label": "Профиль для стекла FDPA-51.22, 19х12х1,75, для стекла 8 мм, …",
+     "supplier": "av24"
+    },
+    "name": "Профиль для стекла FDPA-51",
+    "role": "profile",
+    "image": "https://av24.su/wa-data/public/shop/products/30/79/7930/images/42835/42835.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Сечение": "19х12х1,75 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "gold": 788,
+       "black": 638,
+       "satin": 788,
+       "white": 825,
+       "brgold": 1088,
+       "bronze": 788,
+       "chrome": 712,
+       "gunmetal": 975
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-794c6p",
+    "ref": {
+     "base": "FDPA-500.1 AL",
+     "label": "Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м, для п-образного…",
+     "supplier": "av24"
+    },
+    "name": "Заглушка верхняя FDPA-500",
+    "role": "cap",
+    "image": "https://av24.su/wa-data/public/shop/products/31/26/2631/images/43385/43385.750x0.jpg",
+    "specs": {
+     "Длина": "1 м",
+     "Сечение": "19х13х2 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 262,
+       "rose": 262,
+       "black": 158,
+       "satin": 255,
+       "white": 262,
+       "brgold": 338,
+       "bronze": 262,
+       "chrome": 158,
+       "gunmetal": 338
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-7ndi8",
+    "ref": {
+     "base": "FDPP-406.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ нижний прозрачный 2.2 м под стекло 8 мм …",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ нижний прозрачный 2",
+    "role": "seal-bottom",
+    "image": "https://av24.su/wa-data/public/shop/products/73/55/5573/images/18577/18577.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 262
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-b63amv",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-magnet",
+    "image": "https://av24.su/wa-data/public/shop/products/59/55/5559/images/18545/18545.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-ctc213",
+    "ref": {
+     "base": "FDPP-407.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2.2 м, ус 16 мм. п…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2",
+    "role": "seal-hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/64/55/5564/images/18557/18557.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 240
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-5qdsoc",
+    "ref": {
+     "base": "FDC-34-DEF SUS304",
+     "label": "Крепление трубы FDC-34-DEF с дефектом 30х10 к стеклу, нержав…",
+     "supplier": "av24"
+    },
+    "name": "Крепление трубы FDC-34-DEF с дефектом 30х10 к ст",
+    "role": "mount-glass",
+    "prices": {
+     "bronze": 75,
+     "chrome": 75
+    }
+   },
+   {
+    "id": "it-3m7enz",
+    "ref": {
+     "base": "FDC-34 SUS304",
+     "label": "Крепление FDC-34 трубы 30х10 к стеклу, нержавейка/полированн…",
+     "supplier": "av24"
+    },
+    "name": "Крепление FDC-34 трубы 30х10 к стеклу, нержавейк",
+    "role": "mount-glass",
+    "image": "https://av24.su/wa-data/public/shop/products/59/29/2959/images/43799/43799.750x0.jpg",
+    "specs": {
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 592,
+     "rose": 615,
+     "black": 570,
+     "satin": 570,
+     "white": 578,
+     "brgold": 712,
+     "bronze": 502,
+     "chrome": 570,
+     "gunmetal": 848
+    }
+   },
+   {
+    "id": "it-3i6dlf",
+    "ref": {
+     "base": "FDS-1 SUS304",
+     "label": "Раздвижная система Альфа α FDS-1, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Раздвижная система Альфа α FDS-1, нержавейка/пол",
+    "role": "handle-slide",
+    "image": "https://av24.su/wa-data/public/shop/products/10/29/2910/images/9474/9474.750x0.jpg",
+    "prices": {
+     "gold": 3675,
+     "rose": 3675,
+     "black": 3375,
+     "satin": 2925,
+     "white": 4125,
+     "brgold": 4492,
+     "bronze": 4200,
+     "chrome": 3150,
+     "gunmetal": 4492
+    }
+   },
+   {
+    "id": "it-32niq0",
+    "ref": {
+     "base": "FDS-30 SUS304",
+     "label": "Ролик FDS-30 с креплением к стеклу, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Ролик FDS-30 с креплением к стеклу, нержавейка/п",
+    "role": "roller",
+    "image": "https://av24.su/wa-data/public/shop/products/37/77/7737/images/34287/34287.750x0.jpg",
+    "prices": {
+     "gold": 712,
+     "rose": 638,
+     "satin": 488,
+     "white": 742,
+     "brgold": 712,
+     "bronze": 638,
+     "chrome": 518,
+     "gunmetal": 712
+    }
+   },
+   {
+    "id": "it-3ezyt7",
+    "ref": {
+     "base": "FDT-352 SUS304",
+     "label": "Труба FDT-352, 30х10х1.5 мм 2 м, нержавейка/полированный8K",
+     "supplier": "av24"
+    },
+    "name": "Труба FDT-352, 30х10х1",
+    "role": "tube",
+    "image": "https://av24.su/wa-data/public/shop/products/02/40/4002/images/41747/41747.750x0.jpg",
+    "specs": {
+     "Длина": "2 м",
+     "Сечение": "30х10х1.5 мм"
+    },
+    "stocks": [
+     {
+      "len": 2000,
+      "prices": {
+       "gold": 2400,
+       "rose": 3000,
+       "black": 1650,
+       "satin": 1650,
+       "white": 1950,
+       "brgold": 2925,
+       "bronze": 2700,
+       "chrome": 2175,
+       "gunmetal": 2775
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-5smpqj",
+    "ref": {
+     "base": "FDPA-51.22 AL",
+     "label": "Профиль для стекла FDPA-51.22, 19х12х1,75, для стекла 8 мм, …",
+     "supplier": "av24"
+    },
+    "name": "Профиль для стекла FDPA-51",
+    "role": "profile",
+    "image": "https://av24.su/wa-data/public/shop/products/30/79/7930/images/42835/42835.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Сечение": "19х12х1,75 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "gold": 788,
+       "black": 638,
+       "satin": 788,
+       "white": 825,
+       "brgold": 1088,
+       "bronze": 788,
+       "chrome": 712,
+       "gunmetal": 975
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-73e68t",
+    "ref": {
+     "base": "FDPA-500.1 AL",
+     "label": "Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м, для п-образного…",
+     "supplier": "av24"
+    },
+    "name": "Заглушка верхняя FDPA-500",
+    "role": "cap",
+    "image": "https://av24.su/wa-data/public/shop/products/31/26/2631/images/43385/43385.750x0.jpg",
+    "specs": {
+     "Длина": "1 м",
+     "Сечение": "19х13х2 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 262,
+       "rose": 262,
+       "black": 158,
+       "satin": 255,
+       "white": 262,
+       "brgold": 338,
+       "bronze": 262,
+       "chrome": 158,
+       "gunmetal": 338
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-5g0rnx",
+    "ref": {
+     "base": "FDPA-59.22 AL",
+     "label": "Профиль FDPA-59.22 для крепления уплотнителя к стене, 2,2 м,…",
+     "supplier": "av24"
+    },
+    "name": "Профиль FDPA-59",
+    "role": "profile-wall",
+    "image": "https://av24.su/wa-data/public/shop/products/09/80/8009/images/37211/37211.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1162
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-9fohw3",
+    "ref": {
+     "base": "FDPP-406.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ нижний прозрачный 2.2 м под стекло 8 мм …",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ нижний прозрачный 2",
+    "role": "seal-bottom",
+    "image": "https://av24.su/wa-data/public/shop/products/73/55/5573/images/18577/18577.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 262
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-dvkc",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-magnet",
+    "image": "https://av24.su/wa-data/public/shop/products/59/55/5559/images/18545/18545.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-97vagu",
+    "ref": {
+     "base": "FDPP-407.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2.2 м, ус 16 мм. п…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2",
+    "role": "seal-hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/64/55/5564/images/18557/18557.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 240
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-7023zv",
+    "ref": {
+     "base": "FDS-1 SUS304",
+     "label": "Раздвижная система Альфа α FDS-1, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Раздвижная система Альфа α FDS-1, нержавейка/пол",
+    "role": "handle-slide",
+    "image": "https://av24.su/wa-data/public/shop/products/10/29/2910/images/9474/9474.750x0.jpg",
+    "prices": {
+     "gold": 3675,
+     "rose": 3675,
+     "black": 3375,
+     "satin": 2925,
+     "white": 4125,
+     "brgold": 4492,
+     "bronze": 4200,
+     "chrome": 3150,
+     "gunmetal": 4492
+    }
+   },
+   {
+    "id": "it-ayokbn",
+    "ref": {
+     "base": "FDS-30 SUS304",
+     "label": "Ролик FDS-30 с креплением к стеклу, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Ролик FDS-30 с креплением к стеклу, нержавейка/п",
+    "role": "roller",
+    "image": "https://av24.su/wa-data/public/shop/products/37/77/7737/images/34287/34287.750x0.jpg",
+    "prices": {
+     "gold": 712,
+     "rose": 638,
+     "satin": 488,
+     "white": 742,
+     "brgold": 712,
+     "bronze": 638,
+     "chrome": 518,
+     "gunmetal": 712
+    }
+   },
+   {
+    "id": "it-dsfkqn",
+    "ref": {
+     "base": "FDT-351 SUS304",
+     "label": "Труба FDT-351, 30х10х1.5 мм 1 м, нержавейка/полированный8K",
+     "supplier": "av24"
+    },
+    "name": "Труба FDT-351, 30х10х1",
+    "role": "tube",
+    "image": "https://av24.su/wa-data/public/shop/products/04/33/3304/images/41745/41745.750x0.jpg",
+    "specs": {
+     "Длина": "1 м",
+     "Сечение": "30х10х1.5 мм"
+    },
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 1275,
+       "black": 825,
+       "satin": 1050,
+       "white": 1050,
+       "brgold": 1200,
+       "bronze": 1500,
+       "chrome": 1050,
+       "gunmetal": 1275
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-3w3f4b",
+    "ref": {
+     "base": "FDS-32 SUS304",
+     "label": "Крепление трека к стеклу FDS-32, нержавейка/полированный",
+     "supplier": "av24"
+    },
+    "name": "Крепление трека к стеклу FDS-32, нержавейка/поли",
+    "role": "mount-glass",
+    "image": "https://av24.su/wa-data/public/shop/products/39/29/2939/images/15242/15242.750x0.jpg",
+    "prices": {
+     "gold": 488,
+     "rose": 488,
+     "black": 300,
+     "satin": 278,
+     "white": 488,
+     "brgold": 488,
+     "bronze": 488,
+     "chrome": 292,
+     "gunmetal": 638
+    }
+   },
+   {
+    "id": "it-895pw7",
+    "ref": {
+     "base": "FDPA-51.22 AL",
+     "label": "Профиль для стекла FDPA-51.22, 19х12х1,75, для стекла 8 мм, …",
+     "supplier": "av24"
+    },
+    "name": "Профиль для стекла FDPA-51",
+    "role": "profile",
+    "image": "https://av24.su/wa-data/public/shop/products/30/79/7930/images/42835/42835.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Сечение": "19х12х1,75 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "gold": 788,
+       "black": 638,
+       "satin": 788,
+       "white": 825,
+       "brgold": 1088,
+       "bronze": 788,
+       "chrome": 712,
+       "gunmetal": 975
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-3zytz",
+    "ref": {
+     "base": "FDPA-500.1 AL",
+     "label": "Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м, для п-образного…",
+     "supplier": "av24"
+    },
+    "name": "Заглушка верхняя FDPA-500",
+    "role": "cap",
+    "image": "https://av24.su/wa-data/public/shop/products/31/26/2631/images/43385/43385.750x0.jpg",
+    "specs": {
+     "Длина": "1 м",
+     "Сечение": "19х13х2 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 262,
+       "rose": 262,
+       "black": 158,
+       "satin": 255,
+       "white": 262,
+       "brgold": 338,
+       "bronze": 262,
+       "chrome": 158,
+       "gunmetal": 338
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-1jo3s",
+    "ref": {
+     "base": "FDPP-502.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый ма…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн",
+    "role": "seal-magnet",
+    "image": "https://av24.su/wa-data/public/shop/products/59/55/5559/images/18545/18545.750x0.jpg",
+    "specs": {
+     "Угол": "90°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1028
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-9pfs3",
+    "ref": {
+     "base": "FDPP-407.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2.2 м, ус 16 мм. п…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ F-образный прозрачный 2",
+    "role": "seal-hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/64/55/5564/images/18557/18557.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 240
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-9l40k5",
+    "ref": {
+     "base": "FDT-352 SUS304",
+     "label": "Труба FDT-352, 30х10х1.5 мм 2 м, нержавейка/полированный8K",
+     "supplier": "av24"
+    },
+    "name": "Труба FDT-352, 30х10х1",
+    "role": "tube",
+    "image": "https://av24.su/wa-data/public/shop/products/02/40/4002/images/41747/41747.750x0.jpg",
+    "specs": {
+     "Длина": "2 м",
+     "Сечение": "30х10х1.5 мм"
+    },
+    "stocks": [
+     {
+      "len": 2000,
+      "prices": {
+       "gold": 2400,
+       "rose": 3000,
+       "black": 1650,
+       "satin": 1650,
+       "white": 1950,
+       "brgold": 2925,
+       "bronze": 2700,
+       "chrome": 2175,
+       "gunmetal": 2775
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-1wkqd6",
+    "ref": {
+     "base": "FDC-30 SUS304",
+     "label": "Крепление FDC-30 трубы 30х10 к стене, нержавейка/полированны…",
+     "supplier": "av24"
+    },
+    "name": "Крепление FDC-30 трубы 30х10 к стене, нержавейка",
+    "role": "mount-wall",
+    "image": "https://av24.su/wa-data/public/shop/products/63/29/2963/images/43578/43578.750x0.jpg",
+    "specs": {
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 465,
+     "rose": 488,
+     "satin": 390,
+     "white": 412,
+     "brgold": 442,
+     "bronze": 458,
+     "chrome": 352,
+     "gunmetal": 488
+    }
+   },
+   {
+    "id": "it-6poleo",
+    "ref": {
+     "base": "FDC-35 SUS304",
+     "label": "Держатель стекла FDC-35 сквозной 30х10 горизонтальный, нержа…",
+     "supplier": "av24"
+    },
+    "name": "Держатель стекла FDC-35 сквозной 30х10 горизонта",
+    "role": "mount-glass",
+    "image": "https://av24.su/wa-data/public/shop/products/52/29/2952/images/50613/50613.750x0.JPG",
+    "specs": {
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "gold": 698,
+     "rose": 698,
+     "black": 622,
+     "satin": 682,
+     "white": 712,
+     "brgold": 742,
+     "bronze": 735,
+     "chrome": 622,
+     "gunmetal": 938
+    }
+   },
+   {
+    "id": "it-g83m2j",
+    "ref": {
+     "base": "FDP-234 BR",
+     "label": "Петля Афродита FDP-234 стекло-стекло 135° с крышками, латунь…",
+     "supplier": "av24"
+    },
+    "name": "Петля Афродита FDP-234 стекло-стекло 135° с крыш",
+    "role": "hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/39/85/8539/images/45185/45185.750x0.jpg",
+    "specs": {
+     "Угол": "135°"
+    },
+    "prices": {
+     "gold": 4350,
+     "black": 4350,
+     "satin": 3975,
+     "white": 3900,
+     "brgold": 4200,
+     "bronze": 4200,
+     "chrome": 3675,
+     "gunmetal": 5100
+    }
+   },
+   {
+    "id": "it-99jvz2",
+    "ref": {
+     "base": "FDR-30 AL",
+     "label": "Ручка кноб FDR-30 квадратная, алюминий/хром",
+     "supplier": "av24"
+    },
+    "name": "Ручка кноб FDR-30 квадратная, алюминий/хром",
+    "role": "handle",
+    "image": "https://av24.su/wa-data/public/shop/products/60/52/5260/images/26703/26703.750x0.jpg",
+    "prices": {
+     "black": 338,
+     "chrome": 292
+    }
+   },
+   {
+    "id": "it-ehastc",
+    "ref": {
+     "base": "FDC-39 SUS304",
+     "label": "Соединитель FDC-39 трубы 30х10 угловой 135° горизонтальный, …",
+     "supplier": "av24"
+    },
+    "name": "Соединитель FDC-39 трубы 30х10 угловой 135° гори",
+    "role": "connector",
+    "image": "https://av24.su/wa-data/public/shop/products/91/50/5091/images/15975/15975.750x0.jpg",
+    "specs": {
+     "Угол": "135°",
+     "Сечение": "30х10 мм"
+    },
+    "prices": {
+     "chrome": 570
+    }
+   },
+   {
+    "id": "it-g6gzd8",
+    "ref": {
+     "base": "FDPA-51.22 AL",
+     "label": "Профиль для стекла FDPA-51.22, 19х12х1,75, для стекла 8 мм, …",
+     "supplier": "av24"
+    },
+    "name": "Профиль для стекла FDPA-51",
+    "role": "profile",
+    "image": "https://av24.su/wa-data/public/shop/products/30/79/7930/images/42835/42835.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Сечение": "19х12х1,75 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "gold": 788,
+       "black": 638,
+       "satin": 788,
+       "white": 825,
+       "brgold": 1088,
+       "bronze": 788,
+       "chrome": 712,
+       "gunmetal": 975
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-g01986",
+    "ref": {
+     "base": "FDPA-500.1 AL",
+     "label": "Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м, для п-образного…",
+     "supplier": "av24"
+    },
+    "name": "Заглушка верхняя FDPA-500",
+    "role": "cap",
+    "image": "https://av24.su/wa-data/public/shop/products/31/26/2631/images/43385/43385.750x0.jpg",
+    "specs": {
+     "Длина": "1 м",
+     "Сечение": "19х13х2 мм",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 1000,
+      "prices": {
+       "gold": 262,
+       "rose": 262,
+       "black": 158,
+       "satin": 255,
+       "white": 262,
+       "brgold": 338,
+       "bronze": 262,
+       "chrome": 158,
+       "gunmetal": 338
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-by9ppg",
+    "ref": {
+     "base": "FDPP-501.8 PVC",
+     "label": "Уплотнитель магнитный ПРЕМИУМ 135°, 180° прозрачный, белый м…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель магнитный ПРЕМИУМ 135°, 180° прозрач",
+    "role": "seal-magnet",
+    "image": "https://av24.su/wa-data/public/shop/products/11/58/5811/images/47709/47709.750x0.jpeg",
+    "specs": {
+     "Угол": "135°",
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 1050
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-52ktgu",
+    "ref": {
+     "base": "FDPP-406.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ нижний прозрачный 2.2 м под стекло 8 мм …",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ нижний прозрачный 2",
+    "role": "seal-bottom",
+    "image": "https://av24.su/wa-data/public/shop/products/73/55/5573/images/18577/18577.750x0.jpg",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 262
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-by16m2",
+    "ref": {
+     "base": "FDPP-405.8 PVC",
+     "label": "Уплотнитель ПРЕМИУМ Ц-образный прозрачный 2.2 м, ус 16 мм по…",
+     "supplier": "av24"
+    },
+    "name": "Уплотнитель ПРЕМИУМ Ц-образный прозрачный 2",
+    "role": "seal-hinge",
+    "image": "https://av24.su/wa-data/public/shop/products/72/55/5572/images/30463/30463.750x0.JPG",
+    "specs": {
+     "Длина": "2.2 м",
+     "Под стекло": "8 мм"
+    },
+    "stocks": [
+     {
+      "len": 2200,
+      "prices": {
+       "chrome": 202
+      }
+     }
+    ]
+   },
+   {
+    "id": "it-3k416v",
+    "ref": {
+     "base": "FDT-352 SUS304",
+     "label": "Труба FDT-352, 30х10х1.5 мм 2 м, нержавейка/полированный8K",
+     "supplier": "av24"
+    },
+    "name": "Труба FDT-352, 30х10х1",
+    "role": "tube",
+    "image": "https://av24.su/wa-data/public/shop/products/02/40/4002/images/41747/41747.750x0.jpg",
+    "specs": {
+     "Длина": "2 м",
+     "Сечение": "30х10х1.5 мм"
+    },
+    "stocks": [
+     {
+      "len": 2000,
+      "prices": {
+       "gold": 2400,
+       "rose": 3000,
+       "black": 1650,
+       "satin": 1650,
+       "white": 1950,
+       "brgold": 2925,
+       "bronze": 2700,
+       "chrome": 2175,
+       "gunmetal": 2775
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "kits": {
+  "М1": {
+   "slots": [
+    {
+     "role": "mount-wall",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-diss40",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-glass",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-7v0ihn",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "cap-end",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-8yeefi",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-305us2",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "tube",
+       "primary": true
+      }
+     ]
+    }
+   ]
+  },
+  "М2": {
+   "slots": [
+    {
+     "role": "hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-a5k9x7",
+       "primary": false
+      },
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-brac2d",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "handle",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-26ouk",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-wall",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-7o49hw",
+       "primary": true
+      },
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-diss40"
+      }
+     ]
+    },
+    {
+     "role": "mount-glass",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-b7cx5w"
+      }
+     ]
+    },
+    {
+     "role": "cap",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-4vzqdc",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-magnet",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-6plrs2"
+      }
+     ]
+    },
+    {
+     "role": "seal-bottom",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-5pm2ru",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-fhf94p",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "profile",
+       "primary": true
+      },
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-305us2"
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "tube",
+       "primary": true
+      }
+     ]
+    }
+   ]
+  },
+  "М4": {
+   "slots": [
+    {
+     "role": "hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-a5k9x7",
+       "primary": false
+      },
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-4pqfjx",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "handle",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-3y3aw7",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-wall",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-diss40"
+      }
+     ]
+    },
+    {
+     "role": "mount-glass",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-b94oq3",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "cap",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-9qfrfq",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-magnet",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-4cp1qo",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-bottom",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-5opxud",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-dkic27",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-305us2",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-bbdgkv",
+       "primary": true
+      }
+     ]
+    }
+   ]
+  },
+  "М7": {
+   "slots": [
+    {
+     "role": "hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-a5k9x7",
+       "primary": false
+      },
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-brac2d",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "handle",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-26ouk",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-wall",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-7o49hw",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-glass",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-83sqvl",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-corner",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-flxwqq",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "cap",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-4vzqdc",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-magnet",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-6ay6sp",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-bottom",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-5pm2ru",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-fhf94p",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "profile",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "tube",
+       "primary": true
+      }
+     ]
+    }
+   ]
+  },
+  "М8": {
+   "slots": [
+    {
+     "role": "handle-slide",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-fafm00",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "roller",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-4agwke",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "cap",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-gbqu9q",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-305us2",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-fur3bb",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-corner",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-efkste",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-magnet",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "n": 1,
+        "mode": "fixed"
+       },
+       "itemId": "it-9fkotq",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-b4t3h7",
+       "primary": true
+      }
+     ]
+    }
+   ]
+  },
+  "М9": {
+   "slots": [
+    {
+     "role": "handle-slide",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-3az98u",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "roller",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-3xxbl5",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "cap",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-794c6p",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-1a8eic",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-8eaz9v",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-glass",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-3m7enz",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-magnet",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-b63amv",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "n": 2,
+        "mode": "fixed"
+       },
+       "itemId": "it-ctc213",
+       "primary": true
+      }
+     ]
+    }
+   ],
+   "excluded": [
+    "mount-wall",
+    "cap-end",
+    "seal-bottom"
+   ]
+  },
+  "М10": {
+   "slots": [
+    {
+     "role": "handle-slide",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-3i6dlf",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "roller",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-32niq0",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "cap",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-73e68t",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-5smpqj",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-3ezyt7",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile-wall",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-5g0rnx",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-magnet",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-dvkc",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "n": 2,
+        "mode": "fixed"
+       },
+       "itemId": "it-97vagu",
+       "primary": true
+      }
+     ]
+    }
+   ]
+  },
+  "М12": {
+   "slots": [
+    {
+     "role": "handle-slide",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-7023zv",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "roller",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-ayokbn",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "cap",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-3zytz",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "n": 4,
+        "mode": "fixed"
+       },
+       "itemId": "it-9pfs3",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-895pw7",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-3k416v",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-glass",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "n": 2,
+        "mode": "fixed"
+       },
+       "itemId": "it-3w3f4b",
+       "primary": true
+      }
+     ]
+    }
+   ],
+   "excluded": [
+    "mount-wall",
+    "cap-end",
+    "seal-magnet",
+    "seal-bottom"
+   ]
+  },
+  "М11": {
+   "slots": [
+    {
+     "role": "hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-g83m2j",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "handle",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-99jvz2",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-wall",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-1wkqd6",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "mount-glass",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-6poleo",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "connector",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-ehastc",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "cap",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-g01986",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-magnet",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-by9ppg",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-bottom",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-52ktgu",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "seal-hinge",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-by16m2",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "profile",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-g6gzd8",
+       "primary": true
+      }
+     ]
+    },
+    {
+     "role": "tube",
+     "select": "one",
+     "entries": [
+      {
+       "qty": {
+        "mode": "role"
+       },
+       "itemId": "it-9l40k5",
+       "primary": true
+      }
+     ]
+    }
+   ],
+   "excluded": [
+    "cap-end"
+   ]
+  }
+ },
+ "rates": {
+  "glassPerM2": {
+   "clear": 3000,
+   "bronze": 4800,
+   "crystal": 6000,
+   "graphite": 4800
+  },
+  "installPerSection": 5000,
+  "deliveryMoscow": 4000,
+  "liftPerFloor": 0
+ }
+}
