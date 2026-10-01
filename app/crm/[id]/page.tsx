@@ -152,8 +152,11 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
   const [notes, setNotes] = useState('')
   const [price, setPrice] = useState('2500')
   const [fee, setFee] = useState('')
+  const [kind, setKind] = useState<'new' | 'repeat'>('new')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // Уже был замер по этому лиду — новая заявка по умолчанию повторная и ссылается на него.
+  const prior = reqs.find(r => r.status !== 'cancelled') ?? null
 
   const load = useCallback(async () => {
     const { data } = await sb.from('measure_requests')
@@ -180,7 +183,8 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
           deal_number: lead.order_no, client_name: lead.name || lead.phone || `Лид #${lead.id}`,
           phone: lead.phone, address: addr.trim(), scope: scope.trim() || null,
           notes: notes.trim() || null, visit_price: Number(price.replace(/\s/g, '')) || 0,
-          payer: 'клиент (в зачёт заказа)', is_repeat: false, lead_id: lead.id,
+          payer: 'клиент (в зачёт заказа)', lead_id: lead.id,
+          is_repeat: kind === 'repeat', repeat_of: kind === 'repeat' ? prior?.id ?? null : null,
           // Гонорар замерщика: пусто — равен цене выезда (владелец 01.10).
           measurer_fee: fee.trim() || undefined,
         }),
@@ -206,11 +210,17 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
         </div>
       ))}
       {!open ? (
-        <button onClick={() => setOpen(true)} className="w-full px-2 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700">
+        <button onClick={() => { setKind(prior ? 'repeat' : 'new'); setOpen(true) }} className="w-full px-2 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700">
           Сделать заявку на замер для замерщика
         </button>
       ) : (
         <div className="space-y-2">
+          <div className="flex gap-1.5">
+            {([['new', '📐 Новый'], ['repeat', '🔁 Повторный']] as const).map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setKind(k)}
+                className={`flex-1 px-2 py-1.5 rounded-lg border text-[12px] ${kind === k ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white border-[#e4e4e0] text-[#4b4b47]'}`}>{label}</button>
+            ))}
+          </div>
           <input value={addr} onChange={e => setAddr(e.target.value)} placeholder="Адрес объекта *" className={`${inp} w-full`} />
           <input value={scope} onChange={e => setScope(e.target.value)} placeholder="Что мерить (изделие, размеры)" className={`${inp} w-full`} />
           <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Доступ / парковка / пожелания по времени" className={`${inp} w-full`} />

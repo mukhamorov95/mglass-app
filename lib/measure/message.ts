@@ -149,3 +149,42 @@ export function whatsAppUrl(phone: string | null | undefined, text: string): str
   const k = phoneKey(phone)
   return k ? `https://wa.me/7${k}?text=${encodeURIComponent(text)}` : null
 }
+
+// «Замер готов» — то, что замерщик скидывает в группу «Замеры» после выезда (темы
+// «Новый замер готов» / «Повторный замер готов»): кто, где, что мерили, итог, файлы,
+// деньги выезда и как оплачен.
+export type MeasureResultInput = MeasureMessageInput & {
+  result_note?: string | null
+  photos?: string[] | null
+  actual_price?: number | string | null
+  price_note?: string | null
+  visit_payment?: 'onsite' | 'company' | 'unpaid' | null
+}
+const PAID: Record<string, string> = { onsite: 'оплачено замерщику на объекте', company: 'оплачено на компанию', unpaid: 'не оплачено' }
+
+export function buildMeasureResultMessage(p: MeasureResultInput): string {
+  const items = splitScope(p.scope)
+  const deal = tidy(p.deal_number)
+  const head = `✅ ${p.is_repeat ? 'ПОВТОРНЫЙ' : 'НОВЫЙ'} ЗАМЕР ГОТОВ${deal ? ` · ${deal}` : ''}`
+  const who = [
+    `👤 Клиент: ${tidy(p.client_name) || '—'}`,
+    p.phone ? `📞 Телефон: ${messagePhone(p.phone)}` : '',
+    `📍 Адрес: ${tidy(p.address) || '—'}`,
+  ].filter(Boolean)
+  const what = items.length > 1 ? ['📏 Мерили:', ...items.map((it, i) => `${i + 1}. ${it}`)] : [`📏 Мерили: ${items[0] ?? '—'}`]
+  const result = [
+    tidy(p.result_note) ? `📝 Итог: ${String(p.result_note).trim()}` : '',
+    p.photos?.length ? ['📎 Файлы:', ...p.photos].join('\n') : '',
+  ].filter(Boolean)
+  const manager = Number(String(p.visit_price ?? '').replace(/\s/g, '')) || 0
+  const actual = p.actual_price == null || p.actual_price === '' ? null : Number(p.actual_price)
+  const priceText = actual != null && actual !== manager
+    ? `${actual.toLocaleString('ru-RU').replace(/ /g, ' ')} ₽ (менеджер закладывал ${manager.toLocaleString('ru-RU').replace(/ /g, ' ')} ₽${p.price_note ? `: ${tidy(p.price_note)}` : ''})`
+    : manager > 0 ? `${manager.toLocaleString('ru-RU').replace(/ /g, ' ')} ₽` : 'цена не указана'
+  const terms = [
+    `💰 Выезд: ${priceText}${p.visit_payment ? ` · ${PAID[p.visit_payment]}` : ''}`,
+    p.scheduled_at ? `🗓 Замер: ${formatMeasureWhen(p.scheduled_at)}${p.measurer_name ? ` · ${tidy(p.measurer_name)}` : ''}` : '',
+    p.manager_name ? `👔 Менеджер: ${tidy(p.manager_name)}` : '',
+  ].filter(Boolean)
+  return [head, who.join('\n'), what.join('\n'), result.join('\n'), terms.join('\n')].filter(Boolean).join('\n\n')
+}

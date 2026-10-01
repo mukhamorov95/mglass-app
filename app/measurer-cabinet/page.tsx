@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { clientHeadsUpText, dayRouteUrl, formatMeasureWhen, splitScope, tidy, whatsAppUrl } from '@/lib/measure/message'
+import { buildMeasureResultMessage, clientHeadsUpText, dayRouteUrl, formatMeasureWhen, splitScope, tidy, whatsAppUrl } from '@/lib/measure/message'
 import { mskDate } from '@/lib/measure/slots'
 import { mskToday, sendMeasure } from '@/lib/measure/client'
 import { confirmDialog } from '@/lib/dialog'
@@ -66,6 +66,9 @@ export default function MeasurerCabinetPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  // Только что закрытый замер — из плашки его итог копируется в тему группы «…замер готов».
+  const [doneId, setDoneId] = useState<number | null>(null)
+  const [copiedDone, setCopiedDone] = useState(false)
   const [busy, setBusy] = useState<number | null>(null)
   const [boardKey, setBoardKey] = useState(0)
   const [tab, setTab] = useState<Tab>('measures')
@@ -115,8 +118,17 @@ export default function MeasurerCabinetPage() {
     return [...groups.entries()]
   }, [active, today])
 
+  const doneReq = doneId != null ? reqs.find(r => r.id === doneId && r.status === 'done') ?? null : null
+  async function copyDone() {
+    if (!doneReq) return
+    try {
+      await navigator.clipboard.writeText(buildMeasureResultMessage(doneReq))
+      setCopiedDone(true)
+    } catch { setError('Не удалось скопировать — браузер не дал доступ к буферу обмена.') }
+  }
+
   async function act(r: MReq, body: Record<string, unknown>, done?: string) {
-    setBusy(r.id); setError(''); setNotice('')
+    setBusy(r.id); setError(''); setNotice(''); setDoneId(null)
     try {
       const res = await sendMeasure(`/api/measure-requests/${r.id}`, 'PATCH', body)
       if (!res.ok) { if (!res.cancelled) setError(res.error); return }
@@ -224,7 +236,7 @@ export default function MeasurerCabinetPage() {
       <div key={r.id} className={`bg-white border rounded-xl p-3 ${r.status === 'issue' ? 'border-red-200' : 'border-[#e4e4e0]'} ${busy === r.id ? 'opacity-50' : ''}`}>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-mono text-[13px] font-bold">{formatMeasureWhen(r.scheduled_at!, r.duration_min)}</span>
-          <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁' : '📐'} {r.deal_number || `#${r.id}`} · {tidy(r.client_name)}</span>
+          <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁 Повторный · ' : '📐 '}{r.deal_number || `#${r.id}`} · {tidy(r.client_name)}</span>
           {isOwner && r.measurer_name && <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#4b4b47]">📏 {r.measurer_name}</span>}
           {r.status === 'issue' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-700">⚠️ сложность</span>}
         </div>
@@ -261,7 +273,7 @@ export default function MeasurerCabinetPage() {
         {open && openFor?.kind === 'book' && bookingForm(r, '✅ Перенести')}
         {open && openFor?.kind === 'done' && (
           <SettleForm r={r} mode="done" onCancel={() => setOpenFor(null)}
-            onDone={msg => { setOpenFor(null); setNotice(msg); void load() }} />
+            onDone={msg => { setOpenFor(null); setNotice(msg); setDoneId(r.id); setCopiedDone(false); void load() }} />
         )}
         {open && openFor?.kind === 'issue' && (
           <div className="mt-2 rounded-lg border border-red-200 bg-red-50/40 p-3 space-y-2">
@@ -315,7 +327,12 @@ export default function MeasurerCabinetPage() {
         {notice && (
           <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12px] rounded-lg px-3 py-2 flex items-start gap-2">
             <span className="flex-1">✅ {notice}</span>
-            <button onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-800">✕</button>
+            {doneReq && (
+              <button onClick={copyDone} className="text-[11px] font-semibold border border-emerald-300 bg-white rounded-lg px-2 py-1 hover:bg-emerald-100 shrink-0">
+                {copiedDone ? '✓ Скопировано' : `📋 В тему «${doneReq.is_repeat ? 'Повторный' : 'Новый'} замер готов»`}
+              </button>
+            )}
+            <button onClick={() => { setNotice(''); setDoneId(null) }} className="text-emerald-500 hover:text-emerald-800">✕</button>
           </div>
         )}
         {tab === 'earnings' && me && <MeasurerEarnings meId={me.id} isOwner={isOwner} />}
@@ -355,7 +372,7 @@ export default function MeasurerCabinetPage() {
               {pool.map(r => (
                 <div key={r.id} className={`bg-white border border-amber-100 rounded-lg p-3 ${busy === r.id ? 'opacity-50' : ''}`}>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁' : '📐'} {r.deal_number || `#${r.id}`} · {tidy(r.client_name)}</span>
+                    <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁 Повторный · ' : '📐 '}{r.deal_number || `#${r.id}`} · {tidy(r.client_name)}</span>
                     <span className="text-[11px] text-[#9a9a95]">создана {new Date(r.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })}</span>
                   </div>
                   {details(r)}
