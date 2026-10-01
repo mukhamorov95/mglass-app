@@ -297,6 +297,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/',
     '/measurer-cabinet',
     '/measure-calendar',
+    '/measurer-earnings',
   ],
 
   // Офис-менеджер: координация — счета, КП, клиенты, календарь, задачи (CRM).

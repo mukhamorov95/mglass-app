@@ -1,25 +1,22 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { buildMeasureResultMessage, clientHeadsUpText, dayRouteUrl, formatMeasureWhen, splitScope, tidy, whatsAppUrl } from '@/lib/measure/message'
 import { addDays, mskDate } from '@/lib/measure/slots'
 import { askCancelReason, mskToday, sendMeasure } from '@/lib/measure/client'
 import { confirmDialog } from '@/lib/dialog'
 import { telHref } from '@/lib/b2c/phoneKey'
-import MeasureBoard from '@/components/measure/MeasureBoard'
-import MeasurerAvailability from '@/components/measure/MeasurerAvailability'
 import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
 import SettleForm from '@/components/measure/SettleForm'
-import MeasurerEarnings from '@/components/measure/MeasurerEarnings'
-import MeasurerCalendar from '@/components/measure/MeasurerCalendar'
 import OwnerSummary from '@/components/measure/OwnerSummary'
 import MeasureHistory from '@/components/measure/MeasureHistory'
 import { PAYMENT_LABEL, finalPrice, type VisitPayment } from '@/lib/measure/money'
 
-// Кабинет замерщика, четыре вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
-// мерить) → пул новых заявок («Взять» в своё свободное окно) → дальше по дням →
-// занятость всех замерщиков → мой график. «Календарь» — месяц и день. «История» —
-// период, поиск, статус, новые/повторные. «Заработок»: период, оплаты, гонорар.
+// Кабинет замерщика, две вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
+// мерить) → пул новых заявок (Взять · Проведён · Отменён) → дальше по дням → проведены
+// за неделю. «История» — период, поиск, статус, новые/повторные. Календарь (с занятостью
+// всех и моим графиком) и Заработок — отдельные пункты меню (владелец 01.10).
 // Владелец видит то же по всем замерщикам, сводку месяца и может назначить любого.
 
 type MReq = {
@@ -52,7 +49,7 @@ type MReq = {
   photos: string[] | null
   created_at: string
 }
-type Tab = 'measures' | 'history' | 'earnings' | 'calendar'
+type Tab = 'measures' | 'history'
 type Me = { id: string; name: string; role: string; scope: string }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -63,6 +60,7 @@ const dayTitle = (date: string) => { const d = new Date(`${date}T00:00:00Z`); re
 const EMPTY_BOOKING: BookingValue = { measurerId: '', date: '', time: '', durationMin: 90, travelMin: 60 }
 
 export default function MeasurerCabinetPage() {
+  const router = useRouter()
   const [me, setMe] = useState<Me | null>(null)
   const [reqs, setReqs] = useState<MReq[]>([])
   const [measurers, setMeasurers] = useState<{ id: string; name: string }[]>([])
@@ -93,12 +91,14 @@ export default function MeasurerCabinetPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
-  // Ссылки …/measurer-cabinet#earnings и #calendar открывают сразу нужную вкладку.
+  // …#history открывает «Историю»; старые ссылки на #earnings и #calendar ведут в пункты меню.
   useEffect(() => {
     const h = window.location.hash.slice(1)
+    if (h === 'earnings') router.replace('/measurer-earnings')
+    else if (h === 'calendar') router.replace('/measure-calendar')
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (h === 'history' || h === 'earnings' || h === 'calendar') setTab(h)
-  }, [])
+    else if (h === 'history') setTab(h)
+  }, [router])
   function switchTab(t: Tab) {
     setTab(t)
     try { history.replaceState(null, '', t === 'measures' ? window.location.pathname : `#${t}`) } catch { /* без адресной строки */ }
@@ -193,7 +193,8 @@ export default function MeasurerCabinetPage() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
-  const btn = 'text-[12px] border border-[#e4e4e0] bg-white rounded-lg px-2.5 py-1.5 hover:bg-[#f5f5f3]'
+  // На телефоне кнопки крупнее — под палец.
+  const btn = 'text-[13px] sm:text-[12px] border border-[#e4e4e0] bg-white rounded-lg px-3 py-2 sm:px-2.5 sm:py-1.5 hover:bg-[#f5f5f3]'
   const canBook = isMeasurer || (isOwner && measurers.length > 0)
 
   // Функции отрисовки, а не вложенные компоненты: вложенный компонент пересоздаётся
@@ -266,7 +267,7 @@ export default function MeasurerCabinetPage() {
         )}
         <div className="flex items-center gap-1.5 flex-wrap mt-2">
           <button onClick={() => setOpenFor({ id: r.id, kind: 'done' })}
-            className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-2.5 py-1.5 hover:bg-emerald-700">✅ Выполнен</button>
+            className="text-[13px] sm:text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-3 py-2 sm:px-2.5 sm:py-1.5 hover:bg-emerald-700">✅ Выполнен</button>
           <button onClick={() => { setOpenFor({ id: r.id, kind: 'issue' }); setIssueText(r.issue_text ?? ''); setIssueSol(r.issue_solution ?? '') }}
             className={`${btn} text-red-600 border-red-200`}>⚠️ Сложность</button>
           <label className={`${btn} cursor-pointer`}>
@@ -310,8 +311,8 @@ export default function MeasurerCabinetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
+    <div className="min-h-screen bg-[#f5f5f3] pb-28 lg:pb-20">
+      <div className="bg-white border-b border-[#e4e4e0] px-4 sm:px-5 pt-5 sm:pt-6 pb-4">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Кабинет замерщика</h1>
         <p className="text-[12px] text-[#9a9a95] mt-0.5">
           {isOwner ? 'Все замерщики: сегодня, пул новых заявок, дальше по дням, график и выплаты.'
@@ -324,7 +325,7 @@ export default function MeasurerCabinetPage() {
           {overdue.length > 0 && <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-700">Не отмечены: {overdue.length}</span>}
         </div>
         <div className="flex gap-1 mt-3 -mb-4 overflow-x-auto">
-          {([['measures', '📏 Замеры'], ['calendar', '📅 Календарь'], ['history', '🗂 История'], ['earnings', '💰 Заработок']] as const).map(([k, l]) => (
+          {([['measures', '📏 Замеры'], ['history', '🗂 История']] as const).map(([k, l]) => (
             <button key={k} onClick={() => switchTab(k)}
               className={`text-[13px] font-semibold px-4 py-2 border-b-2 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95] hover:text-[#111110]'}`}>
               {l}
@@ -333,7 +334,7 @@ export default function MeasurerCabinetPage() {
         </div>
       </div>
 
-      <div className="px-5 pt-4 space-y-4 max-w-[1100px]">
+      <div className="px-4 sm:px-5 pt-4 space-y-4 max-w-[1100px]">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] rounded-lg px-3 py-2 flex items-start gap-2">
             <span className="flex-1">{error}</span>
@@ -352,8 +353,6 @@ export default function MeasurerCabinetPage() {
           </div>
         )}
         {tab === 'history' && me && <MeasureHistory meId={me.id} isMeasurer={isMeasurer} />}
-        {tab === 'earnings' && me && <MeasurerEarnings meId={me.id} isOwner={isOwner} />}
-        {tab === 'calendar' && me && <MeasurerCalendar meId={me.id} isOwner={isOwner} refreshKey={boardKey} onChanged={() => setBoardKey(k => k + 1)} />}
         {tab === 'measures' && <>
         {isOwner && <OwnerSummary refreshKey={boardKey} />}
         {isOwner && measurers.length === 0 && (
@@ -459,8 +458,6 @@ export default function MeasurerCabinetPage() {
           </section>
         )}
 
-        <MeasureBoard title="Все замерщики — занятость" refreshKey={boardKey} />
-        <MeasurerAvailability onChanged={() => setBoardKey(k => k + 1)} />
 
         </>}
       </div>
