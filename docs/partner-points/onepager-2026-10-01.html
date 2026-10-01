@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стекло и зеркало под размер — для павильона</title>
+<!-- Листок для разговора с павильоном на стройрынке (маршрут docs/partner-points, Т1).
+     Цены посчитаны движком computeQuoteItem на справочниках прода 01.10.2026 (общий прайс,
+     скидка партнёра 10 %, розница — как на «Прилавке»: закупка × 1,39 вверх до 10 ₽,
+     то есть наш прайс × 1,25). Перед печатью новой версии — пересчитать: tmp/onepager-prices.ts. -->
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #e9e9e5; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #111110; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sheet { width: 210mm; min-height: 297mm; margin: 12px auto; background: #fff; padding: 14mm 15mm 12mm; display: flex; flex-direction: column; gap: 6mm; }
+  @media print { html, body { background: #fff; } .sheet { margin: 0; box-shadow: none; height: 296mm; min-height: 0; overflow: hidden; } }
+  .head { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2.5px solid #111110; padding-bottom: 4mm; }
+  .brand { font-size: 13px; font-weight: 800; letter-spacing: .08em; }
+  .brand span { color: #c0453a; }
+  .sub { font-size: 11px; color: #6b6b66; margin-top: 1mm; }
+  h1 { font-size: 27px; line-height: 1.12; letter-spacing: -.02em; margin: 0; }
+  .lead { font-size: 14.5px; line-height: 1.45; color: #3a3a38; margin: 2.5mm 0 0; max-width: 165mm; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: #c0453a; margin: 0 0 2.5mm; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; }
+  ul { margin: 0; padding-left: 4.5mm; font-size: 12.5px; line-height: 1.5; }
+  li { margin: 0 0 .6mm; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; font-size: 10.5px; font-weight: 700; color: #6b6b66; text-transform: uppercase; letter-spacing: .04em; padding: 0 2mm 2mm 0; border-bottom: 1.5px solid #111110; }
+  td { padding: 2.4mm 2mm 2.4mm 0; border-bottom: 1px solid #e4e4e0; vertical-align: top; }
+  td.n, th.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.buy { font-weight: 700; }
+  td.keep { color: #1f7a4f; font-weight: 700; }
+  .what { color: #6b6b66; font-size: 11px; }
+  .note { font-size: 11px; color: #6b6b66; line-height: 1.45; margin-top: 2mm; }
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3mm; counter-reset: s; }
+  .step { background: #f5f5f3; border-radius: 3mm; padding: 3mm; font-size: 11.5px; line-height: 1.4; }
+  .step b { display: block; font-size: 18px; color: #c0453a; margin-bottom: 1mm; }
+  .terms li b { font-weight: 700; }
+  .foot { margin-top: auto; border-top: 1px solid #e4e4e0; padding-top: 3.5mm; display: flex; justify-content: space-between; gap: 6mm; font-size: 10.5px; color: #6b6b66; line-height: 1.5; }
+  .contact { font-size: 12.5px; color: #111110; text-align: right; white-space: nowrap; }
+  .line { display: inline-block; width: 46mm; border-bottom: 1px solid #111110; margin-left: 2mm; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="head">
+    <div>
+      <div class="brand">M<span>‑</span>GLASS · ПРОИЗВОДСТВО</div>
+      <div class="sub">Своё производство стекла и зеркала в Мытищах · с 2023 года</div>
+    </div>
+    <div class="sub" style="text-align:right">Предложение павильону<br>стройрынка</div>
+  </div>
+
+  <div>
+    <h1>Стекло и зеркало по размеру покупателя —<br>без станка и склада у вас</h1>
+    <p class="lead">Покупатель называет размер, вы за минуту называете ему цену и принимаете заказ. Мы режем, обрабатываем и передаём готовое. Разница между нашей ценой и вашей — ваша.</p>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Что делаем</h2>
+      <ul>
+        <li>Зеркала: серебро, осветлённое, бронза и графит, состаренное — 4–6 мм</li>
+        <li>Стекло: прозрачное, осветлённое, матовое, рифлёное — 4–12 мм</li>
+        <li>Закалка, полировка кромки, отверстия и вырезы</li>
+        <li>Фацет 10, 15, 20 мм · фигурный рез · триплекс</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Что берут чаще всего</h2>
+      <ul>
+        <li>Зеркала в ванную и прихожую под нишу</li>
+        <li>Стекло для душа нестандартного размера</li>
+        <li>Кухонные фартуки, полки, стекло на стол</li>
+        <li>Замена разбитого стекла в двери или шкафу</li>
+      </ul>
+    </div>
+  </div>
+
+  <div>
+    <h2>Сколько стоит и сколько остаётся вам</h2>
+    <table>
+      <thead><tr><th>Изделие</th><th class="n">Ваша цена</th><th class="n">Покупателю</th><th class="n">Остаётся вам</th></tr></thead>
+      <tbody>
+        <tr><td>Зеркало 600 × 800 мм<div class="what">серебро 4 мм, полированная кромка</div></td><td class="n">1 350 ₽</td><td class="n buy">1 880 ₽</td><td class="n keep">530 ₽</td></tr>
+        <tr><td>Зеркало в прихожую 500 × 1600 мм<div class="what">серебро 4 мм, фацет 10 мм</div></td><td class="n">3 294 ₽</td><td class="n buy">4 580 ₽</td><td class="n keep">1 286 ₽</td></tr>
+        <tr><td>Кухонный фартук 600 × 2000 мм<div class="what">осветлённое стекло 6 мм, закалка</div></td><td class="n">4 644 ₽</td><td class="n buy">6 460 ₽</td><td class="n keep">1 816 ₽</td></tr>
+        <tr><td>Стекло для душа 900 × 2000 мм<div class="what">прозрачное 8 мм, закалка, отверстия</div></td><td class="n">5 022 ₽</td><td class="n buy">6 990 ₽</td><td class="n keep">1 968 ₽</td></tr>
+      </tbody>
+    </table>
+    <div class="note">Цены на 01.10.2026, с НДС. «Покупателю» — наша рекомендация: прайс + 25 %. Свою цену вы назначаете сами. В цену стекла входят резка, кромка, закалка, отверстия и вырезы; фацет и триплекс — отдельно. У маленьких деталей — минимальная цена позиции.</div>
+  </div>
+
+  <div>
+    <h2>Как это работает</h2>
+    <div class="steps">
+      <div class="step"><b>1</b>Покупатель приносит размеры</div>
+      <div class="step"><b>2</b>Вы вводите их в кабинете — цена покупателю за минуту</div>
+      <div class="step"><b>3</b>Печатаете покупателю КП от своего имени</div>
+      <div class="step"><b>4</b>Оформляете заказ у нас и оплачиваете по цене для вас</div>
+      <div class="step"><b>5</b>Мы изготавливаем и передаём готовое изделие</div>
+    </div>
+  </div>
+
+  <div>
+    <h2>Условия</h2>
+    <ul class="terms">
+      <li><b>Скидка 10 % от прайса</b> на всё — продаёте по своей цене.</li>
+      <li><b>Размер вводите вы</b>: режем точно по цифрам, за размер отвечает тот, кто его ввёл.</li>
+      <li><b>Образцы на витрину — наши</b>: душевая и зеркала, бесплатно.</li>
+      <li><b>Выдача</b>: самовывоз с производства в Мытищах, привоз на вашу точку в определённые дни или доставка покупателю за плату.</li>
+      <li><b>Срок</b> — ориентировочно 15 рабочих дней, точный подтверждаем при заказе.</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    <div>ООО «МЕТАЛ &amp; ГЛАС МАНУФАКТУР»<br>Производство: Мытищи, 1-й Силикатный пер., 12Б/1</div>
+    <div class="contact">Владислав<span class="line"></span></div>
+  </div>
+</div>
+</body>
+</html>
