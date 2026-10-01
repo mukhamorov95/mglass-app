@@ -66,8 +66,10 @@ const common = [
   slot('seal-hinge', 'sealA'), slot('seal-bottom', 'sealCh'), slot('profile', 'profile'), slot('tube', 'tube'),
   slot('cap-end', 'end', { mode: 'fixed', n: 4 }),
 ]
-const KIT_M4: ModelKit = { slots: [...common, slot('seal-magnet', 'mag180')], excluded: ['cap'] }
-const KIT_M7: ModelKit = { slots: [...common, slot('mount-corner', 'corner'), slot('seal-magnet', 'mag90')], excluded: ['cap'] }
+const KIT_M4: ModelKit = { slots: [...common, slot('seal-magnet', 'mag180')], excluded: ['cap'], floorProfile: 'fixed-only' }
+const KIT_M7: ModelKit = { slots: [...common, slot('mount-corner', 'corner'), slot('seal-magnet', 'mag90')], excluded: ['cap'], floorProfile: 'fixed-only' }
+// Тот же М7 со сквозным низом — как собирает модель по умолчанию (и рисует 3D).
+const KIT_M7_THROUGH: ModelKit = { ...KIT_M7, floorProfile: undefined }
 
 const RATES: KitRates = { glassPerM2: {}, installPerSection: 0, deliveryMoscow: 0, liftPerFloor: 0 }
 const FIN = { marginPct: 40, taxPct: 12 }
@@ -87,14 +89,27 @@ describe('Эталон 0245, высота 2 200, чёрный — фурниту
     const lines = price(M4, KIT_M4).lines
     const qty = Object.fromEntries(lines.map(l => [l.itemId, l.qty]))
     expect(qty).toEqual({
-      hinge: 2, handle: 1, wall: 2, holder: 2, sealA: 1, sealCh: 1, profile: 3, tube: 1, end: 4, mag180: 1,
+      hinge: 2, handle: 1, wall: 2, holder: 2, sealA: 1, sealCh: 1, profile: 2, tube: 1, end: 4, mag180: 1,
     })
   })
 
-  it('М4: фурнитура = 16 380 ₽ (±2 ₽ округления строк)', () => {
+  // Лист владельца берёт на М4 профиль 3 × 2,2 м = 1 980 ₽. Низ только под неподвижными
+  // стёклами — это куски 2200, 2200, 400, 400, и движок кладёт их в 2,2 м + 3 м (2200 + 400 +
+  // 400 ровно 3 000) = 1 440 ₽. Остальные строки — копейка в копейку.
+  it('М4: фурнитура = 16 380 ₽ минус 540 ₽ на профиле — 2,2 м + 3 м вместо 3 × 2,2 м', () => {
     const p = price(M4, KIT_M4)
     expect(p.missing).toEqual([])
-    expect(Math.abs(p.hardwareCost - REF_M4)).toBeLessThanOrEqual(2)
+    const ownerProfile = 3 * costOf('FDPA-55.22 AL/BL')
+    const engineProfile = costOf('FDPA-55.22 AL/BL') + costOf('FDPA-55.3 AL/BL')
+    expect(Math.abs(p.hardwareCost - (REF_M4 - ownerProfile + engineProfile))).toBeLessThanOrEqual(2)
+  })
+
+  // Этот план держится на пропиле 0 (решение 5): с пропилом 3 м уже не вмещает три куска,
+  // и выгоднее 2 × 3 м = 1 560 ₽ — всё равно дешевле листа.
+  it('М4 с пропилом 5 мм: профиль 2 × 3 м', () => {
+    const p = computeKitPrice(qOf(M4), LIB, KIT_M4, { ...RATES, kerf: 5 }, FIN, { finishId: 'black', withDelivery: false })
+    const prof = p.lines.find(l => l.itemId === 'profile')!
+    expect(prof.plan!.map(b => b.len)).toEqual([3000, 3000])
   })
 
   it('М7: количества как в ручном листе (кроме профиля — см. ниже)', () => {
@@ -105,18 +120,24 @@ describe('Эталон 0245, высота 2 200, чёрный — фурниту
     })
   })
 
-  // Э5: хлысты разной длины в одном плане. Куски профиля М7 — 2200, 2200, 1469, 916:
-  // эвристики кроили 3 × 3 м = 2 340 ₽, точный раскрой — 2 × 2,2 м + 1 × 3 м.
-  it('М7: профиль кроится смешанными хлыстами 2 × 2,2 м + 1 × 3 м (Э5)', () => {
-    const p = price(M7, KIT_M7).lines.find(l => l.itemId === 'profile')!
+  // Э5: хлысты разной длины в одном плане. Куски профиля М7 со сквозным низом — 2200,
+  // 2200, 1469, 916: эвристики кроили 3 × 3 м = 2 340 ₽, точный раскрой — 2 × 2,2 м + 1 × 3 м.
+  it('М7 со сквозным низом: профиль кроится смешанными хлыстами 2 × 2,2 м + 1 × 3 м (Э5)', () => {
+    const p = price(M7, KIT_M7_THROUGH).lines.find(l => l.itemId === 'profile')!
     const bars = p.plan!.reduce<Record<number, number>>((a, b) => ({ ...a, [b.len]: (a[b.len] ?? 0) + 1 }), {})
     expect(bars).toEqual({ 2200: 2, 3000: 1 })
     expect(Math.abs(p.total - (2 * costOf('FDPA-55.22 AL/BL') + costOf('FDPA-55.3 AL/BL')))).toBeLessThanOrEqual(1)
   })
 
-  // Профиль М7: движок кладёт низ и под дверь (1 469 вместо 819) — у владельца 3 × 2,2 м
-  // = 1 980 ₽. Смешанные хлысты (Э5) уже есть; остаётся низ по решению 3 — Э8.
-  it.fails('М7: фурнитура = 15 349 ₽ — ждёт Э8', () => {
+  // Э8: низ только под неподвижными стёклами — проём двери вырезан, 1 469 → 819, и профиль
+  // ложится в 3 × 2,2 м = 1 980 ₽, как в листе владельца.
+  it('М7: низ под неподвижным стеклом — 819 мм, а не 1 469 (Э8)', () => {
+    const pieces = qOf(M7).fixedFloor!.profile
+    expect([...pieces].sort((a, b) => a - b)).toEqual([819, 916, 2200, 2200])
+    expect([...qOf(M4).fixedFloor!.profile].sort((a, b) => a - b)).toEqual([400, 400, 2200, 2200])
+  })
+
+  it('М7: фурнитура = 15 349 ₽ (Э8)', () => {
     const p = price(M7, KIT_M7)
     expect(p.missing).toEqual([])
     expect(Math.abs(p.hardwareCost - REF_M7)).toBeLessThanOrEqual(2)
@@ -124,7 +145,7 @@ describe('Эталон 0245, высота 2 200, чёрный — фурниту
 
   // Обе душевые одной закупкой: общий хлыст профиля под низ и одна полоса нижнего
   // уплотнителя на обе двери — минус 743 ₽. Общий раскрой (позиция + цвет, min(общий,
-  // поштучный)) — Э5; ждёт низа по решению 3 — Э8.
+  // поштучный)) — Э5, низ под неподвижными стёклами — Э8.
   it('Обе сразу: общий раскрой не дороже поштучного и честно показывает экономию (Э5)', () => {
     const cut = planOrderCutting([
       { q: qOf(M4), lib: LIB, kit: KIT_M4, finishId: 'black' },
@@ -135,7 +156,7 @@ describe('Эталон 0245, высота 2 200, чёрный — фурниту
     for (const c of cut.cuts) expect(c.finishId).toBe('black')
   })
 
-  it.fails('Обе сразу: 30 986 ₽ — ждёт Э8', () => {
+  it('Обе сразу: 30 986 ₽ (Э5 + Э8)', () => {
     const a = price(M4, KIT_M4)
     const b = price(M7, KIT_M7)
     const cut = planOrderCutting([

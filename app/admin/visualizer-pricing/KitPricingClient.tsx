@@ -1030,6 +1030,16 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
               0 — берётся маржа тарифа. Минимум {fin.minMarginPct}%. Источник: {fin.source}.
               Меняются в разделе финансовых настроек, здесь только для этой модели.
             </p>
+            {/* Решение 3 маршрута SHOWROOM_COST_ROUTE: низ только под неподвижными стёклами.
+                Меняет раскрой и цену; 3D пока рисует профиль сквозным. */}
+            <label className="flex items-center justify-between gap-2 text-[13px] py-0.5 mt-2">
+              <span className="text-[#4b4b47]">Нижний профиль {model.code}</span>
+              <select value={kit.floorProfile ?? 'through'} className="border border-[#e4e4e0] rounded-md px-2 py-1 text-[12px] bg-white"
+                onChange={e => editKit(k => { if (e.target.value === 'fixed-only') k.floorProfile = 'fixed-only'; else delete k.floorProfile })}>
+                <option value="through">сквозной, и под дверью</option>
+                <option value="fixed-only">только под неподвижными</option>
+              </select>
+            </label>
           </Card>
 
           <Card title="Работы и логистика">
