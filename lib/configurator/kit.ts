@@ -2,6 +2,7 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { buildFromModel, type Assembly } from '@/components/configurator/scene/assembly'
 import type { MModel } from '@/lib/configurator/arrangement'
 import { inferShape } from '@/lib/configurator/hardwareShapes'
+import { partForItem } from '@/lib/configurator/parts/registry'
 import type { PriceByColor, BarStock, CatalogRef, Tier } from '@/lib/configurator/pricing'
 
 // Прайс ПО МОДЕЛЯМ. Два уровня, чтобы цену позиции вбивать один раз:
@@ -89,6 +90,9 @@ const ROLE_SHAPE: Partial<Record<RoleId, string>> = {
   cap: 'cap', 'cap-end': 'cap',
 }
 export const autoShapeForRole = (name: string, role: RoleId): string => {
+  // Есть паспорт этого артикула — сцена рисует его, а не общую форму роли (Ш4).
+  const part = partForItem(name, role)
+  if (part) return part.id
   const byName = inferShape(name)
   // inferShape по умолчанию отдаёт петлю — для не-петлевой роли это враньё, берём роль.
   const fallback = ROLE_SHAPE[role]
@@ -769,7 +773,7 @@ export function kitChoices(lib: Library, kit: ModelKit, q: KitQuantities): KitCh
   for (const slot of kit.slots) {
     if ((q.roleQty[slot.role] ?? 0) <= 0) continue
     const opts = slot.entries
-      .map(e => { const it = byId.get(e.itemId); return it ? { itemId: it.id, name: it.name, shape: it.shape || inferShape(it.name), primary: !!e.primary } : null })
+      .map(e => { const it = byId.get(e.itemId); return it ? { itemId: it.id, name: it.name, shape: inferShapeOf(it), primary: !!e.primary } : null })
       .filter((o): o is KitChoiceOption => o !== null)
     // Что стоит по умолчанию: помеченная владельцем ★, иначе первая позиция слота.
     const eff = opts.find(o => o.primary) ?? opts[0]
