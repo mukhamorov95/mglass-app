@@ -292,12 +292,13 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
     const res = await fetch(`/api/admin/supplier-catalog/variants?id=${rowId}`)
     if (!res.ok) return
     const { variants, name, supplier, base, imageUrl, specs } = await res.json() as {
-      variants: SupplierRowLike[]; name: string; supplier: string; base: string
+      variants: (SupplierRowLike & { updated_at?: string })[]; name: string; supplier: string; base: string
       imageUrl?: string; specs?: Record<string, string>
     }
     const label = name.length > 60 ? name.slice(0, 60) + '…' : name
     const shortName = name.split('.')[0].slice(0, 48)
-    const ref = { supplier, base, label }
+    const asOf = variants.map(v => v.updated_at ?? '').filter(Boolean).sort().pop()?.slice(0, 10)
+    const ref = { supplier, base, label, ...(asOf ? { asOf } : {}) }
     const sameRef = (r?: { supplier: string; base: string }) => r?.supplier === supplier && r.base === base
 
     edit(s => {
@@ -331,7 +332,7 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
       const id = existing?.id ?? uid('it')
       if (existing) {
         if (isBar) putStock(existing)
-        else existing.prices = { ...existing.prices, ...byFinish }
+        else { existing.prices = { ...existing.prices, ...byFinish }; existing.ref = ref }
         enrich(existing)
       } else {
         const it: LibraryItem = { id, name: shortName, role: slot.role, ...(isBar ? {} : { prices: byFinish, ref }) }

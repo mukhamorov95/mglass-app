@@ -401,6 +401,8 @@ export type KitLine = {
   total: number
   plan?: BarPlan[]
   chosen?: boolean          // выбранный клиентом вариант в слоте 'one'
+  ref?: CatalogRef          // артикул, поставщик и дата цены — для менеджера
+  chromeFallback?: boolean  // у позиции нет цены выбранного цвета, взята цена хрома
 }
 export type KitPriceResult = {
   glassCost: number
@@ -459,6 +461,11 @@ export type KitOptions = {
 }
 
 const priceOf = (it: LibraryItem, finishId: string) => it.prices?.[finishId] ?? it.prices?.chrome ?? 0
+
+// Метки строки для менеджера; в цену не входят и complete не меняют. «Цена хрома» —
+// не пропуск, а подмена: сумма есть, но чёрный бывает дороже (перепись закупки 01.10).
+const lineMeta = (ref: CatalogRef | undefined, chromeFallback: boolean): Pick<KitLine, 'ref' | 'chromeFallback'> =>
+  ({ ...(ref ? { ref } : {}), ...(chromeFallback ? { chromeFallback: true } : {}) })
 
 export function resolveQty(rule: QtyRule, role: RoleId, q: KitQuantities, opts: KitOptions): number {
   switch (rule.mode) {
@@ -569,10 +576,12 @@ export function computeKitPrice(
         if (r.cost <= 0) continue
         paid = true
         if (r.oversize.length) missing.push({ role: slot.role, label: meta.label, reason: 'кусок длиннее хлыста' })
+        const used = (it.stocks ?? []).filter(st => r.plan.some(b => b.len === st.len))
         lines.push({
           role: slot.role, itemId: it.id, label: it.name, qty: r.plan.length, unit: 'хлыст',
           unitPrice: Math.round(r.cost / Math.max(1, r.plan.length)), total: r.cost, plan: r.plan,
           chosen: slot.select === 'one',
+          ...lineMeta(used.find(st => st.ref)?.ref ?? it.ref, used.some(st => !(Number(st.prices?.[finishId]) > 0))),
         })
       } else {
         const unitPrice = priceOf(it, finishId)
@@ -581,6 +590,7 @@ export function computeKitPrice(
         lines.push({
           role: slot.role, itemId: it.id, label: it.name, qty, unit: 'шт',
           unitPrice, total: Math.round(qty * unitPrice), chosen: slot.select === 'one',
+          ...lineMeta(it.ref, !(Number(it.prices?.[finishId]) > 0)),
         })
       }
     }

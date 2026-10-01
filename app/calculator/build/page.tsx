@@ -51,15 +51,46 @@ const RUB = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const midV = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100
 
-type KitLine = { role: string; label: string; qty: number; unit: string; unitPrice: number; total: number; plan?: { len: number; pieces: number[] }[] }
+type KitLine = {
+  role: string; label: string; qty: number; unit: string; unitPrice: number; total: number
+  plan?: { len: number; price: number; pieces: number[]; rest: number }[]
+  ref?: { supplier: string; base: string; asOf?: string }; chromeFallback?: boolean
+}
 type GlassLine = { label: string; w: number; h: number; areaM2: number; pricePerM2: number; listTotal: number; total: number; minPriceApplied: boolean }
 type Price = {
   glassCost: number; hardwareCost: number; sections: number; lines: KitLine[]
   glassLines?: GlassLine[]; glassSource?: string | null; glassThickness?: number; glassDiscountPct?: number
   missing: { label: string; reason: string }[]; complete: boolean
   marginPct?: number; taxPct?: number; marginSource?: 'модель' | 'тариф'
+  glassSubstituted?: string | null
 }
-type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number }
+// marks — янтарные метки на момент расчёта («цена хрома», «стекло подменено»): сумма есть,
+// но взята не та цена. Сохраняются с расчётом, чтобы закупка видела их и потом.
+type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number; marks?: string[] }
+
+const SUPPLIER: Record<string, string> = { av24: 'АВ24', vetro: 'Ветро' }
+const dateRu = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(2, 4)}`
+const metres = (mm: number) => `${(mm / 1000).toLocaleString('ru-RU')} м`
+
+// Раскрой хлыстов строкой: «хлыст 3 м ×1: 916+802+399+399 → остаток 484 мм ≈ 128 ₽».
+// Хлысты одной длины — в одну строку; остаток в рублях — доля цены хлыста.
+function cutText(plan: NonNullable<KitLine['plan']>): string[] {
+  const byLen = new Map<number, typeof plan>()
+  for (const b of plan) byLen.set(b.len, [...(byLen.get(b.len) ?? []), b])
+  return [...byLen.entries()].map(([len, bars]) => {
+    const rest = bars.reduce((s, b) => s + Math.max(0, b.rest), 0)
+    const restRub = bars.reduce((s, b) => s + (b.len > 0 ? Math.max(0, b.rest) / b.len * b.price : 0), 0)
+    const cuts = bars.map(b => b.pieces.map(Math.round).join('+')).join(' · ')
+    return `хлыст ${metres(len)} ×${bars.length}: ${cuts} → остаток ${Math.round(rest)} мм${restRub >= 1 ? ` ≈ ${RUB(restRub)}` : ''}`
+  })
+}
+
+function priceMarks(p: Price | null): string[] {
+  if (!p) return []
+  const out = (p.lines ?? []).filter(l => l.chromeFallback).map(l => `цена хрома: ${l.label}`)
+  if (p.glassSubstituted) out.push(`стекло подменено: ${p.glassSubstituted}`)
+  return out
+}
 
 const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]'
 const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
@@ -299,7 +330,8 @@ export default function BuildCalcPage() {
   const grand = Math.round(beforeDisc * (1 - discPct / 100))
 
   const title = () => `${model.code} ${model.name} · ${isCorner ? `${numOr(String(dims.width))}×${numOr(String(dims.width2 ?? 0))}×${numOr(String(dims.height))}` : `${numOr(String(dims.width))}×${numOr(String(dims.height))}`} мм`
-  const currentItem = (): CartItem => ({ title: title(), cost, productPrice: Math.round(productPrice), install, delivery: deliveryN, lift: liftN, total: grand })
+  const marks = priceMarks(price)
+  const currentItem = (): CartItem => ({ title: title(), cost, productPrice: Math.round(productPrice), install, delivery: deliveryN, lift: liftN, total: grand, ...(marks.length ? { marks } : {}) })
 
   function addMore() {
     if (usable && grand > 0) setCart(c => [...c, currentItem()])
@@ -594,6 +626,7 @@ export default function BuildCalcPage() {
               {/* Спецификация: менеджер должен видеть, из чего сложилась цифра,
                   а не верить итогу. Свёрнута, чтобы не мешать частому сценарию. */}
               <SpecRow label="Себест. стекло" sum={glassCost} open={specGlass} onToggle={() => setSpecGlass(v => !v)} count={price?.glassLines?.length ?? 0}>
+                {price?.glassSubstituted && <p className="text-[11px] text-amber-700 pb-1">Стекло подменено: {price.glassSubstituted}</p>}
                 {price?.glassSource && (
                   <p className="text-[11px] text-[#9a9a95] pb-1">
                     {price.glassSource}{price.glassThickness ? `, ${price.glassThickness} мм` : ''}, закалка · цена по прайсу
@@ -613,16 +646,30 @@ export default function BuildCalcPage() {
               </SpecRow>
               <SpecRow label="Себест. фурнитура" sum={hwCost} open={specHw} onToggle={() => setSpecHw(v => !v)} count={price?.lines?.length ?? 0}>
                 {(price?.lines ?? []).map((l, i) => (
-                  <div key={i} className="flex justify-between gap-2 py-0.5">
-                    <span className="text-[#6b6b66] min-w-0">
-                      {l.label} · {l.qty} {l.unit} × {RUB(l.unitPrice)}
-                      {/* Хлыст режется — показываем куски, иначе непонятно, за что целая палка. */}
-                      {l.plan?.length ? <span className="text-[#9a9a95]"> · рез {l.plan.flatMap(p => p.pieces).map(Math.round).join(', ')} мм</span> : null}
-                    </span>
-                    <span className="font-mono whitespace-nowrap">{RUB(l.total)}</span>
+                  <div key={i} className="py-0.5">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-[#6b6b66] min-w-0">
+                        {l.label} · {l.qty} {l.unit} × {RUB(l.unitPrice)}
+                        {l.chromeFallback && <span className="text-amber-700"> · цена хрома</span>}
+                      </span>
+                      <span className="font-mono whitespace-nowrap">{RUB(l.total)}</span>
+                    </div>
+                    {/* Что именно заказывать и насколько свежа цена. */}
+                    {l.ref && (
+                      <div className="text-[11px] text-[#9a9a95]">
+                        {SUPPLIER[l.ref.supplier] ?? l.ref.supplier} · {l.ref.base}{l.ref.asOf ? ` · цена от ${dateRu(l.ref.asOf)}` : ''}
+                      </div>
+                    )}
+                    {/* Хлыст режется — показываем куски и остаток, иначе непонятно, за что целая палка. */}
+                    {l.plan?.length ? cutText(l.plan).map((t, j) => <div key={j} className="text-[11px] text-[#9a9a95]">{t}</div>) : null}
                   </div>
                 ))}
               </SpecRow>
+              {marks.length > 0 && (
+                <div className="text-[11px] text-amber-700 space-y-0.5">
+                  {marks.map((t, i) => <div key={i}>{t}</div>)}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <div><label className={lbl}>Маржа, %</label><input type="number" className={fld} value={margin} onChange={e => { marginTouched.current = true; setMargin(e.target.value) }} /></div>
                 <div><label className={lbl}>Налог, %</label><input type="number" className={fld} value={tax} onChange={e => { taxTouched.current = true; setTax(e.target.value) }} /></div>
