@@ -7,6 +7,8 @@ import { renderDocCanvas } from '@/lib/pdfCapture'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import UpdDocument from '@/components/UpdDocument'
 import type { InvoiceOrder, InvoiceRequisites } from '@/components/InvoiceDocument'
+import DocSkeleton from '@/components/DocSkeleton'
+import { toast } from '@/lib/toast'
 
 // А7 маршрута менеджерского контура: УПД у менеджера — тот же документ, что в кабинете
 // партнёра (components/UpdDocument), но на менеджерских данных /api/quotes/[id]/invoice-data.
@@ -82,11 +84,14 @@ export default function ManagerUpdPage() {
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
       pdf.save(`УПД-${data.order.custom_number?.trim() || String(data.order.id).padStart(5, '0')}.pdf`)
     } catch {
-      alert('Не удалось сформировать PDF. Используйте «Печать» → Сохранить как PDF.')
+      toast.error('Не удалось сформировать PDF', {
+        detail: 'Лист можно сохранить через «Печать» → Сохранить как PDF.',
+        action: { label: 'Печать', onClick: () => window.print() },
+      })
     }
   }
 
-  if (loading) return <div className="p-8 text-[13px] text-[#6b6b66]">Загрузка…</div>
+  if (loading) return <DocSkeleton rows={5} />
   if (error || !data) return (
     <div className="p-8">
       <p className="text-[15px] font-semibold text-[#111110]">Документ недоступен</p>

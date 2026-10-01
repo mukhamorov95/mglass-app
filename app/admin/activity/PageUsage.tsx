@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, isGroup, isSection, type NavEntry } from '@/lib/nav/managerMenu'
+import { isWallRoute } from '@/lib/routeKey'
 
 type Row = { user_id: string; route: string; device: string; hits: number }
 type Person = { id: string; name: string; role: string; total: number; phoneShare: number; routes: { route: string; hits: number }[] }
@@ -76,7 +77,8 @@ export default function PageUsage({ from, to }: { from?: string; to?: string }) 
     <div className="mt-8">
       <div className="mb-3">
         <h2 className="text-[16px] font-semibold text-[#111110]">Какие экраны открывают</h2>
-        <p className="text-[12px] text-[#9a9a95] mt-0.5">Переход — открытие страницы или переход внутри приложения; фоновая подгрузка ссылок не считается. Пишется с 29.09.2026.</p>
+        <p className="text-[12px] text-[#9a9a95] mt-0.5">Переход — открытие страницы или переход внутри приложения; фоновая подгрузка ссылок и запросы сервис-воркера не считаются. Пишется с 29.09.2026.</p>
+        <p className="text-[12px] text-[#9a9a95] mt-0.5">Строки «стена» (вход занят, нет доступа, страница входа) — это не разделы: туда человека выбрасывает. Их число читается как «столько раз не дали работать».</p>
       </div>
 
       <div className="flex gap-1 flex-wrap mb-3">
@@ -110,7 +112,13 @@ export default function PageUsage({ from, to }: { from?: string; to?: string }) 
                 {routes.map(r => (
                   <tr key={r.route} className="border-b border-[#f5f5f3] last:border-0">
                     <td className="px-4 py-2 min-w-0">
-                      <div className="font-medium text-[#111110]">{label(r.route)}</div>
+                      <div className="font-medium text-[#111110] flex items-center gap-1.5">
+                        {label(r.route)}
+                        {isWallRoute(r.route) && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#fdf0ef] text-[#c23a2b]"
+                                title="Сюда человека выбрасывает: это не раздел, которым пользуются">стена</span>
+                        )}
+                      </div>
                       {labels[r.route] && <div className="text-[11px] text-[#9a9a95] font-mono">{r.route}</div>}
                     </td>
                     <td className="px-2 py-2 text-right">

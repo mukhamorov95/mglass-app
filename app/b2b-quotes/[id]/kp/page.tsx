@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast'
 import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import AssignInstallationButton from '@/components/AssignInstallationButton'
+import DocSkeleton from '@/components/DocSkeleton'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,7 +102,10 @@ export default function KPPrintPage() {
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
       pdf.save(`КП-${order?.custom_number?.trim() || String(order?.id ?? '').padStart(5, '0')}.pdf`)
     } catch (e) {
-      alert('Не удалось сформировать PDF: ' + (e instanceof Error ? e.message : 'ошибка') + '. Используйте «Печать» → Сохранить как PDF.')
+      toast.error('Не удалось сформировать PDF', {
+        detail: (e instanceof Error ? e.message : 'неизвестная ошибка') + '. Лист можно сохранить через «Печать» → Сохранить как PDF.',
+        action: { label: 'Печать', onClick: () => window.print() },
+      })
     }
   }
 
@@ -151,11 +155,7 @@ export default function KPPrintPage() {
       })
   }, [id])
 
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-screen text-[#6b6b66] text-sm">
-      Загрузка...
-    </div>
-  )
+  if (loading) return <DocSkeleton rows={8} />
 
   if (error || !order) return (
     <div className="flex items-center justify-center min-h-screen text-red-500 text-sm">

@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import InvoiceDocument from '@/components/InvoiceDocument'
+import DocSkeleton from '@/components/DocSkeleton'
+import { toast } from '@/lib/toast'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type OrderItem = {
@@ -298,11 +300,14 @@ export default function InvoicePage() {
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
       pdf.save(`Счёт-спецификация-${order?.custom_number?.trim() || String(order?.id ?? '').padStart(5, '0')}.pdf`)
     } catch (e) {
-      alert('Не удалось сформировать PDF: ' + (e instanceof Error ? e.message : 'ошибка') + '. Используйте «Печать» → Сохранить как PDF.')
+      toast.error('Не удалось сформировать PDF', {
+        detail: (e instanceof Error ? e.message : 'неизвестная ошибка') + '. Лист можно сохранить через «Печать» → Сохранить как PDF.',
+        action: { label: 'Печать', onClick: () => window.print() },
+      })
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen text-[#6b6b66] text-sm">Загрузка…</div>
+  if (loading) return <DocSkeleton rows={7} />
   if (error || !order) return <div className="flex items-center justify-center min-h-screen text-red-500 text-sm">{error ?? 'Ошибка загрузки'}</div>
 
   const reqMissing = !req.inn
