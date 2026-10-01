@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { requirePageAccess } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,8 +8,8 @@ export const dynamic = 'force-dynamic'
 // то, что и так видно на карточке. Цена появится своим роутом (маршрут З5).
 
 export async function GET() {
-  const { data: { user } } = await (await createClient()).auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const guard = await requirePageAccess('/calculator/build')
+  if (guard instanceof NextResponse) return guard
 
   const svc = createServiceClient()
   const [{ data, error }, { data: mats }] = await Promise.all([
