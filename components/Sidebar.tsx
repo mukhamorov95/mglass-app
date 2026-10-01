@@ -237,7 +237,8 @@ const ADMIN_B2B: NavEntry[] = [
 const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/measure-requests',    label: 'Заявки на замер',  icon: '📐' },
   { href: '/measure-calendar',    label: 'Календарь замеров', icon: '🗓️' },
-  { href: '/measurer-cabinet',    label: 'Замерщики (календарь/деньги)', icon: '📏' },
+  { href: '/measurer-cabinet',    label: 'Кабинет замерщика', icon: '📏' },
+  { href: '/measurer-earnings',   label: 'Заработок замерщиков', icon: '💰' },
   { href: '/admin/installations', label: 'Монтажи',          icon: '🔧' },
   { href: '/inventory',            label: 'Склад',           icon: '🏬' },
   { href: '/admin/route-sheet',    label: 'Маршрутный лист', icon: '🚚' },
@@ -422,7 +423,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/b2b-rates', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/sandblast-cost', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity', '/commercial/activity'])) open.push('operations')
+    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/measurer-earnings', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity', '/commercial/activity'])) open.push('operations')
   }
   return open
 }
@@ -467,7 +468,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
 
 function detectModeFromPath(pathname: string): ViewMode {
   if (pathname.startsWith('/cfo')) return 'cfo'
-  if (pathname.startsWith('/measurer-cabinet')) return 'measurer'
+  if (pathname.startsWith('/measurer-cabinet') || pathname.startsWith('/measurer-earnings')) return 'measurer'
   if (
     pathname.startsWith('/b2b-orders') ||
     pathname.startsWith('/production-app') ||
@@ -492,6 +493,13 @@ function detectModeFromPath(pathname: string): ViewMode {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
+
+// Нижняя панель на телефоне в контуре замеров — замерщик почти всегда с телефона (владелец 01.10).
+const MEASURER_TABS: NavItem[] = [
+  { href: '/measurer-cabinet',  label: 'Замеры',    icon: '📏' },
+  { href: '/measure-calendar',  label: 'Календарь', icon: '🗓️' },
+  { href: '/measurer-earnings', label: 'Заработок', icon: '💰' },
+]
 
 export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, canViewMoney = false, referralRate = null }: Props) {
   // Владелец видит в «Деньгах» цеха ещё и партнёрку — рабочие только план и ТБ.
@@ -824,8 +832,9 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
       <>
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-indigo-600">Замеры</div>
         <div className="space-y-px">
-          {navItem({ href: '/measurer-cabinet', label: 'Кабинет замерщика', icon: '📏' }, 'bg-indigo-50 text-indigo-700 font-medium')}
-          {navItem({ href: '/measure-calendar', label: 'Календарь замеров', icon: '🗓️' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/measurer-cabinet',  label: 'Кабинет замерщика', icon: '📏' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/measure-calendar',  label: 'Календарь замеров', icon: '🗓️' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/measurer-earnings', label: 'Заработок',         icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
         </div>
       </>
     )
@@ -964,6 +973,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
           {navItem({ href: '/measurer-cabinet', label: 'Кабинет замерщика', icon: '📏' }, 'bg-cyan-50 text-cyan-700 font-medium')}
           {navItem({ href: '/measure-requests', label: 'Заявки на замер',   icon: '📐' }, 'bg-cyan-50 text-cyan-700 font-medium')}
           {navItem({ href: '/measure-calendar', label: 'Календарь замеров', icon: '🗓️' }, 'bg-cyan-50 text-cyan-700 font-medium')}
+          {navItem({ href: '/measurer-earnings', label: 'Заработок',        icon: '💰' }, 'bg-cyan-50 text-cyan-700 font-medium')}
         </div>
       </>
     )
@@ -992,6 +1002,9 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
 
   // ── JSX ─────────────────────────────────────────────────────────────────────
 
+  // Замерщику — всегда; владельцу в режиме «Замерщик» — только на страницах замеров.
+  const measurerBar = role === 'measurer' || (isAdmin && viewMode === 'measurer' && MEASURER_TABS.some(t => active(t.href)))
+
   return (
     <>
       {mobileOpen && (
@@ -1013,7 +1026,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
 
       <aside
         className={`
-          fixed lg:sticky top-0 left-0 h-screen z-40 lg:z-auto
+          fixed lg:sticky top-0 left-0 h-dvh lg:h-screen z-40 lg:z-auto
           w-[250px] flex-shrink-0 flex flex-col bg-[#fbfbfd] border-r border-[#ececf0]
           transition-transform duration-200 ease-in-out overflow-hidden
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -1118,6 +1131,21 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
         </div>
 
       </aside>
+
+      {measurerBar && (
+        <nav aria-label="Замеры" className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white/95 backdrop-blur border-t border-[#e4e4e0] pb-[env(safe-area-inset-bottom)]">
+          <div className="grid grid-cols-3">
+            {MEASURER_TABS.map(t => (
+              <Link key={t.href} href={t.href} onClick={() => setMobileOpen(false)}
+                aria-current={active(t.href) ? 'page' : undefined}
+                className={`flex flex-col items-center justify-center gap-0.5 py-2 min-h-[56px] text-[11px] font-semibold ${active(t.href) ? 'text-[#111110]' : 'text-[#9a9a95]'}`}>
+                <span className={`text-[20px] leading-none ${active(t.href) ? '' : 'opacity-60'}`}>{t.icon}</span>
+                {t.label}
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
     </>
   )
 }
