@@ -13,6 +13,7 @@ import type { KitChoices } from '@/lib/configurator/kit'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { FINANCE_FALLBACK } from '@/lib/pricing/pickFinance'
 import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
+import { kpSectionsFromBom, type BomItem } from '@/lib/kp/bomSections'
 
 // Вкладка «Расчёт» — два экрана. Экран 1: только выбор модели. Экран 2: слева крупный
 // настоящий 3D-визуализатор, справа параметры (габариты → стекло/цвет фурнитуры →
@@ -69,7 +70,8 @@ type Price = {
 // req — параметры душевой, по которым считали: корзина = заказ, общий раскрой профиля и
 // трубы на все душевые заказа пересчитывается по ним (у зеркал req нет).
 type ShowerReq = { model: string; dims: MDims; finishId: string; choice: Record<string, string>; qtyChoice: Record<string, number>; variant?: MVariant }
-type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number; marks?: string[]; req?: ShowerReq }
+// bom — состав душевой названиями (без цен): из него собирается лист 3 КП.
+type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number; marks?: string[]; req?: ShowerReq; bom?: BomItem }
 type OrderCut = { saving: number; cuts: { name: string; finishId: string; perItemBars: number; pooledBars: number; saving: number }[] }
 
 const SUPPLIER: Record<string, string> = { av24: 'АВ24', vetro: 'Ветро' }
@@ -337,7 +339,12 @@ export default function BuildCalcPage() {
   const title = () => `${model.code} ${model.name} · ${isCorner ? `${numOr(String(dims.width))}×${numOr(String(dims.width2 ?? 0))}×${numOr(String(dims.height))}` : `${numOr(String(dims.width))}×${numOr(String(dims.height))}`} мм`
   const marks = priceMarks(price)
   const currentReq: ShowerReq = { model: code, dims, finishId, choice, qtyChoice, variant: mVariant }
-  const currentItem = (): CartItem => ({ title: title(), cost, productPrice: Math.round(productPrice), install, delivery: deliveryN, lift: liftN, total: grand, ...(marks.length ? { marks } : {}), req: currentReq })
+  const currentBom = (): BomItem => ({
+    title: title(), glass: `${glass.label.toLowerCase()} ${THICKNESS} мм, закалённое`, finish: finish.label.toLowerCase(),
+    panels: price?.glassLines?.length || undefined,
+    lines: (price?.lines ?? []).map(l => ({ role: l.role, label: l.label, qty: l.qty, unit: l.unit })),
+  })
+  const currentItem = (): CartItem => ({ title: title(), cost, productPrice: Math.round(productPrice), install, delivery: deliveryN, lift: liftN, total: grand, ...(marks.length ? { marks } : {}), req: currentReq, bom: currentBom() })
 
   // Корзина = заказ: профиль и труба всех душевых кроятся из общих хлыстов. Экономия —
   // себестоимости, строкой; цену клиенту не меняет (это решает менеджер скидкой).
@@ -420,7 +427,8 @@ export default function BuildCalcPage() {
       }
       // КП из этого расчёта: позиции корзины → префилл /kp.
       const items = list.map(i => ({ name: i.title, qty: 1, price: i.productPrice + i.install + i.delivery + i.lift, sum: i.total }))
-      const content = { title: (clientName || 'Коммерческое предложение').toUpperCase(), items, subtotal: total, total, client_name: clientName, client_phone: clientPhone, client_address: objectAddress, ...(amoLeadId ? { amo_lead_id: amoLeadId } : {}) }
+      const kpSections = kpSectionsFromBom(list.flatMap(i => (i.bom ? [i.bom] : [])))
+      const content = { title: (clientName || 'Коммерческое предложение').toUpperCase(), items, subtotal: total, total, client_name: clientName, client_phone: clientPhone, client_address: objectAddress, ...(kpSections.length ? { sections: kpSections } : {}), ...(amoLeadId ? { amo_lead_id: amoLeadId } : {}) }
       try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch {
         toast.error('КП откроется без позиций', { detail: 'Браузер не дал передать данные расчёта. Сам расчёт сохранён в «Расчётах» — откройте его оттуда и нажмите «Сделать КП».' })
       }
