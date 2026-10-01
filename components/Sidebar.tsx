@@ -1134,7 +1134,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
 
       {/* Полоса под кнопкой меню: без неё «☰» висит поверх карточек при прокрутке. */}
       {measurerBar && (
-        <div className="fixed top-0 inset-x-0 h-12 z-30 lg:hidden bg-white/95 backdrop-blur border-b border-[#e4e4e0] flex items-center pl-14 pr-4">
+        <div className="fixed top-0 inset-x-0 h-12 z-30 lg:hidden bg-white/95 backdrop-blur border-b border-[#e4e4e0] flex items-center pt-3 pl-14 pr-4">
           <span className="text-[14px] font-semibold text-[#111110] truncate">
             {MEASURER_TABS.find(t => active(t.href))?.label ?? 'Замеры'}
           </span>
