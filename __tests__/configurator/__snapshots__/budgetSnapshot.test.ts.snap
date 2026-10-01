@@ -1,0 +1,985 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Снимок budget-итогов (данные 01.10) > М1 500 black 1`] = `
+{
+  "complete": true,
+  "hardware": 3818,
+  "lines": [
+    "mount-wall it-diss40×1=352",
+    "mount-glass it-7v0ihn×1=540",
+    "profile it-305us2×2=1276",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М1 500 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 4491,
+  "lines": [
+    "mount-wall it-diss40×1=352",
+    "mount-glass it-7v0ihn×1=540",
+    "profile it-305us2×2=1424",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М1 950 black 1`] = `
+{
+  "complete": true,
+  "hardware": 3818,
+  "lines": [
+    "mount-wall it-diss40×1=352",
+    "mount-glass it-7v0ihn×1=540",
+    "profile it-305us2×2=1276",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М1 950 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 4491,
+  "lines": [
+    "mount-wall it-diss40×1=352",
+    "mount-glass it-7v0ihn×1=540",
+    "profile it-305us2×2=1424",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М1 1400 black 1`] = `
+{
+  "complete": true,
+  "hardware": 3818,
+  "lines": [
+    "mount-wall it-diss40×1=352",
+    "mount-glass it-7v0ihn×1=540",
+    "profile it-305us2×2=1276",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М1 1400 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 4491,
+  "lines": [
+    "mount-wall it-diss40×1=352",
+    "mount-glass it-7v0ihn×1=540",
+    "profile it-305us2×2=1424",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М2 700 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9202,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=338",
+    "mount-wall it-7o49hw×2=704",
+    "mount-glass it-b7cx5w×1=622",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6plrs2×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=1914",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М2 700 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 9903,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=292",
+    "mount-wall it-7o49hw×2=704",
+    "mount-glass it-b7cx5w×1=622",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6plrs2×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=2136",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М2 1150 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9202,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=338",
+    "mount-wall it-7o49hw×2=704",
+    "mount-glass it-b7cx5w×1=622",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6plrs2×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=1914",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М2 1150 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 9903,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=292",
+    "mount-wall it-7o49hw×2=704",
+    "mount-glass it-b7cx5w×1=622",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6plrs2×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=2136",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М2 1600 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9202,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=338",
+    "mount-wall it-7o49hw×2=704",
+    "mount-glass it-b7cx5w×1=622",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6plrs2×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=1914",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М2 1600 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 9903,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=292",
+    "mount-wall it-7o49hw×2=704",
+    "mount-glass it-b7cx5w×1=622",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6plrs2×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=2136",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М4 1000 black 1`] = `
+{
+  "complete": true,
+  "hardware": 10228,
+  "lines": [
+    "hinge it-4pqfjx×2=2324",
+    "handle it-3y3aw7×1=742",
+    "mount-wall it-diss40×2=704",
+    "mount-glass it-b94oq3×2=1244",
+    "cap it-9qfrfq×1=158",
+    "seal-magnet it-4cp1qo×1=1028",
+    "seal-bottom it-5opxud×1=262",
+    "seal-hinge it-dkic27×1=202",
+    "profile it-305us2×3=1914",
+    "tube it-bbdgkv×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М4 1000 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10908,
+  "lines": [
+    "hinge it-4pqfjx×2=2324",
+    "handle it-3y3aw7×1=675",
+    "mount-wall it-diss40×2=704",
+    "mount-glass it-b94oq3×2=1244",
+    "cap it-9qfrfq×1=158",
+    "seal-magnet it-4cp1qo×1=1028",
+    "seal-bottom it-5opxud×1=262",
+    "seal-hinge it-dkic27×1=202",
+    "profile it-305us2×3=2136",
+    "tube it-bbdgkv×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М4 1500 black 1`] = `
+{
+  "complete": true,
+  "hardware": 10228,
+  "lines": [
+    "hinge it-4pqfjx×2=2324",
+    "handle it-3y3aw7×1=742",
+    "mount-wall it-diss40×2=704",
+    "mount-glass it-b94oq3×2=1244",
+    "cap it-9qfrfq×1=158",
+    "seal-magnet it-4cp1qo×1=1028",
+    "seal-bottom it-5opxud×1=262",
+    "seal-hinge it-dkic27×1=202",
+    "profile it-305us2×3=1914",
+    "tube it-bbdgkv×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М4 1500 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10908,
+  "lines": [
+    "hinge it-4pqfjx×2=2324",
+    "handle it-3y3aw7×1=675",
+    "mount-wall it-diss40×2=704",
+    "mount-glass it-b94oq3×2=1244",
+    "cap it-9qfrfq×1=158",
+    "seal-magnet it-4cp1qo×1=1028",
+    "seal-bottom it-5opxud×1=262",
+    "seal-hinge it-dkic27×1=202",
+    "profile it-305us2×3=2136",
+    "tube it-bbdgkv×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М4 2000 black 1`] = `
+{
+  "complete": true,
+  "hardware": 10228,
+  "lines": [
+    "hinge it-4pqfjx×2=2324",
+    "handle it-3y3aw7×1=742",
+    "mount-wall it-diss40×2=704",
+    "mount-glass it-b94oq3×2=1244",
+    "cap it-9qfrfq×1=158",
+    "seal-magnet it-4cp1qo×1=1028",
+    "seal-bottom it-5opxud×1=262",
+    "seal-hinge it-dkic27×1=202",
+    "profile it-305us2×3=1914",
+    "tube it-bbdgkv×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М4 2000 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10908,
+  "lines": [
+    "hinge it-4pqfjx×2=2324",
+    "handle it-3y3aw7×1=675",
+    "mount-wall it-diss40×2=704",
+    "mount-glass it-b94oq3×2=1244",
+    "cap it-9qfrfq×1=158",
+    "seal-magnet it-4cp1qo×1=1028",
+    "seal-bottom it-5opxud×1=262",
+    "seal-hinge it-dkic27×1=202",
+    "profile it-305us2×3=2136",
+    "tube it-bbdgkv×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М7 700×850 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9420,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=338",
+    "mount-wall it-7o49hw×1=352",
+    "mount-glass it-83sqvl×1=622",
+    "mount-corner it-flxwqq×1=570",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6ay6sp×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=1914",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М7 700×850 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10039,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=292",
+    "mount-wall it-7o49hw×1=352",
+    "mount-glass it-83sqvl×1=540",
+    "mount-corner it-flxwqq×1=570",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6ay6sp×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=2136",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М7 1050×850 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9420,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=338",
+    "mount-wall it-7o49hw×1=352",
+    "mount-glass it-83sqvl×1=622",
+    "mount-corner it-flxwqq×1=570",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6ay6sp×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=1914",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М7 1050×850 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10039,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=292",
+    "mount-wall it-7o49hw×1=352",
+    "mount-glass it-83sqvl×1=540",
+    "mount-corner it-flxwqq×1=570",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6ay6sp×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×3=2136",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М7 1400×850 black 1`] = `
+{
+  "complete": true,
+  "hardware": 10058,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=338",
+    "mount-wall it-7o49hw×1=352",
+    "mount-glass it-83sqvl×1=622",
+    "mount-corner it-flxwqq×1=570",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6ay6sp×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×4=2552",
+    "tube tube×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М7 1400×850 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10751,
+  "lines": [
+    "hinge it-brac2d×2=2324",
+    "handle it-26ouk×1=292",
+    "mount-wall it-7o49hw×1=352",
+    "mount-glass it-83sqvl×1=540",
+    "mount-corner it-flxwqq×1=570",
+    "cap it-4vzqdc×1=158",
+    "seal-magnet it-6ay6sp×1=1028",
+    "seal-bottom it-5pm2ru×1=262",
+    "seal-hinge it-fhf94p×1=202",
+    "profile profile×4=2848",
+    "tube tube×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М8 900×1200 black 1`] = `
+{
+  "complete": true,
+  "hardware": 15860,
+  "lines": [
+    "handle-slide it-fafm00×2=6750",
+    "roller it-4agwke×4=2072",
+    "cap it-gbqu9q×2=316",
+    "profile it-305us2×3=1914",
+    "tube it-fur3bb×2=3300",
+    "seal-magnet it-9fkotq×1=1028",
+    "seal-hinge it-b4t3h7×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М8 900×1200 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 16682,
+  "lines": [
+    "handle-slide it-fafm00×2=6300",
+    "roller it-4agwke×4=2072",
+    "cap it-gbqu9q×2=316",
+    "profile it-305us2×3=2136",
+    "tube it-fur3bb×2=4350",
+    "seal-magnet it-9fkotq×1=1028",
+    "seal-hinge it-b4t3h7×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М8 1200×1200 black 1`] = `
+{
+  "complete": true,
+  "hardware": 16498,
+  "lines": [
+    "handle-slide it-fafm00×2=6750",
+    "roller it-4agwke×4=2072",
+    "cap it-gbqu9q×2=316",
+    "profile it-305us2×4=2552",
+    "tube it-fur3bb×2=3300",
+    "seal-magnet it-9fkotq×1=1028",
+    "seal-hinge it-b4t3h7×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М8 1200×1200 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 17394,
+  "lines": [
+    "handle-slide it-fafm00×2=6300",
+    "roller it-4agwke×4=2072",
+    "cap it-gbqu9q×2=316",
+    "profile it-305us2×4=2848",
+    "tube it-fur3bb×2=4350",
+    "seal-magnet it-9fkotq×1=1028",
+    "seal-hinge it-b4t3h7×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М8 1500×1200 black 1`] = `
+{
+  "complete": true,
+  "hardware": 16498,
+  "lines": [
+    "handle-slide it-fafm00×2=6750",
+    "roller it-4agwke×4=2072",
+    "cap it-gbqu9q×2=316",
+    "profile it-305us2×4=2552",
+    "tube it-fur3bb×2=3300",
+    "seal-magnet it-9fkotq×1=1028",
+    "seal-hinge it-b4t3h7×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М8 1500×1200 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 17394,
+  "lines": [
+    "handle-slide it-fafm00×2=6300",
+    "roller it-4agwke×4=2072",
+    "cap it-gbqu9q×2=316",
+    "profile it-305us2×4=2848",
+    "tube it-fur3bb×2=4350",
+    "seal-magnet it-9fkotq×1=1028",
+    "seal-hinge it-b4t3h7×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М9 900×1000 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9641,
+  "lines": [
+    "handle-slide it-3az98u×1=3375",
+    "roller it-3xxbl5×2=1036",
+    "cap it-794c6p×1=158",
+    "profile it-1a8eic×3=1914",
+    "tube it-8eaz9v×1=1650",
+    "seal-magnet it-b63amv×1=1028",
+    "seal-hinge it-ctc213×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М9 900×1000 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10163,
+  "lines": [
+    "handle-slide it-3az98u×1=3150",
+    "roller it-3xxbl5×2=1036",
+    "cap it-794c6p×1=158",
+    "profile it-1a8eic×3=2136",
+    "tube it-8eaz9v×1=2175",
+    "seal-magnet it-b63amv×1=1028",
+    "seal-hinge it-ctc213×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М9 1200×1000 black 1`] = `
+{
+  "complete": true,
+  "hardware": 11291,
+  "lines": [
+    "handle-slide it-3az98u×1=3375",
+    "roller it-3xxbl5×2=1036",
+    "cap it-794c6p×1=158",
+    "profile it-1a8eic×3=1914",
+    "tube it-8eaz9v×2=3300",
+    "seal-magnet it-b63amv×1=1028",
+    "seal-hinge it-ctc213×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М9 1200×1000 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 12338,
+  "lines": [
+    "handle-slide it-3az98u×1=3150",
+    "roller it-3xxbl5×2=1036",
+    "cap it-794c6p×1=158",
+    "profile it-1a8eic×3=2136",
+    "tube it-8eaz9v×2=4350",
+    "seal-magnet it-b63amv×1=1028",
+    "seal-hinge it-ctc213×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М9 1500×1000 black 1`] = `
+{
+  "complete": true,
+  "hardware": 11929,
+  "lines": [
+    "handle-slide it-3az98u×1=3375",
+    "roller it-3xxbl5×2=1036",
+    "cap it-794c6p×1=158",
+    "profile it-1a8eic×4=2552",
+    "tube it-8eaz9v×2=3300",
+    "seal-magnet it-b63amv×1=1028",
+    "seal-hinge it-ctc213×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М9 1500×1000 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 13050,
+  "lines": [
+    "handle-slide it-3az98u×1=3150",
+    "roller it-3xxbl5×2=1036",
+    "cap it-794c6p×1=158",
+    "profile it-1a8eic×4=2848",
+    "tube it-8eaz9v×2=4350",
+    "seal-magnet it-b63amv×1=1028",
+    "seal-hinge it-ctc213×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М10 900 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9641,
+  "lines": [
+    "handle-slide it-3i6dlf×1=3375",
+    "roller it-32niq0×2=1036",
+    "cap it-73e68t×1=158",
+    "profile it-5smpqj×3=1914",
+    "tube it-3ezyt7×1=1650",
+    "seal-magnet it-dvkc×1=1028",
+    "seal-hinge it-97vagu×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М10 900 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10163,
+  "lines": [
+    "handle-slide it-3i6dlf×1=3150",
+    "roller it-32niq0×2=1036",
+    "cap it-73e68t×1=158",
+    "profile it-5smpqj×3=2136",
+    "tube it-3ezyt7×1=2175",
+    "seal-magnet it-dvkc×1=1028",
+    "seal-hinge it-97vagu×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М10 1350 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9641,
+  "lines": [
+    "handle-slide it-3i6dlf×1=3375",
+    "roller it-32niq0×2=1036",
+    "cap it-73e68t×1=158",
+    "profile it-5smpqj×3=1914",
+    "tube it-3ezyt7×1=1650",
+    "seal-magnet it-dvkc×1=1028",
+    "seal-hinge it-97vagu×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М10 1350 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10163,
+  "lines": [
+    "handle-slide it-3i6dlf×1=3150",
+    "roller it-32niq0×2=1036",
+    "cap it-73e68t×1=158",
+    "profile it-5smpqj×3=2136",
+    "tube it-3ezyt7×1=2175",
+    "seal-magnet it-dvkc×1=1028",
+    "seal-hinge it-97vagu×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М10 1800 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9641,
+  "lines": [
+    "handle-slide it-3i6dlf×1=3375",
+    "roller it-32niq0×2=1036",
+    "cap it-73e68t×1=158",
+    "profile it-5smpqj×3=1914",
+    "tube it-3ezyt7×1=1650",
+    "seal-magnet it-dvkc×1=1028",
+    "seal-hinge it-97vagu×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М10 1800 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10163,
+  "lines": [
+    "handle-slide it-3i6dlf×1=3150",
+    "roller it-32niq0×2=1036",
+    "cap it-73e68t×1=158",
+    "profile it-5smpqj×3=2136",
+    "tube it-3ezyt7×1=2175",
+    "seal-magnet it-dvkc×1=1028",
+    "seal-hinge it-97vagu×2=480",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М11 700×1050 black 1`] = `
+{
+  "complete": true,
+  "hardware": 17362,
+  "lines": [
+    "hinge it-g83m2j×2=8700",
+    "handle it-99jvz2×1=338",
+    "mount-wall it-1wkqd6×2=704",
+    "mount-glass it-6poleo×2=1244",
+    "connector it-ehastc×2=1140",
+    "cap it-g01986×1=158",
+    "seal-magnet it-by9ppg×1=1050",
+    "seal-bottom it-52ktgu×1=262",
+    "seal-hinge it-by16m2×1=202",
+    "profile it-g6gzd8×3=1914",
+    "tube it-9l40k5×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М11 700×1050 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 16713,
+  "lines": [
+    "hinge it-g83m2j×2=7350",
+    "handle it-99jvz2×1=292",
+    "mount-wall it-1wkqd6×2=704",
+    "mount-glass it-6poleo×2=1244",
+    "connector it-ehastc×2=1140",
+    "cap it-g01986×1=158",
+    "seal-magnet it-by9ppg×1=1050",
+    "seal-bottom it-52ktgu×1=262",
+    "seal-hinge it-by16m2×1=202",
+    "profile it-g6gzd8×3=2136",
+    "tube it-9l40k5×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М11 1050×1050 black 1`] = `
+{
+  "complete": true,
+  "hardware": 17362,
+  "lines": [
+    "hinge it-g83m2j×2=8700",
+    "handle it-99jvz2×1=338",
+    "mount-wall it-1wkqd6×2=704",
+    "mount-glass it-6poleo×2=1244",
+    "connector it-ehastc×2=1140",
+    "cap it-g01986×1=158",
+    "seal-magnet it-by9ppg×1=1050",
+    "seal-bottom it-52ktgu×1=262",
+    "seal-hinge it-by16m2×1=202",
+    "profile it-g6gzd8×3=1914",
+    "tube it-9l40k5×1=1650",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М11 1050×1050 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 16713,
+  "lines": [
+    "hinge it-g83m2j×2=7350",
+    "handle it-99jvz2×1=292",
+    "mount-wall it-1wkqd6×2=704",
+    "mount-glass it-6poleo×2=1244",
+    "connector it-ehastc×2=1140",
+    "cap it-g01986×1=158",
+    "seal-magnet it-by9ppg×1=1050",
+    "seal-bottom it-52ktgu×1=262",
+    "seal-hinge it-by16m2×1=202",
+    "profile it-g6gzd8×3=2136",
+    "tube it-9l40k5×1=2175",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М11 1400×1050 black 1`] = `
+{
+  "complete": true,
+  "hardware": 19650,
+  "lines": [
+    "hinge it-g83m2j×2=8700",
+    "handle it-99jvz2×1=338",
+    "mount-wall it-1wkqd6×2=704",
+    "mount-glass it-6poleo×2=1244",
+    "connector it-ehastc×2=1140",
+    "cap it-g01986×1=158",
+    "seal-magnet it-by9ppg×1=1050",
+    "seal-bottom it-52ktgu×1=262",
+    "seal-hinge it-by16m2×1=202",
+    "profile it-g6gzd8×4=2552",
+    "tube it-9l40k5×2=3300",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М11 1400×1050 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 19600,
+  "lines": [
+    "hinge it-g83m2j×2=7350",
+    "handle it-99jvz2×1=292",
+    "mount-wall it-1wkqd6×2=704",
+    "mount-glass it-6poleo×2=1244",
+    "connector it-ehastc×2=1140",
+    "cap it-g01986×1=158",
+    "seal-magnet it-by9ppg×1=1050",
+    "seal-bottom it-52ktgu×1=262",
+    "seal-hinge it-by16m2×1=202",
+    "profile it-g6gzd8×4=2848",
+    "tube it-9l40k5×2=4350",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М12 1200 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9693,
+  "lines": [
+    "handle-slide it-7023zv×1=3375",
+    "roller it-ayokbn×2=1036",
+    "cap it-3zytz×1=158",
+    "seal-hinge it-9pfs3×4=960",
+    "profile it-895pw7×3=1914",
+    "tube it-3k416v×1=1650",
+    "mount-glass it-3w3f4b×2=600",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М12 1200 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10199,
+  "lines": [
+    "handle-slide it-7023zv×1=3150",
+    "roller it-ayokbn×2=1036",
+    "cap it-3zytz×1=158",
+    "seal-hinge it-9pfs3×4=960",
+    "profile it-895pw7×3=2136",
+    "tube it-3k416v×1=2175",
+    "mount-glass it-3w3f4b×2=584",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М12 1600 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9693,
+  "lines": [
+    "handle-slide it-7023zv×1=3375",
+    "roller it-ayokbn×2=1036",
+    "cap it-3zytz×1=158",
+    "seal-hinge it-9pfs3×4=960",
+    "profile it-895pw7×3=1914",
+    "tube it-3k416v×1=1650",
+    "mount-glass it-3w3f4b×2=600",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М12 1600 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10199,
+  "lines": [
+    "handle-slide it-7023zv×1=3150",
+    "roller it-ayokbn×2=1036",
+    "cap it-3zytz×1=158",
+    "seal-hinge it-9pfs3×4=960",
+    "profile it-895pw7×3=2136",
+    "tube it-3k416v×1=2175",
+    "mount-glass it-3w3f4b×2=584",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М12 2000 black 1`] = `
+{
+  "complete": true,
+  "hardware": 9693,
+  "lines": [
+    "handle-slide it-7023zv×1=3375",
+    "roller it-ayokbn×2=1036",
+    "cap it-3zytz×1=158",
+    "seal-hinge it-9pfs3×4=960",
+    "profile it-895pw7×3=1914",
+    "tube it-3k416v×1=1650",
+    "mount-glass it-3w3f4b×2=600",
+  ],
+  "missing": [],
+}
+`;
+
+exports[`Снимок budget-итогов (данные 01.10) > М12 2000 chrome 1`] = `
+{
+  "complete": true,
+  "hardware": 10199,
+  "lines": [
+    "handle-slide it-7023zv×1=3150",
+    "roller it-ayokbn×2=1036",
+    "cap it-3zytz×1=158",
+    "seal-hinge it-9pfs3×4=960",
+    "profile it-895pw7×3=2136",
+    "tube it-3k416v×1=2175",
+    "mount-glass it-3w3f4b×2=584",
+  ],
+  "missing": [],
+}
+`;
