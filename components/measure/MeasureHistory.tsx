@@ -130,6 +130,7 @@ export default function MeasureHistory({ meId, isMeasurer }: { meId: string; isM
                   {' · '}{r.visit_payment ? PAYMENT_LABEL[r.visit_payment] : <span className="text-amber-700">оплата не отмечена</span>}
                 </p>
               )}
+              {r.status === 'cancelled' && <p className="text-[#6b6b66]">✕ Почему отменён: {r.cancel_reason || 'причина не записана'}{r.cancelled_by_name ? ` — ${r.cancelled_by_name}` : ''}</p>}
               {r.issue_text && <p className="text-red-600">⚠️ {r.issue_text}{r.issue_solution ? ` → 💡 ${r.issue_solution}` : ''}</p>}
               {r.result_note && <p className="text-[#111110] whitespace-pre-line">📝 {r.result_note}</p>}
               <div className="flex flex-wrap items-center gap-2 pt-0.5">

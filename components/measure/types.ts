@@ -31,6 +31,9 @@ export type MeasureReq = {
   visit_payment: VisitPayment | null
   result_note: string | null
   repeat_of: number | null
+  cancel_reason?: string | null
+  cancelled_by_name?: string | null
+  cancelled_at?: string | null
   photos: string[] | null
   created_at: string
 }

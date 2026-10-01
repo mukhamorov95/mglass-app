@@ -8,7 +8,7 @@ import { isOwnerRole } from '@/lib/getRole'
 import { measureActorFrom, type MeasureActor } from '@/lib/measure/access'
 import { DEFAULT_DURATION_MIN, DEFAULT_SCHEDULE, addDays, checkBooking, mskToIso, type Booking, type DayOff, type Schedule } from '@/lib/measure/slots'
 
-export const REQ_COLS = 'id, deal_id, lead_id, deal_number, client_name, phone, amo_url, address, scope, notes, visit_price, payer, is_repeat, manager_id, manager_name, measurer_id, measurer_name, scheduled_at, duration_min, travel_min, status, issue_text, issue_solution, measurer_fee, fee_status, fee_paid_at, actual_price, price_note, visit_payment, result_note, repeat_of, photos, created_at, updated_at'
+export const REQ_COLS = 'id, deal_id, lead_id, deal_number, client_name, phone, amo_url, address, scope, notes, visit_price, payer, is_repeat, manager_id, manager_name, measurer_id, measurer_name, scheduled_at, duration_min, travel_min, status, issue_text, issue_solution, measurer_fee, fee_status, fee_paid_at, actual_price, price_note, visit_payment, result_note, repeat_of, cancel_reason, cancelled_by_name, cancelled_at, photos, created_at, updated_at'
 
 export type MeasureRequestRow = {
   id: number
@@ -42,6 +42,9 @@ export type MeasureRequestRow = {
   visit_payment: 'onsite' | 'company' | 'unpaid' | null
   result_note: string | null
   repeat_of: number | null
+  cancel_reason: string | null
+  cancelled_by_name: string | null
+  cancelled_at: string | null
   photos: string[] | null
   created_at: string
   updated_at: string

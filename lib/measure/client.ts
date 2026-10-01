@@ -1,4 +1,4 @@
-import { confirmDialog } from '@/lib/dialog'
+import { confirmDialog, promptDialog } from '@/lib/dialog'
 
 // Запрос к API замеров из браузера с одним общим поведением: мягкий конфликт
 // (мало времени на дорогу, вне часов, нерабочий день) сервер возвращает вопросом —
@@ -39,4 +39,16 @@ export function periodRange(kind: PeriodPreset, today = mskToday()): { from: str
   const last = new Date(Date.UTC(py, pm, 0)).getUTCDate()
   const mm = String(pm).padStart(2, '0')
   return { from: `${py}-${mm}-01`, to: `${py}-${mm}-${last}` }
+}
+
+// «Почему отменён?» — без причины сервер не отменит; причина видна в «Истории», у
+// менеджера на доске и в карточке (владелец 01.10). null — передумал отменять.
+export async function askCancelReason(): Promise<string | null> {
+  let text = 'Коротко: клиент передумал, не дозвонились, перенёс на потом…'
+  for (;;) {
+    const v = await promptDialog({ title: 'Почему отменён?', text, placeholder: 'Клиент передумал', confirmLabel: 'Отменить замер', multiline: true })
+    if (v === null) return null
+    if (v.trim()) return v.trim()
+    text = 'Нужна причина — без неё замер не отменится.'
+  }
 }
