@@ -43,6 +43,7 @@ export default function ActivityLogPage() {
   const [entries, setEntries]       = useState<LogEntry[]>([])
   const [loading, setLoading]       = useState(true)
   const [tableExists, setTableExists] = useState(true)
+  const [loadError, setLoadError]   = useState<string | null>(null)
   const [filterAction, setFilterAction] = useState('')
   const [filterUser, setFilterUser]     = useState('')
 
@@ -60,10 +61,13 @@ export default function ActivityLogPage() {
     if (error) {
       if (error.message.includes('does not exist') || error.code === '42P01') {
         setTableExists(false)
+      } else {
+        setLoadError(error.message)
       }
       setLoading(false)
       return
     }
+    setLoadError(null)
 
     setEntries((data ?? []) as LogEntry[])
     setLoading(false)
@@ -146,6 +150,8 @@ CREATE INDEX IF NOT EXISTS idx_actlog_created ON activity_log(created_at DESC);`
         <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
           {loading ? (
             <div className="p-8 text-center text-[13px] text-[#9a9a95]">Загрузка...</div>
+          ) : loadError ? (
+            <div className="p-8 text-center text-[13px] text-red-700">Журнал не загрузился: {loadError}</div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-[13px] text-[#9a9a95]">
               {entries.length === 0 ? 'Действий пока не зафиксировано' : 'Нет результатов по фильтру'}
