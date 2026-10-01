@@ -1,25 +1,22 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { buildMeasureResultMessage, clientHeadsUpText, dayRouteUrl, formatMeasureWhen, splitScope, tidy, whatsAppUrl } from '@/lib/measure/message'
-import { mskDate } from '@/lib/measure/slots'
-import { mskToday, sendMeasure } from '@/lib/measure/client'
+import { addDays, mskDate } from '@/lib/measure/slots'
+import { askCancelReason, mskToday, sendMeasure } from '@/lib/measure/client'
 import { confirmDialog } from '@/lib/dialog'
 import { telHref } from '@/lib/b2c/phoneKey'
-import MeasureBoard from '@/components/measure/MeasureBoard'
-import MeasurerAvailability from '@/components/measure/MeasurerAvailability'
 import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
 import SettleForm from '@/components/measure/SettleForm'
-import MeasurerEarnings from '@/components/measure/MeasurerEarnings'
-import MeasurerCalendar from '@/components/measure/MeasurerCalendar'
 import OwnerSummary from '@/components/measure/OwnerSummary'
 import MeasureHistory from '@/components/measure/MeasureHistory'
-import type { VisitPayment } from '@/lib/measure/money'
+import { PAYMENT_LABEL, finalPrice, type VisitPayment } from '@/lib/measure/money'
 
-// Кабинет замерщика, четыре вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
-// мерить) → пул новых заявок («Взять» в своё свободное окно) → дальше по дням →
-// занятость всех замерщиков → мой график. «Календарь» — месяц и день. «История» —
-// период, поиск, статус, новые/повторные. «Заработок»: период, оплаты, гонорар.
+// Кабинет замерщика, две вкладки. «Замеры»: сегодня (куда ехать, кому звонить, что
+// мерить) → пул новых заявок (Взять · Проведён · Отменён) → дальше по дням → проведены
+// за неделю. «История» — период, поиск, статус, новые/повторные. Календарь (с занятостью
+// всех и моим графиком) и Заработок — отдельные пункты меню (владелец 01.10).
 // Владелец видит то же по всем замерщикам, сводку месяца и может назначить любого.
 
 type MReq = {
@@ -52,7 +49,7 @@ type MReq = {
   photos: string[] | null
   created_at: string
 }
-type Tab = 'measures' | 'history' | 'earnings' | 'calendar'
+type Tab = 'measures' | 'history'
 type Me = { id: string; name: string; role: string; scope: string }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -63,6 +60,7 @@ const dayTitle = (date: string) => { const d = new Date(`${date}T00:00:00Z`); re
 const EMPTY_BOOKING: BookingValue = { measurerId: '', date: '', time: '', durationMin: 90, travelMin: 60 }
 
 export default function MeasurerCabinetPage() {
+  const router = useRouter()
   const [me, setMe] = useState<Me | null>(null)
   const [reqs, setReqs] = useState<MReq[]>([])
   const [measurers, setMeasurers] = useState<{ id: string; name: string }[]>([])
@@ -76,7 +74,8 @@ export default function MeasurerCabinetPage() {
   const [boardKey, setBoardKey] = useState(0)
   const [tab, setTab] = useState<Tab>('measures')
   // Открытая форма у карточки: взять/перенести (booking) или сложность (issue).
-  const [openFor, setOpenFor] = useState<{ id: number; kind: 'book' | 'issue' | 'done' } | null>(null)
+  // log — «Проведён» по заявке из пула: съездил, не взяв её заранее.
+  const [openFor, setOpenFor] = useState<{ id: number; kind: 'book' | 'issue' | 'done' | 'log' } | null>(null)
   const [bookVal, setBookVal] = useState<BookingValue>(EMPTY_BOOKING)
   const [issueText, setIssueText] = useState('')
   const [issueSol, setIssueSol] = useState('')
@@ -92,12 +91,14 @@ export default function MeasurerCabinetPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
-  // Ссылки …/measurer-cabinet#earnings и #calendar открывают сразу нужную вкладку.
+  // …#history открывает «Историю»; старые ссылки на #earnings и #calendar ведут в пункты меню.
   useEffect(() => {
     const h = window.location.hash.slice(1)
+    if (h === 'earnings') router.replace('/measurer-earnings')
+    else if (h === 'calendar') router.replace('/measure-calendar')
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (h === 'history' || h === 'earnings' || h === 'calendar') setTab(h)
-  }, [])
+    else if (h === 'history') setTab(h)
+  }, [router])
   function switchTab(t: Tab) {
     setTab(t)
     try { history.replaceState(null, '', t === 'measures' ? window.location.pathname : `#${t}`) } catch { /* без адресной строки */ }
@@ -120,6 +121,12 @@ export default function MeasurerCabinetPage() {
     }
     return [...groups.entries()]
   }, [active, today])
+
+  // Проведённые за неделю — чтобы только что закрытый замер не пропадал с глаз (владелец 01.10).
+  const weekAgo = addDays(today, -7)
+  const recentDone = useMemo(() => assigned
+    .filter(r => r.status === 'done' && r.scheduled_at && mskDate(r.scheduled_at) >= weekAgo)
+    .sort((a, b) => b.scheduled_at!.localeCompare(a.scheduled_at!)), [assigned, weekAgo])
 
   const doneReq = doneId != null ? reqs.find(r => r.id === doneId && r.status === 'done') ?? null : null
   async function copyDone() {
@@ -148,6 +155,11 @@ export default function MeasurerCabinetPage() {
       measurerId: isMeasurer ? me!.id : (r.measurer_id ?? (measurers.length === 1 ? measurers[0].id : '')),
       date: at.slice(0, 10) || today, time: at.slice(11, 16), durationMin: r.duration_min || 90, travelMin: r.travel_min ?? 60,
     })
+  }
+
+  async function cancel(r: MReq) {
+    const reason = await askCancelReason()
+    if (reason) await act(r, { action: 'cancel', reason }, `Замер ${r.deal_number || `#${r.id}`} отменён: «${reason}». Причина видна в «Истории» и у менеджера.`)
   }
 
   async function submitBooking(r: MReq) {
@@ -181,7 +193,8 @@ export default function MeasurerCabinetPage() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
-  const btn = 'text-[12px] border border-[#e4e4e0] bg-white rounded-lg px-2.5 py-1.5 hover:bg-[#f5f5f3]'
+  // На телефоне кнопки крупнее — под палец.
+  const btn = 'text-[13px] sm:text-[12px] border border-[#e4e4e0] bg-white rounded-lg px-3 py-2 sm:px-2.5 sm:py-1.5 hover:bg-[#f5f5f3]'
   const canBook = isMeasurer || (isOwner && measurers.length > 0)
 
   // Функции отрисовки, а не вложенные компоненты: вложенный компонент пересоздаётся
@@ -254,7 +267,7 @@ export default function MeasurerCabinetPage() {
         )}
         <div className="flex items-center gap-1.5 flex-wrap mt-2">
           <button onClick={() => setOpenFor({ id: r.id, kind: 'done' })}
-            className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-2.5 py-1.5 hover:bg-emerald-700">✅ Выполнен</button>
+            className="text-[13px] sm:text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-3 py-2 sm:px-2.5 sm:py-1.5 hover:bg-emerald-700">✅ Выполнен</button>
           <button onClick={() => { setOpenFor({ id: r.id, kind: 'issue' }); setIssueText(r.issue_text ?? ''); setIssueSol(r.issue_solution ?? '') }}
             className={`${btn} text-red-600 border-red-200`}>⚠️ Сложность</button>
           <label className={`${btn} cursor-pointer`}>
@@ -272,6 +285,7 @@ export default function MeasurerCabinetPage() {
           {canBook && <button onClick={() => openBooking(r)} className={btn}>↔ Перенести</button>}
           <button onClick={async () => { if (await confirmDialog({ title: 'Вернуть заявку в пул?', text: 'Время снимется, заявка снова станет новой для всех замерщиков.', confirmLabel: 'Вернуть в пул' })) act(r, { action: 'unassign' }, 'Заявка вернулась в пул.') }}
             className={btn}>↩ В пул</button>
+          <button onClick={() => cancel(r)} className={`${btn} text-red-600`}>✕ Отменён</button>
         </div>
         {open && openFor?.kind === 'book' && bookingForm(r, '✅ Перенести')}
         {open && openFor?.kind === 'done' && (
@@ -297,8 +311,8 @@ export default function MeasurerCabinetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
+    <div className="min-h-screen bg-[#f5f5f3] pb-28 lg:pb-20">
+      <div className="bg-white border-b border-[#e4e4e0] px-4 sm:px-5 pt-5 sm:pt-6 pb-4">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Кабинет замерщика</h1>
         <p className="text-[12px] text-[#9a9a95] mt-0.5">
           {isOwner ? 'Все замерщики: сегодня, пул новых заявок, дальше по дням, график и выплаты.'
@@ -311,7 +325,7 @@ export default function MeasurerCabinetPage() {
           {overdue.length > 0 && <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-700">Не отмечены: {overdue.length}</span>}
         </div>
         <div className="flex gap-1 mt-3 -mb-4 overflow-x-auto">
-          {([['measures', '📏 Замеры'], ['calendar', '📅 Календарь'], ['history', '🗂 История'], ['earnings', '💰 Заработок']] as const).map(([k, l]) => (
+          {([['measures', '📏 Замеры'], ['history', '🗂 История']] as const).map(([k, l]) => (
             <button key={k} onClick={() => switchTab(k)}
               className={`text-[13px] font-semibold px-4 py-2 border-b-2 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95] hover:text-[#111110]'}`}>
               {l}
@@ -320,7 +334,7 @@ export default function MeasurerCabinetPage() {
         </div>
       </div>
 
-      <div className="px-5 pt-4 space-y-4 max-w-[1100px]">
+      <div className="px-4 sm:px-5 pt-4 space-y-4 max-w-[1100px]">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] rounded-lg px-3 py-2 flex items-start gap-2">
             <span className="flex-1">{error}</span>
@@ -339,8 +353,6 @@ export default function MeasurerCabinetPage() {
           </div>
         )}
         {tab === 'history' && me && <MeasureHistory meId={me.id} isMeasurer={isMeasurer} />}
-        {tab === 'earnings' && me && <MeasurerEarnings meId={me.id} isOwner={isOwner} />}
-        {tab === 'calendar' && me && <MeasurerCalendar meId={me.id} isOwner={isOwner} refreshKey={boardKey} onChanged={() => setBoardKey(k => k + 1)} />}
         {tab === 'measures' && <>
         {isOwner && <OwnerSummary refreshKey={boardKey} />}
         {isOwner && measurers.length === 0 && (
@@ -381,14 +393,32 @@ export default function MeasurerCabinetPage() {
                     <span className="text-[11px] text-[#9a9a95]">создана {new Date(r.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })}</span>
                   </div>
                   {details(r)}
-                  {canBook && (openFor?.id === r.id && openFor.kind === 'book'
-                    ? bookingForm(r, isMeasurer ? '✅ Беру' : '✅ Назначить')
-                    : (
-                      <button onClick={() => openBooking(r)}
-                        className="mt-2 text-[12px] font-semibold bg-[#111110] text-white rounded-lg px-3 py-1.5 hover:bg-[#2a2a28]">
-                        {isMeasurer ? '📅 Взять — выбрать время' : '📅 Назначить замерщика'}
+                  {/* Три исхода заявки из пула: взять на время, отметить уже проведённым, отменить с причиной. */}
+                  {openFor?.id !== r.id && (
+                    <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+                      {canBook ? (
+                        <button onClick={() => openBooking(r)}
+                          className="text-[13px] font-semibold bg-[#111110] text-white rounded-lg px-2 py-2.5 hover:bg-[#2a2a28]">
+                          📅 {isMeasurer ? 'Взять' : 'Назначить'}
+                        </button>
+                      ) : <span />}
+                      {(isMeasurer || isOwner) ? (
+                        <button onClick={() => setOpenFor({ id: r.id, kind: 'log' })}
+                          className="text-[13px] font-semibold bg-emerald-600 text-white rounded-lg px-2 py-2.5 hover:bg-emerald-700">
+                          ✅ Проведён
+                        </button>
+                      ) : <span />}
+                      <button onClick={() => cancel(r)}
+                        className="text-[13px] font-semibold border border-red-200 bg-white text-red-600 rounded-lg px-2 py-2.5 hover:bg-red-50">
+                        ✕ Отменён
                       </button>
-                    ))}
+                    </div>
+                  )}
+                  {openFor?.id === r.id && openFor.kind === 'book' && bookingForm(r, isMeasurer ? '✅ Беру' : '✅ Назначить')}
+                  {openFor?.id === r.id && openFor.kind === 'log' && (
+                    <SettleForm r={r} mode="log_done" measurers={isOwner ? measurers : undefined} onCancel={() => setOpenFor(null)}
+                      onDone={msg => { setOpenFor(null); setNotice(msg); setDoneId(r.id); setCopiedDone(false); void load() }} />
+                  )}
                 </div>
               ))}
             </div>
@@ -405,8 +435,29 @@ export default function MeasurerCabinetPage() {
           ))}
         </section>
 
-        <MeasureBoard title="Все замерщики — занятость" refreshKey={boardKey} />
-        <MeasurerAvailability onChanged={() => setBoardKey(k => k + 1)} />
+        {recentDone.length > 0 && (
+          <section className="space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">✅ Проведены за 7 дней · {recentDone.length}</p>
+              <button onClick={() => switchTab('history')} className="ml-auto text-[12px] text-blue-700 hover:underline">вся история →</button>
+            </div>
+            {recentDone.map(r => (
+              <div key={r.id} className="bg-white border border-emerald-100 rounded-xl p-3 text-[12px] space-y-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-bold text-[13px]">{formatMeasureWhen(r.scheduled_at!)}</span>
+                  <span className="text-[13px] font-semibold">{r.is_repeat ? '🔁 ' : '📐 '}{r.deal_number || `#${r.id}`} · {tidy(r.client_name)}</span>
+                  {isOwner && r.measurer_name && <span className="text-[11px] text-[#9a9a95]">· {r.measurer_name}</span>}
+                </div>
+                {r.address && <p className="text-[#6b6b66]">📍 {r.address}</p>}
+                <p className="text-[#6b6b66]">
+                  💰 {finalPrice(r) > 0 ? fmt(finalPrice(r)) : 'без цены'} · {r.visit_payment ? PAYMENT_LABEL[r.visit_payment] : <span className="text-amber-700">оплата не отмечена</span>}
+                </p>
+                {r.result_note && <p className="text-[#111110] whitespace-pre-line">📝 {r.result_note}</p>}
+              </div>
+            ))}
+          </section>
+        )}
+
 
         </>}
       </div>

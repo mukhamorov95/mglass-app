@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { buildMeasureMessage, buildMeasureResultMessage, formatMeasureWhen, splitScope, tidy } from '@/lib/measure/message'
-import { sendMeasure } from '@/lib/measure/client'
+import { askCancelReason, sendMeasure } from '@/lib/measure/client'
 import { PAYMENT_LABEL, finalPrice } from '@/lib/measure/money'
 import { confirmDialog, type ConfirmOptions } from '@/lib/dialog'
 import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
@@ -110,6 +110,7 @@ export default function RequestsKanban({ me, requests, measurers, searching, onC
           <p className="text-[12px]"><span className="font-mono font-semibold">{formatMeasureWhen(r.scheduled_at, r.duration_min)}</span>{r.measurer_name ? ` · ${r.measurer_name}` : ''}</p>
         )}
         {r.issue_text && <p className="text-[12px] text-red-600">⚠️ {r.issue_text}{r.issue_solution ? ` → 💡 ${r.issue_solution}` : ''}</p>}
+        {r.status === 'cancelled' && r.cancel_reason && <p className="text-[12px] text-[#6b6b66]">✕ {r.cancel_reason}{r.cancelled_by_name ? ` — ${r.cancelled_by_name}` : ''}</p>}
         {r.status === 'done' && (
           <>
             <p className="text-[12px] text-[#6b6b66]">
@@ -134,7 +135,7 @@ export default function RequestsKanban({ me, requests, measurers, searching, onC
             <button onClick={() => act(r, { action: 'unassign' }, { title: 'Вернуть заявку в пул?', text: 'Время снимется, замерщик увидит её снова как новую.', confirmLabel: 'Вернуть в пул' })} className={btn}>↩ В пул</button>
           )}
           {me.canCreate && (r.status === 'new' || r.status === 'scheduled' || r.status === 'issue') && (
-            <button onClick={() => act(r, { action: 'cancel' }, { title: 'Отменить замер?', text: 'Он исчезнет из пула и с доски.', confirmLabel: 'Отменить замер', danger: true })} className={`${btn} text-red-600`}>✕</button>
+            <button onClick={async () => { const reason = await askCancelReason(); if (reason) act(r, { action: 'cancel', reason }) }} className={`${btn} text-red-600`} title="Отменить — спросит почему">✕</button>
           )}
           {me.canCreate && r.status === 'cancelled' && (
             <button onClick={() => act(r, { action: 'reopen' })} className={btn}>↺ Вернуть в работу</button>

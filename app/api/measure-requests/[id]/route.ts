@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { ALLOWED_FROM, denyAction, type MeasureAction } from '@/lib/measure/access'
 import { VISIT_PAYMENTS, applyActualPrice, type VisitPayment } from '@/lib/measure/money'
-import { REQ_COLS, money, requireMeasureActor, text, tryBook, type MeasureRequestRow } from '@/lib/measure/server'
+import { DATE_RE, REQ_COLS, TIME_RE, loadMeasurers, money, requireMeasureActor, text, tryBook, type MeasureRequestRow } from '@/lib/measure/server'
+import { mskDate, mskToIso } from '@/lib/measure/slots'
 
 export const dynamic = 'force-dynamic'
 
 const STATUS_RU: Record<string, string> = {
   new: 'ждёт замерщика', scheduled: 'назначен', done: 'выполнен', issue: 'сложность', cancelled: 'отменён',
 }
-const ACTIONS = new Set<MeasureAction>(['schedule', 'unassign', 'done', 'settle', 'issue', 'cancel', 'reopen', 'fee_paid'])
+const ACTIONS = new Set<MeasureAction>(['schedule', 'unassign', 'done', 'log_done', 'settle', 'issue', 'cancel', 'reopen', 'fee_paid'])
 
 // Деньги выполненного замера: как оплачен выезд и цена замерщика с причиной
 // (цена менеджера visit_price не меняется — lib/measure/money.ts).
@@ -73,9 +74,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       break
     }
     case 'unassign':
-    case 'reopen':
       patch = { status: 'new', measurer_id: null, measurer_name: null, scheduled_at: null }
       break
+    case 'reopen':
+      patch = { status: 'new', measurer_id: null, measurer_name: null, scheduled_at: null, cancel_reason: null, cancelled_by_name: null, cancelled_at: null }
+      break
+    // «Проведён» по заявке из пула: дата и время — когда был замер (не позже сегодня),
+    // замерщик — сам или выбранный владельцем; деньги — как при «Выполнен».
+    case 'log_done': {
+      const date = String(b.date ?? ''), time = String(b.time ?? '')
+      if (!DATE_RE.test(date) || !TIME_RE.test(time)) return NextResponse.json({ error: 'Укажи, когда был замер: дату и время' }, { status: 400 })
+      if (date > mskDate(new Date())) return NextResponse.json({ error: 'Замер ещё не наступил — его можно взять, а не отметить проведённым' }, { status: 400 })
+      const measurerId = actor.role === 'measurer' ? actor.userId : String(b.measurer_id ?? '')
+      let measurers
+      try { measurers = await loadMeasurers(svc) } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }) }
+      const m = measurers.find(x => x.id === measurerId)
+      if (!m) return NextResponse.json({ error: 'Выбери замерщика, который был на замере' }, { status: 400 })
+      const s = settlement(row, b, true)
+      if (typeof s === 'string') return NextResponse.json({ error: s }, { status: 400 })
+      patch = { status: 'done', measurer_id: m.id, measurer_name: m.name, scheduled_at: mskToIso(date, time), ...s }
+      break
+    }
     case 'done': {
       const s = settlement(row, b, true)
       if (typeof s === 'string') return NextResponse.json({ error: s }, { status: 400 })
@@ -95,9 +114,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       patch = { status: 'issue', issue_text: issue, issue_solution: text(b.issue_solution, 1000) }
       break
     }
-    case 'cancel':
-      patch = { status: 'cancelled' }
+    case 'cancel': {
+      const reason = text(b.reason, 500)
+      if (!reason) return NextResponse.json({ error: 'Напиши коротко, почему отменён' }, { status: 400 })
+      patch = { status: 'cancelled', cancel_reason: reason, cancelled_by_name: actor.name, cancelled_at: now }
       break
+    }
     case 'fee_paid':
       if (row.visit_payment === 'onsite') {
         return NextResponse.json({ error: 'Выезд оплачен замерщику на объекте — компании выплачивать нечего' }, { status: 409 })

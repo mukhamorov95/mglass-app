@@ -52,7 +52,8 @@ export type MeasureRow = {
 }
 
 // settle — поправить у выполненного цену замерщика и как оплачен выезд.
-export type MeasureAction = 'schedule' | 'unassign' | 'done' | 'settle' | 'issue' | 'cancel' | 'reopen' | 'fee_paid' | 'attach'
+// log_done — «Проведён» по заявке из пула: съездил, не записав время заранее (владелец 01.10).
+export type MeasureAction = 'schedule' | 'unassign' | 'done' | 'log_done' | 'settle' | 'issue' | 'cancel' | 'reopen' | 'fee_paid' | 'attach'
 
 // Своя ли заявка для менеджерской стороны: создал её или видит все.
 export function ownsRequest(a: MeasureActor, r: MeasureRow): boolean {
@@ -79,6 +80,9 @@ export function denyAction(a: MeasureActor, r: MeasureRow, action: MeasureAction
       return ownsRequest(a, r) ? null : 'Назначать можно только по своей заявке'
     case 'unassign':
       return mineAsMeasurer || ownsRequest(a, r) ? null : 'Это не ваш замер'
+    case 'log_done':
+      if (a.role === 'measurer') return r.status === 'new' || mineAsMeasurer ? null : 'Заявку уже взял другой замерщик'
+      return a.scope === 'all' ? null : 'Отметку ставит замерщик'
     case 'done':
     case 'settle':
     case 'issue':
@@ -87,8 +91,11 @@ export function denyAction(a: MeasureActor, r: MeasureRow, action: MeasureAction
         : action === 'attach' && ownsRequest(a, r) ? null
         : 'Отметку ставит замерщик этого замера'
     case 'cancel':
+      // Замерщик отменяет заявку из пула или свой замер — с причиной (клиент передумал, не дозвонился).
+      if (a.role === 'measurer') return r.status === 'new' || mineAsMeasurer ? null : 'Это не ваш замер'
+      return ownsRequest(a, r) ? null : 'Отменить может менеджер заявки, замерщик или владелец'
     case 'reopen':
-      return ownsRequest(a, r) ? null : 'Отменить может менеджер заявки или владелец'
+      return ownsRequest(a, r) ? null : 'Вернуть в работу может менеджер заявки или владелец'
   }
 }
 
@@ -97,6 +104,7 @@ export const ALLOWED_FROM: Record<Exclude<MeasureAction, 'attach'>, string[]> = 
   schedule: ['new', 'scheduled', 'issue'],
   unassign: ['scheduled', 'issue'],
   done: ['scheduled', 'issue'],
+  log_done: ['new'],
   settle: ['done'],
   issue: ['scheduled', 'done'],
   cancel: ['new', 'scheduled', 'issue'],

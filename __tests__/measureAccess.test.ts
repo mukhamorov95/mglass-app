@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { measureActorFrom, denyAction, type MeasureRow } from '@/lib/measure/access'
+import { ALLOWED_FROM, measureActorFrom, denyAction, type MeasureRow } from '@/lib/measure/access'
 
 const actor = (role: string, extra: { canViewAllClients?: boolean; managerWorkspace?: boolean } = {}) =>
   measureActorFrom({ userId: `u-${role}`, name: role, role, ...extra })
@@ -78,6 +78,26 @@ describe('denyAction', () => {
     expect(denyAction(actor('office')!, r, 'settle')).toBeNull()
     expect(denyAction(actor('admin')!, r, 'settle')).toBeNull()
     expect(denyAction(actor('manager')!, r, 'settle')).not.toBeNull()
+  })
+
+  it('«Проведён» из пула (log_done): замерщик, офис, владелец — не менеджер; чужой взятый — нет', () => {
+    expect(denyAction(actor('measurer')!, row(), 'log_done')).toBeNull()
+    expect(denyAction(actor('office')!, row(), 'log_done')).toBeNull()
+    expect(denyAction(actor('admin')!, row(), 'log_done')).toBeNull()
+    expect(denyAction(actor('manager')!, row(), 'log_done')).not.toBeNull()
+    expect(denyAction(actor('measurer')!, row({ status: 'scheduled', measurer_id: 'u-other' }), 'log_done')).not.toBeNull()
+  })
+
+  it('отмена: замерщик — из пула и свой замер, чужой — нет; вернуть в работу — не замерщик', () => {
+    const m = actor('measurer')!
+    expect(denyAction(m, row(), 'cancel')).toBeNull()
+    expect(denyAction(m, row({ status: 'scheduled', measurer_id: 'u-measurer' }), 'cancel')).toBeNull()
+    expect(denyAction(m, row({ status: 'scheduled', measurer_id: 'u-other' }), 'cancel')).not.toBeNull()
+    expect(denyAction(m, row({ status: 'cancelled' }), 'reopen')).not.toBeNull()
+  })
+
+  it('log_done — только из пула', () => {
+    expect(ALLOWED_FROM.log_done).toEqual(['new'])
   })
 
   it('логист ничего не меняет', () => {

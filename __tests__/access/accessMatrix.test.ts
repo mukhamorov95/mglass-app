@@ -55,6 +55,8 @@ describe('accessMatrix — изоляция данных между ролями
     ['commercial', '/accounting'],
     ['accountant', '/commercial'],
     ['measurer', '/cfo'],
+    ['manager', '/measurer-earnings'],   // заработок замерщика — только он и владелец
+    ['office', '/measurer-earnings'],
     ['partner', '/cfo'],
     ['partner', '/admin/users'],
   ]
