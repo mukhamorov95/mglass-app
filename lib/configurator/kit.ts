@@ -347,6 +347,53 @@ function packWith(pieces: number[], stocks: Stock[], kerf: number, pick: (need: 
   return plan
 }
 
+// Точный раскрой для небольшого числа кусков: перебор с отсечением по цене. Эвристики выше
+// берут хлыст под кусок по одному правилу и не смешивают длины с умом: М7 заказа 0245
+// (куски 2200, 2200, 1469, 916) они кроили 3 × 3 м, а дешевле 2 × 2,2 м + 1 × 3 м.
+// Ищем только план строго дешевле эвристик; потолок узлов держит время в миллисекундах.
+const EXACT_MAX_PIECES = 12
+const EXACT_MAX_NODES = 200_000
+function exactPack(pieces: number[], stocks: Stock[], kerf: number, upper: number): BarPlan[] | null {
+  const sorted = [...pieces].sort((a, b) => b - a)
+  const minRate = Math.min(...stocks.map(s => s.price / s.len))
+  const tail = sorted.map((_, i) => sorted.slice(i).reduce((a, p) => a + p, 0))
+  const bars: BarPlan[] = []
+  let cur = 0
+  let bestCost = upper
+  let best: BarPlan[] | null = null
+  let nodes = 0
+  const walk = (i: number) => {
+    if (++nodes > EXACT_MAX_NODES) return
+    if (i === sorted.length) {
+      if (cur < bestCost - 1e-9) { bestCost = cur; best = bars.map(b => ({ ...b, pieces: [...b.pieces] })) }
+      return
+    }
+    const free = bars.reduce((a, b) => a + b.rest, 0)
+    if (cur + Math.max(0, tail[i] - free) * minRate >= bestCost - 1e-9) return
+    const p = sorted[i]
+    const seen = new Set<string>()
+    for (const b of bars) {
+      const need = p + (b.pieces.length ? kerf : 0)
+      const sig = `${b.len}:${b.rest}`
+      if (b.rest < need || seen.has(sig)) continue     // одинаковые открытые хлысты взаимозаменяемы
+      seen.add(sig)
+      b.rest -= need; b.pieces.push(p)
+      walk(i + 1)
+      b.pieces.pop(); b.rest += need
+    }
+    for (const st of stocks) {
+      if (st.len < p) continue
+      bars.push({ len: st.len, price: st.price, pieces: [p], rest: st.len - p })
+      cur += st.price
+      walk(i + 1)
+      cur -= st.price
+      bars.pop()
+    }
+  }
+  walk(0)
+  return best
+}
+
 export function planBars(pieces: number[], stocks: Stock[], kerf = 0, splice = false): BarResult {
   const empty: BarResult = { cost: 0, plan: [], bars: {}, oversize: [] }
   const usable = stocks.filter(s => s.len > 0 && s.price > 0).sort((a, b) => a.len - b.len)
@@ -383,7 +430,10 @@ export function planBars(pieces: number[], stocks: Stock[], kerf = 0, splice = f
     candidates.push(plan)
   }
 
-  const best = candidates.reduce((a, b) => (cost(b) < cost(a) ? b : a))
+  let best = candidates.reduce((a, b) => (cost(b) < cost(a) ? b : a))
+  if (oversize.length === 0 && pieces.length <= EXACT_MAX_PIECES && usable.length > 1) {
+    best = exactPack(pieces, usable, kerf, cost(best)) ?? best
+  }
   const bars: Record<number, number> = {}
   for (const b of best) bars[b.len] = (bars[b.len] ?? 0) + 1
   return { cost: cost(best), plan: best, bars, oversize }

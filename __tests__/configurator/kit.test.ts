@@ -416,3 +416,24 @@ describe('kit — уплотнители по КАЖДОЙ створке (ре�
     expect(q.barPieces['seal-bottom']).toEqual([600])
   })
 })
+
+describe('Раскрой смешанными хлыстами (Э5)', () => {
+  const stocks = [{ len: 2200, price: 637.5 }, { len: 3000, price: 780 }]
+  it('М7 0245: 2200, 2200, 1469, 916 → 2 × 2,2 м + 1 × 3 м, а не 3 × 3 м', () => {
+    const r = planBars([916, 1469, 2200, 2200], stocks)
+    expect(r.bars).toEqual({ 2200: 2, 3000: 1 })
+    expect(r.cost).toBe(2055)
+    expect(r.plan.flatMap(b => b.pieces).sort((a, b) => a - b)).toEqual([916, 1469, 2200, 2200])
+  })
+  it('пропил учитывается и в точном раскрое', () => {
+    const r = planBars([1500, 1500], [{ len: 3000, price: 900 }, { len: 2200, price: 800 }], 5)
+    expect(r.cost).toBe(1600)
+  })
+  it('много кусков — время ограничено, план полный', () => {
+    const pieces = Array.from({ length: 12 }, (_, i) => 300 + i * 97)
+    const t = Date.now()
+    const r = planBars(pieces, stocks)
+    expect(Date.now() - t).toBeLessThan(2000)
+    expect(r.plan.flatMap(b => b.pieces).length).toBe(12)
+  })
+})
