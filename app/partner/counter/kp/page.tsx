@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { renderDocCanvas } from '@/lib/pdfCapture'
-import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { leadTimeText } from '@/lib/partner/leadTime'
 import { readDraft, retailQuote, describeSpec, type CounterSpec } from '@/lib/partner/counter'
 
 // КП покупателю точки — от имени партнёра, с его розничной ценой. Ни бренда, ни цен
@@ -158,7 +158,7 @@ export default function CounterKpPage() {
           </table>
 
           <div style={{ marginTop: 14, fontSize: 12.5 }}>
-            Срок изготовления — ориентировочно {DEFAULT_WORKING_DAYS} рабочих дней с момента оплаты. Изделия режутся точно по размерам, указанным в предложении.
+            Срок изготовления — {leadTimeText(specs)}{leadTimeText(specs).startsWith('срок') ? '' : ' с момента оплаты'}. Изделия режутся точно по размерам, указанным в предложении.
           </div>
           {settings.kpNote && <div style={{ marginTop: 10, fontSize: 12.5, whiteSpace: 'pre-wrap' }}>{settings.kpNote}</div>}
         </div>
