@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { formatMeasureWhen, splitScope, tidy } from '@/lib/measure/message'
+import { clientHeadsUpText, dayRouteUrl, formatMeasureWhen, splitScope, tidy, whatsAppUrl } from '@/lib/measure/message'
 import { mskDate } from '@/lib/measure/slots'
 import { mskToday, sendMeasure } from '@/lib/measure/client'
 import { confirmDialog } from '@/lib/dialog'
@@ -45,6 +45,7 @@ type MReq = {
   actual_price: number | null
   price_note: string | null
   visit_payment: VisitPayment | null
+  result_note: string | null
   photos: string[] | null
   created_at: string
 }
@@ -142,13 +143,23 @@ export default function MeasurerCabinetPage() {
         : `Замер перенесён на ${label}.`)
   }
 
-  async function attachFile(r: MReq, file: File) {
-    setBusy(r.id); setError('')
+  // Фото и чертежи с объекта — сразу пачкой. По одному и по очереди: сервер дописывает
+  // ссылку в массив заявки, параллельные загрузки затёрли бы друг друга.
+  async function attachFiles(r: MReq, files: File[]) {
+    setBusy(r.id); setError(''); setNotice('')
+    let ok = 0
     try {
-      const fd = new FormData(); fd.append('file', file)
-      const res = await fetch(`/api/measure-requests/${r.id}/photo`, { method: 'POST', body: fd })
-      if (!res.ok) { const j = await res.json().catch(() => ({})); setError(j.error || `Файл не загружен (${res.status})`); return }
-      setNotice(`Файл приложен к замеру ${r.deal_number || `#${r.id}`} — менеджер видит его в карточке сделки.`)
+      for (const file of files) {
+        const fd = new FormData(); fd.append('file', file)
+        const res = await fetch(`/api/measure-requests/${r.id}/photo`, { method: 'POST', body: fd })
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          setError(`${file.name}: ${j.error || `не загружен (${res.status})`}${ok ? ` — до него загружено ${ok}` : ''}`)
+          break
+        }
+        ok++
+      }
+      if (ok) setNotice(`Приложено файлов: ${ok} к замеру ${r.deal_number || `#${r.id}`} — менеджер видит их в заявке и в карточке сделки.`)
       await load()
     } finally { setBusy(null) }
   }
@@ -219,16 +230,30 @@ export default function MeasurerCabinetPage() {
         </div>
         {details(r)}
         {r.issue_text && <p className="text-[12px] text-red-600 mt-1">⚠️ {r.issue_text}{r.issue_solution ? ` → 💡 ${r.issue_solution}` : ''}</p>}
+        {Array.isArray(r.photos) && r.photos.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-1">
+            {r.photos.map((u, i) => (
+              <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-[12px] text-blue-700 hover:underline">📎 файл {i + 1}</a>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-1.5 flex-wrap mt-2">
           <button onClick={() => setOpenFor({ id: r.id, kind: 'done' })}
             className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-2.5 py-1.5 hover:bg-emerald-700">✅ Выполнен</button>
           <button onClick={() => { setOpenFor({ id: r.id, kind: 'issue' }); setIssueText(r.issue_text ?? ''); setIssueSol(r.issue_solution ?? '') }}
             className={`${btn} text-red-600 border-red-200`}>⚠️ Сложность</button>
           <label className={`${btn} cursor-pointer`}>
-            📎 Файл{Array.isArray(r.photos) && r.photos.length > 0 ? ` (${r.photos.length})` : ''}
-            <input type="file" accept="image/*,application/pdf" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) attachFile(r, f); e.target.value = '' }} />
+            📎 Фото / чертёж
+            <input type="file" accept="image/*,application/pdf" multiple className="hidden"
+              onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length) attachFiles(r, fs); e.target.value = '' }} />
           </label>
+          {(() => {
+            const wa = r.scheduled_at ? whatsAppUrl(r.phone, clientHeadsUpText({ measurer_name: r.measurer_name, scheduled_at: r.scheduled_at, address: r.address, today })) : null
+            return wa && (
+              <a href={wa} target="_blank" rel="noopener noreferrer" className={`${btn} text-emerald-700`}
+                title="Откроется WhatsApp с готовым текстом: кто, когда и по какому адресу">💬 Предупредить клиента</a>
+            )
+          })()}
           {canBook && <button onClick={() => openBooking(r)} className={btn}>↔ Перенести</button>}
           <button onClick={async () => { if (await confirmDialog({ title: 'Вернуть заявку в пул?', text: 'Время снимется, заявка снова станет новой для всех замерщиков.', confirmLabel: 'Вернуть в пул' })) act(r, { action: 'unassign' }, 'Заявка вернулась в пул.') }}
             className={btn}>↩ В пул</button>
@@ -310,7 +335,16 @@ export default function MeasurerCabinetPage() {
         )}
 
         <section className="space-y-2">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Сегодня, {dayTitle(today)} · {todays.length}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Сегодня, {dayTitle(today)} · {todays.length}</p>
+            {isMeasurer && (() => {
+              const route = dayRouteUrl(todays.filter(r => r.status === 'scheduled').map(r => r.address))
+              return route && (
+                <a href={route} target="_blank" rel="noopener noreferrer"
+                  className="ml-auto text-[12px] font-semibold bg-[#111110] text-white rounded-lg px-3 py-1.5 hover:bg-[#2a2a28]">🗺 Маршрут дня</a>
+              )
+            })()}
+          </div>
           {todays.length === 0 ? <p className="text-[12px] text-[#c4c4be]">На сегодня замеров нет.</p> : todays.map(activeCard)}
         </section>
 

@@ -8,7 +8,7 @@ import { isOwnerRole } from '@/lib/getRole'
 import { measureActorFrom, type MeasureActor } from '@/lib/measure/access'
 import { DEFAULT_DURATION_MIN, DEFAULT_SCHEDULE, addDays, checkBooking, mskToIso, type Booking, type DayOff, type Schedule } from '@/lib/measure/slots'
 
-export const REQ_COLS = 'id, deal_id, lead_id, deal_number, client_name, phone, amo_url, address, scope, notes, visit_price, payer, is_repeat, manager_id, manager_name, measurer_id, measurer_name, scheduled_at, duration_min, travel_min, status, issue_text, issue_solution, measurer_fee, fee_status, fee_paid_at, actual_price, price_note, visit_payment, photos, created_at, updated_at'
+export const REQ_COLS = 'id, deal_id, lead_id, deal_number, client_name, phone, amo_url, address, scope, notes, visit_price, payer, is_repeat, manager_id, manager_name, measurer_id, measurer_name, scheduled_at, duration_min, travel_min, status, issue_text, issue_solution, measurer_fee, fee_status, fee_paid_at, actual_price, price_note, visit_payment, result_note, photos, created_at, updated_at'
 
 export type MeasureRequestRow = {
   id: number
@@ -40,6 +40,7 @@ export type MeasureRequestRow = {
   actual_price: number | null
   price_note: string | null
   visit_payment: 'onsite' | 'company' | 'unpaid' | null
+  result_note: string | null
   photos: string[] | null
   created_at: string
   updated_at: string
