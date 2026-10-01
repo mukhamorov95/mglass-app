@@ -1,0 +1,44 @@
+{
+  "_source": "Чертёж 0245-0 «Монтажная схема», 2 листа А3 (01.10.2026). Адрес и контакты клиента сюда не переносятся — только то, что нужно расчёту.",
+  "is_shower_drawing": true,
+  "showers": [
+    {
+      "sheet": 1,
+      "positions": "1–3",
+      "model": { "value": "М4", "evidence": "вид спереди: стекло 1 — дверь 2 — стекло 3, петли на кромке стекла 3" },
+      "width_mm": { "value": 1450, "evidence": "размер 1450 под видом спереди" },
+      "depth_mm": { "value": null, "evidence": "" },
+      "height_mm": { "value": 2310, "evidence": "размер 2310 слева от вида спереди" },
+      "door_width_mm": { "value": 650, "evidence": "цепочка 399 · 650 · 399 над видом спереди" },
+      "color": { "value": "Черный", "evidence": "штамп: «Цвет всей фурнитуры — Черный»" },
+      "glass": { "value": "Стекло осветленное матовое 8 мм", "evidence": "штамп" },
+      "thickness_mm": { "value": 8, "evidence": "штамп: «… 8 мм»" },
+      "hardware": [
+        { "label": "Петля FDP-232 Афродита", "role": "hinge", "article": "FDP-232", "evidence": "выноска «Петля FDP-232 Афродита»" },
+        { "label": "Ручка-скоба SD-210/L230", "role": "handle", "article": "SD-210/L230", "evidence": "выноска «Ручка-скоба SD-210/L230»" },
+        { "label": "Уплотнитель магнитный 180°", "role": "seal-magnet", "article": null, "evidence": "выноска" },
+        { "label": "Профиль П-обр.", "role": "profile", "article": null, "evidence": "выноска" },
+        { "label": "Штанга 30х10", "role": "tube", "article": null, "evidence": "выноска" },
+        { "label": "Держатели", "role": "mount-glass", "article": null, "evidence": "выноска" },
+        { "label": "Заглушка для П-обр. профиля", "role": "cap-end", "article": null, "evidence": "выноска" }
+      ]
+    },
+    {
+      "sheet": 2,
+      "positions": "4–6",
+      "model": { "value": "М7", "evidence": "вид сверху: боковое стекло 4 + фронт: дверь 5 и стекло 6, петли на кромке стекла 6" },
+      "width_mm": { "value": 1469, "evidence": "размер 1469 «ось» на виде сверху" },
+      "depth_mm": { "value": 916, "evidence": "размер 916 «ось» на виде сверху" },
+      "height_mm": { "value": 2310, "evidence": "размер 2310 слева от вида стекла 4" },
+      "door_width_mm": { "value": 650, "evidence": "цепочка 650 · 802 над видом 5–6" },
+      "color": { "value": "Черный", "evidence": "штамп" },
+      "glass": { "value": "Стекло осветленное матовое 8 мм", "evidence": "штамп" },
+      "thickness_mm": { "value": 8, "evidence": "штамп" },
+      "hardware": [
+        { "label": "Петля FDP-232 Афродита", "role": "hinge", "article": "FDP-232", "evidence": "выноска" },
+        { "label": "Ручка-скоба SD-210/L230", "role": "handle", "article": "SD-210/L230", "evidence": "выноска" },
+        { "label": "Уплотнитель магнитный 90°", "role": "seal-magnet", "article": null, "evidence": "выноска" }
+      ]
+    }
+  ]
+}
