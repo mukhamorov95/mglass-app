@@ -7,7 +7,7 @@ import { createClient, createScopedClient } from '@/lib/supabase-browser'
 import { useOrganization } from '@/lib/hooks/use-organization'
 import {
   B2BClient, B2BCRM, B2BInteraction, clientToCRM,
-  B2B_SEGMENTS, B2B_STATUSES, B2B_SCORES, B2B_INTERACTION_TYPES,
+  B2B_SEGMENTS, B2B_STATUSES, B2B_SCORES, B2B_INTERACTION_TYPES, B2B_SOURCES, sourceLabel,
 } from '@/lib/types'
 import type { ClientAnalysis } from '@/app/api/ai/analyze-client/route'
 
@@ -34,7 +34,7 @@ type Order = {
   notes: string | null
 }
 
-const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,updated_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes'
+const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,updated_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes,crm_source'
 
 const segmentLabel = (v: string | null) => B2B_SEGMENTS.find(s => s.value === v)?.label ?? v ?? '—'
 const statusMeta   = (v: string | null) => B2B_STATUSES.find(s => s.value === v) ?? { label: '—', color: 'bg-[#f0f0ec] text-[#6b6b66]' }
@@ -213,6 +213,7 @@ export default function B2BClientCardPage() {
       crm_manager:      editCRM.manager_name ?? null,
       crm_next_contact: editCRM.next_contact_date || null,
       crm_notes:        editCRM.crm_notes || null,
+      crm_source:       editCRM.source ?? null,
     }
 
     let query = sb.from('b2b_clients').update(payload).eq('id', clientId)
@@ -363,6 +364,10 @@ export default function B2BClientCardPage() {
                       <span className="text-[#111110]">{crm.manager_name}</span>
                     </div>
                   )}
+                  <div className="flex gap-2">
+                    <span className="text-[#9a9a95] w-24 shrink-0">Откуда</span>
+                    <span className={crm.source ? 'text-[#111110]' : 'text-[#9a9a95]'}>{sourceLabel(crm.source)}</span>
+                  </div>
                   {client.discount_percent > 0 && (
                     <div className="flex gap-2">
                       <span className="text-[#9a9a95] w-24 shrink-0">Скидка</span>
@@ -407,6 +412,14 @@ export default function B2BClientCardPage() {
                       value={editCRM.segment ?? ''} onChange={e => setEditCRM(p => ({ ...p, segment: e.target.value || null }))}>
                       <option value="">—</option>
                       {B2B_SEGMENTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Откуда пришёл</label>
+                    <select className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110]"
+                      value={editCRM.source ?? ''} onChange={e => setEditCRM(p => ({ ...p, source: e.target.value || null }))}>
+                      <option value="">Не указан</option>
+                      {B2B_SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                   </div>
                   <div>

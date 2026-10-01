@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildGroups, buildNameIndex, attribute, summarize, byMonth, ranking, presetPeriod, isDayKey,
-  groupKeyOf, UNKNOWN_KEY, type ReportClientCard, type ReportOrderRow,
+  groupKeyOf, UNKNOWN_KEY, bySource, NO_SOURCE, NO_CARD, type ReportClientCard, type ReportOrderRow,
 } from '@/lib/b2b/clientReport'
 
 const cards: ReportClientCard[] = [
@@ -94,6 +94,44 @@ describe('итоги', () => {
     expect(r[2].hasCard).toBe(false)
     expect(r.reduce((s, x) => s + x.sum, 0)).toBe(summarize(att).sum)
   })
+})
+
+describe('по источникам', () => {
+  const src: ReportClientCard[] = [
+    { id: 9, name: 'ООО МОНАРХ', crm_source: null },
+    { id: 10, name: 'MR GLASS (ООО ЛЮДИ)', crm_source: 'referral' },
+    { id: 26, name: 'ВРНГЛАЗИЕРС', crm_source: 'avito' },
+    { id: 40, name: 'СпецМонтаж', crm_source: 'avito' },
+    { id: 41, name: 'Альфа', crm_source: null },
+  ]
+  const g = buildGroups(src)
+  const ids = new Map(src.map(c => [c.id, c]))
+  const ix = buildNameIndex(src, [])
+  const att = [
+    row({ id: 1, client_id: 9, total_after_discount: 5000 }),
+    row({ id: 2, client_id: 26, total_after_discount: 1000 }),
+    row({ id: 3, client_id: 40, total_after_discount: 2000 }),
+    row({ id: 4, client_id: 40, total_after_discount: 500 }),
+    row({ id: 5, client_id: 41, total_after_discount: 300 }),
+    row({ id: 6, client_name: 'Константин', total_after_discount: 700 }),
+    row({ id: 7, client_name: 'Без клиента', total_after_discount: 100 }),
+  ].map(r => attribute(r, ids, ix))
+  const s = bySource(att, g, ids)
+  const by = Object.fromEntries(s.map(x => [x.source, x]))
+
+  it('группа берёт метку самой старой карточки, где она стоит', () => {
+    // MR GLASS: карточка 9 без метки, 10 — referral, 26 — avito → referral.
+    expect(by.referral).toEqual({ source: 'referral', clients: 1, orders: 2, sum: 6000 })
+  })
+  it('клиенты считаются группами, а не заказами', () =>
+    expect(by.avito).toEqual({ source: 'avito', clients: 1, orders: 2, sum: 2500 }))
+  it('карточка без метки — «не указан», заказ без карточки — отдельно', () => {
+    expect(by[NO_SOURCE]).toMatchObject({ clients: 1, orders: 1, sum: 300 })
+    // «Клиент не указан» — не клиент: в счёт клиентов не идёт, деньги остаются.
+    expect(by[NO_CARD]).toMatchObject({ clients: 1, orders: 2, sum: 800 })
+  })
+  it('сумма строк = итог периода', () =>
+    expect(s.reduce((a, x) => a + x.sum, 0)).toBe(summarize(att).sum))
 })
 
 describe('периоды', () => {

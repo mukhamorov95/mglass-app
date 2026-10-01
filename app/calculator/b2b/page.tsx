@@ -6,7 +6,7 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { TreatToggle } from './TreatToggle'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { B2BClient, B2BMaterial, B2BService, B2BFilm } from '@/lib/types'
+import { B2BClient, B2BMaterial, B2BService, B2BFilm, B2B_SOURCES } from '@/lib/types'
 import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
@@ -200,6 +200,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [ncPhone, setNcPhone]   = useState('')
   const [ncDiscount, setNcDiscount] = useState(0)
   const [ncNotes, setNcNotes]   = useState('')
+  const [ncSource, setNcSource] = useState('')
   const [ncSaving, setNcSaving] = useState(false)
   const [ncError, setNcError]   = useState<string | null>(null)
 
@@ -1427,6 +1428,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         phone: ncPhone.trim() || null,
         discount_percent: ncDiscount,
         notes: ncNotes.trim() || null,
+        crm_source: ncSource || null,
         active: true,
         manager_id: managerId,
         manager_code: managerCode,
@@ -1443,7 +1445,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     setClients(prev => [created as B2BClient, ...prev])
     setClientId((created as B2BClient).id)
     setShowNewClient(false)
-    setNcName(''); setNcContact(''); setNcPhone(''); setNcDiscount(0); setNcNotes('')
+    setNcName(''); setNcContact(''); setNcPhone(''); setNcDiscount(0); setNcNotes(''); setNcSource('')
     setNcSaving(false)
   }
 
@@ -3801,6 +3803,15 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   type="number" min="0" max="50" step="1"
                   className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
                   value={ncDiscount} onChange={e => setNcDiscount(Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Откуда пришёл</label>
+                <select
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white outline-none focus:border-[#111110]"
+                  value={ncSource} onChange={e => setNcSource(e.target.value)}>
+                  <option value="">Не указан</option>
+                  {B2B_SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
               </div>
               <div>
                 <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Комментарий</label>

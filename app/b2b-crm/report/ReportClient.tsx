@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { presetPeriod, type PresetId, type Summary, type MonthRow, type RankRow } from '@/lib/b2b/clientReport'
+import { presetPeriod, NO_SOURCE, NO_CARD, type PresetId, type Summary, type MonthRow, type RankRow, type SourceRow } from '@/lib/b2b/clientReport'
+import { sourceLabel } from '@/lib/types'
 import { mskDayKey } from '@/lib/time'
 
 type GroupOpt = { key: string; label: string; ownRetail: boolean; merged: number }
@@ -18,11 +19,15 @@ type Report = {
   summary?: Summary
   byNameCount?: number
   ranking?: RankRow[]
+  bySource?: SourceRow[]
   client?: ClientInfo | null
   notice?: string
   months?: MonthRow[]
   orders?: OrderRow[]
 }
+
+const srcLabel = (s: string) =>
+  s === NO_CARD ? 'Без карточки клиента' : s === NO_SOURCE ? 'Не указан' : sourceLabel(s)
 
 const PRESETS: { id: PresetId; label: string }[] = [
   { id: 'month', label: 'Этот месяц' },
@@ -221,6 +226,34 @@ export default function ReportClient({ initial }: {
               <Tile label="Средний чек" value={rub(data.summary.avg)} sub="без нулевых заказов" />
               <Tile label="Клиентов" value={String(data.ranking.length)} sub={`с заказами за ${day(data.period.from)} — ${day(data.period.to)}`} />
             </div>
+            {(data.bySource?.length ?? 0) > 0 && (
+              <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-x-auto mb-4">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] px-4 pt-3">Откуда пришли клиенты</p>
+                <table className="w-full text-[13px] min-w-[480px]">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-widest text-[#9a9a95] border-b border-[#f0f0ec]">
+                      <th className="text-left font-semibold px-4 py-2.5">Источник</th>
+                      <th className="text-right font-semibold px-3 py-2.5">Клиентов</th>
+                      <th className="text-right font-semibold px-3 py-2.5">Заказов</th>
+                      <th className="text-right font-semibold px-3 py-2.5">Сумма</th>
+                      <th className="text-right font-semibold px-4 py-2.5">Доля суммы</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f4f4f1]">
+                    {data.bySource!.map(r => (
+                      <tr key={r.source}>
+                        <td className={`px-4 py-2.5 ${r.source === NO_SOURCE || r.source === NO_CARD ? 'text-[#9a9a95]' : 'text-[#111110] font-medium'}`}>{srcLabel(r.source)}</td>
+                        <td className="text-right px-3 py-2.5 font-mono">{r.clients}</td>
+                        <td className="text-right px-3 py-2.5 font-mono">{r.orders}</td>
+                        <td className="text-right px-3 py-2.5 font-mono whitespace-nowrap">{rub(r.sum)}</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-[#6b6b66]">{total > 0 ? pct(r.sum / total * 100) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[11px] text-[#9a9a95] px-4 pb-3 pt-1">Источник ставится в карточке клиента: «Изменить» → «Откуда пришёл».</p>
+              </div>
+            )}
             {data.ranking.length === 0 ? (
               <div className="bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 text-[13px] text-[#9a9a95]">За этот период заказов нет.</div>
             ) : (
