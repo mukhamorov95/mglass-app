@@ -151,6 +151,7 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
   const [scope, setScope] = useState([lead.product, lead.sizes].filter(Boolean).join(', '))
   const [notes, setNotes] = useState('')
   const [price, setPrice] = useState('2500')
+  const [fee, setFee] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -179,7 +180,9 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
           deal_number: lead.order_no, client_name: lead.name || lead.phone || `Лид #${lead.id}`,
           phone: lead.phone, address: addr.trim(), scope: scope.trim() || null,
           notes: notes.trim() || null, visit_price: Number(price.replace(/\s/g, '')) || 0,
-          payer: 'клиент (в зачёт заказа)', is_repeat: false, lead_id: lead.id, measurer_fee: 0,
+          payer: 'клиент (в зачёт заказа)', is_repeat: false, lead_id: lead.id,
+          // Гонорар замерщика: пусто — равен цене выезда (владелец 01.10).
+          measurer_fee: fee.trim() || undefined,
         }),
       })
       const j = await res.json().catch(() => ({})) as { error?: string }
@@ -194,7 +197,7 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
   const inp = 'border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]'
   return (
     <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50/40 p-3 space-y-2">
-      <p className="text-[12px] font-semibold text-emerald-800">📐 Замер (2500₽, в зачёт заказа)</p>
+      <p className="text-[12px] font-semibold text-emerald-800">📐 Замер (выезд — в зачёт заказа)</p>
       {reqs.map(r => (
         <div key={r.id} className="text-[11px] text-[#111110] rounded-lg bg-white border border-emerald-200 px-2.5 py-1.5">
           <span className="font-semibold">{r.status === 'scheduled' ? '🗓 назначен' : r.status === 'done' ? '✅ выполнен' : r.status === 'cancelled' ? '✖ отменён' : r.status === 'issue' ? '⚠️ сложность' : '🆕 в пуле'}</span>
@@ -212,6 +215,7 @@ function MeasureRequestBox({ lead }: { lead: Lead }) {
           <input value={scope} onChange={e => setScope(e.target.value)} placeholder="Что мерить (изделие, размеры)" className={`${inp} w-full`} />
           <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Доступ / парковка / пожелания по времени" className={`${inp} w-full`} />
           <input value={price} onChange={e => setPrice(e.target.value)} type="number" placeholder="Выезд, ₽" className={`${inp} w-full`} />
+          <input value={fee} onChange={e => setFee(e.target.value)} type="number" placeholder="Гонорар замерщика, ₽ — пусто: как выезд" className={`${inp} w-full`} />
           {err && <p className="text-[11px] text-red-600">{err}</p>}
           <div className="flex gap-2">
             <button onClick={submit} disabled={busy} className="flex-1 px-2 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold disabled:opacity-50">{busy ? '…' : 'В пул замерщиков'}</button>

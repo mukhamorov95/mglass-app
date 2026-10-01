@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .select('id, invoice_no, amount, status, issued_at, paid_at')
       .eq('deal_id', dealId).order('issued_at', { ascending: false }),
     svc.from('measure_requests')
-      .select('id, status, scope, measurer_name, scheduled_at, photos, created_at')
+      .select('id, status, scope, measurer_name, scheduled_at, photos, created_at, visit_price, actual_price, price_note, visit_payment, measurer_fee')
       .eq('deal_id', dealId).order('created_at', { ascending: false }),
   ])
 

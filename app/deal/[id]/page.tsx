@@ -7,7 +7,8 @@ import { formatPhone, telHref, waHref } from '@/lib/b2c/phoneKey'
 import type { DealStage } from '@/lib/b2c/dealProgress'
 import { kpItemsFromCalcs } from '@/lib/kp/fromQuick'
 import { toast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
-import { confirmDialog, promptDialog } from '@/lib/dialog'
+import { confirmDialog } from '@/lib/dialog'
+import { PAYMENT_LABEL } from '@/lib/measure/money'
 
 // Карточка Сделки (B2C). Паттерн — как /b2b-deal, но модель своя (deals — тонкая
 // группировка по объекту). Этаж и деньги приходят с сервера тем же кодом, что
@@ -49,7 +50,10 @@ type Contract = Doc & { kp_id: number | null; make_sum: number | null; install_s
 // Счета B2B-контура (приходят из /documents) — к рознице отношения не имеют,
 // розничный счёт ниже: type Invoice.
 type B2BInvoice = { id: number; invoice_no: string; amount: number; status: string; issued_at: string | null; paid_at: string | null }
-type Measure = { id: number; status: string; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string }
+type Measure = {
+  id: number; status: string; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string
+  visit_price: number | null; actual_price: number | null; price_note: string | null; visit_payment: 'onsite' | 'company' | 'unpaid' | null; measurer_fee: number | null
+}
 type Payment = { id: number; kind: string; amount: number; paid_at: string; entered_by_name: string | null; note: string | null; invoice_id: number | null }
 type Invoice = {
   id: number; number: string; amount: number; purpose: string; issued_at: string; due_at: string | null
@@ -127,6 +131,7 @@ export default function DealPage() {
   const [tab, setTab] = useState<'calcs' | 'docs' | 'money'>('calcs')
   const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: B2BInvoice[]; measures: Measure[] } | null>(null)
   const [measuring, setMeasuring] = useState(false)
+  const [measureForm, setMeasureForm] = useState<{ address: string; scope: string; visit_price: string; payer: string; measurer_fee: string; notes: string } | null>(null)
   const [payments, setPayments] = useState<Payment[] | null>(null)
   const [files, setFiles] = useState<DealFile[] | null>(null)
   const [payForm, setPayForm] = useState({ kind: 'prepay', amount: '', paid_at: new Date().toISOString().slice(0, 10), invoice_id: '' })
@@ -337,21 +342,14 @@ export default function DealPage() {
   function openTab(k: 'calcs' | 'docs' | 'money') { setTab(k) }
 
   // Отправить на замер: заявка с данными сделки. Замерщик увидит её в своём кабинете;
-  // отметка и файлы вернутся сюда через deal_id.
+  // отметка и файлы вернутся сюда через deal_id. Цена выезда и гонорар — сразу здесь.
   async function sendMeasure() {
-    if (!deal) return
-    // Адрес обязателен — иначе замерщику некуда ехать. Нет в сделке → спрашиваем и
-    // записываем в саму сделку (по адресу ищут карточку — прямое требование владельца).
-    let addr = (deal.address || '').trim()
-    if (!addr) {
-      const entered = await promptDialog({
-        title: 'Адрес объекта для замера',
-        text: 'Обязателен — замерщику нужно куда ехать. Адрес запишется и в сделку.',
-        placeholder: 'Город, улица, дом, квартира',
-        confirmLabel: 'Отправить на замер',
-      })
-      addr = (entered || '').trim()
-      if (!addr) return
+    if (!deal || !measureForm) return
+    // Адрес обязателен — иначе замерщику некуда ехать. В сделке не было → записываем
+    // и в саму сделку (по адресу ищут карточку — прямое требование владельца).
+    const addr = measureForm.address.trim()
+    if (!addr) { toast.error('Укажите адрес объекта', { detail: 'Замерщику нужно куда ехать.' }); return }
+    if (!(deal.address || '').trim()) {
       await sendOrToast('Адрес не записан в сделку', `/api/deals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ client_name: deal.client_name, phone: deal.phone, address: addr, amo_lead_id: deal.amo_lead_id ?? '' }) },
         'Заявка на замер всё равно уйдёт с этим адресом; в сделку его можно внести через «Изменить»')
@@ -359,9 +357,10 @@ export default function DealPage() {
     setMeasuring(true)
     try {
       const r = await sendOrToast('Заявка на замер не отправлена', `/api/deals/${id}/measure`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr }) },
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...measureForm, address: addr, measurer_fee: measureForm.measurer_fee.trim() || undefined }) },
         'Нажмите «Отправить на замер» ещё раз')
       if (r) {
+        setMeasureForm(null)
         toast.success('Заявка на замер отправлена', { detail: 'Замерщик увидит её в своём кабинете, статус — здесь, в карточке сделки.' })
         await load()
       }
@@ -545,9 +544,10 @@ export default function DealPage() {
         <Link href="/contracts" className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec]">
           📝 Договор
         </Link>
-        <button onClick={sendMeasure} disabled={measuring}
+        <button onClick={() => setMeasureForm(f => f ? null : { address: deal.address ?? '', scope: '', visit_price: '', payer: '', measurer_fee: '', notes: '' })}
+          disabled={measuring}
           className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
-          {measuring ? 'Отправляю…' : '📐 Отправить на замер'}
+          📐 Отправить на замер
         </button>
         <button onClick={loadKpCandidates} disabled={kpBusy}
           className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
@@ -569,6 +569,45 @@ export default function DealPage() {
           {deal.archived_at ? '↩︎ Вернуть из архива' : '🗄 В архив'}
         </button>
       </div>
+
+      {/* Заявка на замер: адрес, что мерить, цена выезда и гонорар замерщика — сразу здесь. */}
+      {measureForm && (
+        <div className="bg-white border border-[#111110] rounded-2xl px-5 py-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[13px] font-semibold text-[#111110]">📐 Заявка на замер</p>
+            <button onClick={() => setMeasureForm(null)} className="text-[12px] text-[#9a9a95] hover:text-[#111110]">Закрыть</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {([
+              ['address', 'Адрес объекта *', 'Город, улица, дом, квартира', 'sm:col-span-2'],
+              ['visit_price', 'Выезд, ₽', '2500', ''],
+              ['payer', 'Кто платит за выезд', 'клиент на объекте / компания / в договоре', ''],
+              ['measurer_fee', 'Гонорар замерщика, ₽', 'пусто — как выезд', ''],
+              ['notes', 'Примечание', 'через кого связь, домофон, время', ''],
+            ] as const).map(([k, label, ph, span]) => (
+              <label key={k} className={`block ${span}`}>
+                <span className="text-[11px] font-semibold text-[#6b6b66] block mb-1">{label}</span>
+                <input value={measureForm[k]} onChange={e => setMeasureForm(f => f ? { ...f, [k]: e.target.value } : f)} placeholder={ph}
+                  inputMode={k === 'visit_price' || k === 'measurer_fee' ? 'numeric' : undefined}
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+              </label>
+            ))}
+            <label className="block sm:col-span-2">
+              <span className="text-[11px] font-semibold text-[#6b6b66] block mb-1">Что мерить — каждое изделие с новой строки</span>
+              <textarea value={measureForm.scope} onChange={e => setMeasureForm(f => f ? { ...f, scope: e.target.value } : f)} rows={3}
+                placeholder={'Душевая перегородка\nЗеркало с подсветкой'}
+                className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] resize-y" />
+            </label>
+          </div>
+          {!(deal.address || '').trim() && measureForm.address.trim() && (
+            <p className="text-[11px] text-[#9a9a95]">Адрес запишется и в сделку.</p>
+          )}
+          <button onClick={sendMeasure} disabled={measuring || !measureForm.address.trim()}
+            className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+            {measuring ? 'Отправляю…' : 'Отправить на замер'}
+          </button>
+        </div>
+      )}
 
       {/* Выбор свободного КП. Сначала совпавшие по телефону/имени, иначе последние. */}
       {kpPick && (
@@ -687,7 +726,12 @@ export default function DealPage() {
                     {m.scheduled_at ? `на ${date(m.scheduled_at)}` : date(m.created_at)}{m.measurer_name ? ` · ${m.measurer_name}` : ''}
                   </span>
                 </div>
-                {m.scope && <p className="text-[12px] text-[#6b6b66]">{m.scope}</p>}
+                {m.scope && <p className="text-[12px] text-[#6b6b66] whitespace-pre-line">{m.scope}</p>}
+                <p className="text-[12px] text-[#6b6b66]">
+                  Выезд {Number(m.visit_price) > 0 ? `${Number(m.visit_price).toLocaleString('ru-RU')} ₽` : 'цена не указана'}
+                  {m.actual_price != null && <> → <b className="text-[#111110]">{Number(m.actual_price).toLocaleString('ru-RU')} ₽</b>{m.price_note ? ` (замерщик: ${m.price_note})` : ''}</>}
+                  {m.visit_payment && <> · {PAYMENT_LABEL[m.visit_payment]}</>}
+                </p>
                 {Array.isArray(m.photos) && m.photos.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {m.photos.map((u, i) => (

@@ -72,6 +72,14 @@ describe('denyAction', () => {
     expect(denyAction(actor('manager')!, row({ manager_id: 'u-other' }), 'attach')).not.toBeNull()
   })
 
+  it('деньги выполненного (settle): замерщик замера, офис, владелец — не менеджер', () => {
+    const r = row({ status: 'done', measurer_id: 'u-measurer' })
+    expect(denyAction(actor('measurer')!, r, 'settle')).toBeNull()
+    expect(denyAction(actor('office')!, r, 'settle')).toBeNull()
+    expect(denyAction(actor('admin')!, r, 'settle')).toBeNull()
+    expect(denyAction(actor('manager')!, r, 'settle')).not.toBeNull()
+  })
+
   it('логист ничего не меняет', () => {
     const l = actor('logist')!
     for (const a of ['schedule', 'unassign', 'done', 'issue', 'cancel', 'attach'] as const) {

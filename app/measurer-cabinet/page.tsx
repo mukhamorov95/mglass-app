@@ -9,6 +9,8 @@ import { telHref } from '@/lib/b2c/phoneKey'
 import MeasureBoard from '@/components/measure/MeasureBoard'
 import MeasurerAvailability from '@/components/measure/MeasurerAvailability'
 import BookingPicker, { type BookingValue } from '@/components/measure/BookingPicker'
+import SettleForm from '@/components/measure/SettleForm'
+import type { VisitPayment } from '@/lib/measure/money'
 
 // Кабинет замерщика: сегодня (куда ехать, кому звонить, что мерить) → пул новых
 // заявок («Взять» в своё свободное окно) → дальше по дням → занятость всех
@@ -38,6 +40,9 @@ type MReq = {
   issue_solution: string | null
   measurer_fee: number
   fee_status: string
+  actual_price: number | null
+  price_note: string | null
+  visit_payment: VisitPayment | null
   photos: string[] | null
   created_at: string
 }
@@ -60,7 +65,7 @@ export default function MeasurerCabinetPage() {
   const [busy, setBusy] = useState<number | null>(null)
   const [boardKey, setBoardKey] = useState(0)
   // Открытая форма у карточки: взять/перенести (booking) или сложность (issue).
-  const [openFor, setOpenFor] = useState<{ id: number; kind: 'book' | 'issue' } | null>(null)
+  const [openFor, setOpenFor] = useState<{ id: number; kind: 'book' | 'issue' | 'done' } | null>(null)
   const [bookVal, setBookVal] = useState<BookingValue>(EMPTY_BOOKING)
   const [issueText, setIssueText] = useState('')
   const [issueSol, setIssueSol] = useState('')
@@ -174,8 +179,10 @@ export default function MeasurerCabinetPage() {
         )}
         {r.notes && <p>💬 {r.notes}</p>}
         <p className="text-[#9a9a95]">
-          💰 выезд {Number(r.visit_price) > 0 ? fmt(Number(r.visit_price)) : 'цена не указана'}{r.payer ? ` · платит ${r.payer}` : ''}
-          {' · '}гонорар {fmt(Number(r.measurer_fee) || 0)}
+          💰 выезд {Number(r.visit_price) > 0 ? fmt(Number(r.visit_price)) : 'цена не указана'}
+          {r.actual_price != null && <> → <b className="text-[#111110]">{fmt(Number(r.actual_price))}</b>{r.price_note ? ` (${r.price_note})` : ''}</>}
+          {r.payer ? ` · платит ${r.payer}` : ''}
+          {' · '}гонорар {Number(r.measurer_fee) > 0 ? fmt(Number(r.measurer_fee)) : 'не указан'}
           {r.manager_name ? ` · менеджер ${r.manager_name}` : ''}
           {r.amo_url && <> · <a href={r.amo_url} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">amo</a></>}
         </p>
@@ -210,7 +217,7 @@ export default function MeasurerCabinetPage() {
         {details(r)}
         {r.issue_text && <p className="text-[12px] text-red-600 mt-1">⚠️ {r.issue_text}{r.issue_solution ? ` → 💡 ${r.issue_solution}` : ''}</p>}
         <div className="flex items-center gap-1.5 flex-wrap mt-2">
-          <button onClick={() => act(r, { action: 'done' }, `Замер ${r.deal_number || `#${r.id}`} выполнен — гонорар ${fmt(Number(r.measurer_fee) || 0)} в «Ожидает выплаты».`)}
+          <button onClick={() => setOpenFor({ id: r.id, kind: 'done' })}
             className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-2.5 py-1.5 hover:bg-emerald-700">✅ Выполнен</button>
           <button onClick={() => { setOpenFor({ id: r.id, kind: 'issue' }); setIssueText(r.issue_text ?? ''); setIssueSol(r.issue_solution ?? '') }}
             className={`${btn} text-red-600 border-red-200`}>⚠️ Сложность</button>
@@ -224,6 +231,10 @@ export default function MeasurerCabinetPage() {
             className={btn}>↩ В пул</button>
         </div>
         {open && openFor?.kind === 'book' && bookingForm(r, '✅ Перенести')}
+        {open && openFor?.kind === 'done' && (
+          <SettleForm r={r} mode="done" onCancel={() => setOpenFor(null)}
+            onDone={msg => { setOpenFor(null); setNotice(msg); void load() }} />
+        )}
         {open && openFor?.kind === 'issue' && (
           <div className="mt-2 rounded-lg border border-red-200 bg-red-50/40 p-3 space-y-2">
             <textarea value={issueText} onChange={e => setIssueText(e.target.value)} rows={2} placeholder="Какая сложность? (нет доступа, стена кривая, клиент не пришёл…)"
