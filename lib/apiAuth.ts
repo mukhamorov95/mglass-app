@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getRole, isOwnerRole, type Role } from './getRole'
+import { getRole, getSessionUser, getUserProfile, canAccessRoute, isOwnerRole, type Role } from './getRole'
 
 // Shared 403 response — keeps Russian copy consistent across endpoints.
 function forbidden() {
@@ -31,6 +31,22 @@ export async function requireAdmin(): Promise<Role | NextResponse> {
 export async function requireRole(allowed: Role[]): Promise<Role | NextResponse> {
   const role = await getRole()
   if (!role || !allowed.includes(role)) return forbidden()
+  return role
+}
+
+// Эндпоинт экрана пускает ровно тех, кто может открыть сам экран. middleware
+// не гейтит /api/* (canAccessRoute пропускает их все), поэтому без этой строки
+// маршрут открыт любой роли с сессией — партнёру, цеху, замерщику. Скоуп и
+// manager_workspace берём из профиля, как middleware: закупщик с кабинетом
+// менеджера проходит, тот же закупщик без него — нет.
+export async function requirePageAccess(pathname: string): Promise<Role | NextResponse> {
+  const user = await getSessionUser()
+  if (!user) return NextResponse.json({ error: 'Нужно войти' }, { status: 401 })
+  const profile = await getUserProfile()
+  if (!profile) return forbidden()
+  const { role, permissions } = profile
+  const opts = { b2bScope: permissions.b2b_client_scope ?? null, managerWorkspace: permissions.manager_workspace === true }
+  if (!canAccessRoute(role, pathname, opts)) return forbidden()
   return role
 }
 

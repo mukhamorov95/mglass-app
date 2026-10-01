@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { requirePageAccess } from '@/lib/apiAuth'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { calcItem, effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { loadB2BRates } from '@/lib/b2b/rates'
@@ -18,12 +18,14 @@ export const dynamic = 'force-dynamic'
 //  • подсветка и рамка — движок lib/mirror/mirrorQuote по справочникам.
 // Себестоимость считается ЗДЕСЬ и наружу уходит спецификацией. В браузер
 // закупочные цены не отдаём — этим болен старый /calculator/mirror.
+// Сам ответ — себестоимость (строки с закупкой, glassCost, directCost), поэтому
+// пускаем только тех, кто может открыть вкладку «Расчёт».
 
 const DEFAULT_MIRROR = 'Серебро'   // обычное зеркало; подставляется, если тип не выбран
 
 export async function POST(req: NextRequest) {
-  const { data: { user } } = await (await createClient()).auth.getUser()
-  if (!user) return NextResponse.json({ full: false, error: 'unauthorized' }, { status: 401 })
+  const guard = await requirePageAccess('/calculator/build')
+  if (guard instanceof NextResponse) return guard
 
   const b = await req.json().catch(() => null) as (Partial<MirrorQuoteInput> & {
     thickness?: number; materialName?: string; quantity?: number; lighting?: boolean
