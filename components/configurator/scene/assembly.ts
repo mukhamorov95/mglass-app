@@ -1,6 +1,7 @@
 import type { Configuration } from '@/lib/configurator/catalog'
 import type { MModel, Seg } from '@/lib/configurator/arrangement'
 import { getPart } from '@/lib/configurator/parts/registry'
+import { hingesBySize } from '@/lib/configurator/hinges'
 import { placePart, surfaces } from '@/lib/configurator/parts/mount'
 
 // Чистый билдер 3D-геометрии из параметрической конфигурации.
@@ -306,10 +307,17 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     const rotY = Math.atan2(-od[1], od[0])
     glass.push({ key, role: 'door', rotY, pos: [cx, H / 2, cz], size: [L, H, t] })
     // петли на петлевой кромке
-    const n = L > 0.7 || H > 2.2 ? 3 : 2
+    const n = hingesBySize(L, H)
     const ys = n === 2 ? [0.28, H - 0.28] : [0.28, H / 2, H - 0.28]
-    for (let i = 0; i < ys.length; i++)
-      hardware.push({ key: `${key}-h${i}`, model: hingeModel, shape: choice.hinge, rotY, pos: [Ph[0], ys[i], Ph[1]] })
+    // Есть паспорт выбранной петли — садим его на петлевую кромку (наружу — через стык,
+    // прочь от полотна двери); нет — прежняя рисованная петля.
+    const hPartHinge = getPart(choice.hinge)
+    for (let i = 0; i < ys.length; i++) {
+      const at: [number, number, number] = [Ph[0], ys[i], Ph[1]]
+      const placed = hPartHinge?.mount.on === 'glass-edge' ? placePart(hPartHinge, surfaces.glassEdge(at, [-od[0], -od[1]], thickness)) : null
+      if (placed?.ok) hardware.push({ key: `${key}-h${i}`, model: hingeModel, shape: choice.hinge, part: hPartHinge!.id, rotY: placed.placement.rotY, pos: placed.placement.pos })
+      else hardware.push({ key: `${key}-h${i}`, model: hingeModel, shape: choice.hinge, rotY, pos: at })
+    }
     // Ручка у внешней кромки, с наружной стороны двери. Нормаль открытой двери
     // поворачивается вместе с полотном — считаем её, а не подставляем знаки руками
     // (прежняя арифметика давала смещение по X и НОЛЬ по Z: высота верная, посадка мимо).

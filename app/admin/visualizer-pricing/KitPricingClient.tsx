@@ -16,11 +16,16 @@ import {
 import { auditKits } from '@/lib/configurator/audit'
 import { buildDataHealth } from '@/lib/configurator/dataHealth'
 import { SHAPE_LIST } from '@/lib/configurator/hardwareShapes'
+import { allParts } from '@/lib/configurator/parts/registry'
 import { CatalogPicker } from './CatalogPicker'
 
 // Формы 3D — единый источник в hardwareShapes.ts (их определяет вкладка 3D). Не копируем
 // список сюда: добавили форму там — она появляется у Веры сама, без правок этого файла.
-const SHAPES = SHAPE_LIST
+// Формы 3D: общие рисованные + паспорта деталей (их выбирают по артикулу автоматически).
+const SHAPES: { id: string; label: string; hint: string }[] = [
+  ...SHAPE_LIST,
+  ...allParts().filter(p => !SHAPE_LIST.some(sh => sh.id === p.id)).map(p => ({ id: p.id, label: p.label, hint: `паспорт ${p.article}` })),
+]
 
 // Прайс душевых: слева модель → справа ЕЁ комплект. Цена позиции живёт в библиотеке
 // тарифа (правится один раз), комплект модели держит порядок вариантов, ★ по умолчанию

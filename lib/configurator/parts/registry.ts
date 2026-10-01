@@ -6,10 +6,12 @@ import type { PartSpec, PartIssue } from './types'
 import { validatePart } from './validate'
 import { SD_210_L230 } from './catalog/sd-210'
 import { FDR_30 } from './catalog/fdr-30'
+import { FDP_232 } from './catalog/fdp-232'
 
 const DECLARED: PartSpec[] = [
   SD_210_L230,
   FDR_30,
+  FDP_232,
 ]
 
 const accepted = new Map<string, PartSpec>()
@@ -26,3 +28,14 @@ for (const spec of DECLARED) {
 export const getPart = (id?: string | null): PartSpec | null => (id ? accepted.get(id) ?? null : null)
 export const allParts = (): PartSpec[] => [...accepted.values()]
 export const partProblems = () => ({ rejected, dupes })
+
+// Паспорт по артикулу позиции прайса: «Петля Афродита FDP-232 …» → паспорт FDP-232.
+// Артикул сравнивается целым словом: FDR-30 не должен найтись в FDR-300.
+export function partForItem(name: string, role: string): PartSpec | null {
+  for (const spec of accepted.values()) {
+    if (spec.role !== role) continue
+    const key = spec.article.split(/[/\s]/)[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (new RegExp(`(^|[^A-Z0-9-])${key}($|[^0-9.])`, 'i').test(name)) return spec
+  }
+  return null
+}

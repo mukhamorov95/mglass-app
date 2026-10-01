@@ -58,6 +58,9 @@ export type PartSpec = {
   mount: Mount
   // Готовая модель вместо параметрики (запасной путь, если поставщик даст файл).
   gltf?: string
+  // Паспортная нагрузка петли: вес двери, который держат две петли, кг. По нему
+  // считается число петель (lib/configurator/hinges.ts), а не по габариту двери.
+  load?: { kgPer2: number; note?: string }
 }
 
 export type PartIssue = { id: string; field: string; problem: string }
