@@ -5,6 +5,11 @@ import { appUrl as publicAppUrl } from '@/lib/appUrl'
 
 const FROM = 'M-Glass <noreply@mglass.ru>'
 
+// Письма партнёрам выключены решением владельца 01.10.2026: «партнёрам пока никому
+// ничего не рассылаем, ни в коем случае». Включает только владелец — переменной
+// окружения PARTNER_EMAILS=on. Колокольчик в кабинете это не трогает: он не рассылка.
+export const partnerEmailsOn = (): boolean => process.env.PARTNER_EMAILS === 'on'
+
 // Общая обёртка над Resend. Возвращает true, если письмо реально отправлено.
 export async function sendEmail(params: { to: string; subject: string; html: string }): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY
@@ -42,6 +47,7 @@ function partnerShell(inner: string, cta?: { href: string; label: string }): str
 
 // Приглашение в кабинет: ссылка на установку пароля.
 export async function notifyPartnerAccessGranted(params: { to: string; clientName: string; setupLink: string }): Promise<boolean> {
+  if (!partnerEmailsOn()) return false
   return sendEmail({
     to: params.to,
     subject: 'Доступ в кабинет заказчика M-Glass',
@@ -59,6 +65,7 @@ export async function notifyPartnerAccessGranted(params: { to: string; clientNam
 export async function notifyPartnerOrderStatus(params: {
   to: string; clientName: string; orderNumber: string; kind: 'in_work' | 'ready' | 'shipped'; link: string
 }): Promise<boolean> {
+  if (!partnerEmailsOn()) return false
   const map = {
     in_work: { s: `Заказ ${params.orderNumber} принят в работу`, t: 'Мы запустили ваш заказ в производство. Следить за готовностью можно в кабинете.' },
     ready:   { s: `Заказ ${params.orderNumber} готов к выдаче`,   t: 'Ваш заказ изготовлен и готов к выдаче. Менеджер согласует с вами отгрузку.' },
