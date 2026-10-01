@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { getPricing } from '@/lib/configurator/pricingStore'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import {
-  emptyLibrary, libraryFromUnitPrices, defaultKitFor, emptyKit,
+  emptyLibrary, libraryFromUnitPrices, defaultKitFor, emptyKit, normalizeKit,
   type Library, type ModelKit, type KitRates,
 } from '@/lib/configurator/kit'
 import type { Tier } from '@/lib/configurator/pricing'
@@ -44,8 +44,8 @@ export async function getKit(tier: Tier, code: string, library: Library): Promis
   try {
     const supabase = createServiceClient()
     const { data } = await supabase.from('configurator_model_kits').select('kit').eq('tier', tier).eq('model_code', code).maybeSingle()
-    const slots = (data?.kit as ModelKit | null)?.slots
-    if (Array.isArray(slots)) return { kit: { slots }, seeded: false }
+    const kit = normalizeKit(data?.kit)
+    if (kit) return { kit, seeded: false }
   } catch { /* таблицы ещё нет */ }
   const model = M_MODELS.some(m => m.code === code) ? getModel(code) : null
   return { kit: model ? defaultKitFor(model, library) : emptyKit(), seeded: true }

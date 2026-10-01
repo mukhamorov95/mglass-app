@@ -186,6 +186,23 @@ export type ModelKit = {
   excluded?: RoleId[]
 }
 
+// Комплект из базы → ModelKit. Литерал обязан перечислить ВСЕ поля типа: getKit отдавал
+// только slots, и маржа модели с исключёнными ролями молча терялись — в цене и при
+// следующем сохранении из админки (она пишет все комплекты тарифа разом).
+export function normalizeKit(raw: unknown): ModelKit | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  if (!Array.isArray(r.slots)) return null
+  const fields: { [K in keyof Required<ModelKit>]: ModelKit[K] | undefined } = {
+    slots: r.slots as KitSlot[],
+    margin: typeof r.margin === 'number' && Number.isFinite(r.margin) && r.margin > 0 && r.margin < 100 ? r.margin : undefined,
+    excluded: Array.isArray(r.excluded)
+      ? [...new Set(r.excluded.filter((x): x is RoleId => typeof x === 'string' && isRole(x)))]
+      : undefined,
+  }
+  return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) as ModelKit
+}
+
 export const DEFAULT_QTY: QtyRule = { mode: 'role' }
 export const emptyKit = (): ModelKit => ({ slots: [] })
 export const emptyLibrary = (): Library => ({ items: [] })
@@ -618,7 +635,9 @@ export function computeKitPrice(
     marginPct, taxPct: finance.taxPct,
     marginSource: marginPct === finance.marginPct ? 'тариф' : 'модель',
     belowMin: marginPct < (finance.minMarginPct ?? 0),
-    missing, complete: missing.length === 0,
+    // Цена изделия 0 при живой себестоимости — формула невозможна (маржа + налог ≥ 100%):
+    // без этого клиент увидел бы ценой один монтаж с доставкой.
+    missing, complete: missing.length === 0 && itemPrice > 0,
   }
 }
 
