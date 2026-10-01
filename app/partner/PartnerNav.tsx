@@ -69,6 +69,11 @@ export default function PartnerNav() {
           <span className="tx">Табло</span>
         </Link>
 
+        <Link href="/partner/counter" className={item(path.startsWith('/partner/counter'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><path d="M3 8.5 4.5 3.5h11L17 8.5" /><path d="M3 8.5h14v1a2.3 2.3 0 0 1-4.6 0 2.3 2.3 0 0 1-4.7 0A2.3 2.3 0 0 1 3 9.5Z" /><path d="M4.5 11.5v5h11v-5" /><path d="M8.5 16.5v-3h3v3" /></svg></span>
+          <span className="tx">Прилавок</span>
+        </Link>
+
         <Link href="/partner/notifications" className={item(path.startsWith('/partner/notifications'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M6 8a4 4 0 0 1 8 0c0 4 1.5 5 1.5 5h-11S6 12 6 8Z" /><path d="M8.5 16a1.5 1.5 0 0 0 3 0" /></svg></span>
           <span className="tx">Уведомления</span>

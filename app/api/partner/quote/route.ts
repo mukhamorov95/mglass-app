@@ -5,7 +5,7 @@ import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { computeQuoteItem, computeQuoteTotals } from '@/lib/b2b/computeQuote'
 import { loadB2BRates } from '@/lib/b2b/rates'
-import type { FacetPrice, B2BOrderItem } from '@/lib/b2bCalculator'
+import { effectiveItemTotal, type FacetPrice, type B2BOrderItem } from '@/lib/b2bCalculator'
 import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial, B2BService } from '@/lib/types'
 import { resolvePartnerClient } from '@/lib/partnerClient'
@@ -118,12 +118,14 @@ export async function POST(req: NextRequest) {
 
   const totals = computeQuoteTotals(items, discount)
 
-  // Наружу — только безопасное: по позициям цена клиента (с НДС), и итог со скидкой.
+  // Наружу — только безопасное: по позициям цена клиента (с НДС) до скидки, итог
+  // позиции после скидки (по нему прилавок считает розницу точки) и итог заказа.
   const safeItems = items.map(it => ({
     material: it.materialName,
     thickness: it.thickness,
     width: it.width, height: it.height, quantity: it.quantity,
     price: it.saleIncVat,
+    lineTotal: effectiveItemTotal(it, discount),
   }))
   const partnerTotal = totals.totalAfterDiscount
 

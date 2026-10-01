@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { SUPER_CATS, readDraft, type SuperCat } from '@/lib/partner/counter'
 
 // Партнёрский калькулятор (дизайн 1-в-1 из прототипа, .pcab). Форма и НАБОР полей —
 // как у менеджера (/calculator/b2b), данные из реальных справочников
@@ -13,7 +14,7 @@ import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 
 type Material = { id: number; name: string; category: string; thickness: number; salePrice: number }
 type FacetOpt = { typeMm: number; salePrice: number }
-type PricedItem = { material: string; thickness: number; width: number; height: number; quantity: number; price: number }
+type PricedItem = { material: string; thickness: number; width: number; height: number; quantity: number; price: number; lineTotal?: number }
 
 type Spec = {
   materialId: number; width: number; height: number; quantity: number
@@ -22,11 +23,6 @@ type Spec = {
   triplexMat2Id: number | null; triplexMat3Id: number | null; applyMinPrice: boolean
 }
 
-const SUPER_CATS = [
-  { value: 'стекло', label: 'Стекло', cats: ['стекло', 'тонированное', 'сатин', 'рифленое', 'декоративное'] },
-  { value: 'зеркало', label: 'Зеркало', cats: ['зеркало'] },
-] as const
-type SuperCat = typeof SUPER_CATS[number]['value']
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 
@@ -110,7 +106,12 @@ export default function PartnerNewQuotePage() {
       // НОВЫЙ просчёт (editingId не ставим → сохранение создаёт новый, а не правит).
       const editParam = params.get('edit')
       const reorderParam = params.get('reorder')
-      if (editParam) {
+      // С прилавка: /partner/new?from=counter — позиции из черновика прилавка. Черновик
+      // не стираем: он остаётся на прилавке, пока партнёр сам не начнёт нового покупателя.
+      if (params.get('from') === 'counter') {
+        const draft = readDraft()
+        if (draft.length) { setList(draft); void recompute(draft, false) }
+      } else if (editParam) {
         fetch(`/api/partner/quote/${editParam}`).then(r => r.ok ? r.json() : Promise.reject())
           .then((q: { id: number; comment: string; specs: Spec[] }) => {
             setEditingId(q.id); setComment(q.comment || ''); setList(q.specs)
@@ -389,7 +390,7 @@ export default function PartnerNewQuotePage() {
                       <td>{name}{s.hasTempering ? ', закалка' : ''}{s.hasFacet ? ', фацет' : ''}{s.hasTriplex ? ', триплекс' : ''}</td>
                       <td className="tnum">{s.width} × {s.height}</td>
                       <td className="r tnum">{s.quantity}</td>
-                      <td className="r tnum">{p ? fmt(p.price) : (busy ? '…' : '')}</td>
+                      <td className="r tnum">{p ? fmt(p.lineTotal ?? p.price) : (busy ? '…' : '')}</td>
                       <td className="r" style={{ whiteSpace: 'nowrap' }}>
                         <button className="rm" onClick={() => editRow(i)} title="Изменить">✎</button>
                         <button className="rm" onClick={() => duplicateRow(i)} title="Дублировать">⧉</button>
