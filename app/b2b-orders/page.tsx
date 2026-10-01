@@ -14,6 +14,7 @@ import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import PointBadge from '@/components/PointBadge'
+import { SkeletonTable } from '@/components/ui/Skeleton'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -1583,7 +1584,7 @@ export default function B2BOrdersPage() {
   }, [expanded, orders, materials])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <SkeletonTable rows={10} />
   )
 
   if (loadError) return (

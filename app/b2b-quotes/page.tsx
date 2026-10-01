@@ -22,6 +22,7 @@ import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import RowMenu, { type MenuItem } from '@/components/RowMenu'
 import { buildTelegramWorkText } from '@/lib/b2b/telegramWorkText'
+import { SkeletonTable } from '@/components/ui/Skeleton'
 
 
 const PAGE_SIZE = 50
@@ -736,7 +737,7 @@ export default function B2BQuotesPage() {
   }, [quotes])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <SkeletonTable rows={10} />
   )
 
   if (loadError) return (
