@@ -31,5 +31,8 @@ export function leadTimeFor(specs: LeadSpec[]): { min: number; max: number } | n
 
 export function leadTimeText(specs: LeadSpec[]): string {
   const t = leadTimeFor(specs)
-  return t ? `${t.min}–${t.max} рабочих дней` : 'срок подтверждаем при заказе'
+  if (!t) return 'срок подтверждаем при заказе'
+  const n = t.max % 100, d = n % 10
+  const word = d >= 2 && d <= 4 && (n < 12 || n > 14) ? 'рабочих дня' : 'рабочих дней'
+  return `${t.min}–${t.max} ${word}`
 }
