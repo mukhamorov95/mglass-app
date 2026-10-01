@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { routeKey, isTrackablePageRequest } from '@/lib/routeKey'
+import { routeKey, isTrackablePageRequest, isWallRoute } from '@/lib/routeKey'
 
 describe('routeKey', () => {
   it('идентификаторы сводит в [id], обычные сегменты с цифрами не трогает', () => {
@@ -39,5 +39,43 @@ describe('isTrackablePageRequest', () => {
     expect(isTrackablePageRequest('/b2b-today', 'POST', h())).toBe(false)
     expect(isTrackablePageRequest('/b2b-today', 'GET', h({ 'next-router-prefetch': '1' }))).toBe(false)
     expect(isTrackablePageRequest('/b2b-today', 'GET', h({ 'sec-purpose': 'prefetch' }))).toBe(false)
+  })
+})
+
+describe('что считается переходом человека (У12)', () => {
+  const h = (o: Record<string, string>) => new Headers(o)
+
+  it('загрузка страницы целиком считается', () => {
+    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'document' }))).toBe(true)
+  })
+
+  it('переход внутри приложения считается', () => {
+    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'empty', rsc: '1' }))).toBe(true)
+  })
+
+  it('фоновый запрос к адресу страницы не считается', () => {
+    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'empty' }))).toBe(false)
+    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'iframe' }))).toBe(false)
+  })
+
+  it('подгрузка ссылки роутером не считается', () => {
+    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'document', 'next-router-prefetch': '1' }))).toBe(false)
+    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-purpose': 'prefetch;prerender' }))).toBe(false)
+  })
+
+  it('браузер без Sec-Fetch-* не теряется', () => {
+    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({}))).toBe(true)
+  })
+
+  it('API и внутренние адреса не считаются', () => {
+    expect(isTrackablePageRequest('/api/search', 'GET', h({ 'sec-fetch-dest': 'document' }))).toBe(false)
+    expect(isTrackablePageRequest('/_next/static/x.js', 'GET', h({ 'sec-fetch-dest': 'document' }))).toBe(false)
+    expect(isTrackablePageRequest('/b2b-quotes', 'POST', h({ 'sec-fetch-dest': 'document' }))).toBe(false)
+  })
+
+  it('экраны-стены помечены', () => {
+    expect(isWallRoute('/device-limit')).toBe(true)
+    expect(isWallRoute('/access-denied')).toBe(true)
+    expect(isWallRoute('/b2b-quotes')).toBe(false)
   })
 })

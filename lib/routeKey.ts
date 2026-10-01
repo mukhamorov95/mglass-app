@@ -26,5 +26,23 @@ export function isTrackablePageRequest(pathname: string, method: string, headers
   if (headers.get('next-router-prefetch')) return false
   const purpose = (headers.get('sec-purpose') ?? headers.get('purpose') ?? '').toLowerCase()
   if (purpose.includes('prefetch')) return false
+  // Переход человека — это либо загрузка страницы целиком (sec-fetch-dest: document),
+  // либо переход внутри приложения (роутер присылает RSC). Всё остальное — фоновый
+  // запрос к адресу страницы: сервис-воркер, свой fetch, предпросмотр ссылки. Раньше
+  // такие запросы попадали в счётчик наравне с переходами, и хвост отчёта нельзя было
+  // отличить от «человек прошёлся по меню» (У12).
+  const dest = (headers.get('sec-fetch-dest') ?? '').toLowerCase()
+  const routerNav = Boolean(headers.get('rsc') ?? headers.get('next-router-state-tree'))
+  // Браузер без Sec-Fetch-* и без заголовков роутера — не наказываем: считаем переходом.
+  if (dest && dest !== 'document' && !routerNav) return false
   return true
+}
+
+// Экраны, на которые человека приводит не ссылка, а запрет: высокая строка здесь
+// означает «сюда выбрасывает», а не «этим пользуются». 01.10 /device-limit оказался
+// в тройке самых частых экранов двух менеджеров — это была стена, а не раздел.
+export const WALL_ROUTES = ['/device-limit', '/access-denied', '/login'] as const
+
+export function isWallRoute(route: string): boolean {
+  return (WALL_ROUTES as readonly string[]).includes(route)
 }
