@@ -23,8 +23,8 @@ def unwrap(block: str) -> str:
 tail = unwrap(re.search(r'## Общий хвост описания.*?```\n(.*?)```', src, re.S).group(1))
 rows = re.findall(r'^\| (\d) \| ([^|]+)\| ([^|]+)\| ([^|]+)\|$', src, re.M)
 bodies = dict(re.findall(r'^### (\d)\. .*?\n\n```\n(.*?)```', src, re.M | re.S))
-if len(rows) != 7 or len(bodies) != 7:
-    sys.exit(f'Ждали 7 объявлений, нашли строк сетки {len(rows)}, текстов {len(bodies)} — LISTINGS.md изменился')
+if not rows or len(rows) != len(bodies) or {r[0] for r in rows} != set(bodies):
+    sys.exit(f'Сетка и тексты не совпадают: строк сетки {len(rows)}, текстов {len(bodies)} — LISTINGS.md изменился')
 
 cards = []
 for num, rubric, title, price in rows:
