@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireDealActor, canSeeDeal } from '@/lib/b2c/dealScope'
+import { parseLeadConfig, leadConfigLine } from '@/lib/configurator/leadPayload'
 import { dealStage, dealValue, emptyArtifacts } from '@/lib/b2c/dealProgress'
 
 export const dynamic = 'force-dynamic'
@@ -44,11 +45,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   // Этаж и деньги считаем ТЕМ ЖЕ кодом, что доска: раньше карточка знала только
   // про расчёты и показывала «Новая · 0 ₽» у сделки с договором на 775 000.
-  const [{ data: kps }, { data: contracts }, { data: pays }] = await Promise.all([
+  const [{ data: kps }, { data: contracts }, { data: pays }, { data: leads }] = await Promise.all([
     svc.from('commercial_proposals').select('total, created_at').eq('deal_id', dealId).order('created_at', { ascending: true }),
     svc.from('contracts').select('total, created_at').eq('deal_id', dealId).order('created_at', { ascending: true }),
     svc.from('deal_payments').select('amount').eq('deal_id', dealId),
+    svc.from('site_leads').select('id, created_at, config').eq('deal_id', dealId).order('created_at', { ascending: false }).limit(20),
   ])
+  // Ш3: заявки 3D-конструктора этой сделки — что клиент собрал, открывается тем же расчётом.
+  const siteLeads = ((leads ?? []) as { id: number; created_at: string; config: unknown }[]).map(l => {
+    const c = parseLeadConfig(l.config)
+    return { id: Number(l.id), created_at: l.created_at, line: c ? leadConfigLine(c) : null }
+  })
   const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
   const art = emptyArtifacts()
   for (const c of (calcs ?? []) as Record<string, unknown>[]) {
@@ -63,7 +70,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const stage = dealStage(art)
 
   return NextResponse.json(
-    { deal, calculations: calcs ?? [], siblings, stage, money },
+    { deal, calculations: calcs ?? [], siblings, stage, money, siteLeads },
     { headers: { 'Cache-Control': 'no-store' } })
 }
 

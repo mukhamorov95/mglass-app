@@ -24,6 +24,7 @@ type Deal = {
 type Note = { id: number; text: string; author_name: string | null; created_at: string }
 // Причины отказа — короткий закрытый список: свободный текст не сложится в отчёт.
 const LOST_REASONS = ['Дорого', 'Выбрал другого', 'Отложил покупку', 'Не отвечает', 'Не наш профиль', 'Другое']
+type SiteLead = { id: number; created_at: string; line: string | null }
 type Sibling = { id: number; client_name: string | null; address: string | null; created_at: string; archived_at: string | null }
 type KpCandidate = {
   id: number; number: string; client_name: string | null; client_phone: string | null
@@ -119,6 +120,7 @@ export default function DealPage() {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', amo_lead_id: '', source: '' })
   const [siblings, setSiblings] = useState<Sibling[]>([])
+  const [siteLeads, setSiteLeads] = useState<SiteLead[]>([])
   const [stage, setStage] = useState<DealStage | null>(null)
   const [money, setMoney] = useState<{ value: number; paid: number; remaining: number } | null>(null)
   const [kpPick, setKpPick] = useState<KpCandidate[] | null>(null)
@@ -156,7 +158,7 @@ export default function DealPage() {
           : `Не удалось загрузить сделку: ${await responseError(r)}. Обновите страницу.`)
         return
       }
-      setDeal(j.deal); setCalcs(j.calculations ?? []); setSiblings(j.siblings ?? [])
+      setDeal(j.deal); setCalcs(j.calculations ?? []); setSiblings(j.siblings ?? []); setSiteLeads(j.siteLeads ?? [])
       setStage(j.stage ?? null); setMoney(j.money ?? null)
       setForm({ client_name: j.deal.client_name ?? '', phone: j.deal.phone ?? '', address: j.deal.address ?? '', amo_lead_id: j.deal.amo_lead_id ?? '', source: j.deal.source ?? '' })
       setError(null)
@@ -708,6 +710,24 @@ export default function DealPage() {
           </div>
         )}
       </div>
+
+      {/* Ш3: что клиент собрал в 3D-конструкторе на сайте — открывается тем же расчётом. */}
+      {siteLeads.length > 0 && (
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl px-5 py-3 space-y-1.5">
+          <p className="text-[11px] uppercase tracking-wide text-[#9a9a95] font-semibold">Заявки с сайта — {siteLeads.length}</p>
+          {siteLeads.map(l => (
+            <div key={l.id} className="flex items-center justify-between gap-3 text-[13px]">
+              <span className="text-[#111110] min-w-0">{l.line ?? 'состав не передан'}<span className="text-[#9a9a95]"> · {date(l.created_at)}</span></span>
+              {l.line && (
+                <Link href={`/calculator/build?lead=${l.id}`}
+                  className="shrink-0 text-[12px] font-medium px-2.5 py-1 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#f0f0ec]">
+                  Открыть в «Расчёте»
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Другие сделки этого клиента: у одного человека может быть несколько объектов. */}
       {siblings.length > 0 && (

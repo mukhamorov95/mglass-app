@@ -1,8 +1,10 @@
 import { type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
-import { sendMessage } from '@/lib/telegram'
+import { sendMessage, type InlineKeyboard } from '@/lib/telegram'
 import { withCors, corsPreflight } from '@/lib/configurator/cors'
 import { parseLead } from '@/lib/configurator/leadPayload'
+import { dealForLead } from '@/lib/configurator/leadDeal'
+import { appUrl } from '@/lib/appUrl'
 
 // Заявка с публичного сайта. Путь /api/configurator/ уже открыт в middleware —
 // поэтому форма на стороннем домене может сюда постучаться без авторизации.
@@ -24,7 +26,7 @@ function rateLimited(ip: string): boolean {
   return false
 }
 
-async function notifyOwners(text: string) {
+async function notifyOwners(text: string, keyboard?: InlineKeyboard) {
   if (!process.env.TELEGRAM_BOT_TOKEN) return
   try {
     const svc = createServiceClient()
@@ -33,7 +35,7 @@ async function notifyOwners(text: string) {
     if (!ids.length) return
     const { data: links } = await svc.from('telegram_users').select('telegram_id').in('user_id', ids)
     const chats = new Set((links ?? []).map(l => (l as { telegram_id?: number }).telegram_id).filter((n): n is number => typeof n === 'number'))
-    await Promise.allSettled([...chats].map(chat => sendMessage(chat, text)))
+    await Promise.allSettled([...chats].map(chat => sendMessage(chat, text, keyboard)))
   } catch { /* уведомление никогда не роняет приём заявки */ }
 }
 
@@ -47,17 +49,32 @@ export async function POST(req: NextRequest) {
   if (parsed.kind === 'bot') return withCors({ ok: true })
   if (parsed.kind === 'invalid') return withCors({ error: parsed.error }, { status: 400 })
 
+  let leadId: number | null = null
+  let deal: { dealId: number; created: boolean } | null = null
   try {
     const svc = createServiceClient()
     // Supabase не бросает исключение на ошибку вставки, а возвращает её —
-    // без этой строки заявка терялась бы из базы молча. Телефон в лог не пишем.
-    const { error } = await svc.from('site_leads').insert({ ...parsed.row, ip })
+    // без этой проверки заявка терялась бы из базы молча. Телефон в лог не пишем.
+    const { data, error } = await svc.from('site_leads').insert({ ...parsed.row, ip, config: parsed.config }).select('id').single()
     if (error) console.error('[configurator/lead] site_leads insert:', error.message)
+    else leadId = Number(data.id)
+    // Ш3: заявка 3D-конструктора со составом заводит сделку у нас (решение 11, 02.10).
+    // Остальные формы сайта сделку не заводят — о них решения не было.
+    if (parsed.config && leadId) {
+      deal = await dealForLead(svc, parsed.row)
+      if (deal) {
+        const { error: linkErr } = await svc.from('site_leads').update({ deal_id: deal.dealId }).eq('id', leadId).select('id')
+        if (linkErr) console.error('[configurator/lead] site_leads link:', linkErr.message)
+      }
+    }
   } catch {
     // База недоступна — заявку всё равно доставим сообщением, а не потеряем.
   }
 
-  await notifyOwners(parsed.message)
+  const keyboard: InlineKeyboard = []
+  if (parsed.config && leadId) keyboard.push([{ text: 'Открыть расчёт', url: appUrl(`/calculator/build?lead=${leadId}`) }])
+  if (deal) keyboard.push([{ text: deal.created ? `Сделка №${deal.dealId}` : `Сделка №${deal.dealId} (клиент уже был)`, url: appUrl(`/deal/${deal.dealId}`) }])
+  await notifyOwners(parsed.message, keyboard.length ? keyboard : undefined)
 
   return withCors({ ok: true })
 }

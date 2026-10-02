@@ -16,6 +16,7 @@ import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPane
 import { kpSectionsFromBom, type BomItem } from '@/lib/kp/bomSections'
 import { drawingToRequest, type DrawingApply, type ShowerDrawingParse } from '@/lib/calc/drawingParse'
 import { targetLight, type TargetLight } from '@/lib/pricing/orderFunds'
+import type { LeadOpen } from '@/lib/calc/leadToBuild'
 
 // Вкладка «Расчёт» — два экрана. Экран 1: только выбор модели. Экран 2: слева крупный
 // настоящий 3D-визуализатор, справа параметры (габариты → стекло/цвет фурнитуры →
@@ -197,6 +198,8 @@ export default function BuildCalcPage() {
   const [mirrorPick, setMirrorPick] = useState<MirrorModel | null>(null)
   const [dealId, setDealId] = useState<number | null>(null)
   const [dealTitle, setDealTitle] = useState<string>('')
+  // Пришли из заявки 3D-конструктора (/calculator/build?lead=7, Ш3): тот же состав, клиент и сделка.
+  const [lead, setLead] = useState<{ id: number; line: string | null; open: LeadOpen } | null>(null)
   // Пустые поля клиента берём из сделки AmoCRM; вписанное руками не перебиваем.
   const amo = useAmoLeadFromUrl(lead => {
     setClientName(v => v || lead.contactName)
@@ -303,6 +306,36 @@ export default function BuildCalcPage() {
     })()
   }, [])
 
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get('lead'))
+    if (!Number.isFinite(id) || id <= 0) return
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/deals/site-lead/${id}`)
+        const j = await r.json().catch(() => ({})) as {
+          lead?: { id: number; name: string; phone: string; line: string | null }
+          deal?: { id: number; title: string } | null
+          open?: LeadOpen | null
+          error?: string
+        }
+        if (!r.ok || !j.lead) { toast.error(j.error ?? 'Заявка не открылась'); return }
+        setClientName(v => v || j.lead!.name); setClientPhone(v => v || j.lead!.phone)
+        if (j.deal) { setDealId(j.deal.id); setDealTitle(j.deal.title) }
+        const o = j.open
+        if (!o) return
+        const notes = [...o.notes]
+        if (!BUDGET_FINISHES.has(o.finishId)) notes.push(`цвет с сайта «${FINISHES.find(f => f.id === o.finishId)?.label ?? o.finishId}» в «Расчёте» не заведён — стоит хром`)
+        if (!GLASS_TYPES.some(g => g.id === o.glassId)) notes.push(`стекла «${o.glassId}» в «Расчёте» нет — стоит прозрачное`)
+        setProduct('shower'); setCode(o.code); setDims({ ...defaultsFor(o.code), ...o.dims })
+        setFinishId(BUDGET_FINISHES.has(o.finishId) ? o.finishId as FinishId : 'chrome')
+        setGlassId(GLASS_TYPES.some(g => g.id === o.glassId) ? o.glassId : 'clear')
+        setChoice(o.choice); setQtyChoice(o.qtyChoice); setProfileFrame(o.profileFrame)
+        setLead({ id: j.lead.id, line: j.lead.line, open: { ...o, notes } })
+        setScreen('detail')
+      } catch { toast.error('Заявка не открылась — проверьте сеть') }
+    })()
+  }, [])
+
   // Восстановление сохранённого расчёта (история «Открыть» → mglass_build_reopen): владелец
   // просил «расчёт можно открыть и пересчитать». Возвращаем модель, габариты, стекло/цвет,
   // выбор фурнитуры, параметры цены и корзину, открываем экран изделия.
@@ -356,6 +389,12 @@ export default function BuildCalcPage() {
     }, 250)
     return () => { clearTimeout(t); ctrl.abort() }
   }, [screen, code, dims, mVariant])
+
+  // Выбор с сайта, которого нет среди вариантов «Расчёта» (премиум, снятая позиция), заменён ★ — называем.
+  const leadMiss = useMemo(() => !lead || !kitChoices || code !== lead.open.code ? [] :
+    Object.entries(lead.open.choice).filter(([r, id]) => kitChoices.variants.some(v => v.role === r && !v.options.some(o => o.itemId === id)))
+      .map(([r]) => `${ROLE_META[r as RoleId]?.label ?? r}: выбранной на сайте позиции нет в вариантах «Расчёта» — стоит ★`),
+  [lead, kitChoices, code])
 
   // Форма выбранной позиции → 3D (петля/ручка); нет выбора → форма из комплекта модели.
   const hwChoice = useMemo<HardwareChoice>(() => {
@@ -649,6 +688,12 @@ export default function BuildCalcPage() {
             <p className="mb-3 text-[12px] text-[#4b4b47] bg-[#eef3ee] border border-[#cfe0d3] rounded-xl px-3 py-2">
               Расчёт пойдёт в сделку <b className="font-semibold">{dealTitle || `#${dealId}`}</b> — после сохранения он появится в её карточке.
             </p>
+          )}
+          {lead && (
+            <div className="mb-3 text-[12px] text-[#4b4b47] bg-white border border-[#e4e4e0] rounded-xl px-3 py-2 space-y-0.5">
+              <p>Заявка с сайта №{lead.id}{lead.line ? <>: <b className="font-semibold">{lead.line}</b></> : null}</p>
+              {[...lead.open.notes, ...leadMiss].map(n => <p key={n} className="text-[#9a5a2a]">⚠️ {n}</p>)}
+            </div>
           )}
           <div className="mb-3 flex items-center gap-3">
           <button onClick={() => setScreen('models')} className="text-[13px] text-[#6b6b66] hover:text-[#111110]">← Модели</button>
