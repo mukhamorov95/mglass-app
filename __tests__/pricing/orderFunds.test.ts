@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  applyTaxSystem, orderFunds, priceForTarget, splitDelivery, allocate, parseOrderFundRates, serializeOrderFundRates,
+  applyTaxSystem, targetPrices, targetLight, AMBER_BAND, orderFunds, priceForTarget, splitDelivery, allocate, parseOrderFundRates, serializeOrderFundRates,
   type FundItemInput, type ItemFunds, type OrderFundRates,
 } from '@/lib/pricing/orderFunds'
 import { retailCalcItems } from '@/lib/pricing/retailCalcItems'
@@ -232,5 +232,47 @@ describe('налог фонда — из режима настроек CFO (ре
     expect(usn6.taxSource).toContain('ИП УСН 6%')
     expect(applyTaxSystem(base, 'osno')).toEqual({ rates: base, taxSource: 'ставка фонда' })
     expect(applyTaxSystem({ ...base, taxPct: null }, 'usn_15').taxSource).toBeNull()
+  })
+})
+
+describe('Ш1: цена для цели в «Расчёте» = та, при которой /cfo покажет остаток на цели', () => {
+  const rates = applyTaxSystem(parseOrderFundRates(RATES_JSON), 'usn_6').rates
+  const base = { materials: 42_150, glassCount: 3, orderItems: 1, partnerKnown: false, rates, targetPct: 38 }
+  const remainsAt = (price: number, partner: boolean, items = 1) =>
+    orderFunds(Array.from({ length: items }, () => ({ label: 'М7', kind: 'shower' as const, price, materials: [{ key: 'materials' as const, amount: 42_150 }], glassCount: 3 })),
+      rates, { deliveryZone: 'moscow', partner: partner ? { pct: null } : null, targetPct: 38 }).items[0]
+
+  it('без партнёра: остаток на цене для цели — 38,0%, на рубль дешевле — ниже', () => {
+    const t = targetPrices(base)!
+    expect(remainsAt(t.price, false).remainsPct).toBeGreaterThanOrEqual(37.9)
+    expect(remainsAt(t.price, false).remainsPct).toBeLessThanOrEqual(38.1)
+    expect(remainsAt(t.price, false).priceForTarget).toBe(t.price)
+  })
+
+  it('известный партнёр 10% — в знаменателе: цена выше, остаток после партнёра тот же', () => {
+    const plain = targetPrices(base)!, withPartner = targetPrices({ ...base, partnerKnown: true })!
+    expect(withPartner.price).toBeGreaterThan(plain.price)
+    expect(remainsAt(withPartner.price, true).remainsPct).toBeCloseTo(38, 0)
+  })
+
+  it('доставка одна на заказ: во втором изделии заказа цена для цели ниже на долю доставки', () => {
+    const one = targetPrices(base)!, two = targetPrices({ ...base, orderItems: 2 })!
+    expect(two.price).toBeLessThan(one.price)
+    expect(remainsAt(two.price, false, 2).remainsPct).toBeCloseTo(38, 0)
+  })
+
+  it('светофор: зелёный от цены цели, жёлтый — до цели минус 10 п.п., ниже — красный', () => {
+    const t = targetPrices(base)!
+    expect(AMBER_BAND).toBe(10)
+    expect(targetLight(t.price, t)).toBe('green')
+    expect(targetLight(t.price - 1, t)).toBe('amber')
+    expect(targetLight(t.amberPrice, t)).toBe('amber')
+    expect(targetLight(t.amberPrice - 1, t)).toBe('red')
+    expect(remainsAt(t.amberPrice, false).remainsPct).toBeCloseTo(28, 0)
+  })
+
+  it('нет ставки или себестоимости — цены для цели нет, а не ноль', () => {
+    expect(targetPrices({ ...base, materials: 0 })).toBeNull()
+    expect(targetPrices({ ...base, rates: { ...rates, installPerGlass: null } })).toBeNull()
   })
 })

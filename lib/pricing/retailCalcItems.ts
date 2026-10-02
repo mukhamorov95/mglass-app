@@ -13,7 +13,7 @@ export type RetailCalcRow = {
 
 export type RetailCalcItems = {
   items: FundItemInput[]
-  partner: { pct: number } | null
+  partner: { pct: number | null } | null   // pct null — ставка известного партнёра из настроек CFO
   partnerSource: string | null
 }
 
@@ -63,7 +63,9 @@ export function retailCalcItems(row: RetailCalcRow): RetailCalcItems {
         glassCountSource: bySections != null ? 'полотен по модели' : byInstall != null ? 'по секциям монтажа' : undefined,
       }
     })
-    return { items, partner: null, partnerSource: null }
+    // «Расчёт» (Ш1) помечает заказ через известного партнёра флагом; его долю берём из ставок CFO.
+    const viaPartner = input.partner === true
+    return { items, partner: viaPartner ? { pct: null } : null, partnerSource: viaPartner ? 'известный партнёр из «Расчёта»' : null }
   }
 
   const formDirect = num(cb.directCost) ?? 0

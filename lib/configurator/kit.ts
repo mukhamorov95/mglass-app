@@ -196,6 +196,9 @@ export type ModelKit = {
   // 'fixed-only' — только под неподвижными стёклами, как собирает владелец (заказ 0245).
   // Пусто = 'through'. Решение 3 маршрута SHOWROOM_COST_ROUTE.
   floorProfile?: 'through' | 'fixed-only'
+  // Цель «остаётся с заказа», % чека — своя у модели (решение владельца 7, 02.10).
+  // Пусто → 100 − средние переменные плана CFO. По ней «Расчёт» считает цену для цели.
+  target?: number
 }
 
 // Комплект из базы → ModelKit. Литерал обязан перечислить ВСЕ поля типа: getKit отдавал
@@ -212,6 +215,7 @@ export function normalizeKit(raw: unknown): ModelKit | null {
       ? [...new Set(r.excluded.filter((x): x is RoleId => typeof x === 'string' && isRole(x)))]
       : undefined,
     floorProfile: r.floorProfile === 'fixed-only' || r.floorProfile === 'through' ? r.floorProfile : undefined,
+    target: typeof r.target === 'number' && Number.isFinite(r.target) && r.target > 0 && r.target < 100 ? r.target : undefined,
   }
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) as ModelKit
 }
