@@ -5,11 +5,9 @@
 // Повторный запуск безопасен: сделки, уже перенесённые (по note 'amo:<id>'), пропускаются.
 
 import { createClient } from '@supabase/supabase-js'
-import { readFileSync } from 'fs'
+import { loadEnvLocal } from './lib/envLocal.mjs'
 
-const env = Object.fromEntries(readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
-  .split('\n').filter(l => l.includes('=') && !l.startsWith('#'))
-  .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]))
+const env = loadEnvLocal()
 
 const APPLY = process.argv.includes('--apply')
 const sub = env.AMO_SUBDOMAIN.includes('.') ? env.AMO_SUBDOMAIN : `${env.AMO_SUBDOMAIN}.amocrm.ru`
