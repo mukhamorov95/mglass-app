@@ -94,3 +94,12 @@ export function calcFinancialModel(input: FinancialModelInput): FinancialModelRe
     effectiveMarginPercent,
   }
 }
+
+// Прибыль сохранённого расчёта — определение profit выше: итог − себестоимость − налог с итога.
+// Себестоимость — сумма той корзины, что ложится в запись, а не живой формы; null — не известна.
+export function savedProfit(total: number, materials: number | null, taxPercent: number): { profit: number; margin: number } | null {
+  if (materials == null || !isFiniteNumber(materials) || !isFiniteNumber(total) || !isFiniteNumber(taxPercent)) return null
+  const profit = Math.round(total - materials - Math.round(total * taxPercent / 100))
+  const margin = total > 0 ? Math.round((profit / total) * 1000) / 10 : 0
+  return { profit, margin }
+}

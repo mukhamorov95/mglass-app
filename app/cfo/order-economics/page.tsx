@@ -86,6 +86,7 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
             <Link href={`/cfo/order-economics?month=${prevM}`} className="px-2 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white">←</Link>
             <span className="text-xs font-mono text-[#6b6b66]">{monthLabel}</span>
             <Link href={`/cfo/order-economics?month=${nextM}`} className="px-2 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white">→</Link>
+            <Link href="/cfo/order-economics/retail" className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white">Розница →</Link>
             <Link href="/cfo" className="px-3 py-1.5 text-xs bg-[#111110] text-white rounded-lg font-medium hover:bg-[#2a2a28]">CFO →</Link>
           </div>
         </div>

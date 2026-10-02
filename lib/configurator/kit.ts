@@ -3,6 +3,7 @@ import { buildFromModel, type Assembly } from '@/components/configurator/scene/a
 import type { MModel } from '@/lib/configurator/arrangement'
 import { inferShape } from '@/lib/configurator/hardwareShapes'
 import { partForItem } from '@/lib/configurator/parts/registry'
+import { hingeCount } from '@/lib/configurator/hinges'
 import type { PriceByColor, BarStock, CatalogRef, Tier } from '@/lib/configurator/pricing'
 
 // Прайс ПО МОДЕЛЯМ. Два уровня, чтобы цену позиции вбивать один раз:
@@ -236,6 +237,7 @@ export type KitQuantities = {
   // вырезан). Есть только у моделей с распашной дверью над нижним профилем.
   fixedFloor?: Record<string, number[]>
   roleQty: Record<RoleId, number>
+  hingeDoors?: { w: number; h: number }[]   // двери на петлях, мм — для числа петель по паспорту выбранной петли
   swingDoors: number
   slideDoors: number
 }
@@ -349,7 +351,12 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
   // вручную там, где нужно («задать своё N»). Остаётся 0, если её не задали.
   for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
 
-  return { thickness, sections: assembly.glass.length, glassM2, doorWidths, profilePieces, tubePieces, barPieces, ...(fixedFloor ? { fixedFloor } : {}), roleQty, swingDoors, slideDoors }
+  // Двери, на которых геометрия поставила петли: по ним цена пересчитает петли по паспорту
+  // позиции комплекта — геометрия для цены строится без выбора клиента.
+  const hingeDoors = doors
+    .filter(d => assembly.hardware.some(h => h.key.startsWith(`${d.key}-h`) && /^-h\d+$/.test(h.key.slice(d.key.length))))
+    .map(d => ({ w: mm(d.size[0]), h: mm(d.size[1]) }))
+  return { thickness, sections: assembly.glass.length, glassM2, doorWidths, profilePieces, tubePieces, barPieces, ...(fixedFloor ? { fixedFloor } : {}), roleQty, ...(hingeDoors.length ? { hingeDoors } : {}), swingDoors, slideDoors }
 }
 
 // ── Раскрой хлыстов ───────────────────────────────────────────────
@@ -570,6 +577,14 @@ const priceOf = (it: LibraryItem, finishId: string) => it.prices?.[finishId] ?? 
 const lineMeta = (ref: CatalogRef | undefined, chromeFallback: boolean): Pick<KitLine, 'ref' | 'chromeFallback'> =>
   ({ ...(ref ? { ref } : {}), ...(chromeFallback ? { chromeFallback: true } : {}) })
 
+// Петли «по роли» — по паспорту нагрузки выбранной позиции (решение 2, 02.10): та же функция,
+// что ставит петли в 3D. Явный выбор количества (режим client, qtyChoice) — главнее.
+function hingeQty(it: LibraryItem, rule: QtyRule, q: KitQuantities, opts: KitOptions): number {
+  const kgPer2 = rule.mode === 'role' ? partForItem(`${it.name} ${it.ref?.base ?? ''}`, 'hinge')?.load?.kgPer2 : undefined
+  if (!kgPer2 || !q.hingeDoors?.length) return resolveQty(rule, 'hinge', q, opts)
+  return q.hingeDoors.reduce((s, d) => s + hingeCount(d.w / 1000, d.h / 1000, q.thickness, kgPer2), 0)
+}
+
 export function resolveQty(rule: QtyRule, role: RoleId, q: KitQuantities, opts: KitOptions): number {
   switch (rule.mode) {
     case 'fixed': return Math.max(0, rule.n)
@@ -668,7 +683,7 @@ export function computeKitPrice(
       // общий слот «Профиль» собирает куски сторон (profile-wall/floor), а под своим
       // ключом у него пусто — позиция молча выпадала из спецификации как «нет цены».
       const pieces = meta.kind === 'bar' ? barPiecesFor(slot.role, kit, q, e.qty, opts) : []
-      const qty = meta.kind === 'bar' ? pieces.length : resolveQty(e.qty, slot.role, q, opts)
+      const qty = meta.kind === 'bar' ? pieces.length : slot.role === 'hinge' ? hingeQty(it, e.qty, q, opts) : resolveQty(e.qty, slot.role, q, opts)
       if (qty <= 0) continue
       if (meta.kind === 'bar') {
         const stocks: Stock[] = (it.stocks ?? [])

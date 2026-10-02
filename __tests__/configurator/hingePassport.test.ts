@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { getPart, partForItem } from '@/lib/configurator/parts/registry'
 import { buildFromModel } from '@/components/configurator/scene/assembly'
 import { getModel } from '@/lib/configurator/arrangement'
-import { computeKitQuantities, kitChoices, autoShapeForRole, type Library, type ModelKit } from '@/lib/configurator/kit'
-import { hingesBySize, hingesByPassport, doorKg } from '@/lib/configurator/hinges'
+import { computeKitQuantities, computeKitPrice, kitChoices, autoShapeForRole, type Library, type ModelKit, type KitRates } from '@/lib/configurator/kit'
+import { hingesBySize, hingesByPassport, hingeCount, doorKg } from '@/lib/configurator/hinges'
 
 // Ш4: 3D рисует выбранный артикул, а не общую форму роли. Паспорт FDP-232 — с чертежа.
 describe('Паспорт FDP-232 и выбор по артикулу', () => {
@@ -44,7 +44,7 @@ describe('Паспорт FDP-232 и выбор по артикулу', () => {
   })
 })
 
-describe('Число петель: габарит сейчас, паспорт — по решению 2', () => {
+describe('Число петель: паспорт, без него — габарит (решение 2, 02.10)', () => {
   it('габаритное правило — то же, что было в assembly.ts', () => {
     expect(hingesBySize(0.65, 2.2)).toBe(2)
     expect(hingesBySize(0.65, 2.31)).toBe(3)
@@ -60,5 +60,50 @@ describe('Число петель: габарит сейчас, паспорт �
 
   it('дверь 700 × 2200 × 10 (38,5 кг) тяжелее паспорта — три и предупреждение', () => {
     expect(hingesByPassport(0.7, 2.2, 10, 35)).toEqual({ n: 3, kg: 38.5, overPassport: true })
+  })
+})
+
+describe('Петли по паспорту в 3D и в цене (решение 2, 02.10)', () => {
+  const m = getModel('М4')
+  const dims2310 = { width: 1450, height: 2310, doorWidth: 650 }
+  const hingePts = (a: ReturnType<typeof buildFromModel>) => a.hardware.filter(h => /-h\d+$/.test(h.key)).length
+  const RATES: KitRates = { glassPerM2: { clear: 0 }, installPerSection: 0, deliveryMoscow: 0, liftPerFloor: 0 }
+  const FIN = { marginPct: 40, taxPct: 12 }
+  const lib: Library = { items: [
+    { id: 'fdp115', name: 'Петля Европа FDP-115 стекло-стекло 180°', role: 'hinge', prices: { chrome: 1000 } },
+    { id: 'fdp232', name: 'Петля Афродита FDP-232 стекло-стекло 180°', role: 'hinge', prices: { chrome: 3000 } },
+  ] }
+  const kitOf = (itemId: string, qty: ModelKit['slots'][number]['entries'][number]['qty'] = { mode: 'role' }): ModelKit =>
+    ({ slots: [{ role: 'hinge', select: 'one', entries: [{ itemId, qty, primary: true }] }] })
+  const hingeLine = (kit: ModelKit, opts = {}) => {
+    const q = computeKitQuantities(buildFromModel(m, dims2310, 8), 8, m)
+    return computeKitPrice(q, lib, kit, RATES, FIN, { withDelivery: false, ...opts }).lines.find(l => l.role === 'hinge')!
+  }
+
+  it('hingeCount: паспорт — по весу, без паспорта — габарит', () => {
+    expect(hingeCount(0.65, 2.31, 8, 35)).toBe(2)
+    expect(hingeCount(0.7, 2.2, 10, 35)).toBe(3)
+    expect(hingeCount(0.65, 2.31, 8)).toBe(3)
+    expect(hingeCount(0.65, 2.31, 8, null)).toBe(3)
+  })
+
+  it('3D: М4 на 2310 с FDP-232 — две петли, без паспорта — три', () => {
+    expect(hingePts(buildFromModel(m, dims2310, 8, true, { hinge: 'hinge-fdp-232' }))).toBe(2)
+    expect(hingePts(buildFromModel(m, dims2310, 8))).toBe(3)
+  })
+
+  it('цена: петля с паспортом — 2 шт на 2310, без паспорта — 3 (как в сцене без выбора)', () => {
+    expect(hingeLine(kitOf('fdp232')).qty).toBe(2)
+    expect(hingeLine(kitOf('fdp115')).qty).toBe(3)
+  })
+
+  it('явный выбор количества менеджером главнее паспорта', () => {
+    const client = kitOf('fdp232', { mode: 'client', options: [2, 3], def: 2 })
+    expect(hingeLine(client, { qtyChoice: { hinge: 3 } }).qty).toBe(3)
+  })
+
+  it('ручка двери не считается петлёй при поиске дверей на петлях', () => {
+    const q = computeKitQuantities(buildFromModel(m, dims2310, 8), 8, m)
+    expect(q.hingeDoors).toEqual([{ w: expect.any(Number), h: 2310 }])
   })
 })

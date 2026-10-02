@@ -118,6 +118,7 @@ const CFO_ITEMS: NavItem[] = [
   { href: '/cfo/margins',  label: 'Маржинальность',    icon: '📈' },
   { href: '/cfo/unit',     label: 'Unit-экономика',    icon: '🔍' },
   { href: '/cfo/order-economics', label: 'Экономика заказов', icon: '🧾' },
+  { href: '/cfo/order-economics/retail', label: 'Фонды розницы', icon: '🚿', indent: true },
   { href: '/cfo/breakeven', label: 'Точка безубыточности', icon: '🎯' },
   { href: '/admin/cfo',    label: 'Финмодели / ДДС',   icon: '💰' },
   { href: '/admin/settings', label: 'Фин. настройки', icon: '⚙️' },
