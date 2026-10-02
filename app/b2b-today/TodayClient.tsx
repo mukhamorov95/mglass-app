@@ -11,6 +11,7 @@ import {
 import { loadTodayOrders } from '@/lib/b2b/loadTodayOrders'
 import PlanEditor from './PlanEditor'
 import { responseError, NETWORK_ERROR } from '@/lib/toast'
+import { ANSWER_SLA_MIN, inquiryTitle, minutesBetween, durationLabel, type Inquiry } from '@/lib/b2b/inquiries'
 
 // Сверху — три главных дела (ТЗ 4.2): просроченные отгрузки, счета без оплаты, остывающие
 // просчёты. Каждое считается в lib/b2b/todayPriorities по данным, которые реально ведутся.
@@ -47,6 +48,9 @@ export default function TodayClient() {
   const [nowTs, setNowTs] = useState(0)   // время берём в эффекте: рендер должен быть чистым
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Входящие без ответа: первое дело дня — от скорости ответа зависит уровень сервиса Авито.
+  const [inquiries, setInquiries] = useState<Inquiry[] | null>(null)
+  const [inqErr, setInqErr] = useState<string | null>(null)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -90,6 +94,17 @@ export default function TodayClient() {
 
   useEffect(() => { loadPlans() }, [])
 
+  useEffect(() => {
+    fetch('/api/b2b/inquiries?status=new')
+      .then(async r => {
+        if (r.status === 403) return
+        if (!r.ok) { setInqErr(await responseError(r)); return }
+        const j = await r.json().catch(() => null) as { inquiries?: Inquiry[] } | null
+        setInquiries(j?.inquiries ?? [])
+      })
+      .catch(() => setInqErr(NETWORK_ERROR))
+  }, [])
+
   const view = useMemo(() => {
     if (!nowTs) return null
     return {
@@ -120,6 +135,10 @@ export default function TodayClient() {
       ) : (
         <>
           <div className="space-y-3">
+            {inqErr && <p className="text-[12px] text-red-600">Заявки не загрузились: {inqErr}</p>}
+            {inquiries && inquiries.length > 0 && (
+              <InquiriesCard rows={inquiries} nowIso={new Date(nowTs).toISOString()} />
+            )}
             <PriorityCard tone="red" title="Просроченные отгрузки" rows={view.ship.recent}
               caption={`Срок прошёл в последние ${SHIP_RECENT_DAYS} дней, отметки «Отгружен» нет. Либо заказ не уехал, либо его не отметили — закройте с датой отгрузки.`}
               empty={`За ${SHIP_RECENT_DAYS} дней просроченных отгрузок нет`} allHref="/b2b-today/shipments" />
@@ -210,6 +229,41 @@ export default function TodayClient() {
           <PlanEditor rows={plan} month={planMonth} onSaved={loadPlans} />
         </div>
       )}
+    </div>
+  )
+}
+
+function InquiriesCard({ rows, nowIso }: { rows: Inquiry[]; nowIso: string }) {
+  const late = rows.filter(r => minutesBetween(r.created_at, nowIso) > ANSWER_SLA_MIN).length
+  return (
+    <div className="border border-red-200 bg-white rounded-2xl overflow-hidden">
+      <div className="px-4 py-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-[14px] font-bold text-[#111110]">
+            <span className="w-2 h-2 rounded-full bg-red-500" />Заявки без ответа
+          </p>
+          <p className="text-[11px] text-[#8a8a85] mt-0.5">
+            Ответ в чате Авито — за {ANSWER_SLA_MIN} минут{late > 0 ? `; дольше уже ждут: ${late}` : ''}. Ответили — отметьте в заявках.
+          </p>
+        </div>
+        <Link href="/b2b-crm/inquiries" className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28]">
+          Заявки · {rows.length}
+        </Link>
+      </div>
+      <div className="divide-y divide-[#f0f0ec] border-t border-[#f0f0ec]">
+        {rows.slice(0, TOP_LIMIT).map(r => {
+          const min = minutesBetween(r.created_at, nowIso)
+          return (
+            <div key={r.id} className="px-4 py-2 flex items-center justify-between gap-3">
+              <p className="text-[12px] text-[#111110] truncate min-w-0">
+                <span className="font-medium">{inquiryTitle(r)}</span>
+                {r.request && <span className="text-[#8a8a85]"> · {r.request}</span>}
+              </p>
+              <span className={`text-[11px] shrink-0 ${min > ANSWER_SLA_MIN ? 'text-red-600 font-semibold' : 'text-[#6b6b66]'}`}>{durationLabel(min)}</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

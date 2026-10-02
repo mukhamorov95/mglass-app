@@ -32,7 +32,7 @@ export type Finding = { severity: Severity; code: string; table: string; title: 
 // Где лежат деньги и люди. Для них правила строже: тут и «RLS выключен» — высокий
 // риск, а не замечание. Список ведём руками: он короткий и должен быть осознанным.
 export const SENSITIVE_TABLES = new Set([
-  'users', 'b2b_clients', 'b2b_client_legal_entities', 'b2b_orders', 'b2b_materials',
+  'users', 'b2b_clients', 'b2b_client_legal_entities', 'b2b_orders', 'b2b_materials', 'b2b_inquiries',
   'materials', 'hardware_items', 'services', 'b2b_services', 'financial_settings',
   'supplier_price_rows', 'glass_price_matrix', 'purchase_orders', 'calculations',
   'commercial_proposals', 'deals', 'deal_payments', 'payments', 'manager_stats_daily',
