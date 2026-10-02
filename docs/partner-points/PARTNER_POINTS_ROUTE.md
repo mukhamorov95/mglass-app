@@ -78,6 +78,12 @@ M-Glass» переносит позиции в «Новый просчёт» (`?
 задачи цеху (`/api/b2b-orders/[id]/launch-production`) отказывают 409 с причиной; в базе —
 триггер `guard_point_order_launch` на `launched_at`. «Оплачен» = `notes.payment_status`,
 его пишет только `/api/b2b-orders/[id]/payment`. Наружу ничего не рассылается.
+02.10 закрыты три обхода этой отметки: цех ставил её через `patch_order_notes_shallow`,
+менеджер — прямой записью `notes` и через `mark_order_stages` (`invoice_paid`), любая из
+шести ролей — через `patch` в `/api/b2b-orders/[id]/stages`. В базе — триггер
+`guard_b2b_order_money` (ключи оплаты из браузера не пишет никто; сумму запущенного или
+оплаченного заказа меняет владелец), в `/stages` — белый список ключей. Миграция
+`20261002_b2b_money_columns_guard.sql`, пробы ролями — в PR.
 
 ## Грабли
 

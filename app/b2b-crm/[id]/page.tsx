@@ -222,10 +222,13 @@ export default function B2BClientCardPage() {
     const { data: updated, error } = await query.select('updated_at').maybeSingle()
     savingRef.current = false
 
+    // Отказ базы (скидка выше лимита, поле владельца) — своими словами, а не «изменились».
     if (error || !updated) {
-      showToast(clientVersion && !updated
-        ? 'Данные изменились другим менеджером. Обновите страницу.'
-        : 'Ошибка сохранения.')
+      showToast(error
+        ? `Не сохранено: ${error.message}`
+        : clientVersion
+          ? 'Данные изменились другим менеджером. Обновите страницу.'
+          : 'Ошибка сохранения.')
       setSavingClient(false)
       return
     }

@@ -18,6 +18,12 @@ import { consumeForOrder } from '@/lib/inventory/consumeHook'
 
 const ALLOWED = ['admin', 'ceo', 'manager', 'commercial', 'buyer', 'production'] as const
 
+// Ключи notes, которые экран заказов кладёт в patch (app/b2b-orders/page.tsx).
+const STAGES_PATCH_KEYS: ReadonlySet<string> = new Set([
+  'material_status', 'material_status_updated_at', 'material_status_updated_by',
+  'deadline_control', 'bulk_actions',
+])
+
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
 const toDateOnly = (v: unknown): string | null => {
   if (v === null || v === false) return null
@@ -43,8 +49,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Оплата отмечается через /payment' }, { status: 400 })
   }
   // Прочие верхнеуровневые поля notes (например material_status) — тем же вызовом,
-  // чтобы экран не возвращался к записи блобом.
+  // чтобы экран не возвращался к записи блобом. Только перечисленные: патч пишет
+  // сервис-ключ, его триггер не проверяет, и до 02.10 сюда можно было прислать
+  // payment_status: 'paid' и запустить неоплаченный заказ точки.
   const patch = (body?.patch ?? {}) as Record<string, unknown>
+  const foreign = Object.keys(patch).filter(k => !STAGES_PATCH_KEYS.has(k))
+  if (foreign.length) {
+    return NextResponse.json({ error: `Поле «${foreign[0]}» здесь не пишется` }, { status: 400 })
+  }
 
   const stages: Record<string, string | null> = {}
   for (const [k, v] of Object.entries(rawStages)) stages[k] = toDateOnly(v)
