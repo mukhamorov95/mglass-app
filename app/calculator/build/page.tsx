@@ -15,6 +15,7 @@ import { FINANCE_FALLBACK } from '@/lib/pricing/pickFinance'
 import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
 import { kpSectionsFromBom, type BomItem } from '@/lib/kp/bomSections'
 import { drawingToRequest, type DrawingApply, type ShowerDrawingParse } from '@/lib/calc/drawingParse'
+import { targetLight, type TargetLight } from '@/lib/pricing/orderFunds'
 
 // Вкладка «Расчёт» — два экрана. Экран 1: только выбор модели. Экран 2: слева крупный
 // настоящий 3D-визуализатор, справа параметры (габариты → стекло/цвет фурнитуры →
@@ -66,6 +67,13 @@ type Price = {
   marginPct?: number; taxPct?: number; marginSource?: 'модель' | 'тариф'
   glassSubstituted?: string | null
   stops?: Stop[]; notes?: Stop[]
+  target?: { price: number; amberPrice: number; source: 'модель' | 'план CFO' } | null
+}
+// Светофор «остаётся с заказа» (Ш1): менеджер видит цвет и цену для цели, разбор фондов — в /cfo.
+const LIGHT: Record<TargetLight, { dot: string; text: string }> = {
+  green: { dot: 'bg-emerald-500', text: 'в цели' },
+  amber: { dot: 'bg-amber-500', text: 'ниже цели' },
+  red: { dot: 'bg-red-500', text: 'сильно ниже цели — согласовать' },
 }
 type Stop = { kind: string; text: string }
 // Без чертежа менеджер прикидывает цену: «проверь отверстие на чертеже» ему не к чему.
@@ -164,6 +172,8 @@ export default function BuildCalcPage() {
   const [delivery, setDelivery] = useState('5000')
   const [lift, setLift] = useState('')
   const [discount, setDiscount] = useState('0')
+  // Заказ через известного партнёра (дизайнера): его доля — в цене для цели. На весь заказ.
+  const [viaPartner, setViaPartner] = useState(false)
 
   const [cart, setCart] = useState<CartItem[]>([])
   const [orderCutAt, setOrderCutAt] = useState<{ key: string; cut: OrderCut } | null>(null)
@@ -214,14 +224,17 @@ export default function BuildCalcPage() {
     const marked = Object.fromEntries(Object.entries(drawn).map(([r, v]) => [r, v.trim()]).filter(([, v]) => v))
     return { ...(panels.some(Boolean) ? { panels } : {}), ...(Object.keys(marked).length ? { drawn: marked } : {}) }
   }, [byDrawing, panelOver, drawn])
-  const paramsKey = useMemo(() => JSON.stringify({ code, dims, finishId, g: glass.b2b, choice, qtyChoice, mVariant, drawingReq }), [code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant, drawingReq])
+  const orderItems = cart.length + 1
+  const paramsKey = useMemo(() => JSON.stringify({ code, dims, finishId, g: glass.b2b, choice, qtyChoice, mVariant, drawingReq, viaPartner, orderItems }), [code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant, drawingReq, viaPartner, orderItems])
   const priceDirty = pricedKey !== paramsKey   // цена ещё не догнала параметры
 
   function pickModel(c: string) {
     setCode(c); setDims(defaultsFor(c)); setChoice({}); setQtyChoice({}); setKitChoices(null); setPrice(null)
     setByDrawing(false); setPanelOver({}); setDrawn({}); setDrawingFrom(null); setDrawingOpts([])
     marginTouched.current = false; taxTouched.current = false
-    setMargin(String(FINANCE_FALLBACK.marginPct)); setTax(String(FINANCE_FALLBACK.taxPct)); setPerSection('6500'); setDelivery('5000'); setLift(''); setDiscount('0')
+    setMargin(String(FINANCE_FALLBACK.marginPct)); setTax(String(FINANCE_FALLBACK.taxPct)); setPerSection('6500'); setLift(''); setDiscount('0')
+    // Доставка одна на заказ: если она уже есть у изделия в корзине, второй раз не берём.
+    setDelivery(cart.some(i => i.delivery > 0) ? '0' : '5000')
     setProfileFrame('partial')
     setScreen('detail')
   }
@@ -315,6 +328,7 @@ export default function BuildCalcPage() {
       if (p.drawn && typeof p.drawn === 'object') setDrawn(p.drawn as Record<string, string>)
       if (p.drawingFrom && typeof p.drawingFrom === 'object') setDrawingFrom(p.drawingFrom as DrawingApply)
       // Сохранённые маржа и налог — решение по этому расчёту: настройки их не перебивают.
+      if (p.partner === true) setViaPartner(true)
       if (p.margin != null) marginTouched.current = true
       if (p.tax != null) taxTouched.current = true
       s('margin', setMargin); s('tax', setTax); s('perSection', setPerSection); s('delivery', setDelivery); s('lift', setLift); s('discount', setDiscount)
@@ -363,7 +377,7 @@ export default function BuildCalcPage() {
       setState('loading')
       fetch('/api/calc/build', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-        body: JSON.stringify({ model: code, thickness: THICKNESS, finishId, glassType: glass.b2b, dims, choice, qtyChoice, variant: mVariant, ...drawingReq }),
+        body: JSON.stringify({ model: code, thickness: THICKNESS, finishId, glassType: glass.b2b, dims, choice, qtyChoice, variant: mVariant, ...drawingReq, partner: viaPartner, orderItems }),
       }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((res: { full?: boolean; price?: Price }) => {
           // Только последний запрос доживает (остальные оборваны abort), значит key актуален.
@@ -378,7 +392,7 @@ export default function BuildCalcPage() {
         }).catch((e: unknown) => { if ((e as Error)?.name !== 'AbortError') { setPrice(null); setState('error') } })
     }, 400)
     return () => { clearTimeout(t); ctrl.abort() }
-  }, [screen, code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant, drawingReq, paramsKey])
+  }, [screen, code, dims, finishId, glass.b2b, choice, qtyChoice, mVariant, drawingReq, viaPartner, orderItems, paramsKey])
 
   const glassCost = price?.glassCost ?? 0
   const hwCost = price?.hardwareCost ?? 0
@@ -399,6 +413,19 @@ export default function BuildCalcPage() {
   const discPct = Math.min(100, Math.max(0, numOr(discount)))
   const beforeDisc = (usable ? productPrice : 0) + install + deliveryN + liftN
   const grand = Math.round(beforeDisc * (1 - discPct / 100))
+  const target = usable && !priceDirty ? price?.target ?? null : null
+  const light = target && grand > 0 ? targetLight(grand, target) : null
+  // «Поставить цену для цели»: маржа, при которой «К оплате» не ниже цены для цели при тех же
+  // монтаже, доставке, подъёме и скидке. Округление вверх до 0,1 — чтобы не недобрать рубль.
+  function setTargetPrice() {
+    if (!target) return
+    const need = target.price / (1 - discPct / 100) - install - deliveryN - liftN
+    if (!(need > cost) || !(cost > 0)) return
+    const mm = Math.ceil((1 - tx / 100 - cost / need) * 1000) / 10
+    if (!(mm > 0 && mm < 100 - tx)) return
+    marginTouched.current = true
+    setMargin(String(mm))
+  }
 
   const title = () => `${model.code} ${model.name} · ${isCorner ? `${numOr(String(dims.width))}×${numOr(String(dims.width2 ?? 0))}×${numOr(String(dims.height))}` : `${numOr(String(dims.width))}×${numOr(String(dims.height))}`} мм`
   const marks = priceMarks(price)
@@ -458,7 +485,7 @@ export default function BuildCalcPage() {
     // иначе в КП приезжало бы лишнее изделие, которого менеджер не добавлял.
     if (product === 'shower' && usable && grand > 0) list.push(currentItem())
     if (!list.length) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500); return }
-    const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, ...(byDrawing ? { byDrawing, panelOver, drawn, ...(drawingFrom ? { drawingFrom } : {}) } : {}), margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
+    const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, ...(byDrawing ? { byDrawing, panelOver, drawn, ...(drawingFrom ? { drawingFrom } : {}) } : {}), ...(viaPartner ? { partner: true } : {}), margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
     const total = list.reduce((s, i) => s + i.total, 0)
     const sig = JSON.stringify(snapshot) + '|' + total
     if (sig === lastSavedSigRef.current) { setSaveMsg('Уже сохранено ✓'); setTimeout(() => setSaveMsg(null), 2500); return }
@@ -868,6 +895,10 @@ export default function BuildCalcPage() {
                 <div><label className={lbl}>Доставка</label><input type="number" className={fld} value={delivery} onChange={e => setDelivery(e.target.value)} /></div>
                 <div><label className={lbl}>Подъём</label><input type="number" className={fld} value={lift} onChange={e => setLift(e.target.value)} placeholder="0" /></div>
                 <div><label className={lbl}>Скидка, %</label><input type="number" className={fld} value={discount} onChange={e => setDiscount(e.target.value)} placeholder="0" /></div>
+                <label className="flex items-end gap-2 pb-1.5 text-[12px] text-[#4b4b47] cursor-pointer">
+                  <input type="checkbox" checked={viaPartner} onChange={e => setViaPartner(e.target.checked)} />
+                  через партнёра (дизайнер)
+                </label>
               </div>
               {install > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Монтаж ({sections}×{RUB(numOr(perSection))})</span><span className="font-mono">{RUB(install)}</span></div>}
               {deliveryN > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Доставка</span><span className="font-mono">{RUB(deliveryN)}</span></div>}
@@ -897,6 +928,17 @@ export default function BuildCalcPage() {
               <span className="text-[14px] font-semibold text-[#111110]">К оплате{cart.length ? ` (изделие ${cart.length + 1})` : ''}</span>
               <span className="text-[22px] font-bold font-mono text-[#111110]">{RUB(grand)}</span>
             </div>
+            {light && target && (
+              <div className="flex items-center justify-between gap-2 text-[12px]">
+                <span className="flex items-center gap-1.5 text-[#111110]">
+                  <span className={`inline-block w-2.5 h-2.5 rounded-full ${LIGHT[light].dot}`} />{LIGHT[light].text}
+                </span>
+                <span className="text-[#6b6b66]">
+                  цена для цели <span className="font-mono">{RUB(target.price)}</span>
+                  {grand < target.price && <button type="button" onClick={setTargetPrice} className="ml-1.5 underline text-[#111110]">поставить</button>}
+                </span>
+              </div>
+            )}
             {(priceDirty || state === 'loading') && <p className="text-[11px] text-[#9a9a95]">пересчёт цены…</p>}
             {!priceDirty && state !== 'loading' && price && !usable && price.missing.length > 0 && (
               <p className="text-[11px] text-[#c2410c]">Цена не заведена: {price.missing.map(x => x.label).join(', ')}.</p>

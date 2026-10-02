@@ -10,6 +10,8 @@ import { loadB2BRates } from '@/lib/b2b/rates'
 import { MGLASS_CLIENT_IDS } from '@/lib/b2bScope'
 import type { B2BMaterial } from '@/lib/types'
 import { buildStops } from '@/lib/calc/buildStops'
+import { loadOrderFundSettings } from '@/lib/pricing/orderFundsStore'
+import { targetPrices } from '@/lib/pricing/orderFunds'
 
 // Расчёт изделия для вкладки «Расчёт» кабинета менеджера и стандартной линейки CFO.
 // Композирует ДВА движка, ни один не редактирует:
@@ -35,6 +37,10 @@ export type BuildRequest = {
   // размерам чертежа, — расхождения уходят в stops.
   panels?: Array<{ w: number; h: number } | null>
   drawn?: Record<string, string>
+  // Ш1: заказ идёт через известного партнёра (его доля — в знаменателе цены для цели) и сколько
+  // в заказе изделий (доставка одна на заказ, делится поровну).
+  partner?: boolean
+  orderItems?: number
 }
 
 export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
@@ -101,7 +107,7 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
   for (const label of loadedRates.missing) glassMissing.push(`ставка «${label}»: нет в справочнике, взята заводская`)
 
   // ── Фурнитура + количества + цена — движок конфигуратора ─────────────────────
-  const { data: { library, rates, kits }, finance } = await resolveTierData('budget')
+  const [{ data: { library, rates, kits }, finance }, funds] = await Promise.all([resolveTierData('budget'), loadOrderFundSettings()])
   const q = computeKitQuantities(assembly, thickness, model, rates.capMargin)
   const price = computeKitPrice(q, library, kits[body.model] ?? { slots: [] }, rates, finance, {
     finishId: body.finishId,
@@ -139,13 +145,26 @@ export async function priceBuild(svc: SupabaseClient, body: BuildRequest) {
     doors, thicknessMm: thickness, swingDoors: q.swingDoors,
     heightMm: body.dims.height, heightRange: model.constraints.height, spliced,
   })
+  // Цена для цели «остаётся с заказа» (Ш1). Менеджеру — только две цены для светофора:
+  // ставки фондов и сдельная из ответа не уходят (они в /cfo).
+  const modelTarget = kit.target
+  const targetPct = modelTarget ?? funds.targetPct
+  const complete = price.complete && glassMissing.length === 0
+  const tp = complete && targetPct != null
+    ? targetPrices({
+        materials: price.glassCost + price.hardwareCost, glassCount: assembly.glass.length,
+        orderItems: Math.max(1, Math.round(body.orderItems ?? 1)), partnerKnown: !!body.partner,
+        rates: funds.rates, targetPct,
+      })
+    : null
   return {
-    ...price, missing, complete: price.complete && glassMissing.length === 0,
+    ...price, missing, complete,
     glassSource: glassMat ? glassMat.name : null,
     glassThickness: glassMat ? glassMat.thickness : thickness,
     glassDiscountPct: mgDiscount,
     glassLines,
     glassSubstituted,
     stops, notes,
+    target: tp ? { ...tp, source: modelTarget != null ? 'модель' as const : 'план CFO' as const } : null,
   }
 }

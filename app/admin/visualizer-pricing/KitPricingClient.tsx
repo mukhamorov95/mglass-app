@@ -1035,6 +1035,15 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
               0 — берётся маржа тарифа. Минимум {fin.minMarginPct}%. Источник: {fin.source}.
               Меняются в разделе финансовых настроек, здесь только для этой модели.
             </p>
+            {/* Решение 7 маршрута SHOWROOM_COST_ROUTE (02.10): цель «остаётся с заказа» своя у модели.
+                По ней «Расчёт» менеджера считает цену для цели и светофор. */}
+            <label className="flex items-center justify-between gap-2 text-[13px] py-0.5 mt-2">
+              <span className="text-[#4b4b47]">Цель «остаётся с заказа» {model.code}</span>
+              <NumInput value={kit.target ?? 0} onChange={v => editKit(k => { if (v > 0 && v < 100) k.target = v; else delete k.target })} suffix="%" w={64} />
+            </label>
+            <p className="text-[11px] text-[#9a9a95] mt-1">
+              0 — цель плана CFO (100 − средние переменные). Это доля чека после закупки, сдельной, налога и продаж.
+            </p>
             {/* Решение 3 маршрута SHOWROOM_COST_ROUTE: низ только под неподвижными стёклами.
                 Меняет раскрой и цену; 3D пока рисует профиль сквозным. */}
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5 mt-2">

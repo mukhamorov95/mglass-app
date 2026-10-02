@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requirePageAccess } from '@/lib/apiAuth'
+import { getRole, isOwnerRole } from '@/lib/getRole'
 import { M_MODELS } from '@/lib/configurator/arrangement'
 import { priceBuild, type BuildRequest } from '@/lib/calc/buildPrice'
 
@@ -18,6 +19,8 @@ export async function POST(req: NextRequest) {
   if (!body?.model || !body.dims || !M_MODELS.some(m => m.code === body.model)) {
     return NextResponse.json({ full: false, error: 'model + dims обязательны' }, { status: 400 })
   }
-  const price = await priceBuild(createServiceClient(), body as BuildRequest)
-  return NextResponse.json({ full: true, price }, { headers: { 'Cache-Control': 'no-store' } })
+  const [price, role] = await Promise.all([priceBuild(createServiceClient(), body as BuildRequest), getRole()])
+  // Цена для цели и светофор — пока только владельцу (решение 02.10): при цели 38% все модели
+  // красные, цели моделям владелец ставит сам. Режем в ответе, а не только на экране.
+  return NextResponse.json({ full: true, price: isOwnerRole(role) ? price : { ...price, target: null } }, { headers: { 'Cache-Control': 'no-store' } })
 }

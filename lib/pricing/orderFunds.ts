@@ -120,6 +120,34 @@ export function priceForTarget(p: { materials: number; piecework: number; taxPct
   return Math.round(cost * 100 / keepPct)
 }
 
+// Цена изделия для цели «остаётся с заказа» — для «Расчёта» менеджера (Ш1). Те же ставки и тот
+// же делёж, что в orderFunds: при этой цене /cfo покажет остаток на цели. amberPrice — цена,
+// при которой остаток на AMBER_BAND п.п. ниже цели: граница жёлтого и красного светофора.
+// Решения владельца 02.10: цель своя у модели (пусто — план CFO), известный партнёр — в
+// знаменателе, менеджеру — только цена и светофор, без разбора фондов.
+export const AMBER_BAND = 10
+export type TargetPriceInput = {
+  materials: number; glassCount: number; orderItems: number; partnerKnown: boolean
+  rates: OrderFundRates; targetPct: number; zone?: DeliveryZone
+}
+export function targetPrices(p: TargetPriceInput): { price: number; amberPrice: number } | null {
+  const r = p.rates
+  const delivery = r.deliveryPerOrder[p.zone ?? 'moscow']
+  const partner = p.partnerKnown ? r.partnerKnownPct : r.partnerReservePct
+  const parts = [r.drawingPerShower, r.measurePerShower, r.installPerGlass, delivery, r.taxPct, r.managerPct, r.realizationPct, partner, r.otherPct]
+  if (parts.some(x => x == null) || !(p.materials > 0) || !(p.glassCount > 0)) return null
+  const share = splitDelivery(delivery as number, Math.max(1, p.orderItems))[0]
+  const piecework = (r.drawingPerShower as number) + (r.measurePerShower as number) + Math.round((r.installPerGlass as number) * p.glassCount) + share
+  const salesPct = (r.managerPct as number) + (r.realizationPct as number) + (partner as number) + (r.otherPct as number)
+  const at = (targetPct: number) => priceForTarget({ materials: Math.round(p.materials), piecework, taxPct: r.taxPct as number, salesPct, targetPct })
+  const price = at(p.targetPct), amberPrice = at(p.targetPct - AMBER_BAND)
+  return price != null && amberPrice != null ? { price, amberPrice } : null
+}
+
+export type TargetLight = 'green' | 'amber' | 'red'
+export const targetLight = (check: number, t: { price: number; amberPrice: number }): TargetLight =>
+  check >= t.price ? 'green' : check >= t.amberPrice ? 'amber' : 'red'
+
 export type MaterialKey = 'glass' | 'hardware' | 'materials'
 export const MATERIAL_LABELS: Record<MaterialKey, string> = { glass: 'Стекло', hardware: 'Фурнитура', materials: 'Стекло и фурнитура' }
 
