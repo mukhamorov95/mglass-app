@@ -121,6 +121,10 @@ export function ConfiguratorClient({ variant = 'internal', initialModel }: {
   const [screen, setScreen] = useState<'models' | 'build'>(variant === 'embed' && !initialModel ? 'models' : 'build')
   const [doorOpen, setDoorOpen] = useState(true)
   const [sent, setSent] = useState(false)
+  // Заявка (Ш3): телефон обязателен — без него менеджеру некуда звонить, и раньше кнопка
+  // писала «отправлена», ничего не отправив. website — скрытое поле: его заполняет только бот.
+  const [leadForm, setLeadForm] = useState<{ open: boolean; name: string; phone: string; website: string; sending: boolean; error: string | null }>(
+    { open: false, name: '', phone: '', website: '', sending: false, error: null })
   const [kitChoices, setKitChoices] = useState<KitChoices | null>(null)
   const [choice, setChoice] = useState<Record<string, string>>({})       // роль → itemId позиции
   const [qtyChoice, setQtyChoice] = useState<Record<string, number>>({}) // роль → количество (петли 2/3)
@@ -277,19 +281,33 @@ export function ConfiguratorClient({ variant = 'internal', initialModel }: {
     return () => ro.disconnect()
   }, [embed, screen, code])
 
-  function sendLead() {
-    const payload = {
-      type: 'mglass-shower-config' as const,
-      config: {
-        model: model.code, name: model.name, dims, thickness: THICKNESS, tier,
-        glass: { id: glass.id, label: glass.label },
-        finish: { id: finish.id, label: finish.label },
-        glassAreaM2: quantities.glassM2, sections: quantities.sections,
-        priceFrom: clientFrom ?? 0,
-      },
+  async function sendLead() {
+    if ((leadForm.phone.match(/\d/g) ?? []).length < 10) { setLeadForm(f => ({ ...f, error: 'Укажите телефон' })); return }
+    const config = {
+      model: model.code, name: model.name, dims, thickness: THICKNESS, tier,
+      glass: { id: glass.id, label: glass.label },
+      finish: { id: finish.id, label: finish.label },
+      glassAreaM2: quantities.glassM2, sections: quantities.sections,
+      choice, qtyChoice, variant: mVariant,
+      priceFrom: clientFrom ?? 0,
     }
+    setLeadForm(f => ({ ...f, sending: true, error: null }))
+    try {
+      const r = await fetch('/api/configurator/lead', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: leadForm.name, phone: leadForm.phone, website: leadForm.website, consent: true,
+          source: 'configurator-3d', context: document.referrer || 'shower-embed', config,
+        }),
+      })
+      const d = await r.json().catch(() => null) as { error?: string } | null
+      if (!r.ok) { setLeadForm(f => ({ ...f, sending: false, error: d?.error ?? 'Не отправилось — попробуйте ещё раз' })); return }
+    } catch {
+      setLeadForm(f => ({ ...f, sending: false, error: 'Не отправилось — проверьте интернет' })); return
+    }
+    // Сообщение родительскому окну — для аналитики Tilda; доставка заявки — запрос выше.
     const origin = process.env.NEXT_PUBLIC_EMBED_PARENT_ORIGIN || '*'
-    try { window.parent?.postMessage(payload, origin) } catch { /* not embedded */ }
+    try { window.parent?.postMessage({ type: 'mglass-shower-config' as const, config }, origin) } catch { /* not embedded */ }
     setSent(true)
   }
 
@@ -637,8 +655,26 @@ export function ConfiguratorClient({ variant = 'internal', initialModel }: {
                 <p className="text-[14px] font-semibold text-[#256029]">Заявка отправлена</p>
                 <p className="text-[12px] text-[#4b6b4b] mt-1">Менеджер свяжется с вами.</p>
               </div>
+            ) : leadForm.open ? (
+              <form onSubmit={e => { e.preventDefault(); void sendLead() }}
+                className="bg-white border border-[#e4e4e0] rounded-xl p-4 space-y-2">
+                <input value={leadForm.name} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Имя" autoComplete="name" maxLength={120}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110]" />
+                <input value={leadForm.phone} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value, error: null }))}
+                  placeholder="Телефон" type="tel" autoComplete="tel" inputMode="tel" maxLength={32} required
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110]" />
+                <input value={leadForm.website} onChange={e => setLeadForm(f => ({ ...f, website: e.target.value }))}
+                  name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
+                {leadForm.error && <p className="text-[12px] text-[#c2410c]">{leadForm.error}</p>}
+                <button type="submit" disabled={leadForm.sending}
+                  className="w-full bg-[#111110] text-white text-[14px] font-medium py-3 rounded-lg hover:bg-[#2a2a28] disabled:opacity-50">
+                  {leadForm.sending ? 'Отправляем…' : 'Отправить заявку'}
+                </button>
+                <p className="text-[11px] text-[#9a9a95] leading-snug">Менеджер перезвонит и уточнит размеры. Нажимая кнопку, вы соглашаетесь на обработку персональных данных.</p>
+              </form>
             ) : (
-              <button onClick={sendLead}
+              <button onClick={() => setLeadForm(f => ({ ...f, open: true }))}
                 className="w-full bg-[#111110] text-white text-[14px] font-medium py-3 rounded-lg hover:bg-[#2a2a28]">
                 Оставить заявку
               </button>
