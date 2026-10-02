@@ -72,6 +72,7 @@ export const MANAGER_MGLASS: NavEntry[] = [
 // производства менеджер видит в самом заказе. Доступ к цеху не закрыт.
 export const MANAGER_B2B: NavItem[] = [
   { href: '/b2b-today',      label: 'Мой день · B2B',  icon: '☀️' },
+  { href: '/b2b-crm/inquiries', label: 'Входящие заявки', icon: '📥' },
   { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮' },
   { href: '/calculator/b2b-mglass', label: 'Расчёт B2B для MGlass', icon: '🧾' },
   { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝' },

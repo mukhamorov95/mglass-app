@@ -317,11 +317,18 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
               )}
             </p>
           </div>
-          <button
-            onClick={() => router.push('/admin/b2b-clients')}
-            className="text-[12px] text-[#6b6b66] border border-[#e4e4e0] px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
-            + Добавить клиента
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push('/b2b-crm/inquiries')}
+              className="text-[12px] text-[#6b6b66] border border-[#e4e4e0] px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
+              Входящие заявки
+            </button>
+            <button
+              onClick={() => router.push('/admin/b2b-clients')}
+              className="text-[12px] text-[#6b6b66] border border-[#e4e4e0] px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
+              + Добавить клиента
+            </button>
+          </div>
         </div>
 
         {/* Панель приборов */}
