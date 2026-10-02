@@ -10,7 +10,7 @@ import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
 import type { MDims, GlassTint, HardwareChoice, MVariant } from '@/components/configurator/scene/assembly'
 import { ROLE_META, type KitChoices, type RoleId } from '@/lib/configurator/kit'
-import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { calcFinancialModel, savedProfit } from '@/lib/pricing/financialModel'
 import { FINANCE_FALLBACK } from '@/lib/pricing/pickFinance'
 import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
 import { kpSectionsFromBom, type BomItem } from '@/lib/kp/bomSections'
@@ -470,8 +470,9 @@ export default function BuildCalcPage() {
         input_data: snapshot,
         cost_breakdown: { glassCost, hwCost, directCost: cost, productPrice, installTotal: install, delivery: deliveryN, lift: liftN, sections, ...(orderCut ? { orderCutSaving: orderCut.saving } : {}) },
         financial_breakdown: { marginPct: m, taxPct: tx, discountPct: discPct, total },
-        base_price: total, discount: 0, partner_percent: 0, final_price: total, margin: m,
-        profit: Math.max(0, Math.round(total - cost)),
+        base_price: total, discount: 0, partner_percent: 0, final_price: total,
+        // Прибыль и маржа — по сохраняемой корзине: итог − её себестоимость − налог (financialModel.ts).
+        ...(savedProfit(total, list.reduce((s, i) => s + i.cost, 0), tx) ?? { margin: 0, profit: 0 }),
         client_text: [title(), objectAddress && `Адрес: ${objectAddress}`].filter(Boolean).join(' · '),
         client_name: clientName.trim() || undefined,
         client_phone: clientPhone.trim() || undefined,
