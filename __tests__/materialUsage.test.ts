@@ -41,10 +41,20 @@ describe('computeMaterialUsage — честный расход материал�
     expect(u.honestCost - u.netCost).toBeLessThan(u.fullSheetsCost - u.netCost)
   })
 
+  // До 02.10.2026 60 шт кроились по 20 на лист — три плотных листа. Блочная раскладка кладёт
+  // 23 (10 стоя × 2 + 3 лёжа), и плотные три листа теперь — 69 шт.
   it('плотный раскрой: обрезки мельче 400×800 — отход заказа, не остаток', () => {
-    const [u] = computeMaterialUsage(satin60)
+    const [u] = computeMaterialUsage([{ ...satin60[0], quantity: 69 }])
+    expect(u.sheets).toBe(3)
     expect(u.remnantM2).toBe(0)
     expect(u.honestCost).toBe(u.fullSheetsCost)
+  })
+
+  it('60 шт 291×913: 23 + 23 + 14 — на третьем листе настоящий остаток, а не отход', () => {
+    const [u] = computeMaterialUsage(satin60)
+    expect(u.sheets).toBe(3)
+    expect(u.remnantM2).toBeGreaterThan(3)
+    expect(u.honestCost).toBeLessThan(u.fullSheetsCost)
   })
 
   it('reuseRate=0 → расход = целые листы (ничего не возвращается)', () => {
