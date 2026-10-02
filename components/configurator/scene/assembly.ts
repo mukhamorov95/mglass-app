@@ -1,7 +1,7 @@
 import type { Configuration } from '@/lib/configurator/catalog'
 import type { MModel, Seg } from '@/lib/configurator/arrangement'
 import { getPart } from '@/lib/configurator/parts/registry'
-import { hingesBySize } from '@/lib/configurator/hinges'
+import { hingeCount } from '@/lib/configurator/hinges'
 import { placePart, surfaces } from '@/lib/configurator/parts/mount'
 
 // Чистый билдер 3D-геометрии из параметрической конфигурации.
@@ -306,12 +306,12 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     const cx = (Ph[0] + Pfo[0]) / 2, cz = (Ph[1] + Pfo[1]) / 2
     const rotY = Math.atan2(-od[1], od[0])
     glass.push({ key, role: 'door', rotY, pos: [cx, H / 2, cz], size: [L, H, t] })
-    // петли на петлевой кромке
-    const n = hingesBySize(L, H)
-    const ys = n === 2 ? [0.28, H - 0.28] : [0.28, H / 2, H - 0.28]
-    // Есть паспорт выбранной петли — садим его на петлевую кромку (наружу — через стык,
-    // прочь от полотна двери); нет — прежняя рисованная петля.
+    // Петли на петлевой кромке. Есть паспорт выбранной петли — число по весу двери против его
+    // нагрузки и посадка паспортом на кромку (наружу — через стык, прочь от полотна двери);
+    // нет — габаритное правило и прежняя рисованная петля.
     const hPartHinge = getPart(choice.hinge)
+    const n = hingeCount(L, H, thickness, hPartHinge?.load?.kgPer2)
+    const ys = n === 2 ? [0.28, H - 0.28] : [0.28, H / 2, H - 0.28]
     for (let i = 0; i < ys.length; i++) {
       const at: [number, number, number] = [Ph[0], ys[i], Ph[1]]
       const placed = hPartHinge?.mount.on === 'glass-edge' ? placePart(hPartHinge, surfaces.glassEdge(at, [-od[0], -od[1]], thickness)) : null
