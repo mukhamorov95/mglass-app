@@ -40,6 +40,19 @@ function rate(v: unknown): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
+// Налог фонда — из режима налогообложения настроек CFO, один источник с /admin/cfo (решение
+// владельца 02.10: «6%, как в cfo_settings»). Процентом чека выражается только УСН 6%; у УСН 15%
+// и ОСНО налог считается от прибыли и НДС — тогда берётся ставка фонда, если владелец её задал.
+export const TAX_SYSTEM_CHECK_PCT: Record<string, number> = { usn_6: 6 }
+export const TAX_SYSTEM_LABEL: Record<string, string> = { usn_6: 'ИП УСН 6%', usn_15: 'ИП УСН 15%', osno: 'ООО ОСНО' }
+
+export function applyTaxSystem(rates: OrderFundRates, system: unknown): { rates: OrderFundRates; taxSource: string | null } {
+  const key = typeof system === 'string' ? system : ''
+  const fromSystem = TAX_SYSTEM_CHECK_PCT[key]
+  if (fromSystem != null) return { rates: { ...rates, taxPct: fromSystem }, taxSource: `режим «${TAX_SYSTEM_LABEL[key]}» в настройках CFO` }
+  return { rates, taxSource: rates.taxPct != null ? 'ставка фонда' : null }
+}
+
 // Колонка хранит плоский snake_case JSON: {as_of, drawing_per_shower, …, other_pct}.
 export function parseOrderFundRates(raw: unknown): OrderFundRates {
   const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {}

@@ -78,7 +78,7 @@ export default async function RetailOrderFundsPage() {
           </div>
         </div>
 
-        <RatesCard rates={settings.rates} avgVariablePct={settings.avgVariablePct} targetPct={target} error={settings.error} />
+        <RatesCard rates={settings.rates} avgVariablePct={settings.avgVariablePct} targetPct={target} taxSource={settings.taxSource} error={settings.error} />
 
         {error ? (
           <div className="bg-white rounded-lg border border-red-200 px-4 py-4 text-xs text-red-700">
@@ -128,7 +128,7 @@ export default async function RetailOrderFundsPage() {
   )
 }
 
-function RatesCard({ rates, avgVariablePct, targetPct, error }: { rates: OrderFundRates; avgVariablePct: number | null; targetPct: number | null; error: string | null }) {
+function RatesCard({ rates, avgVariablePct, targetPct, taxSource, error }: { rates: OrderFundRates; avgVariablePct: number | null; targetPct: number | null; taxSource: string | null; error: string | null }) {
   const money = (v: number | null) => v == null ? <span className="text-amber-700">нет ставки</span> : <>{rub(v)} ₽</>
   const share = (v: number | null) => v == null ? <span className="text-amber-700">нет ставки</span> : <>{pct(v)}%</>
   const rows: [string, React.ReactNode][] = [
@@ -137,7 +137,7 @@ function RatesCard({ rates, avgVariablePct, targetPct, error }: { rates: OrderFu
     [RATE_LABELS.installPerGlass, money(rates.installPerGlass)],
     [RATE_LABELS.deliveryMoscow, money(rates.deliveryPerOrder.moscow)],
     [RATE_LABELS.deliveryRegion, money(rates.deliveryPerOrder.region)],
-    [RATE_LABELS.taxPct, share(rates.taxPct)],
+    [RATE_LABELS.taxPct, <>{share(rates.taxPct)}{taxSource && <span className="text-[#9a9a95] font-sans"> · {taxSource}</span>}</>],
     [RATE_LABELS.managerPct, share(rates.managerPct)],
     [RATE_LABELS.realizationPct, share(rates.realizationPct)],
     [RATE_LABELS.partnerReservePct, share(rates.partnerReservePct)],

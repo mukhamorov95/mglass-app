@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  orderFunds, priceForTarget, splitDelivery, allocate, parseOrderFundRates, serializeOrderFundRates,
+  applyTaxSystem, orderFunds, priceForTarget, splitDelivery, allocate, parseOrderFundRates, serializeOrderFundRates,
   type FundItemInput, type ItemFunds, type OrderFundRates,
 } from '@/lib/pricing/orderFunds'
 import { retailCalcItems } from '@/lib/pricing/retailCalcItems'
@@ -220,5 +220,17 @@ describe('savedProfit — прибыль сохранённого расчёта
   it('себестоимость не известна — null, а не вся цена в прибыль', () => {
     expect(savedProfit(100_072, null, 12)).toBeNull()
     expect(savedProfit(100_072, NaN, 12)).toBeNull()
+  })
+})
+
+describe('налог фонда — из режима настроек CFO (решение 02.10)', () => {
+  it('УСН 6% перекрывает ставку фонда 12%; ОСНО и УСН 15% оставляют ставку фонда', () => {
+    const base = parseOrderFundRates(RATES_JSON)
+    expect(base.taxPct).toBe(12)
+    const usn6 = applyTaxSystem(base, 'usn_6')
+    expect(usn6.rates.taxPct).toBe(6)
+    expect(usn6.taxSource).toContain('ИП УСН 6%')
+    expect(applyTaxSystem(base, 'osno')).toEqual({ rates: base, taxSource: 'ставка фонда' })
+    expect(applyTaxSystem({ ...base, taxPct: null }, 'usn_15').taxSource).toBeNull()
   })
 })
