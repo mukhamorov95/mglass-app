@@ -18,6 +18,10 @@
       "schedule": "0 5 * * *"
     },
     {
+      "path": "/api/cron/margin-book-sync",
+      "schedule": "10 5 * * *"
+    },
+    {
       "path": "/api/cron/sales-ledger-check",
       "schedule": "0 10 * * 1-6"
     },

@@ -1,5 +1,5 @@
 // Ежедневная синхронизация книги владельца «Продажи Мгласс» → crm_sales
-// («Реестр продаж и оплат»). Книга — источник правды: что в ней есть, то и в
+// («Продажи M-Glass», /sales). Книга — источник правды: что в ней есть, то и в
 // реестре; строку, которой в книге больше нет, реестр гасит (voided), а не удаляет.
 //
 // Один код для крона (app/api/cron/sales-sheet-sync) и для ручного запуска
@@ -7,7 +7,7 @@
 // скрипт грузит этот файл самим Node, без сборщика и алиасов.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { parseBookTotals, parseTab, parseTabList, parseTabMonth } from './salesSheetParse.mjs'
+import { parseBookTotals, parseStatusTab, parseTab, parseTabList, parseTabMonth } from './salesSheetParse.mjs'
 
 export const SALES_BOOK_ID = '15FavFbEdA_G33k_4ExsuPYF4Xf_eezmGC64OTsTY9vw'
 const SUMMARY_GID = '1728905654'          // лист «МГЛАСС»: «Продаж за месяц» по годам
@@ -139,7 +139,18 @@ export type MonthReport = {
   extraInRegistry: { id: number; order_no: string | null; amount: number; source: string | null }[]
 }
 
-export type SyncReport = { dry: boolean; months: MonthReport[]; error?: string }
+export type HiddenStatusReport = {
+  month: string
+  tab: string | null
+  closed: number
+  changed: { order_no: string | null; closed: boolean }[]
+  unknown: string[]
+}
+export type SyncReport = { dry: boolean; months: MonthReport[]; hidden?: HiddenStatusReport[]; error?: string }
+
+// Со скрытыми вкладками сверяем только статус — маржа считается по закрытым
+// объектам, а с января 2026 их ведёт книга «Маржа».
+export const HIDDEN_SINCE = '2026-01'
 
 type Fetch = (url: string) => Promise<string>
 const defaultFetch: Fetch = async url => {
@@ -160,8 +171,9 @@ export async function syncSalesBook(
 ): Promise<SyncReport> {
   const fetchText = opts.fetchText ?? defaultFetch
   const base = `https://docs.google.com/spreadsheets/d/${SALES_BOOK_ID}`
-  const tabs = (parseTabList(await fetchText(`${base}/htmlview`)) as { name: string; gid: string }[])
+  const allTabs = (parseTabList(await fetchText(`${base}/htmlview`)) as { name: string; gid: string }[])
     .filter(t => parseTabMonth(t.name))
+  const tabs = allTabs
     .filter(t => (opts.only?.length ? opts.only.includes(t.name.trim()) : true))
     .filter(t => (opts.since ? parseTabMonth(t.name)! >= opts.since : true))
   if (tabs.length === 0) return { dry: !!opts.dry, months: [], error: 'В книге не найдено месячных вкладок' }
@@ -263,7 +275,73 @@ export async function syncSalesBook(
         .map(r => ({ id: r.id, order_no: r.order_no, amount: Number(r.amount || 0), source: r.source })),
     })
   }
-  return { dry: !!opts.dry, months }
+  const hidden = opts.only?.length ? [] : await syncHiddenStatuses(sb, {
+    dry: opts.dry, fetchText,
+    since: opts.since && opts.since > HIDDEN_SINCE ? opts.since : HIDDEN_SINCE,
+    visible: allTabs.map(t => parseTabMonth(t.name)!),
+  })
+  return { dry: !!opts.dry, months, hidden }
+}
+
+const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
+// Вкладки января–июня 2026 владелец скрыл: htmlview их не перечисляет, и статусы
+// в реестре застыли на 20.07. Скрытый лист отдаёт gviz по имени — CSV без цветов,
+// но «Статус» в нём есть. Имя пробуем в двух написаниях книги («Июнь 26»,
+// «Январь 2026»); незнакомое имя gviz подменяет первым листом — его отсекает
+// проверка шапки в parseStatusTab.
+export async function syncHiddenStatuses(
+  sb: SupabaseClient,
+  opts: { dry?: boolean; since: string; visible: string[]; fetchText?: Fetch },
+): Promise<HiddenStatusReport[]> {
+  const fetchText = opts.fetchText ?? defaultFetch
+  const visible = new Set(opts.visible)
+  const last = [...visible].sort().at(-1)
+  if (!last) return []
+  const months: string[] = []
+  for (let m = opts.since; m <= last; m = nextMonth(m)) if (!visible.has(m)) months.push(m)
+
+  const out: HiddenStatusReport[] = []
+  for (const month of months) {
+    const [y, mo] = month.split('-')
+    const names = [`${MONTH_NAMES[Number(mo) - 1]} ${y.slice(2)}`, `${MONTH_NAMES[Number(mo) - 1]} ${y}`]
+    let tab: string | null = null
+    let rows: { order_no: string; closed: boolean }[] | null = null
+    for (const n of names) {
+      rows = parseStatusTab(await fetchText(`https://docs.google.com/spreadsheets/d/${SALES_BOOK_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(n)}`))
+      if (rows) { tab = n; break }
+    }
+    if (!rows) { out.push({ month, tab: null, closed: 0, changed: [], unknown: [] }); continue }
+
+    const { data, error } = await sb.from('crm_sales').select('id, order_no, status')
+      .eq('import_batch', BATCH).eq('ledger_month', month).eq('voided', false)
+    if (error) throw new Error(`${tab}: ${error.message}`)
+    const pool = (data ?? []) as { id: number; order_no: string | null; status: string }[]
+    const key = (s: string | null) => String(s ?? '').replace(/\s+/g, '').toLowerCase()
+    const used = new Set<number>()
+    const changed: { id: number; order_no: string | null; closed: boolean }[] = []
+    const unknown: string[] = []
+    for (const r of rows) {
+      const hit = pool.find(p => !used.has(p.id) && key(p.order_no) === key(r.order_no))
+      if (!hit) { unknown.push(r.order_no); continue }
+      used.add(hit.id)
+      if ((hit.status === 'closed') !== r.closed) changed.push({ id: hit.id, order_no: hit.order_no, closed: r.closed })
+    }
+    if (!opts.dry) {
+      const now = new Date().toISOString()
+      for (const c of changed) {
+        const { error: e } = await sb.from('crm_sales').update({ status: c.closed ? 'closed' : 'open', updated_at: now }).eq('id', c.id)
+        if (e) throw new Error(`${tab}, ${c.order_no}: ${e.message}`)
+      }
+    }
+    out.push({ month, tab, closed: rows.filter(r => r.closed).length, changed: changed.map(({ order_no, closed }) => ({ order_no, closed })), unknown })
+  }
+  return out
+}
+
+const nextMonth = (ym: string) => {
+  const [y, m] = ym.split('-').map(Number)
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
 }
 
 const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -310,6 +388,14 @@ export function formatSyncReport(r: SyncReport): string {
     if (m.orphansHeld) fixes.push(`${esc(m.tab)}: из книги пропало слишком много строк сразу — реестр не трогал, проверьте книгу`)
     for (const v of m.voided.slice(0, 5)) lines.push(`   снята (нет в книге): ${esc(v.order_no ?? '—')} ${esc(v.client ?? '')} · ${rub(v.amount)}`)
     for (const u of m.updated.slice(0, 5)) lines.push(`   ${esc(u.order_no ?? '—')}: ${u.fields.map(f => FIELD_RU[f] ?? f).join(', ')}`)
+  }
+  for (const h of r.hidden ?? []) {
+    if (!h.tab) { fixes.push(`${monthName(h.month)}: вкладка скрыта и не нашлась по имени — статусы не сверены`); continue }
+    const moved = h.changed.length
+      ? ` (${h.changed.filter(c => c.closed).length ? `закрыты: ${h.changed.filter(c => c.closed).map(c => esc(c.order_no ?? '—')).slice(0, 8).join(', ')}` : ''}${h.changed.some(c => !c.closed) ? `${h.changed.some(c => c.closed) ? '; ' : ''}снова открыты: ${h.changed.filter(c => !c.closed).map(c => esc(c.order_no ?? '—')).join(', ')}` : ''})`
+      : ''
+    lines.push(`🙈 ${monthName(h.month)} (вкладка скрыта): закрыто ${h.closed}${moved}`)
+    if (h.unknown.length) fixes.push(`${monthName(h.month)}, скрытая вкладка: ${h.unknown.map(esc).join(', ')} — в реестре нет; откройте вкладку, и утренняя сверка их заберёт`)
   }
   if (fixes.length) {
     lines.push('\n✏️ <b>Поправить в книге</b>')
