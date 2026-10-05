@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { bookNames } from '@/lib/sales/bookNames'
 
-// «Аналитика дохода» (manager_stats_daily / _monthly): менеджер читает только свои строки
-// (supabase/migrations/20261006_manager_stats_own_rows.sql). Политику мерит настоящий
+// «Аналитика дохода» (manager_stats_daily / _monthly) и снимок дня (manager_day_stats):
+// менеджер читает только свои строки, «видеть все сделки» открывает всех только менеджеру
+// (supabase/migrations/20261006_manager_stats_own_rows.sql,
+// 20261006_manager_day_stats_flag_role.sql). Политику мерит настоящий
 // Postgres (PGlite): таблицы, crm_caller() и is_partner() берутся из миграций репозитория,
 // от Supabase — только роли anon/authenticated, auth.uid() из request.jwt.claims и
 // гранты по умолчанию. Имена и суммы вымышленные, кроме имён книги из bookNames.ts.
@@ -13,6 +15,7 @@ import { bookNames } from '@/lib/sales/bookNames'
 const MIG = join(process.cwd(), 'supabase/migrations')
 const file = (f: string) => readFileSync(join(MIG, f), 'utf8')
 const OWN_ROWS = '20261006_manager_stats_own_rows.sql'
+const DAY_FLAG = '20261006_manager_day_stats_flag_role.sql'
 
 function fn(f: string, name: string): string {
   const m = file(f).match(new RegExp(`create or replace function public\\.${name}\\(\\)[\\s\\S]*?\\$\\$;`))
@@ -57,6 +60,8 @@ const USERS: [string, string, string, boolean][] = [
 
 const BOOK = ['Александра', 'Влад', 'Дима', 'Любовь', 'Семён', 'Яна']
 const TABLES = ['manager_stats_daily', 'manager_stats_monthly'] as const
+const AMO: Record<string, number> = { [U.admin]: 100, [U.semen]: 101, [U.dmitry]: 102, [U.yana]: 103, [U.allDeals]: 104 }
+const AMO_ALL = Object.values(AMO).sort()
 
 let db: PGlite
 
@@ -75,7 +80,7 @@ beforeAll(async () => {
 
     create table public.users (
       id uuid primary key, name text, role text not null,
-      can_view_all_deals boolean default false
+      can_view_all_deals boolean default false, amo_user_id bigint
     );
     alter table public.users enable row level security;
     -- Как в проде: грант на запись у authenticated есть, политики на запись нет.
@@ -85,9 +90,13 @@ beforeAll(async () => {
   await db.exec(fn('20260720_crm_rls_real.sql', 'crm_caller'))
   await db.exec(file('20260917_manager_stats_daily.sql'))
   await db.exec(file('20260918_manager_stats_monthly.sql'))
+  await db.exec(file('20261006_manager_day_stats.sql'))
 
   for (const [id, name, role, all] of USERS) {
-    await db.query('insert into users (id, name, role, can_view_all_deals) values ($1, $2, $3, $4)', [id, name, role, all])
+    await db.query('insert into users (id, name, role, can_view_all_deals, amo_user_id) values ($1, $2, $3, $4, $5)', [id, name, role, all, AMO[id] ?? null])
+  }
+  for (const amo of AMO_ALL) {
+    await db.query(`insert into manager_day_stats (day, amo_user_id, name, actions) values ('2026-10-01', $1, $2, 7)`, [amo, `amo ${amo}`])
   }
   for (const [i, m] of BOOK.entries()) {
     await db.query(`insert into manager_stats_daily (stat_date, manager, metric, value) values ('2026-09-01', $1, 'payments', $2)`, [m, 1000 * (i + 1)])
@@ -95,18 +104,19 @@ beforeAll(async () => {
   }
 
   await db.exec(file(OWN_ROWS))
+  await db.exec(file(DAY_FLAG))
 }, 60_000)
 
 afterAll(async () => { await db?.close() })
 
-type Seen = { uid: string | null; managers: string[] }
+type Seen<T = string> = { uid: string | null; managers: T[] }
 
-async function seenBy(uid: string | null, table: string, role = 'authenticated'): Promise<Seen> {
+async function seenBy<T = string>(uid: string | null, table: string, role = 'authenticated', col = 'manager'): Promise<Seen<T>> {
   return db.transaction(async tx => {
     await tx.exec(`set local role ${role}`)
     if (uid) await tx.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: uid, role })])
-    const r = await tx.query<{ uid: string | null; managers: string[] | null }>(
-      `select auth.uid()::text as uid, array_agg(distinct manager order by manager) as managers from ${table}`)
+    const r = await tx.query<{ uid: string | null; managers: T[] | null }>(
+      `select auth.uid()::text as uid, array_agg(distinct ${col} order by ${col}) as managers from ${table}`)
     return { uid: r.rows[0].uid, managers: r.rows[0].managers ?? [] }
   })
 }
@@ -183,13 +193,43 @@ describe.each(TABLES)('%s: кто чьи строки читает', table => {
   })
 })
 
+describe('manager_day_stats: кто чей день читает', () => {
+  const day = (uid: string | null, role = 'authenticated') => seenBy<number>(uid, 'manager_day_stats', role, 'amo_user_id::int')
+
+  it.each([
+    ['Семен', U.semen], ['Дмитрий', U.dmitry], ['Яна', U.yana],
+  ])('менеджер %s — только свой день', async (_n, uid) => {
+    expect(await day(uid)).toEqual({ uid, managers: [AMO[uid]] })
+  })
+
+  it.each([
+    ['закупщик с «видеть все сделки»', U.buyer],
+    ['менеджер без amo-id', U.newbie],
+    ['цех', U.workshop],
+    ['партнёр', U.partner],
+  ])('%s — ничего', async (_n, uid) => {
+    expect(await day(uid)).toEqual({ uid, managers: [] })
+  })
+
+  it.each([
+    ['admin', U.admin], ['ceo', U.ceo], ['commercial', U.commercial], ['cfo', U.cfo],
+    ['менеджер с «видеть все сделки»', U.allDeals],
+  ])('%s — все', async (_n, uid) => {
+    expect(await day(uid)).toEqual({ uid, managers: AMO_ALL })
+  })
+
+  it('аноним — без доступа', async () => {
+    await expect(day(null, 'anon')).rejects.toThrow(/permission denied/)
+  })
+})
+
 describe('база и экран согласны, кому видны все', () => {
-  it('роли руководства в политике = роли canAll в /api/manager-stats', () => {
+  it('роли руководства в политиках = роли canAll в /api/manager-stats', () => {
     const route = readFileSync(join(process.cwd(), 'app/api/manager-stats/route.ts'), 'utf8')
     const inRoute = route.match(/const canAll = \[([^\]]*)\]\.includes/)
     expect(inRoute, 'canAll не найден в /api/manager-stats').not.toBeNull()
-    const inSql = [...file(OWN_ROWS).matchAll(/c\.u_role in \(([^)]*)\)/g)].map(m => m[1])
-    expect(inSql).toHaveLength(2)
+    const inSql = [OWN_ROWS, DAY_FLAG].flatMap(f => [...file(f).matchAll(/c\.u_role in \(([^)]*)\)/g)].map(m => m[1]))
+    expect(inSql).toHaveLength(3)
     const roles = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map(x => x[1]).sort()
     for (const s of inSql) expect(roles(s)).toEqual(roles(inRoute![1]))
   })
