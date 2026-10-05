@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { calls, dayLabel, duration, hm, monthName, plural, rub, signals } from '@/lib/morning'
+import { calls, dayLabel, duration, hm, monthName, nextMonth, plural, rub, signals } from '@/lib/morning'
 import type { Morning } from '@/lib/morningData'
+import PlanEditor from '@/components/morning/PlanEditor'
 
 // «Команда» — первый экран владельца: тот же день и месяц, что у каждого менеджера
 // на его «Утре», строкой на человека. Строка открывает «Утро» этого менеджера.
@@ -14,7 +15,7 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
   const label = day ? dayLabel(day, today) : null
   const yesterday = new Date(Date.parse(`${today}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10)
 
-  const tot = { out: 0, ok: 0, in: 0, missed: 0, talk: 0, msgs: 0, moved: 0, kp: 0, inv: 0, salesN: 0, sales: 0, money: 0, prevMoney: 0 }
+  const tot = { out: 0, ok: 0, in: 0, missed: 0, talk: 0, msgs: 0, moved: 0, kp: 0, inv: 0, salesN: 0, sales: 0, money: 0, prevMoney: 0, plan: 0, planCash: 0 }
   for (const p of people) {
     if (p.row) {
       const c = calls(p.row)
@@ -25,7 +26,9 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
     tot.salesN += p.month.salesCount; tot.sales += p.month.salesSum
     tot.money += p.month.prepay + p.month.remainder
     tot.prevMoney += p.prev.prepay + p.prev.remainder
+    if (p.plan != null) { tot.plan += p.plan; tot.planCash += p.month.prepay + p.month.remainder }
   }
+  const pct = (cash: number, plan: number) => `${Math.floor((cash / plan) * 100)} %`
   const notes = day ? people.flatMap(p => signals(p.row, p.schedule, day).map(t => ({ who: p.name, t }))) : []
 
   return (
@@ -39,7 +42,7 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { l: `Поступило · ${monthName(month).toLowerCase()}`, v: rub(tot.money), s: `${monthName(prev).toLowerCase()}: ${rub(tot.prevMoney)}` },
+          { l: `Поступило · ${monthName(month).toLowerCase()}`, v: rub(tot.money), s: `${tot.plan ? `план ${rub(tot.plan)}, выполнено ${pct(tot.planCash, tot.plan)} · ` : ''}${monthName(prev).toLowerCase()}: ${rub(tot.prevMoney)}` },
           { l: `Продажи · ${monthName(month).toLowerCase()}`, v: rub(tot.sales), s: `${tot.salesN} ${plural(tot.salesN, 'объект', 'объекта', 'объектов')}` },
           { l: 'Звонки за день', v: `${tot.out} исх. · ${tot.ok} дозвон`, s: `входящих ${tot.in} · в разговоре ${duration(tot.talk)}` },
           { l: 'КП и счета за день', v: `${tot.kp} · ${tot.inv}`, s: `сообщений ${tot.msgs} · сделок двинуто ${tot.moved}` },
@@ -58,7 +61,7 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
             <tr className="text-[11px] text-[#6b6b66] uppercase tracking-wider">
               <th className="px-3 pt-3 pb-1 text-left font-semibold"></th>
               <th colSpan={6} className="px-2 pt-3 pb-1 text-left font-semibold border-l border-[#efefeb]">{label ? `${label.title} · ${dm(day!)}` : 'День'}</th>
-              <th colSpan={3} className="px-2 pt-3 pb-1 text-left font-semibold border-l border-[#efefeb]">{monthName(month)}</th>
+              <th colSpan={4} className="px-2 pt-3 pb-1 text-left font-semibold border-l border-[#efefeb]">{monthName(month)}</th>
             </tr>
             <tr className="text-[11px] text-[#6b6b66] border-b border-[#e4e4e0]">
               <th className="px-3 py-2 text-left font-semibold">Менеджер</th>
@@ -70,6 +73,7 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
               <th className={th}>КП · счета</th>
               <th className={`${th} border-l border-[#efefeb]`}>Продажи</th>
               <th className={th}>Поступило</th>
+              <th className={th}>План · выполнено</th>
               <th className={`${th} pr-3`}>Разговоры → замеры → оплаты</th>
             </tr>
           </thead>
@@ -93,6 +97,7 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
                   <td className={td}>{r && r.adv_kp != null ? `${r.adv_kp} · ${r.adv_invoice ?? 0}` : '—'}</td>
                   <td className={`${td} border-l border-[#efefeb]`}>{p.month.salesCount} · {rub(p.month.salesSum)}</td>
                   <td className={`${td} font-semibold`}>{rub(p.month.prepay + p.month.remainder)}</td>
+                  <td className={td}>{p.plan != null ? `${rub(p.plan)} · ${p.plan ? pct(p.month.prepay + p.month.remainder, p.plan) : '—'}` : <span className="text-[#9a9a95]">нет плана</span>}</td>
                   <td className={`${td} pr-3`}>{p.month.talks} → {p.month.measureAssigned} → {p.month.measureDone} → {p.month.payments}</td>
                 </tr>
               )
@@ -107,11 +112,21 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
               <td className={td}>{tot.kp} · {tot.inv}</td>
               <td className={`${td} border-l border-[#efefeb]`}>{tot.salesN} · {rub(tot.sales)}</td>
               <td className={td}>{rub(tot.money)}</td>
+              <td className={td}>{tot.plan ? `${rub(tot.plan)} · ${pct(tot.planCash, tot.plan)}` : '—'}</td>
               <td className={`${td} pr-3`}></td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <PlanEditor
+        months={[month, nextMonth(month)]}
+        sellers={people.map(p => ({ amoUserId: p.amoUserId, name: p.name }))}
+        plans={{
+          [month]: Object.fromEntries(people.map(p => [p.amoUserId, p.plan])),
+          [nextMonth(month)]: Object.fromEntries(people.map(p => [p.amoUserId, p.nextPlan])),
+        }}
+      />
 
       {notes.length > 0 && (
         <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-2">
@@ -125,7 +140,8 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
       <p className="text-[11px] text-[#6b6b66] leading-relaxed">
         День — снимок в 6:30 из AmoCRM и АТС, правило подсчёта то же, что на «Рабочем дне AMO»; «день в amo» — первое и последнее
         своё действие в CRM, а не приход. КП и счета — вход сделки в этапы «КП отправлено» и «Счёт выставлен». Продажи — «Продажи
-        M-Glass»; поступления и путь клиентов — «Аналитика дохода», загрузка в 8:05.
+        M-Glass»; поступления и путь клиентов — «Аналитика дохода», загрузка в 8:05. План — в поступлениях; итоговый
+        процент считается только по тем, у кого план поставлен.
         {bookLastDay && bookLastDay < yesterday && <span className="text-amber-700"> Книга заполнена по {dm(bookLastDay)}.</span>}
       </p>
     </section>
