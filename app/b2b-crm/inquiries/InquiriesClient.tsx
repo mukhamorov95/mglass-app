@@ -114,6 +114,8 @@ export default function InquiriesClient() {
           </button>
         </div>
 
+        <NotifyPanel />
+
         {showForm && (
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 mb-4 grid gap-3 sm:grid-cols-2">
             <div>
@@ -255,5 +257,63 @@ function Act({ children, onClick, disabled, dark }: { children: React.ReactNode;
       className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap disabled:opacity-40 ${dark ? 'bg-[#111110] text-white hover:bg-[#2a2a28]' : 'border border-[#e4e4e0] text-[#111110] hover:bg-[#f8f8f7]'}`}>
       {children}
     </button>
+  )
+}
+
+type Person = { id: string; name: string; role: string; telegram: boolean; on: boolean }
+
+// Кому уходят уведомления о новых заявках. Видит только владелец: у остальных API отвечает 403,
+// и блок не рисуется.
+function NotifyPanel() {
+  const [people, setPeople] = useState<Person[] | null>(null)
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetch('/api/b2b/inquiries/notify').then(r => r.ok ? r.json() : null).then(j => {
+      if (alive && j?.people) setPeople(j.people as Person[])
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  if (!people) return null
+  const on = people.filter(p => p.on)
+
+  async function toggle(p: Person) {
+    setBusy(p.id)
+    const r = await sendOrToast('Не сохранено', '/api/b2b/inquiries/notify', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: p.id, on: !p.on }),
+    })
+    if (r) setPeople(ps => ps?.map(x => x.id === p.id ? { ...x, on: !p.on } : x) ?? null)
+    setBusy(null)
+  }
+
+  return (
+    <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-4">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between gap-3 text-left">
+        <span className="text-[12px] text-[#111110]">
+          <span className="font-semibold">Уведомления в Telegram:</span>{' '}
+          {on.length ? on.map(p => p.name).join(', ') : <span className="text-red-600">никому</span>}
+        </span>
+        <span className="text-[11px] font-semibold text-blue-600 shrink-0">{open ? 'Свернуть' : 'Изменить'}</span>
+      </button>
+      {open && (
+        <div className="mt-3 grid gap-1.5">
+          {people.map(p => (
+            <label key={p.id} className="flex items-center gap-2 text-[13px] text-[#111110]">
+              <input type="checkbox" checked={p.on} disabled={busy === p.id} onChange={() => toggle(p)} />
+              <span>{p.name}</span>
+              <span className="text-[11px] text-[#9a9a95]">{p.role}</span>
+              {!p.telegram && <span className="text-[11px] text-amber-600">бот не привязан — не получит</span>}
+            </label>
+          ))}
+          <p className="text-[11px] text-[#9a9a95] mt-1">
+            Получатель видит телефон и запрос клиента. Если отмечен ровно один сотрудник (не владелец), заявки из чатов Авито назначаются ему.
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
