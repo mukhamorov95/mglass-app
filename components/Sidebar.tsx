@@ -10,7 +10,7 @@ import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 import { hasB2BSalesScope, isAllClientsScope } from '@/lib/b2bScope'
 import { SEARCH_OPEN_EVENT } from '@/lib/search'
 import {
-  MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, OWNER_AI, isGroup, isSection,
+  MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, OWNER_AI, isGroup, isSection, visibleFor,
   type NavItem, type NavEntry, type NavSection,
 } from '@/lib/nav/managerMenu'
 
@@ -735,7 +735,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     // Права проверяем и внутри подменюшек — иначе спрятанный пункт «Клиенты»
     // просто переехал бы в свёрнутый список и остался бы виден.
     const allowed = (i: NavItem) =>
-      i.href === '/clients'     ? permissions.see_clients
+      !visibleFor(i, isOwner)   ? false
+      : i.href === '/clients'     ? permissions.see_clients
       : i.href === '/calendar'  ? permissions.see_calendar
       : i.href === '/my-earnings' ? permissions.see_earnings
       : true
@@ -857,7 +858,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
           {navItem({ href: '/commercial', label: 'Аналитика менеджеров', icon: '📈' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/commercial/activity', label: 'Рабочий день (AMO)', icon: '⏱️' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/commercial/churn', label: 'Отток клиентов',  icon: '📉' }, 'bg-indigo-50 text-indigo-700 font-medium')}
-          {navItem({ href: '/sales',      label: 'Реестр продаж и оплат',         icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/sales',      label: 'Продажи M-Glass',      icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/ceo',        label: 'CEO Обзор',            icon: '👑' }, 'bg-indigo-50 text-indigo-700 font-medium')}
         </div>
       </>
