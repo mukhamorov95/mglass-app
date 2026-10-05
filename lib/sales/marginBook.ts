@@ -10,7 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseMoney, parseMoneyLoose, parseSheetRows, parseTabList, parseTabMonth } from './salesSheetParse.mjs'
 
 export const MARGIN_BOOK_ID = '1E5jUrBxJUTXa74LAd7ZiNq6qMJq5e0J_yMWxqvRTdPY'
-export const MARGIN_SINCE = '2026-01'
+export const MARGIN_SINCE = '2025-04'   // первая вкладка книги; 2025 год заполнен 05.10
 
 // Статьи и правки — в отдельном модуле: его читает клиентская карточка объекта, а
 // сюда (с адресом книги) клиентскому коду ходить нельзя.
@@ -497,6 +497,7 @@ export async function refreshSaleFinance(sb: SupabaseClient, saleId: number): Pr
 // ─── Отчёт в Telegram ─────────────────────────────────────────────────────────
 
 const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
 export const monthRu = (ym: string) => MONTHS_RU[Number(ym.slice(5, 7)) - 1] ?? ym
 const rub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const pct = (n: number | null) => (n == null ? '—' : `${n.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`)
@@ -523,12 +524,22 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
   const lines = [head]
   const fixes: string[] = []
   let partnersInfo = 0, notInMargin = 0
-  for (const m of r.months) {
-    const own = m.objects.flatMap(o => o.issues.filter(i => needsFix(o, i)).map(i => ({ o, i })))
-    const icon = m.held ? '⚠️' : own.length ? '✏️' : '✅'
-    const t = periodTotals(m.objects)
-    lines.push(`${icon} ${monthRu(m.month)}: продажи ${rub(t.sales)} · закрыто ${t.closed} из ${t.objects} на ${rub(t.closed_sales)} · расходы ${rub(t.costs)} · маржа ${pct(t.margin_pct)}${m.held ? ` — ${m.held}` : ''}`)
+  const fixesOf = (m: MarginMonthReport) => m.objects.flatMap(o => o.issues.filter(i => needsFix(o, i)).map(i => ({ o, i })))
+  const totalsLine = (head: string, t: PeriodTotals, held: string | null) => {
+    lines.push(`${head}: продажи ${rub(t.sales)} · закрыто ${t.closed} из ${t.objects} на ${rub(t.closed_sales)} · расходы ${rub(t.costs)} · маржа ${pct(t.margin_pct)}${held ? ` — ${held}` : ''}`)
     if (t.to_fill) lines.push(`   закрыто, но без всех расходов: ${t.to_fill} — в маржу не вошли, дописать`)
+  }
+  // Прошлые годы — строкой на год: они почти не меняются, а помесячно заслонили бы текущий.
+  const lastYear = r.months.map(m => m.month.slice(0, 4)).sort().at(-1)
+  for (const y of [...new Set(r.months.map(m => m.month.slice(0, 4)))].filter(y => y !== lastYear).sort()) {
+    const ms = r.months.filter(m => m.month.startsWith(y))
+    const held = ms.some(m => m.held)
+    const icon = held ? '⚠️' : ms.some(m => fixesOf(m).length) ? '✏️' : '✅'
+    totalsLine(`${icon} ${y} год`, periodTotals(ms.flatMap(m => m.objects)), held ? 'есть месяцы, прочитанные пустыми — не тронуты' : null)
+  }
+  for (const m of r.months) {
+    const own = fixesOf(m)
+    if (m.month.slice(0, 4) === lastYear) totalsLine(`${m.held ? '⚠️' : own.length ? '✏️' : '✅'} ${monthRu(m.month)}`, periodTotals(m.objects), m.held)
     if (m.bookAmountTotal != null && Math.round(m.bookAmountTotal) !== Math.round(m.rowsAmount)) {
       fixes.push(`«Маржа» ${esc(m.tab)}: итог «Сумма заказа» ${rub(m.bookAmountTotal)}, строки складываются в ${rub(m.rowsAmount)}`)
     }
@@ -543,7 +554,9 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
     notInMargin += m.summary.notInMargin
   }
   const closed = periodTotals(r.months.flatMap(m => m.objects))
-  lines.push(`\nЗакрытые объекты (${closed.closed}): продажи ${rub(closed.closed_sales)} · маржа <b>${rub(closed.margin)}</b> · ${pct(closed.margin_pct)}`)
+  const first = r.months[0]?.month
+  const since = first ? ` с ${MONTHS_GEN[Number(first.slice(5, 7)) - 1]} ${first.slice(0, 4)}` : ''
+  lines.push(`\nЗакрытые объекты${since} (${closed.closed}): продажи ${rub(closed.closed_sales)} · маржа <b>${rub(closed.margin)}</b> · ${pct(closed.margin_pct)}`)
   if (closed.to_fill) lines.push(`ещё ${closed.to_fill} закрыто без всех расходов — в маржу не вошли`)
   if (r.financeUpdated) lines.push(`Себестоимость в CFO ${r.dry ? 'обновится' : 'обновлена'} у ${r.financeUpdated} продаж`)
   if (fixes.length) {

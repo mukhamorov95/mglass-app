@@ -149,8 +149,9 @@ export type HiddenStatusReport = {
 export type SyncReport = { dry: boolean; months: MonthReport[]; hidden?: HiddenStatusReport[]; error?: string }
 
 // Со скрытыми вкладками сверяем только статус — маржа считается по закрытым
-// объектам, а с января 2026 их ведёт книга «Маржа».
-export const HIDDEN_SINCE = '2026-01'
+// объектам. Книга «Маржа» ведётся с апреля 2025 (2025 год владелец заполнил 05.10),
+// статусы берём со всего 2025.
+export const HIDDEN_SINCE = '2025-01'
 
 type Fetch = (url: string) => Promise<string>
 const defaultFetch: Fetch = async url => {
