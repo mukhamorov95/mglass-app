@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/lib/apiAuth'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
 import { getSessionUser } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
@@ -20,7 +20,7 @@ async function whoAmI(): Promise<{ name: string; canAll: boolean } | null> {
 }
 
 export async function GET(req: NextRequest) {
-  const guard = await requireRole(['admin', 'ceo', 'commercial', 'manager'])
+  const guard = await requireAnyPageAccess(['/crm'])
   if (guard instanceof NextResponse) return guard
   const me = await whoAmI()
   if (!me) return NextResponse.json({ error: 'no user' }, { status: 401 })

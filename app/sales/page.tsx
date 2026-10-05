@@ -112,7 +112,7 @@ export default function SalesPage() {
         {/* Шапка */}
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-[18px] font-semibold text-[#111110]">💰 Реестр продаж и оплат</h1>
+            <h1 className="text-[18px] font-semibold text-[#111110]">💰 Продажи M-Glass</h1>
             {!canAll && <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">только мои</span>}
             <Link href="/crm" className="text-[12px] text-[#0071e3] hover:underline">→ Воронка</Link>
           </div>
@@ -306,7 +306,7 @@ export default function SalesPage() {
         </div>
 
         <p className="mt-3 text-[11px] text-[#c4c4be]">
-          Розница M-Glass из книги «Продажи Мгласс» (2024–2026), помесячно сходится с книгой. Заказы производства (B2B) сюда не мешаются — они в CFO → «Продажи и маржа». Маржа по завершённым объектам — там же.
+          Розница M-Glass из книги «Продажи Мгласс» (2024–2026). Каждое утро в 8:00 реестр догоняет книгу — правки по продажам вносите в книгу, иначе утром их перепишет. Заказы производства (B2B) сюда не мешаются — они в CFO → «Продажи и маржа». Маржа по завершённым объектам — там же.
         </p>
       </div>
     </div>

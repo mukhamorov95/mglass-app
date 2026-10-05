@@ -36,7 +36,7 @@ export const SENSITIVE_TABLES = new Set([
   'materials', 'hardware_items', 'services', 'b2b_services', 'financial_settings',
   'supplier_price_rows', 'glass_price_matrix', 'purchase_orders', 'calculations',
   'commercial_proposals', 'deals', 'deal_payments', 'payments', 'manager_stats_daily',
-  'manager_stats_monthly', 'coefficients', 'process_cost_inputs', 'production_settings',
+  'manager_stats_monthly', 'manager_day_stats', 'manager_month_plans', 'margin_edits', 'coefficients', 'process_cost_inputs', 'production_settings',
   'security_audit_runs',   // сам отчёт прогона — список дыр
   'manager_schedules', 'wazzup_outgoing_messages', 'manager_coaching',
   'b2b_rates',        // закалка, кромка, мин. цены — себестоимость B2B
@@ -51,6 +51,7 @@ export const SENSITIVE_TABLES = new Set([
   'b2b_partner_settings', // наценка точки партнёра — его коммерческая тайна
   'activity_log',     // кто менял права, пароли, реквизиты покупателя — и кому это видно
   'cfo_settings',     // постоянные расходы и ставки фондов заказа (сдельная, % продаж)
+  'margin_book_rows', // расходы и маржа каждого объекта из книги «Маржа»
 ])
 
 // Новые таблицы без денег и людей — перечислены явно, с причиной. Тест

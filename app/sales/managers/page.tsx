@@ -77,7 +77,7 @@ export default function ManagerStatsPage() {
         <div className="flex items-center gap-3 flex-wrap mb-3">
           <h1 className="text-[18px] font-semibold text-[#111110]">🏆 Показатели менеджеров</h1>
           <Link href="/crm" className="text-[12px] text-[#0071e3] hover:underline">→ Воронка</Link>
-          <Link href="/sales" className="text-[12px] text-[#0071e3] hover:underline">→ Реестр продаж</Link>
+          <Link href="/sales" className="text-[12px] text-[#0071e3] hover:underline">→ Продажи M-Glass</Link>
         </div>
 
         {/* Период — тот же, что в реестре продаж: месяц, квартал, год или свои даты. */}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, isGroup, isSection, type NavEntry, type NavItem } from '@/lib/nav/managerMenu'
+import { MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, isGroup, isSection, visibleFor, type NavEntry, type NavItem } from '@/lib/nav/managerMenu'
 import { canAccessRoute } from '@/lib/getRole'
 
 const items = (entries: NavEntry[]): NavItem[] =>
@@ -13,8 +13,17 @@ describe('меню менеджера — каждая ссылка рабоча
   it.each(all.map(i => [i.href]))('%s — страница существует', href => {
     expect(existsSync(join(process.cwd(), 'app', href, 'page.tsx'))).toBe(true)
   })
-  it.each(all.map(i => [i.href]))('%s — открыт роли manager', href => {
+  it.each(all.filter(i => !i.ownerOnly).map(i => [i.href]))('%s — открыт роли manager', href => {
     expect(canAccessRoute('manager', href)).toBe(true)
+  })
+  it('маржа — только владельцу: менеджеру пункт не показывается', () => {
+    const margin = all.find(i => i.href === '/sales/margin')!
+    expect(margin.ownerOnly).toBe(true)
+    expect(visibleFor(margin, false)).toBe(false)
+    expect(visibleFor(margin, true)).toBe(true)
+    // Право на маржу (Вера, 05.10) открывает пункт и без роли владельца.
+    expect(visibleFor(margin, false, { margin_edit: true })).toBe(true)
+    expect(visibleFor(margin, false, { margin_edit: false })).toBe(false)
   })
   it('ссылки не повторяются', () => {
     expect(new Set(all.map(i => i.href)).size).toBe(all.length)
@@ -28,7 +37,8 @@ describe('структура по ТЗ (Н1)', () => {
   })
   it('понятные названия', () => {
     expect(labelOf('/crm')).toBe('Воронка продаж')
-    expect(labelOf('/sales')).toBe('Реестр продаж и оплат')
+    expect(labelOf('/sales')).toBe('Продажи M-Glass')
+    expect(labelOf('/sales/margin')).toBe('Маржа')
     expect(labelOf('/calculations')).toBe('Расчёты')
     expect(labelOf('/inventory')).toBe('Склад и резервы')
     expect(labelOf('/calendar')).toBe('Календарь замеров и монтажей')
@@ -61,6 +71,8 @@ describe('структура по ТЗ (Н1)', () => {
       '/b2b-crm/report',
       // Входящие заявки B2B — Авито и другие каналы до клиента (концепция Авито v2, 02.10)
       '/b2b-crm/inquiries',
+      // Маржа объектов по книге «Маржа» — только владельцу (просьба владельца 05.10)
+      '/sales/margin',
     ]
     expect(all.map(i => i.href).sort()).toEqual(before.sort())
   })

@@ -57,6 +57,8 @@ const PERM_LABELS: { key: keyof UserPermissions; icon: string; label: string }[]
   { key: 'see_calendar', icon: '📅', label: 'Календарь' },
   { key: 'see_clients',  icon: '👤', label: 'Клиенты' },
   { key: 'see_earnings', icon: '💰', label: 'Заработки' },
+  // Видеть «Маржу» и дописывать расходы объектов; владельцы видят её всегда.
+  { key: 'margin_edit',  icon: '📐', label: 'Маржа' },
 ]
 
 // Две главные группы-заголовка: офис M-Glass и цех. Обе по умолчанию свёрнуты.
@@ -640,6 +642,12 @@ export default function UsersPage() {
                                 className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${perms.manager_workspace ? 'bg-[#111110] text-white hover:opacity-90' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
                                 {perms.manager_workspace ? '✓ Менеджер' : '+ Менеджер'}
                               </button>
+                              <button
+                                onClick={() => togglePerm(u, 'margin_edit')}
+                                title="«Маржа» в «Воронке и продажах»: видеть и дописывать расходы объектов. Каждая правка — в журнале действий"
+                                className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${perms.margin_edit ? 'bg-[#111110] text-white hover:opacity-90' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                                {perms.margin_edit ? '✓ Маржа' : '+ Маржа'}
+                              </button>
                             </div>
                           ) : (
                             <div className="flex flex-col items-center gap-1">
@@ -655,7 +663,7 @@ export default function UsersPage() {
                                   onChange={e => setHomeRoute(u, (e.target.value || null) as ManagerHome | null)}
                                   title="Куда попадает человек со входа в приложение"
                                   className="text-[10px] font-medium px-2 py-1 rounded-full border border-[#e4e4e0] bg-white cursor-pointer outline-none focus:border-[#111110]">
-                                  <option value="">Вход: общая панель</option>
+                                  <option value="">Вход: Утро (главная)</option>
                                   {MANAGER_HOMES.map(h => (
                                     <option key={h.value} value={h.value}>Вход: {h.label}</option>
                                   ))}

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/lib/apiAuth'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
+import { serviceAsMe } from '@/lib/serviceAs'
 import { getSessionUser } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
 import { salePaymentKey } from '@/lib/payments/paymentKeys'
+import { bookNames } from '@/lib/sales/bookNames'
 import { resolvePeriod, parseManagers } from '@/lib/sales/period'
 import { mskDayKey } from '@/lib/time'
 
@@ -42,7 +44,7 @@ function markedPaid(r: SaleRow): number {
 }
 
 export async function GET(req: NextRequest) {
-  const guard = await requireRole(['admin', 'ceo', 'manager', 'commercial'])
+  const guard = await requireAnyPageAccess(['/sales'])
   if (guard instanceof NextResponse) return guard
   const me = await whoAmI()
   if (!me) return NextResponse.json({ error: 'no user' }, { status: 401 })
@@ -64,7 +66,7 @@ export async function GET(req: NextRequest) {
     .eq('voided', false).neq('department', 'b2b')
     .order('sale_date', { ascending: true }).order('id', { ascending: true })
     .limit(2000)
-  if (!me.canAll) query = query.eq('manager', me.name)
+  if (!me.canAll) query = query.in('manager', bookNames(me.name))
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   // Весь период целиком — разрез по менеджерам считаем по нему, иначе, выбрав
@@ -121,7 +123,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireRole(['admin', 'ceo', 'manager', 'commercial'])
+  const guard = await requireAnyPageAccess(['/sales'])
   if (guard instanceof NextResponse) return guard
   const me = await whoAmI()
   if (!me) return NextResponse.json({ error: 'no user' }, { status: 401 })
@@ -147,7 +149,7 @@ export async function POST(req: NextRequest) {
     manager: (b.manager as string)?.trim() || me.name,
     created_by: me.name,
   }
-  const sb = createServiceClient()
+  const sb = await serviceAsMe()
   const { data, error } = await sb.from('crm_sales').insert(row).select('id').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -162,7 +164,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const guard = await requireRole(['admin', 'ceo', 'manager', 'commercial'])
+  const guard = await requireAnyPageAccess(['/sales'])
   if (guard instanceof NextResponse) return guard
   const me = await whoAmI()
   if (!me) return NextResponse.json({ error: 'no user' }, { status: 401 })
@@ -178,7 +180,7 @@ export async function PATCH(req: NextRequest) {
   for (const k of ['amount', 'partner_fee', 'prepayment'] as const) if (k in b) patch[k] = Number(b[k]) || 0
   for (const k of ['order_no', 'client', 'ready_date', 'sale_date', 'department', 'payment_method', 'manager', 'note'] as const) if (k in b) patch[k] = (b[k] as string) || null
 
-  const sb = createServiceClient()
+  const sb = await serviceAsMe()
   const { data: before } = await sb.from('crm_sales')
     .select('id, amount, prepayment, sale_date, b2b_order_id, order_id, payment_method').eq('id', id).maybeSingle()
   const { error } = await sb.from('crm_sales').update(patch).eq('id', id)
