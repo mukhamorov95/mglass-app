@@ -17,8 +17,21 @@ export const AI_TOOLS: Tool[] = [
   },
   {
     name: 'get_financial_settings',
-    description: 'Получить текущие финансовые настройки: маржа, расходы, налоги',
-    input_schema: { type: 'object' as const, properties: {} },
+    description:
+      'Получить финансовые настройки: налог, маржа (default_margin, min_margin), проценты расходов, пороги цвета маржи, ' +
+      'максимальная скидка, сроки SLA. Строк несколько — по типу изделия и уровню (tier). Строки с product_type = null — ' +
+      'общие по уровням budget/standard. Без product_type вернёт все строки.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        product_type: {
+          type: 'string',
+          description:
+            'Тип изделия, например: mirror, mirror_light, loft, shower_standard, shower_budget. ' +
+            'Если своей строки у типа нет — вернутся общие строки (product_type = null).',
+        },
+      },
+    },
   },
   {
     name: 'get_recent_calculations',
@@ -61,9 +74,15 @@ export async function executeTool(name: string, input: Record<string, unknown>, 
         return JSON.stringify(data ?? [])
       }
       case 'get_financial_settings': {
-        const { data, error } = await supabase.from('financial_settings').select('*').single()
+        // Фильтр в коде, а не в запросе: строк единицы, а запасные общие строки нужны,
+        // когда у типа своей нет — так же выбирают калькуляторы (quickCalc.pickSettings).
+        const { data, error } = await supabase.from('financial_settings').select('*').order('id')
         if (error) return `Ошибка: ${error.message}`
-        return JSON.stringify(data)
+        const rows = (data ?? []) as { product_type: string | null }[]
+        const productType = input.product_type as string | undefined
+        if (!productType) return JSON.stringify(rows)
+        const own = rows.filter(r => r.product_type === productType)
+        return JSON.stringify(own.length > 0 ? own : rows.filter(r => r.product_type == null))
       }
       case 'get_recent_calculations': {
         const limit = Math.min((input.limit as number) ?? 5, 20)
