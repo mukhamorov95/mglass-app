@@ -21,6 +21,9 @@ describe('меню менеджера — каждая ссылка рабоча
     expect(margin.ownerOnly).toBe(true)
     expect(visibleFor(margin, false)).toBe(false)
     expect(visibleFor(margin, true)).toBe(true)
+    // Право на маржу (Вера, 05.10) открывает пункт и без роли владельца.
+    expect(visibleFor(margin, false, { margin_edit: true })).toBe(true)
+    expect(visibleFor(margin, false, { margin_edit: false })).toBe(false)
   })
   it('ссылки не повторяются', () => {
     expect(new Set(all.map(i => i.href)).size).toBe(all.length)

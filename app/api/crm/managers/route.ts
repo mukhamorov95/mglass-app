@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { requireRole } from '@/lib/apiAuth'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
 
 // Список менеджеров по продажам для назначения ответственного в карточке лида.
 export async function GET() {
-  const guard = await requireRole(['admin', 'ceo', 'commercial', 'manager'])
+  const guard = await requireAnyPageAccess(['/crm'])
   if (guard instanceof NextResponse) return guard
   const sb = createServiceClient()
   const { data } = await sb.from('users').select('name,role')

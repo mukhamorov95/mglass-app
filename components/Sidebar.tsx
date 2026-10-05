@@ -735,7 +735,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     // Права проверяем и внутри подменюшек — иначе спрятанный пункт «Клиенты»
     // просто переехал бы в свёрнутый список и остался бы виден.
     const allowed = (i: NavItem) =>
-      !visibleFor(i, isOwner)   ? false
+      !visibleFor(i, isOwner, permissions) ? false
       : i.href === '/clients'     ? permissions.see_clients
       : i.href === '/calendar'  ? permissions.see_calendar
       : i.href === '/my-earnings' ? permissions.see_earnings

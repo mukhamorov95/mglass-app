@@ -20,6 +20,9 @@ export type UserPermissions = {
   manager_workspace?: boolean
   // Начальный экран: куда уводить с «/» (У2). Пусто — общая панель.
   home_route?: ManagerHome | null
+  // «Маржа» в «Воронке и продажах»: видеть и дописывать расходы объектов (решение
+  // владельца 05.10 — Вере). Владельцы видят маржу и без этого права.
+  margin_edit?: boolean
 }
 
 export const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -31,4 +34,5 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   b2b_client_scope:  null,
   manager_workspace: false,
   home_route:        null,
+  margin_edit:       false,
 }

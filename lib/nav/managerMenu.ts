@@ -2,8 +2,9 @@
 // каждую ссылку со страницей и с доступом роли (__tests__/nav/managerMenu.test.ts).
 
 // ownerOnly — пункт видят только владельцы (admin, ceo), менеджеру он не показывается:
-// так маржа живёт рядом с продажами, не уходя в менеджерское меню.
-export type NavItem  = { href: string; label: string; icon: string; indent?: boolean; ownerOnly?: boolean }
+// так маржа живёт рядом с продажами, не уходя в менеджерское меню. orPermission —
+// кроме владельцев, его видит тот, кому выдано это право (маржа — Вере, 05.10).
+export type NavItem  = { href: string; label: string; icon: string; indent?: boolean; ownerOnly?: boolean; orPermission?: 'margin_edit' }
 export type NavGroup = { groupLabel: string }
 // Свёрнутая подменюшка: заголовок + свои пункты. Нужна там, где список длинный,
 // а каждый день пользуются пятью пунктами (меню менеджера).
@@ -11,7 +12,8 @@ export type NavSection = { sectionLabel: string; icon: string; items: NavItem[] 
 export type NavEntry = NavItem | NavGroup | NavSection
 
 export function isGroup(e: NavEntry): e is NavGroup { return 'groupLabel' in e }
-export const visibleFor = (i: NavItem, isOwner: boolean) => !i.ownerOnly || isOwner
+export const visibleFor = (i: NavItem, isOwner: boolean, perms?: { margin_edit?: boolean } | null) =>
+  !i.ownerOnly || isOwner || (i.orPermission != null && perms?.[i.orPermission] === true)
 export function isSection(e: NavEntry): e is NavSection { return 'sectionLabel' in e }
 
 // ─── Manager: AmoCRM Dashboard ────────────────────────────────────────────────
@@ -41,7 +43,7 @@ export const MANAGER_MGLASS: NavEntry[] = [
     // разговоры, замеры, оплаты и полученные деньги за период.
     { href: '/sales/managers',    label: 'Показатели менеджеров', icon: '🏆' },
     // Четвёртый — маржа объектов по книге «Маржа» (просьба владельца 05.10).
-    { href: '/sales/margin',      label: 'Маржа',                 icon: '📐', ownerOnly: true },
+    { href: '/sales/margin',      label: 'Маржа',                 icon: '📐', ownerOnly: true, orPermission: 'margin_edit' },
   ] },
 
   { groupLabel: 'Расчёты и документы' },

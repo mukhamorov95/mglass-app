@@ -43,6 +43,12 @@ export function normalizeRole(r: unknown): Role | null {
   return isRole(v) ? v : null
 }
 
+// «Маржа» в «Воронке и продажах»: владелец или обладатель права margin_edit
+// (решение владельца 05.10 — Вере). Одна проверка для меню, страницы и API.
+export function canMargin(role: Role | string | null | undefined, permissions?: { margin_edit?: boolean } | null): boolean {
+  return isOwnerRole(role) || permissions?.margin_edit === true
+}
+
 export function isOwnerRole(role: Role | string | null | undefined): boolean {
   const r = normalizeRole(role)
   return r !== null && OWNER_ROLES.includes(r)

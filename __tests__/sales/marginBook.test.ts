@@ -239,3 +239,43 @@ describe('roundShares — доли статей сходятся с долей �
     expect(roundShares([100, 200], 0)).toEqual([0, 0])
   })
 })
+
+describe('правки «Маржи» из приложения (Вера, 05.10)', () => {
+  const tab = parseMarginTab(BOOK, GID, 'Январь 26')
+  const at = '2026-10-05T17:00:00Z'
+  const ed = (value: number) => ({ value, by: 'Вера', at })
+
+  it('пустая в книге ячейка, внесённая в приложении, закрывает «не внесено» и входит в расходы', () => {
+    const before = reconcileMonth('2026-01', tab.rows, SALES).find(o => o.order_no === '0900-2')!
+    const o = reconcileMonth('2026-01', tab.rows, SALES, new Map([[3, { installer: ed(9000) }]])).find(x => x.order_no === '0900-2')!
+    expect(before.issues.map(i => i.kind)).toContain('missing_costs')
+    expect(o.issues.map(i => i.kind)).not.toContain('missing_costs')
+    expect(o.var_total).toBe(before.var_total! + 9000)
+    expect(o.book_costs!.installer).toBeNull()
+    expect(o.edits.installer?.by).toBe('Вера')
+  })
+
+  it('правка сильнее книги, а книжное значение остаётся для сравнения', () => {
+    const o = reconcileMonth('2026-01', tab.rows, SALES, new Map([[1, { glass: ed(5000) }]])).find(x => x.order_no === '0873-3')!
+    expect(o.costs!.glass).toBe(5000)
+    expect(o.book_costs!.glass).toBe(4061)
+    expect(o.md).toBe(16169 - (5000 - 4061))
+  })
+
+  it('объекта нет в книге «Маржа», расходы внесены в приложении — маржа считается по ним', () => {
+    const e = { glass: ed(10000), hardware: ed(5000), designer: ed(0), measurer: ed(2000), installer: ed(6000), delivery: ed(3000) }
+    const o = reconcileMonth('2026-01', tab.rows, SALES, new Map([[4, e]])).find(x => x.order_no === '0959-2')!
+    expect(o.issues.map(i => i.kind)).toEqual([])
+    expect(o.var_total).toBe(26000)
+    expect(o.md).toBe(57011 - 26000)
+    expect(o.finance_cost).toBe(26000)
+  })
+
+  it('«закрыт» из приложения — поверх статуса книги продаж; без правки — как в книге', () => {
+    const objs = reconcileMonth('2026-01', tab.rows, SALES, new Map([[4, { closed: ed(1) }], [1, { closed: ed(0) }]]))
+    const open = objs.find(x => x.order_no === '0959-2')!
+    expect([open.closed, open.book_closed]).toEqual([true, false])
+    expect(objs.find(x => x.order_no === '0873-3')!.closed).toBe(false)
+    expect(objs.find(x => x.order_no === '0811-2')!.closed).toBe(true)
+  })
+})

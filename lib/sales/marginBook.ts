@@ -12,22 +12,11 @@ import { parseMoney, parseMoneyLoose, parseSheetRows, parseTabList, parseTabMont
 export const MARGIN_BOOK_ID = '1E5jUrBxJUTXa74LAd7ZiNq6qMJq5e0J_yMWxqvRTdPY'
 export const MARGIN_SINCE = '2026-01'
 
-export const COST_KEYS = [
-  'glass', 'hardware', 'designer', 'measurer', 'installer', 'delivery',
-  'partners', 'claims', 'tax', 'bonus_manager', 'bonus_ror', 'bonus_rop',
-] as const
-export type CostKey = typeof COST_KEYS[number]
-
-// «По объекту проставлены все расходы» — эти шесть статей заполнены, хотя бы нулём.
-// Партнёров и рекламаций у большинства объектов нет: там пустая ячейка и значит
-// «не было». Налог и бонусы книга считает формулой от суммы.
-export const REQUIRED_COSTS: CostKey[] = ['glass', 'hardware', 'designer', 'measurer', 'installer', 'delivery']
-
-export const COST_RU: Record<CostKey, string> = {
-  glass: 'стекло', hardware: 'фурнитура', designer: 'конструктор', measurer: 'замерщик',
-  installer: 'монтажник', delivery: 'доставка', partners: 'партнёры', claims: 'рекламации',
-  tax: 'налог', bonus_manager: 'бонус менеджера', bonus_ror: 'бонус РОР', bonus_rop: 'бонус РОП',
-}
+// Статьи и правки — в отдельном модуле: его читает клиентская карточка объекта, а
+// сюда (с адресом книги) клиентскому коду ходить нельзя.
+import { COST_KEYS, COST_RU, EDIT_FIELDS, REQUIRED_COSTS, type CostKey, type EditField, type MarginEdit, type SaleEdits } from './marginFields.mjs'
+export { COST_KEYS, COST_RU, EDIT_FIELDS, REQUIRED_COSTS }
+export type { CostKey, EditField, MarginEdit, SaleEdits }
 
 type Col = CostKey | 'orderNo' | 'amount' | 'varTotal' | 'md' | 'dima'
 const HEADER: Record<string, Col> = {
@@ -142,6 +131,10 @@ export type MarginObject = {
   finance_cost: number | null                 // себестоимость для crm_sale_finance (витрина v_crm_sales_margin)
   issues: Issue[]
   precise: boolean
+  book_costs: Record<CostKey, number | null> | null   // как в книге, до правок и партнёрских из продаж
+  book_closed: boolean                                // статус по «Продажам M-Glass»
+  partner_fee: number                                 // партнёрские из продаж
+  edits: SaleEdits                                    // что внесено в приложении
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -165,7 +158,16 @@ export function needsFix(o: Pick<MarginObject, 'closed'>, i: Issue): boolean {
   return true
 }
 
-export function reconcileMonth(month: string, rows: MarginBookRow[], sales: MarginSale[]): MarginObject[] {
+const emptyCosts = () => Object.fromEntries(COST_KEYS.map(k => [k, null])) as Record<CostKey, number | null>
+// Внесённое в приложении сильнее книги: это последнее сознательное значение. Если книга
+// потом заполнит ячейку по-другому, экран покажет оба.
+function withEdits(costs: Record<CostKey, number | null>, e: SaleEdits): Record<CostKey, number | null> {
+  const out = { ...costs }
+  for (const k of COST_KEYS) if (e[k]) out[k] = e[k]!.value
+  return out
+}
+
+export function reconcileMonth(month: string, rows: MarginBookRow[], sales: MarginSale[], edits: Map<number, SaleEdits> = new Map()): MarginObject[] {
   const pool = new Map<string, MarginSale[]>()
   for (const s of sales) if (s.order_no) pool.set(key(s.order_no), [...(pool.get(key(s.order_no)) ?? []), s])
   const used = new Set<number>()
@@ -179,7 +181,10 @@ export function reconcileMonth(month: string, rows: MarginBookRow[], sales: Marg
   const lone = sales.filter(s => !used.has(s.id))
 
   const objects: MarginObject[] = pairs.map(({ r, s }) => {
-    const closed = s?.status === 'closed'
+    const e = (s && edits.get(s.id)) || {}
+    const bookClosed = s?.status === 'closed'
+    const closed = e.closed ? e.closed.value === 1 : bookClosed
+    const own = withEdits(r.costs, e)
     const issues: Issue[] = []
     if (!s) {
       const twin = lone.find(x => Math.round(x.amount) === Math.round(r.amount))
@@ -189,15 +194,15 @@ export function reconcileMonth(month: string, rows: MarginBookRow[], sales: Marg
     const cells = cellsSum(r.costs)
     if (r.text_cells.length) issues.push({ kind: 'text_cells', keys: r.text_cells, book: r.book_var_total!, cells: r2(cells) })
     else if (r.book_var_total != null && Math.abs(r.book_var_total - cells) > ROUNDING) issues.push({ kind: 'book_total', book: r.book_var_total, cells: r2(cells) })
-    const missing = REQUIRED_COSTS.filter(k => r.costs[k] == null)
+    const missing = REQUIRED_COSTS.filter(k => own[k] == null)
     if (missing.length) issues.push({ kind: 'missing_costs', keys: missing })
 
     // Партнёрские в продажах больше, чем в «Марже», — считаем бо́льшие: деньги
     // партнёру уходят из той же суммы, занизить расход хуже, чем завысить.
-    const mp = r.costs.partners ?? 0
+    const mp = own.partners ?? 0
     const pf = Number(s?.partner_fee ?? 0)
     if (s && Math.round(pf) !== Math.round(mp)) issues.push({ kind: 'partners', margin: mp, sale: pf })
-    const costs = pf > mp ? { ...r.costs, partners: pf } : r.costs
+    const costs = pf > mp ? { ...own, partners: pf } : own
 
     const amount = s ? Number(s.amount) : r.amount
     const varTotal = r2(cellsSum(costs))
@@ -212,15 +217,43 @@ export function reconcileMonth(month: string, rows: MarginBookRow[], sales: Marg
       // продажи из себестоимости вычитаем: иначе они уйдут из маржи дважды.
       finance_cost: s ? r2(amount - pf - md) : null,
       issues, precise: false,
+      book_costs: r.costs, book_closed: bookClosed, partner_fee: pf, edits: e,
     }
     o.precise = closed && !issues.some(i => blocksPrecision(o, i))
     return o
   })
   for (const s of lone) {
+    const e = edits.get(s.id) ?? {}
+    const bookClosed = s.status === 'closed'
+    const closed = e.closed ? e.closed.value === 1 : bookClosed
+    const amount = Number(s.amount)
+    const pf = Number(s.partner_fee ?? 0)
+    // В книге «Маржа» объекта нет, но расходы внесены в приложении — считаем по ним.
+    if (COST_KEYS.some(k => e[k])) {
+      const own = withEdits(emptyCosts(), e)
+      const issues: Issue[] = []
+      const missing = REQUIRED_COSTS.filter(k => own[k] == null)
+      if (missing.length) issues.push({ kind: 'missing_costs', keys: missing })
+      const mp = own.partners ?? 0
+      if (Math.round(pf) !== Math.round(mp)) issues.push({ kind: 'partners', margin: mp, sale: pf })
+      const costs = pf > mp ? { ...own, partners: pf } : own
+      const varTotal = r2(cellsSum(costs))
+      const md = r2(amount - varTotal)
+      const o: MarginObject = {
+        month, order_no: s.order_no, sale_id: s.id, row: null, client: s.client, manager: s.manager, closed,
+        amount, costs, var_total: varTotal, md, md_pct: amount ? md / amount * 100 : null, dima: null,
+        finance_cost: r2(amount - pf - md), issues, precise: false,
+        book_costs: null, book_closed: bookClosed, partner_fee: pf, edits: e,
+      }
+      o.precise = closed && !issues.some(i => blocksPrecision(o, i))
+      objects.push(o)
+      continue
+    }
     objects.push({
       month, order_no: s.order_no, sale_id: s.id, row: null, client: s.client, manager: s.manager,
-      closed: s.status === 'closed', amount: Number(s.amount), costs: null, var_total: null,
+      closed, amount, costs: null, var_total: null,
       md: null, md_pct: null, dima: null, finance_cost: null, issues: [{ kind: 'no_margin' }], precise: false,
+      book_costs: null, book_closed: bookClosed, partner_fee: pf, edits: e,
     })
   }
   return objects
@@ -307,6 +340,22 @@ export function fromDb(r: MarginDbRow): MarginBookRow {
 
 export const SALE_COLUMNS = 'id, order_no, client, manager, amount, partner_fee, status, ledger_month'
 
+// Правки приложения по продажам — пачками: в адресе запроса сотни id не помещаются.
+export async function loadEdits(sb: SupabaseClient, saleIds: number[]): Promise<Map<number, SaleEdits>> {
+  const out = new Map<number, SaleEdits>()
+  for (let i = 0; i < saleIds.length; i += 150) {
+    const { data, error } = await sb.from('margin_edits').select('sale_id, field, value, edited_by_name, edited_at')
+      .in('sale_id', saleIds.slice(i, i + 150))
+    if (error) throw new Error(`Правки маржи: ${error.message}`)
+    for (const r of (data ?? []) as { sale_id: number; field: EditField; value: number; edited_by_name: string | null; edited_at: string }[]) {
+      const e = out.get(Number(r.sale_id)) ?? {}
+      e[r.field] = { value: Number(r.value), by: r.edited_by_name, at: r.edited_at }
+      out.set(Number(r.sale_id), e)
+    }
+  }
+  return out
+}
+
 // ─── Синхронизация ────────────────────────────────────────────────────────────
 
 export type MarginMonthReport = {
@@ -346,12 +395,14 @@ export async function syncMarginBook(
     .in('ledger_month', parsed.map(p => p.month)).eq('voided', false).neq('department', 'b2b').range(0, 9999)
   if (salesErr) throw new Error(`Продажи: ${salesErr.message}`)
   const sales = (salesData ?? []) as unknown as (MarginSale & { ledger_month: string })[]
+  // Расходы, внесённые в приложении, — поверх книги и в себестоимости для CFO.
+  const edits = await loadEdits(sb, sales.map(s => s.id))
 
   const months: MarginMonthReport[] = []
   const financeWanted = new Map<number, number>()
   const now = new Date().toISOString()
   for (const tab of parsed) {
-    const objects = reconcileMonth(tab.month, tab.rows, sales.filter(s => s.ledger_month === tab.month))
+    const objects = reconcileMonth(tab.month, tab.rows, sales.filter(s => s.ledger_month === tab.month), edits)
     const { data: ex, error: exErr } = await sb.from('margin_book_rows').select('id, external_key, voided').eq('ledger_month', tab.month)
     if (exErr) throw new Error(`${tab.tab}: ${exErr.message}`)
     const live = (ex ?? []).filter(r => !r.voided)
@@ -409,6 +460,29 @@ export async function syncMarginBook(
     }
   }
   return { dry: !!opts.dry, months, financeUpdated }
+}
+
+// После правки в приложении: себестоимость продажи для витрины CFO — сразу, а не
+// утром. Месяц пересчитывается тем же reconcileMonth; поставленную руками не трогаем.
+export async function refreshSaleFinance(sb: SupabaseClient, saleId: number): Promise<void> {
+  const { data: sale, error } = await sb.from('crm_sales').select(SALE_COLUMNS).eq('id', saleId).maybeSingle()
+  if (error) throw new Error(`Продажа: ${error.message}`)
+  const month = (sale as { ledger_month?: string } | null)?.ledger_month
+  if (!month) return
+  const [rows, sales] = await Promise.all([
+    sb.from('margin_book_rows').select('*').eq('ledger_month', month).eq('voided', false).order('row_no').range(0, 4999),
+    sb.from('crm_sales').select(SALE_COLUMNS).eq('ledger_month', month).eq('voided', false).neq('department', 'b2b').range(0, 4999),
+  ])
+  if (rows.error || sales.error) throw new Error(`Месяц ${month}: ${(rows.error ?? sales.error)!.message}`)
+  const list = (sales.data ?? []) as unknown as MarginSale[]
+  const edits = await loadEdits(sb, list.map(x => x.id))
+  const o = reconcileMonth(month, ((rows.data ?? []) as MarginDbRow[]).map(fromDb), list, edits).find(x => x.sale_id === saleId)
+  if (!o || o.finance_cost == null) return
+  const { data: f } = await sb.from('crm_sale_finance').select('cost_overridden').eq('sale_id', saleId).maybeSingle()
+  if (f?.cost_overridden) return
+  const { error: upErr } = await sb.from('crm_sale_finance')
+    .upsert({ sale_id: saleId, cost: o.finance_cost, cost_source: 'import', updated_at: new Date().toISOString() }, { onConflict: 'sale_id' })
+  if (upErr) throw new Error(`Себестоимость: ${upErr.message}`)
 }
 
 // ─── Отчёт в Telegram ─────────────────────────────────────────────────────────
