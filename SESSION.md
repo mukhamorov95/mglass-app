@@ -1,3 +1,13 @@
+## Задача (05.10, девятая): AI-чат — get_financial_settings возвращал ошибку вместо настроек
+- Было: lib/ai-tools.ts → .single() на financial_settings, а строк 7 (5 по типам изделия + 2 общие с
+  product_type = null, уровни budget/standard) — модель в /api/ai/chat всегда получала «multiple rows».
+- Стало: все строки по id; с product_type — строки типа, а если своей нет — общие (как quickCalc.pickSettings).
+  Схема инструмента в AI_TOOLS приняла product_type. Клиент — по-прежнему вызывающего (RLS), service-ключ не вернулся.
+- Тест __tests__/ai/financialSettingsTool.test.ts: заглушка клиента, .single() на нескольких строках — ошибка как у
+  PostgREST; на старом коде 6 из 6 красные.
+- Известное, не моё: в общем node_modules нет @electric-sql/pglite → tsc (7 ошибок) и vitest падают только в
+  __tests__/access/managerStatsOwnRows.test.ts. Нужен npm install в основном каталоге.
+
 ## Задача (05.10, восьмая): «Команда» за любой день/период; Вере — «Воронка и продажи» и правка «Маржи»; журнал действий
 - #846 «Команда»: меню Сегодня · Последний рабочий день · 7 дней · месяц · прошлый месяц · год · прошлый год +
   формы «День», «Месяц», «С … по …» (?d, ?month, ?year, ?from&to). Сегодня — POST /api/manager-day/today (владелец,
