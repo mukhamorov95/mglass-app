@@ -7,7 +7,7 @@ import { mskDayKey } from '@/lib/time'
 import { plural } from '@/lib/morning'
 import { shiftMonth } from '@/lib/sales/period'
 import {
-  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, costsComplete, fixLine, fromDb, loadEdits, monthGen, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
+  COST_KEYS, COST_RU, MARGIN_SINCE, NO_TAX_DELIVERY_UNTIL, SALE_COLUMNS, costsComplete, fixLine, fromDb, loadEdits, monthGen, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
   type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals,
 } from '@/lib/sales/marginBook'
 
@@ -32,6 +32,8 @@ const share = (part: number, whole: number) => (whole ? part / whole * 100 : nul
 const marginRub = (t: PeriodTotals) => rub(Math.round(t.closed_sales) - Math.round(t.costs))
 const costPct = (t: PeriodTotals) => share(t.costs, t.closed_sales)
 const marginPct = (t: PeriodTotals) => { const c = costPct(t); return c == null ? null : 100 - pct1(c) }
+const oldFormat = (m: string) => m >= MARGIN_SINCE && m <= NO_TAX_DELIVERY_UNTIL
+const OLD_HINT = 'в книге «Маржа» за апрель–июль 2025 нет колонок «Доставка» и «Налог» — маржа без них, выше сопоставимой'
 // Цвет — по напечатанному значению: 34,96 % показывается «35,0 %» и красится зелёным.
 const mCls = (n: number | null) =>
   n == null ? 'text-[#9a9a95]' : pct1(n) < 25 ? 'text-red-600' : pct1(n) < 35 ? 'text-amber-600' : 'text-emerald-700'
@@ -87,6 +89,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
   const total = periodTotals(byMonth.flatMap(x => x.objects))
   const fixes = byMonth.flatMap(x => x.fixes)
   const beforeBook = months[0] < MARGIN_SINCE
+  const hasOld = byMonth.some(x => oldFormat(x.month) && x.t.closed > 0)
 
   const tile = 'bg-white border border-[#e4e4e0] rounded-xl px-4 py-3'
   const btn = (on: boolean) => `px-3 py-1.5 rounded-lg text-[12px] font-medium border ${on ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110]'}`
@@ -151,6 +154,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
             <p className="text-[20px] font-semibold text-[#111110] mt-0.5">{marginRub(total)} ₽</p>
             <p className="text-[12px] text-[#6b6b66]">
               <span className={`font-semibold ${mCls(marginPct(total))}`}>{pct(marginPct(total))}</span> от продаж закрытых
+              {hasOld && <span className="text-amber-700" title={OLD_HINT}> · * апрель–июль 2025 — без налога и доставки</span>}
             </p>
           </div>
           <a href="#fixes" className={`${tile} hover:border-[#111110]`}>
@@ -188,7 +192,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
                   <span className="text-right">{rub(m.t.closed_sales)}</span>
                   <span className="text-right">{rub(m.t.costs)}</span>
                   <span className="text-right font-semibold">{marginRub(m.t)}</span>
-                  <span className={`text-right font-semibold ${mCls(marginPct(m.t))}`}>{pct(marginPct(m.t))}</span>
+                  <span className={`text-right font-semibold ${mCls(marginPct(m.t))}`}>{pct(marginPct(m.t))}{oldFormat(m.month) && m.t.closed > 0 && <span className="text-amber-700" title={OLD_HINT}>*</span>}</span>
                 </summary>
                 <MonthBody m={m} />
               </details>
@@ -220,7 +224,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
 
         <div className="text-[11px] text-[#9a9a95] space-y-1">
           <p>Продажи — сумма всех заказов месяца из «Продаж M-Glass». Закрытый — «закрыт» там или отмечен закрытым в карточке объекта, и у него внесены стекло, фурнитура, конструктор, замерщик, монтажник и доставка. Расходы и маржа — только закрытых, процент маржи — от их продаж. Расходы — прямые по заказам из «Маржи»: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, партнёры, рекламации, налог и бонусы. Статьи складываются здесь, а не берутся из итога книги: число, набранное текстом, книга не считает.</p>
-          <p>«Дописать» — заказ закрыт по статусу, но в «Марже» пусто хотя бы в одной из этих шести статей или его там ещё нет. Он в «Не закрыто» и в маржу не входит, пока статью не заполнят. Если расхода не было — поставьте 0 (в книге или в карточке объекта): заказ сразу перейдёт в закрытые. До августа 2025 в книге не было колонки «Доставка» — у тех месяцев доставка считается 0.</p>
+          <p>«Дописать» — заказ закрыт по статусу, но в «Марже» пусто хотя бы в одной из этих шести статей или его там ещё нет. Он в «Не закрыто» и в маржу не входит, пока статью не заполнят. Если расхода не было — поставьте 0 (в книге или в карточке объекта): заказ сразу перейдёт в закрытые. </p>
+          <p>* Апрель–июль 2025: в книге «Маржа» нет колонок «Доставка» и «Налог» — доставка считается 0, налог не учтён, поэтому маржа этих месяцев выше сопоставимой с последующими. Добавьте колонки в книгу — сверка прочитает их сама.</p>
           <p>✎ — у объекта есть ячейки, внесённые в приложении: они сильнее книги, книга не меняется. Если книга потом заполнит ячейку по-другому, карточка покажет оба значения. Каждая правка — в журнале действий у владельца.</p>
         </div>
       </div>
