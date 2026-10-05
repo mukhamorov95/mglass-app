@@ -131,7 +131,7 @@ export const SITE = {
   yandexVerification: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION || "",
   // Дата последней правки текстов — идёт в lastmod карты сайта. Меняется руками
   // вместе с текстами: «сегодня» на каждой сборке Яндекс быстро перестаёт читать.
-  contentUpdated: "2026-09-22",
+  contentUpdated: "2026-10-05",
 };
 
 export function unconfirmedFacts(): string[] {
