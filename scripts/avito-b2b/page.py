@@ -23,6 +23,7 @@ def unwrap(block: str) -> str:
 tail = unwrap(re.search(r'## Общий хвост описания.*?```\n(.*?)```', src, re.S).group(1))
 rows = re.findall(r'^\| (\d) \| ([^|]+)\| ([^|]+)\| ([^|]+)\|$', src, re.M)
 bodies = dict(re.findall(r'^### (\d)\. .*?\n\n```\n(.*?)```', src, re.M | re.S))
+fields = dict(re.findall(r'^### (\d)\. [^\n]*\n(?:(?!^### ).)*?^Поля и прайс-лист[^\n]*\n\n```\n(.*?)```', src, re.M | re.S))
 if not rows or len(rows) != len(bodies) or {r[0] for r in rows} != set(bodies):
     sys.exit(f'Сетка и тексты не совпадают: строк сетки {len(rows)}, текстов {len(bodies)} — LISTINGS.md изменился')
 
@@ -30,6 +31,11 @@ cards = []
 for num, rubric, title, price in rows:
     title, rubric, price = title.strip(), rubric.strip(), price.strip()
     text = unwrap(bodies[num]) + '\n\n' + tail
+    extra = '' if num not in fields else f'''
+      <details>
+        <summary>Поля и прайс-лист — заполнить в форме</summary>
+        <pre class="ad-text" id="f{num}">{html.escape(fields[num].strip())}</pre>
+      </details>'''
     cards.append(f'''
     <article class="ad" id="ad{num}">
       <div class="ad-head">
@@ -42,7 +48,7 @@ for num, rubric, title, price in rows:
         <summary>Текст объявления</summary>
         <pre class="ad-text" id="t{num}">{html.escape(text)}</pre>
       </details>
-      <button class="copy" type="button" data-target="t{num}">Скопировать текст</button>
+      <button class="copy" type="button" data-target="t{num}">Скопировать текст</button>{extra}
     </article>''')
 
 page = open('scripts/avito-b2b/page.template.html', encoding='utf-8').read()
