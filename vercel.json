@@ -14,8 +14,16 @@
       "schedule": "30 3 * * *"
     },
     {
+      "path": "/api/cron/manager-day-snapshot",
+      "schedule": "30 3 * * *"
+    },
+    {
       "path": "/api/cron/sales-sheet-sync",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/manager-stats-sync",
+      "schedule": "5 5 * * *"
     },
     {
       "path": "/api/cron/margin-book-sync",
