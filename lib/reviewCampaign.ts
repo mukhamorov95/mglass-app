@@ -26,12 +26,16 @@ const TIME_BUDGET_MS = 240_000
 // (уникальный индекс), ни того же человека (askedBefore).
 export async function fillQueue(days = 90): Promise<{ found: number; added: number; skipped: Partial<Record<SkipReason, number>> }> {
   const since = Math.floor(Date.now() / 1000) - days * 86400
-  const leads = await amoGetAll<ReviewLead>('/api/v4/leads', {
+  // Путь без /api/v4: amoGet добавляет его сам. С префиксом запрос уходил на
+  // /api/v4/api/v4/leads, получал 404, а 404 amoGet отдаёт как «пусто».
+  const leads = await amoGetAll<ReviewLead>('/leads', {
     with: 'contacts',
     'filter[closed_at][from]': String(since),
     'filter[statuses][0][pipeline_id]': String(PIPELINE),
     'filter[statuses][0][status_id]': String(DONE_STATUS),
   }, 'leads')
+  // За 90 дней закрывается ~30 сделок в месяц: ноль — сломанный запрос, а не правда
+  if (!leads.length) throw new Error(`AmoCRM не вернул ни одной успешной сделки за ${days} дней — похоже на сбой запроса`)
 
   // Все контакты сделки, а не первый: клиент бывает вторым после дизайнера
   const ids = [...new Set(leads.flatMap(l => (l._embedded?.contacts ?? []).map(c => c.id)))]
@@ -39,7 +43,7 @@ export async function fillQueue(days = 90): Promise<{ found: number; added: numb
   for (let i = 0; i < ids.length; i += 200) {
     const p: Record<string, string> = {}
     ids.slice(i, i + 200).forEach((id, k) => { p[`filter[id][${k}]`] = String(id) })
-    contacts.push(...await amoGetAll<ReviewContact>('/api/v4/contacts', p, 'contacts'))
+    contacts.push(...await amoGetAll<ReviewContact>('/contacts', p, 'contacts'))
   }
 
   const sb = createServiceClient()
