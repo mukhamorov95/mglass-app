@@ -32,6 +32,9 @@ export type Inquiry = {
   b2b_client_id: number | null
   created_by: string | null
   assigned_to: string | null
+  // Заявки из чатов GLASMEN (вебхук Авито); у заведённых руками — пусто.
+  avito_chat_id?: string | null
+  last_message_at?: string | null
 }
 
 // Первый ответ на Авито нужен за 30 минут: от него зависят уровень сервиса и сама сделка.

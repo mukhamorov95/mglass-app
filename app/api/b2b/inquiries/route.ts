@@ -5,6 +5,8 @@ import {
   normalizeInquiryInput, hasWho, statusPatch, isInquiryStatus, inquiryTitle, OPEN_STATUSES,
   type Inquiry,
 } from '@/lib/b2b/inquiries'
+import { inquiryNotifyText } from '@/lib/b2b/avitoInquiry'
+import { notifyInquiryRecipients } from '@/lib/b2b/inquiryNotify'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +14,7 @@ export const dynamic = 'force-dynamic'
 // 20261002_b2b_inquiries.sql): владелец видит весь поток, сотрудник — свои и назначенные.
 // Гейт роли здесь тот же, что у страницы: /api не наследует гейт экрана.
 
-const COLS = 'id, created_at, updated_at, source, contact_name, company, phone, request, chat_url, listing, status, answered_at, closed_at, lost_reason, b2b_client_id, created_by, assigned_to'
+const COLS = 'id, created_at, updated_at, source, contact_name, company, phone, request, chat_url, listing, status, answered_at, closed_at, lost_reason, b2b_client_id, created_by, assigned_to, avito_chat_id, last_message_at'
 
 async function gate() {
   const sb = await createClient()
@@ -51,6 +53,9 @@ export async function POST(req: NextRequest) {
     .insert({ source: 'avito', ...n.value, created_by: g.user.id })
     .select(COLS).single()
   if (error) return NextResponse.json({ error: `Заявка не сохранена: ${error.message}` }, { status: 500 })
+  // Тот, кто завёл заявку, о ней уже знает — уведомляем остальных получателей.
+  await notifyInquiryRecipients(inquiryNotifyText(data as unknown as Inquiry, 'new'), g.user.id)
+    .catch(e => console.error('[inquiries] уведомление не отправлено', e))
   return NextResponse.json({ inquiry: data })
 }
 
