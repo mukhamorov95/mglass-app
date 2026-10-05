@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import * as mgmt from '@/scripts/lib/managerStatsParse.mjs'
+import * as mgmt from '@/lib/sales/managerStatsParse.mjs'
 
 type Fact = { stat_date: string; manager: string; metric: string; value: number }
 const { normalizeManager, parseNumber } = mgmt
