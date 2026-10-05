@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { addBookFacts, calls, dayLabel, emptyMonth, isWorkday, pickDay, plural, prevMonth, signals, type DayRow, type Schedule } from '@/lib/morning'
+import { addBookFacts, bookSplit, calls, dayLabel, emptyMonth, isWorkday, parseView, periodTitle, pickDay, plural, prevMonth, signals, sumActivity, type DayRow, type Schedule } from '@/lib/morning'
 
 const row = (patch: Partial<DayRow>): DayRow => ({
   day: '2026-10-01', amo_user_id: 1, name: 'Александра', first_at: null, last_at: null, active_hours: null, longest_pause_min: null,
@@ -38,6 +38,11 @@ describe('dayLabel', () => {
   it('вчера — «Вчера», иначе — «Последний рабочий день»', () => {
     expect(dayLabel('2026-10-04', '2026-10-05')).toEqual({ title: 'Вчера', date: 'воскресенье, 4 октября' })
     expect(dayLabel('2026-10-02', '2026-10-05').title).toBe('Последний рабочий день')
+  })
+  it('выбранный руками день — дата, сегодняшний — «Сегодня»', () => {
+    expect(dayLabel('2026-10-05', '2026-10-05', true).title).toBe('Сегодня')
+    expect(dayLabel('2026-09-15', '2026-10-05', true)).toEqual({ title: '15 сентября', date: 'вторник' })
+    expect(dayLabel('2025-12-31', '2026-10-05', true).title).toBe('31 декабря 2025')
   })
 })
 
@@ -86,6 +91,12 @@ describe('signals — что заметить владельцу', () => {
       'пропущенных входящих: 1',
     ])
   })
+  it('сегодня, снимок в 10:40: «нет действий» ещё не сигнал; в 11:05 — уже', () => {
+    expect(signals(undefined, sch, '2026-10-05', '10:40')).toEqual([])
+    expect(signals(undefined, sch, '2026-10-05', '11:05')).toEqual(['к 11:05 своих действий в amo нет при графике с 09:00'])
+    expect(signals(row({ actions: 5, first_at: '2026-10-05T06:10:00Z', left_waiting: 3 }), sch, '2026-10-05', '11:05'))
+      .toEqual(['на 11:05 без ответа клиентов: 3'])
+  })
   it('начал в 10:30 при графике с 9:00 — меньше двух часов, не сигнал', () => {
     expect(signals(row({ actions: 50, first_at: '2026-10-01T07:30:00Z' }), sch, '2026-10-01')).toEqual([])
   })
@@ -95,5 +106,71 @@ describe('plural', () => {
   it('1 объект, 3 объекта, 5 и 11 объектов, 21 объект', () => {
     const o = (n: number) => `${n} ${plural(n, 'объект', 'объекта', 'объектов')}`
     expect([o(1), o(3), o(5), o(11), o(21), o(0)]).toEqual(['1 объект', '3 объекта', '5 объектов', '11 объектов', '21 объект', '0 объектов'])
+  })
+})
+
+describe('parseView — что выбрано на «Команде»', () => {
+  const T = '2026-10-05'
+  it('без параметров — последний рабочий день', () => {
+    expect(parseView({}, T)).toEqual({ view: { kind: 'auto' } })
+  })
+  it('день: сегодня можно, завтра и кривую дату — нет', () => {
+    expect(parseView({ d: T }, T).view).toEqual({ kind: 'day', day: T })
+    expect(parseView({ d: '2026-10-06' }, T).error).toBe('день ещё не наступил')
+    expect(parseView({ d: '2026-02-30' }, T).error).toMatch('нет такого дня')
+  })
+  it('текущий месяц — по сегодня и остаётся месяцем; прошлый — целиком', () => {
+    expect(parseView({ month: '2026-10' }, T).view).toEqual({ kind: 'range', from: '2026-10-01', to: T, month: '2026-10' })
+    expect(parseView({ month: '2026-09' }, T).view).toEqual({ kind: 'range', from: '2026-09-01', to: '2026-09-30', month: '2026-09' })
+    expect(parseView({ month: '2026-11' }, T).error).toMatch('нет такого месяца')
+  })
+  it('год — с 1 января по сегодня; свои даты — конец не дальше сегодня', () => {
+    expect(parseView({ year: '2026' }, T).view).toEqual({ kind: 'range', from: '2026-01-01', to: T, month: null })
+    expect(parseView({ from: '2026-09-01', to: '2026-12-01' }, T).view).toEqual({ kind: 'range', from: '2026-09-01', to: T, month: null })
+    expect(parseView({ from: '2026-09-10', to: '2026-09-01' }, T).error).toBe('период: начало позже конца')
+    expect(parseView({ from: '2026-09-01', to: '2026-09-30' }, T).view).toMatchObject({ month: '2026-09' })
+  })
+})
+
+describe('periodTitle', () => {
+  const T = '2026-10-05'
+  it('месяц, год, отрезок, другой год', () => {
+    expect(periodTitle('2026-10-01', T, T)).toBe('Октябрь')
+    expect(periodTitle('2025-06-01', '2025-06-30', T)).toBe('Июнь 2025')
+    expect(periodTitle('2026-01-01', T, T)).toBe('2026 год')
+    expect(periodTitle('2025-01-01', '2025-12-31', T)).toBe('2025 год')
+    expect(periodTitle('2026-09-29', T, T)).toBe('29 сентября – 5 октября')
+    expect(periodTitle('2025-12-20', '2026-01-10', T)).toBe('20 декабря 2025 – 10 января 2026')
+  })
+})
+
+describe('bookSplit — итог месяца или дни', () => {
+  it('год по 5 октября: январь–сентябрь итогами, октябрь по дням', () => {
+    const b = bookSplit('2026-01-01', '2026-10-05', '2026-10')
+    expect(b.months).toEqual(['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'])
+    expect([b.daily('2026-10-03'), b.daily('2026-06-15'), b.daily('2026-10-06')]).toEqual([true, false, false])
+  })
+  it('края периода — по дням, целый месяц внутри — итогом', () => {
+    const b = bookSplit('2026-06-15', '2026-08-10', '2026-10')
+    expect(b.months).toEqual(['2026-07'])
+    expect([b.daily('2026-06-14'), b.daily('2026-06-15'), b.daily('2026-07-20'), b.daily('2026-08-10')]).toEqual([false, true, false, true])
+  })
+})
+
+describe('sumActivity — неделя одного человека', () => {
+  // пн 28.09 — пт 02.10 и выходные; снимков нет за 30.09
+  const days = ['2026-09-28', '2026-09-29', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']
+  const rows = [
+    row({ day: '2026-09-28', actions: 50, first_at: '2026-09-28T06:00:00Z', calls_out: 4, calls_out_ok: 2, messages_own: 10, cards_moved: 3, adv_kp: 1, adv_invoice: 0 }),
+    row({ day: '2026-09-29', actions: 40, first_at: '2026-09-29T09:30:00Z', pbx_out: 7, pbx_out_ok: 5, pbx_in: 1, pbx_talk_sec: 600, messages_no_author: 2 }),
+    row({ day: '2026-10-03', actions: 5, first_at: '2026-10-03T08:00:00Z' }),
+  ]
+  const a = sumActivity(rows, sch, days)
+  it('рабочие дни по графику и без действий; выходной с работой — в «днях в amo»', () => {
+    expect([a.days, a.workdays, a.worked, a.idle, a.late]).toEqual([6, 4, 3, 2, 1])
+  })
+  it('звонки — АТС, где ответила; среднее начало — по рабочим дням', () => {
+    expect([a.out, a.ok, a.in, a.talkSec, a.msgs, a.moved, a.kp]).toEqual([11, 7, 1, 600, 12, 3, 1])
+    expect(a.startAvg).toBe('10:45')   // 09:00 и 12:30 по Москве
   })
 })

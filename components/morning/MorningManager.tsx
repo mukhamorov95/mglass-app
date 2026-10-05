@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import MyDay from '@/components/MyDay'
-import { calls, dayLabel, dayRange, duration, hm, monthName, plural, ratePct, rub, type MonthMoney } from '@/lib/morning'
+import { calls, dayLabel, dayRange, duration, hm, monthName, plural, ratePct, rub, type MonthMoney, type View } from '@/lib/morning'
+import PeriodPicker from '@/components/morning/PeriodPicker'
+import TodayRefresh from '@/components/morning/TodayRefresh'
 import { payoutSplit, payouts, planProgress } from '@/lib/earnings/cash'
 import { currentTierIndex, distanceToNextTier } from '@/lib/earnings/calculateProgressiveCommission'
 import type { Morning, MorningPerson } from '@/lib/morningData'
@@ -118,20 +120,23 @@ function MonthCards({ m, prev, prevLabel }: { m: MonthMoney; prev: MonthMoney; p
   )
 }
 
-export default function MorningManager({ morning, person, ownerView }: { morning: Morning; person: MorningPerson; ownerView: boolean }) {
+// view — только у владельца: он выбирает день сверху; менеджер видит последний рабочий.
+export default function MorningManager({ morning, person, ownerView, view }: { morning: Morning; person: MorningPerson; ownerView: boolean; view?: View }) {
   const { day, today, month, prev, bookLastDay } = morning
-  const label = day ? dayLabel(day, today) : null
+  const label = day ? dayLabel(day, today, view?.kind === 'day') : null
   const yesterday = new Date(Date.parse(`${today}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10)
   return (
     <div className="space-y-6">
       {ownerView && (
-        <Link href="/" className="text-[13px] text-blue-600 hover:underline">← Команда</Link>
+        <Link href={view?.kind === 'day' ? `/?d=${view.day}` : '/'} className="text-[13px] text-blue-600 hover:underline">← Команда</Link>
       )}
+      {ownerView && view && <PeriodPicker today={today} view={view} person={person.amoUserId} />}
 
       <section className="space-y-3">
         <div className="flex items-baseline gap-2 flex-wrap">
           <h2 className="text-[16px] font-bold text-[#111110]">{label?.title ?? 'Вчера'}</h2>
           {label && <span className="text-[13px] text-[#6b6b66]">{label.date}</span>}
+          {ownerView && day === today && <TodayRefresh updatedAt={morning.updatedAt} />}
         </div>
         {day
           ? <YesterdayCards p={person} />
