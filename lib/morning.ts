@@ -36,14 +36,19 @@ export function addBookFacts(into: MonthMoney, facts: { metric: string; value: n
   return into
 }
 
-// «Вчера» — последний прошедший день, когда в amo вообще кто-то работал. В понедельник
-// это пятница (или суббота дежурного), а не пустое воскресенье.
-export function pickDay(rows: { day: string; actions: number }[], today: string): string | null {
+// «Вчера» — последний прошедший рабочий по графику день, когда в amo кто-то работал.
+// В понедельник это пятница: ни пустое воскресенье, ни суббота дежурного, где
+// пара минут работы одного человека и нули у остальных.
+export function pickDay(rows: { day: string; actions: number }[], today: string, workday?: (day: string) => boolean): string | null {
   const past = rows.filter(r => r.day < today)
-  const worked = past.filter(r => r.actions > 0).map(r => r.day).sort()
-  if (worked.length) return worked[worked.length - 1]
-  const any = past.map(r => r.day).sort()
-  return any.length ? any[any.length - 1] : null
+  const last = (xs: { day: string }[]) => (xs.length ? xs.map(r => r.day).sort().at(-1)! : null)
+  const worked = past.filter(r => r.actions > 0)
+  return (workday ? last(worked.filter(r => workday(r.day))) : null) ?? last(worked) ?? last(past)
+}
+
+export const plural = (n: number, one: string, few: string, many: string) => {
+  const a = Math.abs(n) % 100, b = a % 10
+  return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many
 }
 
 const WEEKDAYS = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота']
