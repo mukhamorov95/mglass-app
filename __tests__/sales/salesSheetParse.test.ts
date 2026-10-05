@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import * as sheet from '@/scripts/lib/salesSheetParse.mjs'
+import * as sheet from '@/lib/sales/salesSheetParse.mjs'
 
 // Модуль разбора книги — на JS (его запускает скрипт импорта), поэтому в тесте
 // поля описываем сами: иначе TS выводит из JSDoc пустые объекты.
 type Cols = Record<string, number>
 type Sale = Record<string, unknown>
-const { parseTabMonth, parseMoney, parseDate, paidFromColor, parseSheetRows, rowToSale, parseTabList } = sheet
+const { parseTabMonth, parseMoney, parseMoneyLoose, parseDate, paidFromColor, parseSheetRows, rowToSale, parseTabList, parseBookTotals } = sheet
 const findColumns = sheet.findColumns as (rows: unknown[]) => { headerRow: number; cols: Cols }
 const parseTab = sheet.parseTab as (html: string, gid: string, tab: string) =>
   { ledgerMonth: string; headerRow: number; sales: Sale[]; skipped: Sale[] }
@@ -24,6 +24,25 @@ describe('книга продаж: разбор значений', () => {
     expect(parseMoney('р.0')).toBe(0)
     expect(parseMoney('')).toBeNull()
     expect(parseMoney('-')).toBeNull()
+  })
+
+  it('сумма текстом: число берём, только если оно в ячейке одно, и помечаем', () => {
+    expect(parseMoneyLoose('р.95 900')).toEqual({ value: 95900, text: false })
+    expect(parseMoneyLoose('По 95 900')).toEqual({ value: 95900, text: true })
+    expect(parseMoneyLoose('По 95\u00a0900')).toEqual({ value: 95900, text: true })
+    expect(parseMoneyLoose('2 шт. по 5000')).toEqual({ value: null, text: false })
+    expect(parseMoneyLoose('доплата')).toEqual({ value: null, text: false })
+    expect(parseMoneyLoose('')).toEqual({ value: null, text: false })
+  })
+
+  it('итоги «Продаж за месяц» с листа МГЛАСС', () => {
+    const csv = '"","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"\n'
+      + '"2026","р.1 000","р.0","","","","","р.5 136 559","р.4 595 782","р.2 799 787","р.93 400","",""'
+    const t = parseBookTotals(csv)
+    expect(t.get('2026-01')).toBe(1000)
+    expect(t.has('2026-02')).toBe(false)
+    expect(t.get('2026-08')).toBe(4595782)
+    expect(t.get('2026-10')).toBe(93400)
   })
 
   it('дата: 1900 год — пустая ячейка с формулой, 31 сентября — опечатка в книге', () => {
@@ -102,6 +121,14 @@ describe('книга продаж: разбор строк', () => {
     expect(sales).toHaveLength(1)
     expect(skipped).toHaveLength(1)
     expect(skipped[0]).toMatchObject({ skip: 'без суммы заказа', order_no: '0935-3', prepayment: 130550 })
+  })
+
+  it('сумма текстом «По 95 900» — продажа остаётся, строка помечена для отчёта', () => {
+    const txt = HTML.replace('<td class="s30">р.186&nbsp;500</td>', '<td class="s30">По 186&nbsp;500</td>')
+    const { sales, skipped } = parseTab(txt, GID, 'Июль 26')
+    expect(skipped).toHaveLength(0)
+    expect(sales[0]).toMatchObject({ amount: 186500, amount_text: 'По 186 500', row: 6 })
+    expect(sales[1]).toMatchObject({ amount_text: null })
   })
 
   it('пустая заготовка строки продажей не становится', () => {
