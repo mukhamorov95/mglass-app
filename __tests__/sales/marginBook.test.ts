@@ -148,22 +148,25 @@ describe('сверка «Маржи» с «Продажами»', () => {
 describe('деньги периода: продажи → расходы → маржа', () => {
   const objs = reconcileMonth('2026-01', parseMarginTab(BOOK, GID, 'Январь 26').rows, SALES)
 
-  it('все объекты: строка «Маржи» без продажи в суммы не входит, статьи складываются в расходы', () => {
+  it('продажи — все заказы, расходы и маржа — только закрытые; строка «Маржи» без продажи в суммы не входит', () => {
     const t = periodTotals(objs)
     expect(t.objects).toBe(4)
     expect(t.closed).toBe(3)
     expect(t.sales).toBe(45000 + 150000 + 105000 + 57011)
+    expect(t.closed_sales).toBe(300000)
+    expect(t.costs).toBe(28831 + 125951 + 49725)
     expect(Object.values(t.byCost).reduce((a, b) => a + b, 0)).toBe(t.costs)
-    expect(t.margin).toBe(t.sales - t.costs)
-    expect(t.partial).toBe(2)   // 0900-2 без монтажника, 0959-2 нет в «Марже»
+    expect(t.margin).toBe(t.closed_sales - t.costs)
+    expect(t.margin_pct).toBeCloseTo(95493 / 300000 * 100, 6)
+    expect(t.partial).toBe(1)   // 0900-2 закрыт без монтажника; 0959-2 открыт — не считается
   })
 
-  it('только закрытые', () => {
-    const t = periodTotals(objs, 'closed')
-    expect(t.base).toBe(3)
-    expect(t.sales).toBe(300000)
-    expect(t.costs).toBe(28831 + 125951 + 49725)
-    expect(t.partial).toBe(1)
+  it('открытый заказ с расходами не меняет маржу, пока его не закроют', () => {
+    const open = objs.map(o => (o.closed ? o : { ...o, costs: { ...(o.costs ?? {}), glass: 50000 } as typeof o.costs, var_total: 50000, md: o.amount - 50000 }))
+    const t = periodTotals(open)
+    expect(t.costs).toBe(periodTotals(objs).costs)
+    expect(t.margin).toBe(periodTotals(objs).margin)
+    expect(t.sales).toBe(periodTotals(objs).sales)
   })
 })
 
@@ -180,8 +183,8 @@ describe('отчёт в Telegram', () => {
 
   it('месяц с правками — ✏️, адрес правки и сводка', () => {
     const t = plain(formatMarginReport(report))
-    expect(t).toContain('✏️ Январь: продажи 357 011 ₽ · расходы 204 507 ₽ · маржа 42,7 %')
-    expect(t).toContain('расходы неполные у 2 из 4 — маржа завышена')
+    expect(t).toContain('✏️ Январь: продажи 357 011 ₽ · закрыто 3 из 4 на 300 000 ₽ · расходы 204 507 ₽ · маржа 31,8 %')
+    expect(t).toContain('расходы неполные у 1 из 3 закрытых — маржа завышена')
     expect(t).toContain('Закрытые объекты (3): продажи 300 000 ₽ · маржа <b>95 493 ₽</b> · 31,8 %')
     expect(t).toContain('«Маржа» Январь 26, стр. 4, 0811-2: текстом набрано — фурнитура')
     expect(t).toContain('может, это 0959-2?')
@@ -199,7 +202,7 @@ describe('отчёт в Telegram', () => {
   it('всё сошлось — ✅', () => {
     const clean = reconcileMonth('2026-01', tab.rows.slice(0, 1), SALES.slice(0, 1))
     const t = formatMarginReport({ dry: true, financeUpdated: 0, months: [{ ...report.months[0], bookAmountTotal: 45000, rowsAmount: 45000, objects: clean, summary: summarize(clean) }] })
-    expect(plain(t)).toContain('✅ Январь: продажи 45 000 ₽ · расходы 28 831 ₽ · маржа 35,9 %')
+    expect(plain(t)).toContain('✅ Январь: продажи 45 000 ₽ · закрыто 1 из 1 на 45 000 ₽ · расходы 28 831 ₽ · маржа 35,9 %')
     expect(t).not.toContain('Поправить')
   })
 })
