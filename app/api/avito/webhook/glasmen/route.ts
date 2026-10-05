@@ -4,6 +4,7 @@ import { parseAvitoEvent, avitoChatUrl, inquiryNotifyText, type AvitoWebhookBody
 import { glasmenChatInfo, glasmenUserId } from '@/lib/avito/glasmen'
 import { notifyInquiryRecipients, inquiryAssignee } from '@/lib/b2b/inquiryNotify'
 import { statusPatch, type Inquiry } from '@/lib/b2b/inquiries'
+import { webhookGate } from '@/lib/avito/webhookGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,8 +22,9 @@ const CLOSED = new Set(['won', 'lost'])
 export async function POST(req: NextRequest) {
   const secret = process.env.AVITO_GLASMEN_WEBHOOK_SECRET
   const ownUserId = glasmenUserId()
-  if (!secret || !ownUserId) return NextResponse.json({ error: 'not configured' }, { status: 503 })
-  if (req.nextUrl.searchParams.get('key') !== secret) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  if (!ownUserId) return NextResponse.json({ error: 'not configured' }, { status: 503 })
+  const denied = webhookGate(secret, req.nextUrl.searchParams.get('key'))
+  if (denied) return NextResponse.json({ error: denied.error }, { status: denied.status })
 
   const body = await req.json().catch(() => null) as AvitoWebhookBody | null
   const ev = parseAvitoEvent(body, ownUserId)
