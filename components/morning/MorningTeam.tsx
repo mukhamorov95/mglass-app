@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { calls, dayLabel, duration, hm, monthName, rub, signals } from '@/lib/morning'
+import { calls, dayLabel, duration, hm, monthName, plural, rub, signals } from '@/lib/morning'
 import type { Morning } from '@/lib/morningData'
 
 // «Команда» — первый экран владельца: тот же день и месяц, что у каждого менеджера
@@ -40,7 +40,7 @@ export default function MorningTeam({ morning }: { morning: Morning }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { l: `Поступило · ${monthName(month).toLowerCase()}`, v: rub(tot.money), s: `${monthName(prev).toLowerCase()}: ${rub(tot.prevMoney)}` },
-          { l: `Продажи · ${monthName(month).toLowerCase()}`, v: rub(tot.sales), s: `${tot.salesN} объектов` },
+          { l: `Продажи · ${monthName(month).toLowerCase()}`, v: rub(tot.sales), s: `${tot.salesN} ${plural(tot.salesN, 'объект', 'объекта', 'объектов')}` },
           { l: 'Звонки за день', v: `${tot.out} исх. · ${tot.ok} дозвон`, s: `входящих ${tot.in} · в разговоре ${duration(tot.talk)}` },
           { l: 'КП и счета за день', v: `${tot.kp} · ${tot.inv}`, s: `сообщений ${tot.msgs} · сделок двинуто ${tot.moved}` },
         ].map(x => (

@@ -655,7 +655,7 @@ export default function UsersPage() {
                                   onChange={e => setHomeRoute(u, (e.target.value || null) as ManagerHome | null)}
                                   title="Куда попадает человек со входа в приложение"
                                   className="text-[10px] font-medium px-2 py-1 rounded-full border border-[#e4e4e0] bg-white cursor-pointer outline-none focus:border-[#111110]">
-                                  <option value="">Вход: общая панель</option>
+                                  <option value="">Вход: Утро (главная)</option>
                                   {MANAGER_HOMES.map(h => (
                                     <option key={h.value} value={h.value}>Вход: {h.label}</option>
                                   ))}

@@ -1,7 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { bookNames } from '@/lib/sales/bookNames'
-import { addBookFacts, emptyMonth, pickDay, prevMonth, type DayRow, type MonthMoney, type Schedule } from '@/lib/morning'
+import { addBookFacts, emptyMonth, isWorkday, pickDay, prevMonth, type DayRow, type MonthMoney, type Schedule } from '@/lib/morning'
 
 // Данные «Утра». Читает service-ключом: кто что видит, решает страница до вызова —
 // менеджеру передаётся только его amo-id.
@@ -51,7 +51,9 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
   // а не его последний рабочий день недельной давности.
   const byDay = new Map<string, number>()
   for (const r of rows) if (sellers.includes(Number(r.amo_user_id))) byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.actions)
-  const day = pickDay([...byDay].map(([d, actions]) => ({ day: d, actions })), today)
+  const sellerSchedules = sellers.map(id => schedules.get(id))
+  const workday = (d: string) => sellerSchedules.some(s => isWorkday(d, s))
+  const day = pickDay([...byDay].map(([d, actions]) => ({ day: d, actions })), today, workday)
     ?? pickDay(rows.map(r => ({ day: r.day, actions: r.actions })), today)
 
   const userName = new Map(((users.data ?? []) as { name: string | null; amo_user_id: number }[]).map(u => [Number(u.amo_user_id), u.name ?? '']))

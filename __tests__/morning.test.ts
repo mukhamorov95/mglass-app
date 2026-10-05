@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { addBookFacts, calls, dayLabel, emptyMonth, isWorkday, pickDay, prevMonth, signals, type DayRow, type Schedule } from '@/lib/morning'
+import { addBookFacts, calls, dayLabel, emptyMonth, isWorkday, pickDay, plural, prevMonth, signals, type DayRow, type Schedule } from '@/lib/morning'
 
 const row = (patch: Partial<DayRow>): DayRow => ({
   day: '2026-10-01', amo_user_id: 1, name: 'Александра', first_at: null, last_at: null, active_hours: null, longest_pause_min: null,
@@ -18,6 +18,12 @@ describe('pickDay — какой день показывать как «вчер
       { day: '2026-10-02', actions: 60 }, { day: '2026-10-03', actions: 0 }, { day: '2026-10-04', actions: 0 },
     ]
     expect(pickDay(days, '2026-10-05')).toBe('2026-10-02')
+  })
+  it('суббота дежурного с минутой работы — не «последний рабочий день»: берём пятницу по графику', () => {
+    const days = [{ day: '2026-10-02', actions: 64 }, { day: '2026-10-03', actions: 43 }, { day: '2026-10-04', actions: 0 }]
+    const weekday = (d: string) => isWorkday(d, sch)
+    expect(pickDay(days, '2026-10-05', weekday)).toBe('2026-10-02')
+    expect(pickDay(days, '2026-10-05')).toBe('2026-10-03')
   })
   it('сегодняшний день не берётся, даже если в нём уже есть действия', () => {
     expect(pickDay([{ day: '2026-10-05', actions: 10 }, { day: '2026-10-04', actions: 3 }], '2026-10-05')).toBe('2026-10-04')
@@ -82,5 +88,12 @@ describe('signals — что заметить владельцу', () => {
   })
   it('начал в 10:30 при графике с 9:00 — меньше двух часов, не сигнал', () => {
     expect(signals(row({ actions: 50, first_at: '2026-10-01T07:30:00Z' }), sch, '2026-10-01')).toEqual([])
+  })
+})
+
+describe('plural', () => {
+  it('1 объект, 3 объекта, 5 и 11 объектов, 21 объект', () => {
+    const o = (n: number) => `${n} ${plural(n, 'объект', 'объекта', 'объектов')}`
+    expect([o(1), o(3), o(5), o(11), o(21), o(0)]).toEqual(['1 объект', '3 объекта', '5 объектов', '11 объектов', '21 объект', '0 объектов'])
   })
 })

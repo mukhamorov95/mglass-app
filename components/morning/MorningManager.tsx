@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import MyDay from '@/components/MyDay'
-import { calls, dayLabel, duration, hm, monthName, rub, type MonthMoney } from '@/lib/morning'
+import { calls, dayLabel, duration, hm, monthName, plural, rub, type MonthMoney } from '@/lib/morning'
 import type { Morning, MorningPerson } from '@/lib/morningData'
 
 // «Утро» менеджера: вчера, сегодня, месяц. Все цифры собираются сами — менеджер
@@ -22,7 +22,7 @@ const dm = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
 export function YesterdayCards({ p }: { p: MorningPerson }) {
   const r = p.row
   if (!r || (r.actions === 0 && r.messages_own === 0 && (r.pbx_out ?? 0) === 0)) {
-    return <p className="text-[13px] text-[#6b6b66] bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">В этот день в amo нет ни одного вашего действия и звонков через АТС.</p>
+    return <p className="text-[13px] text-[#6b6b66] bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">Своих действий в amo и звонков через АТС в этот день нет.</p>
   }
   const c = calls(r)
   const msgs = r.messages_own + r.messages_no_author
@@ -54,7 +54,7 @@ function MonthCards({ m, prev, prevLabel }: { m: MonthMoney; prev: MonthMoney; p
   const money = m.prepay + m.remainder
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <Card label="Продажи" value={rub(m.salesSum)} sub={`${m.salesCount} объектов`}
+      <Card label="Продажи" value={rub(m.salesSum)} sub={`${m.salesCount} ${plural(m.salesCount, 'объект', 'объекта', 'объектов')}`}
         note={`сумма заказов из «Продаж M-Glass» · ${prevLabel}: ${prev.salesCount} · ${rub(prev.salesSum)}`} />
       <Card label="Поступило денег" value={rub(money)} sub={`предоплаты ${rub(m.prepay)} + остатки ${rub(m.remainder)} · оплат ${m.payments}`}
         note={`из «Аналитики дохода» · ${prevLabel}: ${rub(prev.prepay + prev.remainder)}`} />
