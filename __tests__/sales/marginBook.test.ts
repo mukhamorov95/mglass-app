@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseMarginTab, reconcileMonth, summarize, formatMarginReport, needsFix, fromDb, periodTotals,
+  parseMarginTab, reconcileMonth, summarize, formatMarginReport, needsFix, fromDb, periodTotals, roundShares,
   type MarginSale, type MarginSyncReport,
 } from '@/lib/sales/marginBook'
 import * as sheet from '@/lib/sales/salesSheetParse.mjs'
@@ -223,5 +223,19 @@ describe('скрытые вкладки «Продаж»: статусы из CS
 
   it('чужой лист (gviz подменил незнакомое имя первым листом) — null', () => {
     expect(parseStatusTab('"Отметка времени","Вопрос без заголовка"\n"1","2"')).toBeNull()
+  })
+})
+
+describe('roundShares — доли статей сходятся с долей расходов', () => {
+  it('январь 2026: статьи в сумме дают 62,3 %, как строка «Расходы по статьям»', () => {
+    const parts = [370737, 316393, 312000, 304037, 125030, 88000, 55280, 41462, 36500, 34000, 27639, 12000]
+    const whole = 2763980
+    const s = roundShares(parts, whole)
+    expect(Math.round(s.reduce((a, b) => a + b, 0) * 10) / 10).toBe(62.3)
+    parts.forEach((p, i) => expect(Math.abs(s[i] - p / whole * 100)).toBeLessThan(0.1))
+  })
+
+  it('без продаж — нули, а не деление на ноль', () => {
+    expect(roundShares([100, 200], 0)).toEqual([0, 0])
   })
 })

@@ -5,7 +5,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { mskDayKey } from '@/lib/time'
 import { shiftMonth } from '@/lib/sales/period'
 import {
-  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, fixLine, fromDb, monthRu, needsFix, periodTotals, reconcileMonth,
+  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, fixLine, fromDb, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
   type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals, type Scope,
 } from '@/lib/sales/marginBook'
 
@@ -201,6 +201,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
 
 function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: PeriodTotals; fixes: string[] } }) {
   const rows = COST_KEYS.map(k => ({ k, sum: m.t.byCost[k] })).filter(x => x.sum !== 0).sort((a, b) => b.sum - a.sum)
+  const shares = roundShares(rows.map(x => x.sum), m.t.sales)
   const sold = m.objects.filter(o => o.sale_id != null)
   return (
     <div className="px-4 pb-4 pt-1 space-y-2 bg-[#fcfcfb]">
@@ -211,11 +212,11 @@ function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: Peri
         </summary>
         <div className="px-3 pb-2">
           {rows.length === 0 && <p className="text-[12px] text-[#9a9a95] py-1">Расходы за месяц в «Марже» не внесены.</p>}
-          {rows.map(x => (
+          {rows.map((x, i) => (
             <div key={x.k} className="grid grid-cols-[1fr_auto_4.5rem] gap-3 py-1 text-[12px] border-t border-[#f0f0ec] first:border-0">
               <span>{COST_RU[x.k][0].toUpperCase() + COST_RU[x.k].slice(1)}</span>
               <span className="text-right tabular-nums">{rub(x.sum)} ₽</span>
-              <span className="text-right tabular-nums text-[#6b6b66]">{pct(share(x.sum, m.t.sales))}</span>
+              <span className="text-right tabular-nums text-[#6b6b66]">{m.t.sales ? pct(shares[i]) : '—'}</span>
             </div>
           ))}
         </div>

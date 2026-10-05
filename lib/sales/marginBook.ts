@@ -480,3 +480,16 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
   if (info.length && lines.join('\n').length + 80 < limit) lines.push('', `ℹ️ ${info.join('; ')}`)
   return lines.join('\n')
 }
+
+// Доли статей в процентах от продаж с точностью 0,1 так, чтобы в показанной
+// точности они сходились с долей всех расходов: 13,4 + 11,4 + … = 62,3, а не 62,2.
+// Наибольший остаток: недостающие десятые отдаются статьям с самым крупным хвостом.
+export function roundShares(parts: number[], whole: number): number[] {
+  if (!whole) return parts.map(() => 0)
+  const raw = parts.map(p => p / whole * 1000)
+  const floor = raw.map(Math.floor)
+  let left = Math.round(raw.reduce((s, x) => s + x, 0)) - floor.reduce((s, x) => s + x, 0)
+  const order = raw.map((x, i) => [x - floor[i], i] as const).sort((a, b) => b[0] - a[0])
+  for (const [, i] of order) { if (left <= 0) break; floor[i]++; left-- }
+  return floor.map(x => x / 10)
+}

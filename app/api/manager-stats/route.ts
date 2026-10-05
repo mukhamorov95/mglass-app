@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { getSessionUser } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { bookNames } from '@/lib/sales/bookNames'
 import { resolvePeriod, parseManagers } from '@/lib/sales/period'
 import { mskDayKey } from '@/lib/time'
 import { METRIC_KEYS, foldStats, splitPeriod, describeNote, type StatFact, type MonthNote } from '@/lib/sales/managerStats'
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
     let mq = sb.from('manager_stats_monthly')
       .select('month, manager, metric, book, days, value, kind, note_day')
       .in('month', months).limit(5000)
-    if (!canAll) mq = mq.eq('manager', me)
+    if (!canAll) mq = mq.in('manager', bookNames(me))
     const { data: mrows, error: merr } = await mq
     if (merr) return NextResponse.json({ error: merr.message }, { status: 500 })
     type MonthRow = Omit<MonthNote, 'kind'> & { kind: MonthNote['kind'] | 'match' }
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
     let dq = sb.from('manager_stats_daily')
       .select('stat_date, manager, metric, value')
       .gte('stat_date', lo).lte('stat_date', hi).limit(20000)
-    if (!canAll) dq = dq.eq('manager', me)
+    if (!canAll) dq = dq.in('manager', bookNames(me))
     const { data: drows, error: derr } = await dq
     if (derr) return NextResponse.json({ error: derr.message }, { status: 500 })
     facts.push(...((drows ?? []) as StatFact[]))
