@@ -7,13 +7,13 @@ import { mskDayKey } from '@/lib/time'
 import { shiftMonth } from '@/lib/sales/period'
 import {
   COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, fixLine, fromDb, loadEdits, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
-  type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals, type Scope,
+  type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals,
 } from '@/lib/sales/marginBook'
 
 // Маржа объектов M-Glass: книга «Маржа», сверенная с «Продажами M-Glass».
-// Читается так, как владелец считает сам (05.10): месяц → продажи → прямые расходы
-// по заказам → маржа. Месяц раскрывается на месте, расходы — по статьям с долей от
-// продаж. Владельцу и тому, кому выдано право «Маржа» (Вере — решение владельца 05.10):
+// Читается так, как владелец считает сам (05.10): месяц → все продажи → закрытые заказы
+// → их прямые расходы → их маржа. Месяц раскрывается на месте, расходы — по статьям с
+// долей от продаж закрытых. Владельцу и тому, кому выдано право «Маржа» (Вере — решение владельца 05.10):
 // он же дописывает пустые ячейки объекта в карточке (MarginObjectRow). Витрина CFO
 // /cfo/sales-ledger читает ту же себестоимость: её пишет та же утренняя сверка.
 
@@ -26,6 +26,11 @@ const rub = (n: number) => Math.round(n).toLocaleString('ru-RU')
 const pct1 = (n: number) => Math.round(n * 10) / 10
 const pct = (n: number | null) => (n == null ? '—' : `${pct1(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`)
 const share = (part: number, whole: number) => (whole ? part / whole * 100 : null)
+// Маржа — разность напечатанного: «продажи закрытых − расходы» сходится до рубля,
+// доли расходов и маржи от продаж закрытых — до 100,0 %.
+const marginRub = (t: PeriodTotals) => rub(Math.round(t.closed_sales) - Math.round(t.costs))
+const costPct = (t: PeriodTotals) => share(t.costs, t.closed_sales)
+const marginPct = (t: PeriodTotals) => { const c = costPct(t); return c == null ? null : 100 - pct1(c) }
 // Цвет — по напечатанному значению: 34,96 % показывается «35,0 %» и красится зелёным.
 const mCls = (n: number | null) =>
   n == null ? 'text-[#9a9a95]' : pct1(n) < 25 ? 'text-red-600' : pct1(n) < 35 ? 'text-amber-600' : 'text-emerald-700'
@@ -44,22 +49,17 @@ const periodLabel = (mode: Mode, anchor: string) => {
 }
 const step = (mode: Mode) => (mode === 'year' ? 12 : mode === 'quarter' ? 3 : 1)
 
-const GRID = 'grid grid-cols-[1.3fr_1.1fr_.7fr_.7fr_1.1fr_1.1fr_.8fr] gap-2 items-center'
+const GRID = 'grid grid-cols-[1.1fr_1fr_.6fr_.6fr_1fr_1fr_1fr_.7fr] gap-2 items-center'
 
-export default async function MarginPage({ searchParams }: { searchParams: Promise<{ mode?: string; month?: string; scope?: string }> }) {
+export default async function MarginPage({ searchParams }: { searchParams: Promise<{ mode?: string; month?: string }> }) {
   const profile = await getUserProfile()
   if (!profile || !canMargin(profile.role, profile.permissions)) redirect('/sales')
 
   const sp = await searchParams
   const mode: Mode = sp.mode === 'month' || sp.mode === 'quarter' ? sp.mode : 'year'
   const anchor = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month ?? '') ? sp.month! : mskDayKey().slice(0, 7)
-  const scope: Scope = sp.scope === 'closed' ? 'closed' : 'all'
   const months = monthsOf(mode, anchor)
-  const href = (p: { mode?: Mode; month?: string; scope?: Scope }) => {
-    const q = new URLSearchParams({ mode: p.mode ?? mode, month: p.month ?? anchor })
-    if ((p.scope ?? scope) === 'closed') q.set('scope', 'closed')
-    return `/sales/margin?${q}`
-  }
+  const href = (p: { mode?: Mode; month?: string }) => `/sales/margin?${new URLSearchParams({ mode: p.mode ?? mode, month: p.month ?? anchor })}`
 
   // Service-role: право на маржу проверено выше.
   const svc = createServiceClient()
@@ -78,11 +78,11 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
     const objects = reconcileMonth(m, own.map(fromDb), sales.filter(s => s.ledger_month === m), edits)
     const tab = own[0]?.tab ?? `${monthRu(m)} ${m.slice(2, 4)}`
     return {
-      month: m, tab, objects, t: periodTotals(objects, scope),
+      month: m, tab, objects, t: periodTotals(objects),
       fixes: objects.flatMap(o => o.issues.filter(i => needsFix(o, i)).map(i => fixLine({ month: m, tab }, o, i))),
     }
   }).filter(x => x.objects.length > 0)
-  const total = periodTotals(byMonth.flatMap(x => x.objects), scope)
+  const total = periodTotals(byMonth.flatMap(x => x.objects))
   const fixes = byMonth.flatMap(x => x.fixes)
   const beforeBook = months[0] < MARGIN_SINCE
 
@@ -98,7 +98,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           <Link href="/sales/managers" className="text-[12px] text-[#0071e3] hover:underline">→ Показатели менеджеров</Link>
         </div>
         <p className="text-[12px] text-[#9a9a95] mb-3">
-          Маржа = продажи − прямые расходы по заказам. Расходы — из книги «Маржа» и внесённые здесь, продажи — из «Продаж M-Glass»; сверка с книгой каждое утро в 8:10.
+          Продажи — все заказы периода. Расходы и маржа — только по закрытым заказам: у открытого расходы ещё набираются.
+          Маржа = продажи закрытых − их прямые расходы. Расходы — из книги «Маржа» и внесённые здесь, продажи — из «Продаж M-Glass»; сверка с книгой каждое утро в 8:10.
           Нажмите на объект — откроются все его ячейки: пустое можно дописать и сохранить.
         </p>
 
@@ -111,9 +112,6 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           <Link href={href({ mode: 'month' })} className={btn(mode === 'month')}>Месяц</Link>
           <Link href={href({ mode: 'quarter' })} className={btn(mode === 'quarter')}>Квартал</Link>
           <Link href={href({ mode: 'year' })} className={btn(mode === 'year')}>Год</Link>
-          <span className="w-px h-6 bg-[#e4e4e0] mx-1" />
-          <Link href={href({ scope: 'all' })} className={btn(scope === 'all')}>Все объекты</Link>
-          <Link href={href({ scope: 'closed' })} className={btn(scope === 'closed')}>Только закрытые</Link>
         </div>
 
         {editsError && (
@@ -127,23 +125,28 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           </p>
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
           <div className={tile}>
             <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Продажи</p>
             <p className="text-[20px] font-semibold text-[#111110] mt-0.5">{rub(total.sales)} ₽</p>
-            <p className="text-[12px] text-[#6b6b66]">{scope === 'closed' ? `${total.base} закрытых объектов` : `${total.objects} объектов · закрыто ${total.closed}`}</p>
+            <p className="text-[12px] text-[#6b6b66]">{total.objects} заказов за период</p>
           </div>
           <div className={tile}>
-            <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Расходы по заказам</p>
+            <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Закрыто заказов</p>
+            <p className="text-[20px] font-semibold text-[#111110] mt-0.5">{total.closed} <span className="text-[14px] font-normal text-[#9a9a95]">из {total.objects}</span></p>
+            <p className="text-[12px] text-[#6b6b66]">на {rub(total.closed_sales)} ₽</p>
+          </div>
+          <div className={tile}>
+            <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Расходы по закрытым</p>
             <p className="text-[20px] font-semibold text-[#111110] mt-0.5">{rub(total.costs)} ₽</p>
-            <p className="text-[12px] text-[#6b6b66]">{pct(share(total.costs, total.sales))} от продаж</p>
+            <p className="text-[12px] text-[#6b6b66]">{pct(costPct(total))} от продаж закрытых</p>
           </div>
           <div className={tile}>
-            <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Маржа</p>
-            <p className="text-[20px] font-semibold text-[#111110] mt-0.5">{rub(total.margin)} ₽</p>
+            <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Маржа по закрытым</p>
+            <p className="text-[20px] font-semibold text-[#111110] mt-0.5">{marginRub(total)} ₽</p>
             <p className="text-[12px] text-[#6b6b66]">
-              <span className={`font-semibold ${mCls(total.margin_pct)}`}>{pct(total.margin_pct)}</span> от продаж
-              {total.partial > 0 && <span className="text-amber-700"> · у {total.partial} объектов расходы неполные — маржа завышена</span>}
+              <span className={`font-semibold ${mCls(marginPct(total))}`}>{pct(marginPct(total))}</span> от продаж закрытых
+              {total.partial > 0 && <span className="text-amber-700"> · у {total.partial} закрытых расходы неполные — маржа завышена</span>}
             </p>
           </div>
           <a href="#fixes" className={`${tile} hover:border-[#111110]`}>
@@ -154,12 +157,16 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
         </div>
 
         <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-x-auto mb-4">
-          <div className="min-w-[760px]">
+          <div className="min-w-[880px]">
+            <div className={`${GRID} px-4 pt-2 text-[11px] text-[#9a9a95]`}>
+              <span className="col-start-5 col-span-4 text-center border-b border-[#e4e4e0] pb-1">только закрытые заказы</span>
+            </div>
             <div className={`${GRID} px-4 py-2 border-b border-[#e4e4e0] text-[11px] text-[#9a9a95]`}>
               <span>Месяц</span>
               <span className="text-right">Продажи, ₽</span>
-              <span className="text-right">Объектов</span>
+              <span className="text-right">Заказов</span>
               <span className="text-right">Закрыто</span>
+              <span className="text-right">Продажи, ₽</span>
               <span className="text-right">Расходы, ₽</span>
               <span className="text-right">Маржа, ₽</span>
               <span className="text-right">Маржа</span>
@@ -172,9 +179,10 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
                   <span className="text-right">{rub(m.t.sales)}</span>
                   <span className="text-right">{m.t.objects}</span>
                   <span className="text-right">{m.t.closed}</span>
-                  <span className="text-right">{rub(m.t.costs)}{m.t.partial > 0 && <span className="text-amber-600" title={`у ${m.t.partial} объектов расходы неполные`}> ⚠</span>}</span>
-                  <span className="text-right font-semibold">{rub(m.t.margin)}</span>
-                  <span className={`text-right font-semibold ${mCls(m.t.margin_pct)}`}>{pct(m.t.margin_pct)}</span>
+                  <span className="text-right">{rub(m.t.closed_sales)}</span>
+                  <span className="text-right">{rub(m.t.costs)}{m.t.partial > 0 && <span className="text-amber-600" title={`у ${m.t.partial} закрытых расходы неполные`}> ⚠</span>}</span>
+                  <span className="text-right font-semibold">{marginRub(m.t)}</span>
+                  <span className={`text-right font-semibold ${mCls(marginPct(m.t))}`}>{pct(marginPct(m.t))}</span>
                 </summary>
                 <MonthBody m={m} />
               </details>
@@ -185,9 +193,10 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
                 <span className="text-right">{rub(total.sales)}</span>
                 <span className="text-right">{total.objects}</span>
                 <span className="text-right">{total.closed}</span>
+                <span className="text-right">{rub(total.closed_sales)}</span>
                 <span className="text-right">{rub(total.costs)}</span>
-                <span className="text-right">{rub(total.margin)}</span>
-                <span className={`text-right ${mCls(total.margin_pct)}`}>{pct(total.margin_pct)}</span>
+                <span className="text-right">{marginRub(total)}</span>
+                <span className={`text-right ${mCls(marginPct(total))}`}>{pct(marginPct(total))}</span>
               </div>
             )}
           </div>
@@ -203,8 +212,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
         )}
 
         <div className="text-[11px] text-[#9a9a95] space-y-1">
-          <p>Продажи — сумма заказов месяца из «Продаж M-Glass». Расходы — прямые по заказам из «Маржи»: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, партнёры, рекламации, налог и бонусы. Статьи складываются здесь, а не берутся из итога книги: число, набранное текстом, книга не считает.</p>
-          <p>⚠ «Расходы неполные» — у объекта в «Марже» пусто хотя бы в одной из статей: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, — или его в «Марже» ещё нет. Маржа у такого объекта завышена. Если расхода не было — поставьте 0 (в книге или в карточке объекта).</p>
+          <p>Продажи — сумма всех заказов месяца из «Продаж M-Glass»; закрытые — со статусом «закрыт» там или отмеченные закрытыми в карточке объекта. Расходы и маржа — только закрытых, процент маржи — от их продаж. Расходы — прямые по заказам из «Маржи»: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, партнёры, рекламации, налог и бонусы. Статьи складываются здесь, а не берутся из итога книги: число, набранное текстом, книга не считает.</p>
+          <p>⚠ «Расходы неполные» — у закрытого объекта в «Марже» пусто хотя бы в одной из статей: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, — или его в «Марже» ещё нет. Маржа у такого объекта завышена. Если расхода не было — поставьте 0 (в книге или в карточке объекта).</p>
           <p>✎ — у объекта есть ячейки, внесённые в приложении: они сильнее книги, книга не меняется. Если книга потом заполнит ячейку по-другому, карточка покажет оба значения. Каждая правка — в журнале действий у владельца.</p>
         </div>
       </div>
@@ -214,29 +223,29 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
 
 function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: PeriodTotals; fixes: string[] } }) {
   const rows = COST_KEYS.map(k => ({ k, sum: m.t.byCost[k] })).filter(x => x.sum !== 0).sort((a, b) => b.sum - a.sum)
-  const shares = roundShares(rows.map(x => x.sum), m.t.sales)
+  const shares = roundShares(rows.map(x => x.sum), m.t.closed_sales)
   const sold = m.objects.filter(o => o.sale_id != null)
   return (
     <div className="px-4 pb-4 pt-1 space-y-2 bg-[#fcfcfb]">
       <details className="group/c bg-white border border-[#e4e4e0] rounded-lg">
         <summary className="flex items-center justify-between px-3 py-2 text-[13px] cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-          <span className="font-medium"><span className="inline-block w-4 text-[#9a9a95] transition-transform group-open/c:rotate-90">▸</span>Расходы по статьям</span>
-          <span><b>{rub(m.t.costs)} ₽</b> <span className="text-[#9a9a95]">· {pct(share(m.t.costs, m.t.sales))} от продаж</span></span>
+          <span className="font-medium"><span className="inline-block w-4 text-[#9a9a95] transition-transform group-open/c:rotate-90">▸</span>Расходы закрытых по статьям</span>
+          <span><b>{rub(m.t.costs)} ₽</b> <span className="text-[#9a9a95]">· {pct(costPct(m.t))} от продаж закрытых</span></span>
         </summary>
         <div className="px-3 pb-2">
-          {rows.length === 0 && <p className="text-[12px] text-[#9a9a95] py-1">Расходы за месяц в «Марже» не внесены.</p>}
+          {rows.length === 0 && <p className="text-[12px] text-[#9a9a95] py-1">{m.t.closed ? 'Расходы закрытых в «Марже» не внесены.' : 'Закрытых заказов в этом месяце пока нет.'}</p>}
           {rows.map((x, i) => (
             <div key={x.k} className="grid grid-cols-[1fr_auto_4.5rem] gap-3 py-1 text-[12px] border-t border-[#f0f0ec] first:border-0">
               <span>{COST_RU[x.k][0].toUpperCase() + COST_RU[x.k].slice(1)}</span>
               <span className="text-right tabular-nums">{rub(x.sum)} ₽</span>
-              <span className="text-right tabular-nums text-[#6b6b66]">{m.t.sales ? pct(shares[i]) : '—'}</span>
+              <span className="text-right tabular-nums text-[#6b6b66]">{m.t.closed_sales ? pct(shares[i]) : '—'}</span>
             </div>
           ))}
         </div>
       </details>
 
       {m.t.partial > 0 && (
-        <p className="text-[12px] text-amber-700">⚠ У {m.t.partial} из {m.t.base} объектов расходы неполные — маржа месяца завышена. Какие — в списке объектов ниже.</p>
+        <p className="text-[12px] text-amber-700">⚠ У {m.t.partial} из {m.t.closed} закрытых расходы неполные — маржа месяца завышена. Какие — в списке объектов ниже.</p>
       )}
 
       <details className="group/o bg-white border border-[#e4e4e0] rounded-lg">
