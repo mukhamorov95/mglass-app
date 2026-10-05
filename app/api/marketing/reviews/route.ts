@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireOwner } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
-import { fillQueue, sendBatch } from '@/lib/reviewCampaign'
+import { fillQueue, sendBatch, sentToday, whatsappChannels } from '@/lib/reviewCampaign'
 import { DAILY_LIMIT } from '@/lib/reviewMessage'
 
 export const runtime = 'nodejs'
@@ -12,35 +12,30 @@ export async function GET() {
   if (gate instanceof NextResponse) return gate
 
   const sb = createServiceClient()
-  const { data } = await sb.from('review_requests').select('status')
+  const { data, error } = await sb.from('review_requests').select('status')
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const counts: Record<string, number> = {}
   for (const r of data ?? []) counts[r.status] = (counts[r.status] ?? 0) + 1
 
-  const { data: sentToday } = await sb.from('review_requests')
-    .select('id', { count: 'exact', head: false })
-    .eq('status', 'sent')
-    .gte('sent_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
-
-  return NextResponse.json({ counts, sentToday: sentToday?.length ?? 0, dailyLimit: DAILY_LIMIT })
+  return NextResponse.json({ counts, sentToday: await sentToday(sb), dailyLimit: DAILY_LIMIT, channels: await whatsappChannels() })
 }
 
 export async function POST(req: Request) {
   const gate = await requireOwner()
   if (gate instanceof NextResponse) return gate
 
-  const { action, limit } = await req.json().catch(() => ({ action: '' }))
+  const { action, channelId } = await req.json().catch(() => ({ action: '' }))
   try {
     if (action === 'fill') return NextResponse.json(await fillQueue())
     if (action === 'send') {
-      // Дневной лимит считаем здесь, а не в sendBatch: иначе два нажатия подряд
-      // обойдут его и отправят две порции за день.
-      const sb = createServiceClient()
-      const { data: today } = await sb.from('review_requests')
-        .select('id').eq('status', 'sent')
-        .gte('sent_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
-      const left = DAILY_LIMIT - (today?.length ?? 0)
-      if (left <= 0) return NextResponse.json({ sent: 0, failed: 0, note: 'дневная норма уже отправлена' })
-      return NextResponse.json(await sendBatch(Math.min(limit ?? left, left)))
+      if (typeof channelId !== 'string' || !channelId) {
+        return NextResponse.json({ error: 'не выбран номер, с которого писать' }, { status: 400 })
+      }
+      // Норма проверяется и здесь, и перед каждым сообщением в sendBatch: две вкладки
+      // разом иначе отправили бы две порции за день.
+      const left = DAILY_LIMIT - await sentToday(createServiceClient())
+      if (left <= 0) return NextResponse.json({ sent: 0, failed: 0, pending: null, left: 0, note: 'дневная норма уже отправлена' })
+      return NextResponse.json(await sendBatch(channelId, left))
     }
     return NextResponse.json({ error: 'unknown action' }, { status: 400 })
   } catch (e) {
