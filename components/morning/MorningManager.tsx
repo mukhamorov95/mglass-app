@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import MyDay from '@/components/MyDay'
-import { calls, dayLabel, duration, hm, monthName, nextMonth, plural, rub, type MonthMoney } from '@/lib/morning'
-import { monthEnd, payoutSplit, planProgress } from '@/lib/earnings/cash'
+import { calls, dayLabel, dayRange, duration, hm, monthName, plural, ratePct, rub, type MonthMoney } from '@/lib/morning'
+import { payoutSplit, payouts, planProgress } from '@/lib/earnings/cash'
 import { currentTierIndex, distanceToNextTier } from '@/lib/earnings/calculateProgressiveCommission'
 import type { Morning, MorningPerson } from '@/lib/morningData'
 
@@ -64,6 +64,11 @@ function PlanPayCards({ morning, person, ownerView }: { morning: Morning; person
   const workDays = person.schedule?.work_days?.length ? person.schedule.work_days : [1, 2, 3, 4, 5]
   const pp = planProgress({ plan: person.plan, cash, month, today, bookLastDay, workDays })
   const split = payoutSplit(person.firstHalf, cash, pay.tiers)
+  // Ближайшие две выплаты: в начале октября это 15.10 за конец сентября и 27.10.
+  const ahead = payouts({
+    month, prevTotal: person.prev.prepay + person.prev.remainder, prevFirstHalf: person.prevFirstHalf,
+    monthCash: cash, firstHalf: person.firstHalf, tiers: pay.tiers,
+  }).filter(x => x.date >= today).slice(0, 2)
   const rate = pay.tiers[currentTierIndex(cash, pay.tiers)]?.ratePercent
   const next = distanceToNextTier(cash, pay.tiers)
   const m = monthName(month).toLowerCase()
@@ -90,10 +95,10 @@ function PlanPayCards({ morning, person, ownerView }: { morning: Morning; person
       )}
       <Card label={`Комиссия · ${m}`} value={rub(split.total)}
         sub={<>
-          ставка {rate} %{next ? ` · до ${next.ratePercent} % ещё ${rub(next.remaining)}` : ' — максимальная'}<br />
-          27.{month.slice(5, 7)} — {rub(split.first)} за 1–15 · 15.{nextMonth(month).slice(5, 7)} — {rub(split.second)} за 16–{monthEnd(month).slice(8, 10)}
+          ставка {ratePct(rate ?? 0)}{next ? ` · до ${ratePct(next.ratePercent)} ещё ${rub(next.remaining)}` : ' — максимальная'}
+          {ahead.map(x => <span key={x.date} className="block">{ddmm(x.date)} — {rub(x.amount)} за {dayRange(x.from, x.to)}</span>)}
         </>}
-        note={<>от поступлений месяца, ступенчато; оклад {rub(pay.salary)} отдельно · {through} · <Link href={ownerView ? `/my-earnings?m=${person.amoUserId}` : '/my-earnings'} className="text-blue-600 hover:underline">Мои заработки</Link></>} />
+        note={<>от поступлений месяца, ступенчато; оклад {rub(pay.salary)} отдельно · {through} · <Link href={ownerView ? `/my-earnings?m=${person.amoUserId}` : '/my-earnings'} className="text-blue-600 hover:underline">Мои деньги</Link></>} />
     </div>
   )
 }

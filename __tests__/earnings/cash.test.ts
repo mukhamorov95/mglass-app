@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayCommissions, monthEnd, payoutSplit, planProgress, workdays } from '@/lib/earnings/cash'
+import { dayCommissions, monthEnd, payoutSplit, payouts, planProgress, workdays } from '@/lib/earnings/cash'
 import { DEFAULT_MANAGER_COMMISSION_TIERS as TIERS } from '@/lib/earnings/calculateProgressiveCommission'
 
 const WEEK = [1, 2, 3, 4, 5]
@@ -66,5 +66,18 @@ describe('dayCommissions — комиссия, которую принёс де�
     const d = dayCommissions(days, TIERS)
     expect(d.map(x => x.date)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03'])
     expect(d.reduce((s, x) => s + x.commission, 0)).toBe(payoutSplit(0, 2_150_000, TIERS).total)
+  })
+})
+
+describe('payouts — три выплаты вокруг месяца', () => {
+  it('Александра на 05.10: 15.10 — добор за 16–30 сентября по книге', () => {
+    const p = payouts({ month: '2026-10', prevTotal: 702_170, prevFirstHalf: 437_011, monthCash: 0, firstHalf: 0, tiers: TIERS })
+    expect(p.map(x => [x.date, x.from, x.to])).toEqual([
+      ['2026-10-15', '2026-09-16', '2026-09-30'],
+      ['2026-10-27', '2026-10-01', '2026-10-15'],
+      ['2026-11-15', '2026-10-16', '2026-10-31'],
+    ])
+    expect(p[0].amount).toBe(14_043 - 8_740)
+    expect([p[1].amount, p[2].amount]).toEqual([0, 0])
   })
 })

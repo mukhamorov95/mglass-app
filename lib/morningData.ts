@@ -15,6 +15,7 @@ export type MorningPerson = {
   month: MonthMoney
   prev: MonthMoney
   firstHalf: number          // поступления 1–15 текущего месяца — выплата 27-го
+  prevFirstHalf: number      // то же за прошлый месяц — добор 15-го считается от него
   plan: number | null        // план месяца в поступлениях (manager_month_plans)
   nextPlan: number | null    // план следующего месяца — для редактора владельца
 }
@@ -81,7 +82,7 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
     return {
       amoUserId: id, name, schedule: s,
       row: rows.find(r => Number(r.amo_user_id) === id && r.day === day),
-      month: emptyMonth(), prev: emptyMonth(), firstHalf: 0,
+      month: emptyMonth(), prev: emptyMonth(), firstHalf: 0, prevFirstHalf: 0,
       plan: planOf(month, id), nextPlan: planOf(addMonth(month), id),
     }
   })
@@ -94,7 +95,7 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
       .gte('sale_date', `${prev}-01`).lt('sale_date', `${addMonth(month)}-01`)
       .eq('voided', false).neq('department', 'b2b').in('manager', names).limit(5000),
     sb.from('manager_stats_daily').select('stat_date, manager, metric, value')
-      .gte('stat_date', `${month}-01`).lt('stat_date', `${addMonth(month)}-01`)
+      .gte('stat_date', `${prev}-01`).lt('stat_date', `${addMonth(month)}-01`)
       .in('manager', names).in('metric', BOOK_METRICS).limit(5000),
     // Прошлый месяц — итогом месяца из книги, как на «Показателях менеджеров».
     sb.from('manager_stats_monthly').select('manager, metric, value')
@@ -114,8 +115,13 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
   for (const f of (daily.data ?? []) as { stat_date: string; manager: string; metric: string; value: number }[]) {
     const p = byId.get(owner.get(f.manager) ?? -1)
     if (!p) continue
-    addBookFacts(p.month, [f])
-    if ((f.metric === 'prepay' || f.metric === 'remainder') && Number(f.stat_date.slice(8, 10)) <= 15) p.firstHalf += Number(f.value) || 0
+    const cur = f.stat_date.startsWith(month)
+    // Прошлый месяц целиком берётся итогом книги ниже; по дням нужна только его первая половина.
+    if (cur) addBookFacts(p.month, [f])
+    if ((f.metric === 'prepay' || f.metric === 'remainder') && Number(f.stat_date.slice(8, 10)) <= 15) {
+      if (cur) p.firstHalf += Number(f.value) || 0
+      else p.prevFirstHalf += Number(f.value) || 0
+    }
   }
   for (const f of (monthly.data ?? []) as { manager: string; metric: string; value: number }[]) {
     const p = byId.get(owner.get(f.manager) ?? -1)

@@ -64,6 +64,12 @@ export function dayLabel(day: string, today: string): { title: string; date: str
 
 export const monthName = (month: string) => MONTHS_NOM[Number(month.slice(5, 7)) - 1]
 
+// «16–30 сентября» — отрезок дней внутри одного месяца.
+export const dayRange = (from: string, to: string) =>
+  `${Number(from.slice(8, 10))}–${Number(to.slice(8, 10))} ${MONTHS_GEN[Number(from.slice(5, 7)) - 1]}`
+
+export const ratePct = (r: number) => `${r.toLocaleString('ru-RU')} %`
+
 export function prevMonth(month: string): string {
   const [y, m] = month.split('-').map(Number)
   return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7)

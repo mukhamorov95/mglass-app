@@ -11,7 +11,8 @@ import {
   distanceToNextTier,
   type CommissionTier,
 } from '@/lib/earnings/calculateProgressiveCommission'
-import { cashOf, dayCommissions, payoutSplit, planProgress, monthEnd } from '@/lib/earnings/cash'
+import { cashOf, dayCommissions, payouts, planProgress } from '@/lib/earnings/cash'
+import { dayRange, monthName, ratePct } from '@/lib/morning'
 import type { CashData } from '@/lib/earnings/cashData'
 
 // Глобальная конфигурация мотивации (одна строка в public.earnings_settings,
@@ -67,7 +68,7 @@ type EarningsResponse = {
 
 const TIER_COLORS: Record<string, string> = {
   '2%':   'bg-gray-100 text-gray-600',
-  '2.5%': 'bg-sky-50 text-sky-700',
+  '2,5%': 'bg-sky-50 text-sky-700',
   '3%':   'bg-blue-50 text-blue-700',
   '4%':   'bg-amber-50 text-amber-700',
   '5%':   'bg-emerald-50 text-emerald-700',
@@ -76,17 +77,14 @@ const TIER_COLORS: Record<string, string> = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n: number)  { return n.toLocaleString('ru-RU') + ' ₽' }
-function fmtM(n: number) { return (n / 1_000_000).toFixed(1) + 'M' }
 function monthLabel(key: string) {
   const [y, m] = key.split('-')
   const names = ['', 'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
   return `${names[parseInt(m)]} ${y}`
 }
 const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`
-const nextMonthKey = (key: string) => {
-  const [y, m] = key.split('-').map(Number)
-  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7)
-}
+// «октябрь» — для фраз; monthLabel («Окт 2026») — для заголовков и строк таблиц.
+const monthWord = (key: string) => monthName(key).toLowerCase()
 const prevMonthKey = (key: string) => {
   const [y, m] = key.split('-').map(Number)
   return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7)
@@ -98,9 +96,8 @@ function tierLabelFor(revenue: number, tiers: CommissionTier[]): string {
   const idx = currentTierIndex(revenue, tiers)
   const t   = tiers[idx]
   if (!t) return '2%'
-  // целые → "2%", дробные → "2.5%"
-  const r = t.ratePercent
-  return Number.isInteger(r) ? `${r}%` : `${r}%`
+  // целые → "2%", дробные → "2,5%"
+  return `${t.ratePercent.toLocaleString('ru-RU')}%`
 }
 
 // Streak bonus: ищем наибольший порог, на котором последние 3 завершённых месяца ≥ minRevenue.
@@ -253,13 +250,14 @@ export default function MyEarningsPage() {
   // ── Поступления по дням, выплаты, план ─────────────────────────────────────
   const days = useMemo(() => dayCommissions(cash?.days ?? [], effTiers).reverse(), [cash, effTiers])
   const firstHalf = (cash?.days ?? []).filter(d => Number(d.date.slice(8, 10)) <= 15).reduce((s, d) => s + cashOf(d), 0)
-  const split = payoutSplit(firstHalf, curRevenue, effTiers)
   const prevKey = prevMonthKey(nowKey)
   const prevTotal = byMonth[prevKey]?.revenue ?? 0
   const prevFirstHalf = (cash?.prevDays ?? []).filter(d => Number(d.date.slice(8, 10)) <= 15).reduce((s, d) => s + cashOf(d), 0)
-  const prevSplit = payoutSplit(prevFirstHalf, prevTotal, effTiers)
+  const payoutRows = payouts({ month: nowKey, prevTotal, prevFirstHalf, monthCash: curRevenue, firstHalf, tiers: effTiers })
   const plan = cash ? planProgress({ plan: cash.plan, cash: curRevenue, month: nowKey, today: cash.today, bookLastDay: cash.bookLastDay, workDays: cash.workDays }) : null
-  const bookNote = plan?.dataThrough ? `книга внесена по ${ddmm(plan.dataThrough)}` : `за ${monthLabel(nowKey)} в книге пока нет записей`
+  const bookNote = plan?.dataThrough
+    ? `книга внесена по ${ddmm(plan.dataThrough)}`
+    : `за ${monthWord(nowKey)} в книге пока нет записей${cash?.bookLastDay ? ` — она внесена по ${ddmm(cash.bookLastDay)}` : ''}`
 
   // ── Manager income calculator: производные ─────────────────────────────────
   const plannedCommission = useMemo(
@@ -375,7 +373,7 @@ export default function MyEarningsPage() {
                     const finalPrefix = t.to == null ? `свыше ${fromM} млн` : prefix
                     return (
                       <li key={`${t.from}-${t.ratePercent}`}>
-                        · {finalPrefix} — <span className="font-mono font-semibold">{t.ratePercent}%</span>
+                        · {finalPrefix} — <span className="font-mono font-semibold">{ratePct(t.ratePercent)}</span>
                       </li>
                     )
                   })}
@@ -633,7 +631,7 @@ export default function MyEarningsPage() {
           {plannedDistance && (
             <p className="text-[10px] text-[#6b6b66] mt-2 leading-snug">
               До следующей ступени осталось <span className="font-mono font-semibold text-[#111110]">{fmt(plannedDistance.remaining)}</span>
-              {' '}(следующая ставка <span className="font-mono font-semibold">{plannedDistance.ratePercent}%</span>).
+              {' '}(следующая ставка <span className="font-mono font-semibold">{ratePct(plannedDistance.ratePercent)}</span>).
             </p>
           )}
         </div>
@@ -795,14 +793,10 @@ export default function MyEarningsPage() {
             </div>
             <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Выплаты комиссии</p>
-              {[
-                { date: `15.${nowKey.slice(5, 7)}`, what: `за 16–${monthEnd(prevKey).slice(8, 10)} ${monthLabel(prevKey).toLowerCase()}`, sum: prevSplit.second },
-                { date: `27.${nowKey.slice(5, 7)}`, what: `за 1–15 ${monthLabel(nowKey).toLowerCase()}`, sum: split.first },
-                { date: `15.${nextMonthKey(nowKey).slice(5, 7)}`, what: `за 16–${monthEnd(nowKey).slice(8, 10)} ${monthLabel(nowKey).toLowerCase()}`, sum: split.second },
-              ].map(x => (
-                <div key={x.date + x.what} className="flex items-baseline justify-between gap-3 py-1 border-b border-[#f5f5f3] last:border-0">
-                  <span className="text-[11px] text-[#4b4b47]"><span className="font-mono font-semibold">{x.date}</span> · {x.what}</span>
-                  <span className="text-[12px] font-mono font-semibold text-emerald-700 whitespace-nowrap">{fmt(x.sum)}</span>
+              {payoutRows.map(x => (
+                <div key={x.date} className="flex items-baseline justify-between gap-3 py-1 border-b border-[#f5f5f3] last:border-0">
+                  <span className="text-[11px] text-[#4b4b47]"><span className="font-mono font-semibold">{ddmm(x.date)}</span> · за {dayRange(x.from, x.to)}</span>
+                  <span className="text-[12px] font-mono font-semibold text-emerald-700 whitespace-nowrap">{fmt(x.amount)}</span>
                 </div>
               ))}
               <p className="text-[10px] text-[#9a9a95] mt-1.5 leading-snug">
@@ -854,7 +848,7 @@ export default function MyEarningsPage() {
             {distance ? (
               <p className="text-[11px] text-[#6b6b66] leading-snug">
                 До следующей ступени осталось <span className="font-mono font-semibold text-[#111110]">{fmt(distance.remaining)}</span>.
-                {' '}Следующая ставка: <span className={`font-mono font-semibold ${TIER_COLORS[nextTierLabel ?? '2%']?.split(' ')[1] ?? ''}`}>{distance.ratePercent}%</span>
+                {' '}Следующая ставка: <span className={`font-mono font-semibold ${TIER_COLORS[nextTierLabel ?? '2%']?.split(' ')[1] ?? ''}`}>{ratePct(distance.ratePercent)}</span>
               </p>
             ) : (
               <p className="text-[11px] text-emerald-700 font-semibold">Максимальный тир достигнут — каждый рубль выручки приносит 5%.</p>
@@ -879,7 +873,7 @@ export default function MyEarningsPage() {
                     {(t.from / 1_000_000).toFixed(t.from % 1_000_000 === 0 ? 0 : 1)}M–{upperLabel}
                   </span>
                   <span className={`text-[11px] font-mono font-semibold w-12 flex-shrink-0 ${filled ? 'text-[#111110]' : 'text-[#c4c4be]'}`}>
-                    {t.ratePercent}%
+                    {ratePct(t.ratePercent)}
                   </span>
                   <span className={`flex-1 text-[11px] font-mono text-right ${filled ? 'text-[#4b4b47]' : 'text-[#c4c4be]'}`}>
                     {filled ? fmt(tierResult.amountInTier) : '—'}
@@ -918,7 +912,7 @@ export default function MyEarningsPage() {
             </p>
           ) : streak.bonus === 0 ? (
             <p className="text-[10px] text-[#9a9a95] mt-2 leading-snug">
-              Последние 3 закрытых месяца на разных тирах — серия не сложилась.
+              Серии нет: из последних 3 закрытых месяцев не каждый дотянул до {fmt(Math.min(...effBonuses.map(b => b.minRevenue)))} поступлений.
             </p>
           ) : null}
         </div>
@@ -931,7 +925,7 @@ export default function MyEarningsPage() {
               <p className="text-[10px] text-[#9a9a95] mt-0.5">Из «Аналитики дохода»; комиссия дня — на сколько выросла комиссия месяца от его поступлений. Если сумма неверна — её правят в книге, здесь она обновится в 8:05.</p>
             </div>
             {days.length === 0 ? (
-              <div className="p-6 text-center text-[#9a9a95] text-xs">За {monthLabel(nowKey)} поступлений в книге пока нет · {bookNote}</div>
+              <div className="p-6 text-center text-[#9a9a95] text-xs">Поступлений пока нет: {bookNote}.</div>
             ) : (
               <>
                 <div className="grid grid-cols-[70px_1fr_1fr_1fr_90px] gap-2 px-3 py-1.5 border-b border-[#e4e4e0]">
@@ -959,6 +953,7 @@ export default function MyEarningsPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0]">
             <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">История по месяцам</p>
+            <p className="text-[10px] text-[#9a9a95] mt-0.5">Поступления — предоплаты + остатки из «Аналитики дохода». Ставка и комиссия — только с {effSettings.effectiveFrom.split('-').reverse().join('.')}, когда вступила нынешняя шкала; раньше платили по другим правилам.</p>
           </div>
           {sortedMonthKeys.length === 0 ? (
             <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет данных</div>
@@ -966,13 +961,16 @@ export default function MyEarningsPage() {
             <>
               <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-1.5 border-b border-[#e4e4e0]">
                 <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Месяц</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Выручка</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Поступило</span>
                 <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-center">Ставка</span>
                 <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Оплат</span>
                 <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">Комиссия</span>
               </div>
               {sortedMonthKeys.map(k => {
                 const m = byMonth[k]
+                // Шкала действует с effectiveFrom: раньше платили по другим правилам, и
+                // комиссия по нынешней шкале за те месяцы выглядела бы как начисленная.
+                const ruled = k >= effSettings.effectiveFrom.slice(0, 7)
                 const c = calculateProgressiveCommission(m.revenue, effTiers).totalCommission
                 const tl = tierLabelFor(m.revenue, effTiers)
                 const isCurrent = k === nowKey
@@ -982,10 +980,12 @@ export default function MyEarningsPage() {
                       isCurrent ? 'bg-emerald-50/40' : 'hover:bg-[#fafaf9]'
                     }`}>
                     <span className="text-xs text-[#111110]">{monthLabel(k)}{isCurrent && <span className="text-[10px] text-emerald-600 ml-1.5">сейчас</span>}</span>
-                    <span className="text-xs font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmtM(m.revenue)}</span>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded text-center whitespace-nowrap ${TIER_COLORS[tl] ?? TIER_COLORS['2%']}`}>{tl}</span>
+                    <span className="text-xs font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmt(m.revenue)}</span>
+                    {ruled
+                      ? <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded text-center whitespace-nowrap ${TIER_COLORS[tl] ?? TIER_COLORS['2%']}`}>{tl}</span>
+                      : <span className="text-[10px] text-[#9a9a95] text-center">—</span>}
                     <span className="text-xs font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.dealCount}</span>
-                    <span className="text-xs font-mono font-bold text-emerald-700 text-right whitespace-nowrap">{fmt(c)}</span>
+                    <span className={`text-xs font-mono text-right whitespace-nowrap ${ruled ? 'font-bold text-emerald-700' : 'text-[#9a9a95]'}`}>{ruled ? fmt(c) : '—'}</span>
                   </div>
                 )
               })}
