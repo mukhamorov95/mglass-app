@@ -3,6 +3,7 @@
 // __tests__/earnings/cash.test.ts. Комиссия — calculateProgressiveCommission.
 
 import { calculateProgressiveCommission, type CommissionTier } from '@/lib/earnings/calculateProgressiveCommission'
+import { nextMonth, prevMonth } from '@/lib/morning'
 
 export type CashMonth = { month: string; prepay: number; remainder: number; payments: number }
 export type CashDay = { date: string; prepay: number; remainder: number }
@@ -69,6 +70,24 @@ export function payoutSplit(firstHalfCash: number, monthCash: number, tiers: Com
   const first = calculateProgressiveCommission(firstHalfCash, tiers).totalCommission
   const total = calculateProgressiveCommission(monthCash, tiers).totalCommission
   return { first, second: total - first, total }
+}
+
+export type Payout = { date: string; from: string; to: string; amount: number }
+
+// Три выплаты вокруг месяца: 15-го — добор за вторую половину прошлого, 27-го — за
+// 1–15 текущего, 15-го следующего — добор за его вторую половину. Прошлый месяц целиком —
+// итогом книги, его первая половина — по дням.
+export function payouts(i: {
+  month: string; prevTotal: number; prevFirstHalf: number; monthCash: number; firstHalf: number; tiers: CommissionTier[]
+}): Payout[] {
+  const prev = prevMonth(i.month)
+  const p = payoutSplit(i.prevFirstHalf, i.prevTotal, i.tiers)
+  const c = payoutSplit(i.firstHalf, i.monthCash, i.tiers)
+  return [
+    { date: `${i.month}-15`, from: `${prev}-16`, to: monthEnd(prev), amount: p.second },
+    { date: `${i.month}-27`, from: `${i.month}-01`, to: `${i.month}-15`, amount: c.first },
+    { date: `${nextMonth(i.month)}-15`, from: `${i.month}-16`, to: monthEnd(i.month), amount: c.second },
+  ]
 }
 
 // Сколько комиссии принёс день: прирост комиссии месяца от его поступлений.
