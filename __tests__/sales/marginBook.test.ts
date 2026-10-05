@@ -148,21 +148,31 @@ describe('сверка «Маржи» с «Продажами»', () => {
 describe('деньги периода: продажи → расходы → маржа', () => {
   const objs = reconcileMonth('2026-01', parseMarginTab(BOOK, GID, 'Январь 26').rows, SALES)
 
-  it('продажи — все заказы, расходы и маржа — только закрытые; строка «Маржи» без продажи в суммы не входит', () => {
+  it('продажи — все заказы; расходы и маржа — закрытые с полными расходами; строка «Маржи» без продажи в суммы не входит', () => {
     const t = periodTotals(objs)
     expect(t.objects).toBe(4)
-    expect(t.closed).toBe(3)
+    expect(t.closed).toBe(2)    // 0900-2 закрыт, но без монтажника — не закрыт
+    expect(t.open).toBe(2)      // 0900-2 и открытый 0959-2
+    expect(t.to_fill).toBe(1)
     expect(t.sales).toBe(45000 + 150000 + 105000 + 57011)
+    expect(t.closed_sales).toBe(195000)
+    expect(t.costs).toBe(28831 + 125951)
+    expect(Object.values(t.byCost).reduce((a, b) => a + b, 0)).toBe(t.costs)
+    expect(t.margin).toBe(16169 + 24049)
+    expect(t.margin_pct).toBeCloseTo(40218 / 195000 * 100, 6)
+  })
+
+  it('дописали недостающую статью — заказ переходит в закрытые', () => {
+    const filled = objs.map(o => (o.order_no === '0900-2' ? { ...o, issues: o.issues.filter(i => i.kind !== 'missing_costs') } : o))
+    const t = periodTotals(filled)
+    expect(t.closed).toBe(3)
+    expect(t.to_fill).toBe(0)
     expect(t.closed_sales).toBe(300000)
     expect(t.costs).toBe(28831 + 125951 + 49725)
-    expect(Object.values(t.byCost).reduce((a, b) => a + b, 0)).toBe(t.costs)
-    expect(t.margin).toBe(t.closed_sales - t.costs)
-    expect(t.margin_pct).toBeCloseTo(95493 / 300000 * 100, 6)
-    expect(t.partial).toBe(1)   // 0900-2 закрыт без монтажника; 0959-2 открыт — не считается
   })
 
   it('открытый заказ с расходами не меняет маржу, пока его не закроют', () => {
-    const open = objs.map(o => (o.closed ? o : { ...o, costs: { ...(o.costs ?? {}), glass: 50000 } as typeof o.costs, var_total: 50000, md: o.amount - 50000 }))
+    const open = objs.map(o => (o.closed ? o : { ...o, costs: { ...(o.costs ?? {}), glass: 50000 } as typeof o.costs, var_total: 50000, md: o.amount - 50000, issues: [] }))
     const t = periodTotals(open)
     expect(t.costs).toBe(periodTotals(objs).costs)
     expect(t.margin).toBe(periodTotals(objs).margin)
@@ -183,9 +193,9 @@ describe('отчёт в Telegram', () => {
 
   it('месяц с правками — ✏️, адрес правки и сводка', () => {
     const t = plain(formatMarginReport(report))
-    expect(t).toContain('✏️ Январь: продажи 357 011 ₽ · закрыто 3 из 4 на 300 000 ₽ · расходы 204 507 ₽ · маржа 31,8 %')
-    expect(t).toContain('расходы неполные у 1 из 3 закрытых — маржа завышена')
-    expect(t).toContain('Закрытые объекты (3): продажи 300 000 ₽ · маржа <b>95 493 ₽</b> · 31,8 %')
+    expect(t).toContain('✏️ Январь: продажи 357 011 ₽ · закрыто 2 из 4 на 195 000 ₽ · расходы 154 782 ₽ · маржа 20,6 %')
+    expect(t).toContain('закрыто, но без всех расходов: 1 — в маржу не вошли, дописать')
+    expect(t).toContain('Закрытые объекты (2): продажи 195 000 ₽ · маржа <b>40 218 ₽</b> · 20,6 %')
     expect(t).toContain('«Маржа» Январь 26, стр. 4, 0811-2: текстом набрано — фурнитура')
     expect(t).toContain('может, это 0959-2?')
     expect(t).toContain('у 1 закрытых не проставлены все расходы — 0900-2')
