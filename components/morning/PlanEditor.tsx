@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { confirmDialog } from '@/lib/dialog'
 import { monthName, rub } from '@/lib/morning'
 
 // Редактор планов на «Команде» (М6): владелец ставит каждому продавцу план месяца в
@@ -64,17 +65,27 @@ export default function PlanEditor({ months, sellers, plans }: { months: string[
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty, draft, month])
 
-  function pickMonth(m: string) {
+  async function pickMonth(m: string) {
     if (m === month) return
-    if (dirty && !window.confirm(`Правки плана на ${monthName(month).toLowerCase()} не сохранены. Отменить их и перейти?`)) return
+    if (dirty && !(await confirmDialog({
+      title: `Правки плана на ${monthName(month).toLowerCase()} не сохранены`,
+      text: 'Если перейти на другой месяц, они пропадут.',
+      confirmLabel: 'Перейти без сохранения',
+      danger: true,
+    }))) return
     writeDraft(month, null)
     setMonth(m)
     setDraft({ ...fromSaved(m), ...(readDraft(m) ?? {}) })
     setMsg(null)
   }
 
-  function discard() {
-    if (!window.confirm('Отменить несохранённые правки плана?')) return
+  async function discard() {
+    if (!(await confirmDialog({
+      title: 'Отменить несохранённые правки плана?',
+      text: `Поля вернутся к сохранённым планам: ${changed.map(s => s.name).join(', ')}.`,
+      confirmLabel: 'Отменить правки',
+      danger: true,
+    }))) return
     writeDraft(month, null)
     setDraft(fromSaved(month))
     setMsg(null)
