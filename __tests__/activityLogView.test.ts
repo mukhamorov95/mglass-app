@@ -34,4 +34,9 @@ group('журнал действий — запись триггера по-ру
   it('значения: пусто, да/нет, длинный текст', () => {
     expect([fmtValue(null), fmtValue(true), fmtValue('x'.repeat(90)).length]).toEqual(['—', 'да', 81])
   })
+  it('права пользователя — только изменённые ключи, по-русски', () => {
+    const was = { see_b2b: true, manager_workspace: true, b2b_client_scope: 'all_clients' }
+    const d = describe(e({ entity_type: 'users', details: { changes: { permissions: [was, { ...was, margin_edit: true }] }, row: { name: 'Вера' } } }))
+    expect(d).toMatchObject({ place: 'Пользователи и права', object: 'Вера', changes: [{ what: 'права · Маржа', before: '—', after: 'да' }] })
+  })
 })
