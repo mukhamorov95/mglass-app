@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
 import { salePaymentKey } from '@/lib/payments/paymentKeys'
+import { bookNames } from '@/lib/sales/bookNames'
 import { resolvePeriod, parseManagers } from '@/lib/sales/period'
 import { mskDayKey } from '@/lib/time'
 
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
     .eq('voided', false).neq('department', 'b2b')
     .order('sale_date', { ascending: true }).order('id', { ascending: true })
     .limit(2000)
-  if (!me.canAll) query = query.eq('manager', me.name)
+  if (!me.canAll) query = query.in('manager', bookNames(me.name))
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   // Весь период целиком — разрез по менеджерам считаем по нему, иначе, выбрав
