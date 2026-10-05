@@ -291,26 +291,32 @@ export function summarize(objects: MarginObject[]): MarginSummary {
 }
 
 // Деньги периода так, как их читает владелец (05.10): продажи — все заказы периода,
-// расходы и маржа — только закрытые. У открытого заказа расходы ещё набираются, и его
-// маржа завышала итог (сентябрь показывал 91,8 %). Процент маржи — от продаж закрытых,
-// иначе он сравнивал бы расходы одних заказов с выручкой других. Строка «Маржи» без
-// продажи в суммы не входит (она в правках). «Неполные» — закрытые, у которых расходы
-// внесены не все или не внесены вовсе: их маржа завышена, это видно рядом с цифрой.
+// расходы и маржа — только закрытые. Закрытый — «закрыт» в «Продажах M-Glass» или
+// отмечен в карточке объекта, И внесены все обязательные расходы: заказ с пустой статьёй
+// не закрыт, его надо дописать (решение владельца 05.10) — в расходы и маржу он не
+// входит, а стоит в «Не закрыто» отдельной строкой «дописать». У открытого заказа
+// расходы ещё набираются, и его маржа завышала итог (сентябрь показывал 91,8 %).
+// Процент маржи — от продаж закрытых. Строка «Маржи» без продажи в суммы не входит.
+export const costsComplete = (o: Pick<MarginObject, 'var_total' | 'issues'>) =>
+  o.var_total != null && !o.issues.some(i => i.kind === 'missing_costs')
+export const countsAsClosed = (o: Pick<MarginObject, 'closed' | 'var_total' | 'issues'>) => o.closed && costsComplete(o)
+
 export type PeriodTotals = {
   objects: number
-  closed: number
+  closed: number         // закрыты и с полными расходами
+  open: number           // objects − closed
+  to_fill: number        // из open: закрыты по статусу, но расходы внесены не все
   sales: number          // все заказы периода
   closed_sales: number   // закрытые — база маржи
   costs: number          // закрытые
   margin: number         // closed_sales − costs
   margin_pct: number | null
   byCost: Record<CostKey, number>
-  partial: number
 }
 
 export function periodTotals(objects: MarginObject[]): PeriodTotals {
   const sold = objects.filter(o => o.sale_id != null)
-  const closed = sold.filter(o => o.closed)
+  const closed = sold.filter(countsAsClosed)
   const byCost = Object.fromEntries(COST_KEYS.map(k => [k, 0])) as Record<CostKey, number>
   for (const o of closed) if (o.costs) for (const k of COST_KEYS) byCost[k] += o.costs[k] ?? 0
   const closedSales = r2(closed.reduce((s, o) => s + o.amount, 0))
@@ -318,12 +324,13 @@ export function periodTotals(objects: MarginObject[]): PeriodTotals {
   return {
     objects: sold.length,
     closed: closed.length,
+    open: sold.length - closed.length,
+    to_fill: sold.filter(o => o.closed && !costsComplete(o)).length,
     sales: r2(sold.reduce((s, o) => s + o.amount, 0)),
     closed_sales: closedSales,
     costs, margin: r2(closedSales - costs),
     margin_pct: closedSales ? (closedSales - costs) / closedSales * 100 : null,
     byCost,
-    partial: closed.filter(o => o.var_total == null || o.issues.some(i => i.kind === 'missing_costs')).length,
   }
 }
 
@@ -521,7 +528,7 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
     const icon = m.held ? '⚠️' : own.length ? '✏️' : '✅'
     const t = periodTotals(m.objects)
     lines.push(`${icon} ${monthRu(m.month)}: продажи ${rub(t.sales)} · закрыто ${t.closed} из ${t.objects} на ${rub(t.closed_sales)} · расходы ${rub(t.costs)} · маржа ${pct(t.margin_pct)}${m.held ? ` — ${m.held}` : ''}`)
-    if (t.partial) lines.push(`   расходы неполные у ${t.partial} из ${t.closed} закрытых — маржа завышена`)
+    if (t.to_fill) lines.push(`   закрыто, но без всех расходов: ${t.to_fill} — в маржу не вошли, дописать`)
     if (m.bookAmountTotal != null && Math.round(m.bookAmountTotal) !== Math.round(m.rowsAmount)) {
       fixes.push(`«Маржа» ${esc(m.tab)}: итог «Сумма заказа» ${rub(m.bookAmountTotal)}, строки складываются в ${rub(m.rowsAmount)}`)
     }
@@ -537,7 +544,7 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
   }
   const closed = periodTotals(r.months.flatMap(m => m.objects))
   lines.push(`\nЗакрытые объекты (${closed.closed}): продажи ${rub(closed.closed_sales)} · маржа <b>${rub(closed.margin)}</b> · ${pct(closed.margin_pct)}`)
-  if (closed.partial) lines.push(`у ${closed.partial} из них расходы неполные`)
+  if (closed.to_fill) lines.push(`ещё ${closed.to_fill} закрыто без всех расходов — в маржу не вошли`)
   if (r.financeUpdated) lines.push(`Себестоимость в CFO ${r.dry ? 'обновится' : 'обновлена'} у ${r.financeUpdated} продаж`)
   if (fixes.length) {
     lines.push('', '✏️ <b>Поправить в книгах</b>')

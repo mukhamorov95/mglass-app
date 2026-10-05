@@ -16,6 +16,7 @@ export type MarginRowData = {
   client: string | null
   manager: string | null
   closed: boolean
+  needsCosts: boolean     // закрыт по статусу, но расходы внесены не все — в маржу не входит
   bookClosed: boolean
   amount: number
   partnerFee: number
@@ -150,7 +151,7 @@ export default function MarginObjectRow({ d }: { d: MarginRowData }) {
           {dirty && <span className="text-amber-600" title="есть несохранённые правки"> •</span>}
         </td>
         <td className="px-3 py-1.5 max-w-[220px] truncate" title={d.client ?? ''}>{d.client ?? '—'}<span className="text-[#9a9a95]"> · {d.manager ?? '—'}</span></td>
-        <td className="px-3 py-1.5">{d.saleId == null ? <span className="text-[#9a9a95]">нет в продажах</span> : d.closed ? 'закрыт' : <span className="text-[#9a9a95]">в работе</span>}</td>
+        <td className="px-3 py-1.5">{d.saleId == null ? <span className="text-[#9a9a95]">нет в продажах</span> : d.needsCosts ? <span className="text-amber-700">закрыт · дописать</span> : d.closed ? 'закрыт' : <span className="text-[#9a9a95]">в работе</span>}</td>
         <td className="px-3 py-1.5 text-right">{rub(d.amount)}</td>
         <td className="px-3 py-1.5 text-right">{d.varTotal == null ? '—' : rub(d.varTotal)}</td>
         <td className="px-3 py-1.5 text-right font-semibold">{d.md == null ? '—' : rub(d.md)}</td>

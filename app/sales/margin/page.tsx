@@ -4,9 +4,10 @@ import { canMargin, getUserProfile } from '@/lib/getRole'
 import MarginObjectRow from '@/components/sales/MarginObjectRow'
 import { createServiceClient } from '@/lib/supabase-service'
 import { mskDayKey } from '@/lib/time'
+import { plural } from '@/lib/morning'
 import { shiftMonth } from '@/lib/sales/period'
 import {
-  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, fixLine, fromDb, loadEdits, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
+  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, costsComplete, fixLine, fromDb, loadEdits, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
   type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals,
 } from '@/lib/sales/marginBook'
 
@@ -49,7 +50,7 @@ const periodLabel = (mode: Mode, anchor: string) => {
 }
 const step = (mode: Mode) => (mode === 'year' ? 12 : mode === 'quarter' ? 3 : 1)
 
-const GRID = 'grid grid-cols-[1.1fr_1fr_.6fr_.6fr_1fr_1fr_1fr_.7fr] gap-2 items-center'
+const GRID = 'grid grid-cols-[1fr_1fr_.6fr_.6fr_1fr_1fr_1fr_1fr_.7fr] gap-2 items-center'
 
 export default async function MarginPage({ searchParams }: { searchParams: Promise<{ mode?: string; month?: string }> }) {
   const profile = await getUserProfile()
@@ -98,8 +99,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           <Link href="/sales/managers" className="text-[12px] text-[#0071e3] hover:underline">→ Показатели менеджеров</Link>
         </div>
         <p className="text-[12px] text-[#9a9a95] mb-3">
-          Продажи — все заказы периода. Расходы и маржа — только по закрытым заказам: у открытого расходы ещё набираются.
-          Маржа = продажи закрытых − их прямые расходы. Расходы — из книги «Маржа» и внесённые здесь, продажи — из «Продаж M-Glass»; сверка с книгой каждое утро в 8:10.
+          Продажи — все заказы периода. Расходы и маржа — только по закрытым: закрыт в «Продажах» или отмечен в карточке, и внесены все расходы.
+          Закрытый без какой-то статьи стоит в «Не закрыто» с пометкой «дописать». Маржа = продажи закрытых − их прямые расходы. Расходы — из книги «Маржа» и внесённые здесь, продажи — из «Продаж M-Glass»; сверка с книгой каждое утро в 8:10.
           Нажмите на объект — откроются все его ячейки: пустое можно дописать и сохранить.
         </p>
 
@@ -134,7 +135,10 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           <div className={tile}>
             <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Закрыто заказов</p>
             <p className="text-[20px] font-semibold text-[#111110] mt-0.5">{total.closed} <span className="text-[14px] font-normal text-[#9a9a95]">из {total.objects}</span></p>
-            <p className="text-[12px] text-[#6b6b66]">на {rub(total.closed_sales)} ₽</p>
+            <p className="text-[12px] text-[#6b6b66]">
+              на {rub(total.closed_sales)} ₽ · не закрыто {total.open}
+              {total.to_fill > 0 && <span className="text-amber-700">, из них {total.to_fill} — дописать расходы</span>}
+            </p>
           </div>
           <div className={tile}>
             <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Расходы по закрытым</p>
@@ -146,7 +150,6 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
             <p className="text-[20px] font-semibold text-[#111110] mt-0.5">{marginRub(total)} ₽</p>
             <p className="text-[12px] text-[#6b6b66]">
               <span className={`font-semibold ${mCls(marginPct(total))}`}>{pct(marginPct(total))}</span> от продаж закрытых
-              {total.partial > 0 && <span className="text-amber-700"> · у {total.partial} закрытых расходы неполные — маржа завышена</span>}
             </p>
           </div>
           <a href="#fixes" className={`${tile} hover:border-[#111110]`}>
@@ -157,15 +160,16 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
         </div>
 
         <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-x-auto mb-4">
-          <div className="min-w-[880px]">
+          <div className="min-w-[960px]">
             <div className={`${GRID} px-4 pt-2 text-[11px] text-[#9a9a95]`}>
-              <span className="col-start-5 col-span-4 text-center border-b border-[#e4e4e0] pb-1">только закрытые заказы</span>
+              <span className="col-start-6 col-span-4 text-center border-b border-[#e4e4e0] pb-1">только закрытые заказы</span>
             </div>
             <div className={`${GRID} px-4 py-2 border-b border-[#e4e4e0] text-[11px] text-[#9a9a95]`}>
               <span>Месяц</span>
               <span className="text-right">Продажи, ₽</span>
               <span className="text-right">Заказов</span>
               <span className="text-right">Закрыто</span>
+              <span className="text-right">Не закрыто</span>
               <span className="text-right">Продажи, ₽</span>
               <span className="text-right">Расходы, ₽</span>
               <span className="text-right">Маржа, ₽</span>
@@ -179,8 +183,9 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
                   <span className="text-right">{rub(m.t.sales)}</span>
                   <span className="text-right">{m.t.objects}</span>
                   <span className="text-right">{m.t.closed}</span>
+                  <OpenCell t={m.t} />
                   <span className="text-right">{rub(m.t.closed_sales)}</span>
-                  <span className="text-right">{rub(m.t.costs)}{m.t.partial > 0 && <span className="text-amber-600" title={`у ${m.t.partial} закрытых расходы неполные`}> ⚠</span>}</span>
+                  <span className="text-right">{rub(m.t.costs)}</span>
                   <span className="text-right font-semibold">{marginRub(m.t)}</span>
                   <span className={`text-right font-semibold ${mCls(marginPct(m.t))}`}>{pct(marginPct(m.t))}</span>
                 </summary>
@@ -193,6 +198,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
                 <span className="text-right">{rub(total.sales)}</span>
                 <span className="text-right">{total.objects}</span>
                 <span className="text-right">{total.closed}</span>
+                <OpenCell t={total} />
                 <span className="text-right">{rub(total.closed_sales)}</span>
                 <span className="text-right">{rub(total.costs)}</span>
                 <span className="text-right">{marginRub(total)}</span>
@@ -212,8 +218,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
         )}
 
         <div className="text-[11px] text-[#9a9a95] space-y-1">
-          <p>Продажи — сумма всех заказов месяца из «Продаж M-Glass»; закрытые — со статусом «закрыт» там или отмеченные закрытыми в карточке объекта. Расходы и маржа — только закрытых, процент маржи — от их продаж. Расходы — прямые по заказам из «Маржи»: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, партнёры, рекламации, налог и бонусы. Статьи складываются здесь, а не берутся из итога книги: число, набранное текстом, книга не считает.</p>
-          <p>⚠ «Расходы неполные» — у закрытого объекта в «Марже» пусто хотя бы в одной из статей: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, — или его в «Марже» ещё нет. Маржа у такого объекта завышена. Если расхода не было — поставьте 0 (в книге или в карточке объекта).</p>
+          <p>Продажи — сумма всех заказов месяца из «Продаж M-Glass». Закрытый — «закрыт» там или отмечен закрытым в карточке объекта, и у него внесены стекло, фурнитура, конструктор, замерщик, монтажник и доставка. Расходы и маржа — только закрытых, процент маржи — от их продаж. Расходы — прямые по заказам из «Маржи»: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, партнёры, рекламации, налог и бонусы. Статьи складываются здесь, а не берутся из итога книги: число, набранное текстом, книга не считает.</p>
+          <p>«Дописать» — заказ закрыт по статусу, но в «Марже» пусто хотя бы в одной из этих шести статей или его там ещё нет. Он в «Не закрыто» и в маржу не входит, пока статью не заполнят. Если расхода не было — поставьте 0 (в книге или в карточке объекта): заказ сразу перейдёт в закрытые.</p>
           <p>✎ — у объекта есть ячейки, внесённые в приложении: они сильнее книги, книга не меняется. Если книга потом заполнит ячейку по-другому, карточка покажет оба значения. Каждая правка — в журнале действий у владельца.</p>
         </div>
       </div>
@@ -244,14 +250,14 @@ function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: Peri
         </div>
       </details>
 
-      {m.t.partial > 0 && (
-        <p className="text-[12px] text-amber-700">⚠ У {m.t.partial} из {m.t.closed} закрытых расходы неполные — маржа месяца завышена. Какие — в списке объектов ниже.</p>
+      {m.t.to_fill > 0 && (
+        <p className="text-[12px] text-amber-700">✎ {m.t.to_fill} {plural(m.t.to_fill, 'заказ закрыт', 'заказа закрыты', 'заказов закрыто')} без всех расходов — в маржу месяца не вошли. В списке объектов ниже они помечены «дописать».</p>
       )}
 
       <details className="group/o bg-white border border-[#e4e4e0] rounded-lg">
         <summary className="flex items-center justify-between px-3 py-2 text-[13px] cursor-pointer list-none [&::-webkit-details-marker]:hidden">
           <span className="font-medium"><span className="inline-block w-4 text-[#9a9a95] transition-transform group-open/o:rotate-90">▸</span>Объекты · {sold.length}</span>
-          <span className="text-[#9a9a95]">закрыто {m.t.closed}</span>
+          <span className="text-[#9a9a95]">закрыто {m.t.closed} · не закрыто {m.t.open}</span>
         </summary>
         <div className="overflow-x-auto">
           <table className="w-full text-[12px] whitespace-nowrap">
@@ -271,7 +277,7 @@ function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: Peri
               {m.objects.map(o => (
                 <MarginObjectRow key={`${o.order_no}-${o.row ?? o.sale_id}`} d={{
                   saleId: o.sale_id, orderNo: o.order_no, client: o.client, manager: o.manager,
-                  closed: o.closed, bookClosed: o.book_closed, amount: o.amount, partnerFee: o.partner_fee,
+                  closed: o.closed, needsCosts: o.closed && !costsComplete(o), bookClosed: o.book_closed, amount: o.amount, partnerFee: o.partner_fee,
                   varTotal: o.var_total, md: o.md, mdPct: o.md_pct, issue: issueText(o),
                   book: o.book_costs, edits: o.edits,
                 }} />
@@ -287,6 +293,15 @@ function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: Peri
         </ul>
       )}
     </div>
+  )
+}
+
+function OpenCell({ t }: { t: PeriodTotals }) {
+  return (
+    <span className="text-right">
+      {t.open}
+      {t.to_fill > 0 && <span className="text-[11px] font-normal text-amber-700" title="закрыты по статусу, но расходы внесены не все — допишите, и заказ войдёт в маржу"> · {t.to_fill} дописать</span>}
+    </span>
   )
 }
 
