@@ -257,6 +257,41 @@ export function summarize(objects: MarginObject[]): MarginSummary {
   }
 }
 
+// Деньги периода так, как их читает владелец: продажи → прямые расходы по заказам →
+// маржа (остаток). База — продажи из «Продаж M-Glass»; строка «Маржи» без продажи
+// в суммы не входит (она в правках). «Неполные» — объекты, у которых расходы внесены
+// не все или не внесены вовсе: их маржа завышена, это видно рядом с цифрой.
+export type Scope = 'all' | 'closed'
+export type PeriodTotals = {
+  objects: number
+  closed: number
+  sales: number
+  costs: number
+  margin: number
+  margin_pct: number | null
+  byCost: Record<CostKey, number>
+  partial: number
+  base: number
+}
+
+export function periodTotals(objects: MarginObject[], scope: Scope = 'all'): PeriodTotals {
+  const sold = objects.filter(o => o.sale_id != null)
+  const base = scope === 'closed' ? sold.filter(o => o.closed) : sold
+  const byCost = Object.fromEntries(COST_KEYS.map(k => [k, 0])) as Record<CostKey, number>
+  for (const o of base) if (o.costs) for (const k of COST_KEYS) byCost[k] += o.costs[k] ?? 0
+  const sales = r2(base.reduce((s, o) => s + o.amount, 0))
+  const costs = r2(base.reduce((s, o) => s + (o.var_total ?? 0), 0))
+  return {
+    objects: sold.length,
+    closed: sold.filter(o => o.closed).length,
+    sales, costs, margin: r2(sales - costs),
+    margin_pct: sales ? (sales - costs) / sales * 100 : null,
+    byCost,
+    partial: base.filter(o => o.var_total == null || o.issues.some(i => i.kind === 'missing_costs')).length,
+    base: base.length,
+  }
+}
+
 // Строка базы → строка книги: страница пересчитывает маржу тем же reconcileMonth.
 export type MarginDbRow = { row_no: number; order_no: string | null; amount: number | null; text_cells: string[] | null; book_var_total: number | null; book_md: number | null; dima: number | null } & Record<CostKey, number | null>
 export function fromDb(r: MarginDbRow): MarginBookRow {
@@ -406,10 +441,11 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
   const fixes: string[] = []
   let partnersInfo = 0, notInMargin = 0
   for (const m of r.months) {
-    const s = m.summary
     const own = m.objects.flatMap(o => o.issues.filter(i => needsFix(o, i)).map(i => ({ o, i })))
     const icon = m.held ? '⚠️' : own.length ? '✏️' : '✅'
-    lines.push(`${icon} ${monthRu(m.month)}: закрыто ${s.closed} · посчитано ${s.precise} · МД ${pct(s.md_pct)}${s.precise ? ` (${rub(s.md)})` : ''}${m.held ? ` — ${m.held}` : ''}`)
+    const t = periodTotals(m.objects)
+    lines.push(`${icon} ${monthRu(m.month)}: продажи ${rub(t.sales)} · расходы ${rub(t.costs)} · маржа ${pct(t.margin_pct)}${m.held ? ` — ${m.held}` : ''}`)
+    if (t.partial) lines.push(`   расходы неполные у ${t.partial} из ${t.objects} — маржа завышена`)
     if (m.bookAmountTotal != null && Math.round(m.bookAmountTotal) !== Math.round(m.rowsAmount)) {
       fixes.push(`«Маржа» ${esc(m.tab)}: итог «Сумма заказа» ${rub(m.bookAmountTotal)}, строки складываются в ${rub(m.rowsAmount)}`)
     }
@@ -421,11 +457,11 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
       fixes.push(`«Маржа» ${esc(m.tab)}: у ${missing.length} закрытых не проставлены все расходы — ${nos}${missing.length > 6 ? ' и др.' : ''}`)
     }
     partnersInfo += m.objects.filter(o => o.issues.some(i => i.kind === 'partners' && !needsFix(o, i))).length
-    notInMargin += s.notInMargin
+    notInMargin += m.summary.notInMargin
   }
-  const all = summarize(r.months.flatMap(m => m.objects))
-  lines.push(`\nЗаработано по точно посчитанным: <b>${rub(all.md)}</b> · ${pct(all.md_pct)} — ${all.precise} из ${all.closed} закрытых`)
-  if (all.pending.count) lines.push(`Закрыты, но посчитать точно нельзя: ${all.pending.count} на ${rub(all.pending.revenue)}`)
+  const closed = periodTotals(r.months.flatMap(m => m.objects), 'closed')
+  lines.push(`\nЗакрытые объекты (${closed.base}): продажи ${rub(closed.sales)} · маржа <b>${rub(closed.margin)}</b> · ${pct(closed.margin_pct)}`)
+  if (closed.partial) lines.push(`у ${closed.partial} из них расходы неполные`)
   if (r.financeUpdated) lines.push(`Себестоимость в CFO ${r.dry ? 'обновится' : 'обновлена'} у ${r.financeUpdated} продаж`)
   if (fixes.length) {
     lines.push('', '✏️ <b>Поправить в книгах</b>')
