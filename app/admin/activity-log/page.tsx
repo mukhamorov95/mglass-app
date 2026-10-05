@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { TABLES, describe, type LogEntry } from '@/lib/activityLogView'
 import { mskDayKey } from '@/lib/time'
+import { plural } from '@/lib/morning'
 
 // Журнал действий — только владельцу (RLS activity_log: is_owner()). Кто, когда, в
 // каком разделе, что было и что стало. Пишет триггер базы на ключевых таблицах
@@ -97,7 +98,7 @@ export default function ActivityLogPage() {
             <input type="checkbox" checked={!people} onChange={e => setPeople(!e.target.checked)} />
             показывать «систему»
           </label>
-          <span className="ml-auto text-[11px] text-[#6b6b66]">{entries.length}{more ? '+' : ''} записей</span>
+          <span className="ml-auto text-[11px] text-[#6b6b66]">{entries.length}{more ? '+' : ''} {plural(entries.length, 'запись', 'записи', 'записей')}</span>
         </div>
 
         <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
