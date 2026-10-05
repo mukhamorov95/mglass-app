@@ -7,7 +7,7 @@ import { mskDayKey } from '@/lib/time'
 import { plural } from '@/lib/morning'
 import { shiftMonth } from '@/lib/sales/period'
 import {
-  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, costsComplete, fixLine, fromDb, loadEdits, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
+  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, costsComplete, fixLine, fromDb, loadEdits, monthGen, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
   type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals,
 } from '@/lib/sales/marginBook'
 
@@ -80,7 +80,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
     const tab = own[0]?.tab ?? `${monthRu(m)} ${m.slice(2, 4)}`
     return {
       month: m, tab, objects, t: periodTotals(objects),
-      fixes: objects.flatMap(o => o.issues.filter(i => needsFix(o, i)).map(i => fixLine({ month: m, tab }, o, i))),
+      // До первой вкладки «Маржи» поправлять в книге нечего — этих месяцев в ней нет.
+      fixes: m < MARGIN_SINCE ? [] : objects.flatMap(o => o.issues.filter(i => needsFix(o, i)).map(i => fixLine({ month: m, tab }, o, i))),
     }
   }).filter(x => x.objects.length > 0)
   const total = periodTotals(byMonth.flatMap(x => x.objects))
@@ -122,7 +123,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
         )}
         {beforeBook && (
           <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-            Книга «Маржа» сверяется с {monthRu(MARGIN_SINCE).toLowerCase()} {MARGIN_SINCE.slice(0, 4)} года — расходов за более ранние месяцы здесь нет.
+            Книга «Маржа» ведётся с {monthGen(MARGIN_SINCE)} {MARGIN_SINCE.slice(0, 4)} года — расходов за более ранние месяцы нет, их заказы в маржу не входят и «дописать» не помечаются.
           </p>
         )}
 
@@ -277,7 +278,7 @@ function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: Peri
               {m.objects.map(o => (
                 <MarginObjectRow key={`${o.order_no}-${o.row ?? o.sale_id}`} d={{
                   saleId: o.sale_id, orderNo: o.order_no, client: o.client, manager: o.manager,
-                  closed: o.closed, needsCosts: o.closed && !costsComplete(o), bookClosed: o.book_closed, amount: o.amount, partnerFee: o.partner_fee,
+                  closed: o.closed, needsCosts: o.closed && !costsComplete(o) && o.month >= MARGIN_SINCE, bookClosed: o.book_closed, amount: o.amount, partnerFee: o.partner_fee,
                   varTotal: o.var_total, md: o.md, mdPct: o.md_pct, issue: issueText(o),
                   book: o.book_costs, edits: o.edits,
                 }} />

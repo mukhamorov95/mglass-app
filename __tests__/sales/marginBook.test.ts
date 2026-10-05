@@ -205,6 +205,13 @@ describe('деньги периода: продажи → расходы → м�
     expect(t.costs).toBe(28831 + 125951 + 49725)
   })
 
+  it('до первой вкладки «Маржи» закрытый без расходов — не «дописать»: дописывать некуда', () => {
+    const early = objs.map(o => ({ ...o, month: '2025-03' }))
+    const t = periodTotals(early)
+    expect(t.to_fill).toBe(0)
+    expect(t.closed + t.open).toBe(t.objects)
+  })
+
   it('открытый заказ с расходами не меняет маржу, пока его не закроют', () => {
     const open = objs.map(o => (o.closed ? o : { ...o, costs: { ...(o.costs ?? {}), glass: 50000 } as typeof o.costs, var_total: 50000, md: o.amount - 50000, issues: [] }))
     const t = periodTotals(open)

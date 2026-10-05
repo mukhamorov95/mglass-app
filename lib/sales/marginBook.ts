@@ -308,7 +308,7 @@ export type PeriodTotals = {
   objects: number
   closed: number         // закрыты и с полными расходами
   open: number           // objects − closed
-  to_fill: number        // из open: закрыты по статусу, но расходы внесены не все
+  to_fill: number        // из open: закрыты по статусу, но расходы внесены не все (месяцы книги «Маржа»)
   sales: number          // все заказы периода
   closed_sales: number   // закрытые — база маржи
   costs: number          // закрытые
@@ -328,7 +328,8 @@ export function periodTotals(objects: MarginObject[]): PeriodTotals {
     objects: sold.length,
     closed: closed.length,
     open: sold.length - closed.length,
-    to_fill: sold.filter(o => o.closed && !costsComplete(o)).length,
+    // До первой вкладки «Маржи» расходов нет и дописывать некуда.
+    to_fill: sold.filter(o => o.closed && !costsComplete(o) && o.month >= MARGIN_SINCE).length,
     sales: r2(sold.reduce((s, o) => s + o.amount, 0)),
     closed_sales: closedSales,
     costs, margin: r2(closedSales - costs),
@@ -501,6 +502,7 @@ export async function refreshSaleFinance(sb: SupabaseClient, saleId: number): Pr
 // ─── Отчёт в Telegram ─────────────────────────────────────────────────────────
 
 const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+export const monthGen = (ym: string) => MONTHS_GEN[Number(ym.slice(5, 7)) - 1] ?? ym
 const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
 export const monthRu = (ym: string) => MONTHS_RU[Number(ym.slice(5, 7)) - 1] ?? ym
 const rub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
@@ -559,7 +561,7 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
   }
   const closed = periodTotals(r.months.flatMap(m => m.objects))
   const first = r.months[0]?.month
-  const since = first ? ` с ${MONTHS_GEN[Number(first.slice(5, 7)) - 1]} ${first.slice(0, 4)}` : ''
+  const since = first ? ` с ${monthGen(first)} ${first.slice(0, 4)}` : ''
   lines.push(`\nЗакрытые объекты${since} (${closed.closed}): продажи ${rub(closed.closed_sales)} · маржа <b>${rub(closed.margin)}</b> · ${pct(closed.margin_pct)}`)
   if (closed.to_fill) lines.push(`ещё ${closed.to_fill} закрыто без всех расходов — в маржу не вошли`)
   if (r.financeUpdated) lines.push(`Себестоимость в CFO ${r.dry ? 'обновится' : 'обновлена'} у ${r.financeUpdated} продаж`)
