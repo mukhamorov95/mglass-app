@@ -58,7 +58,7 @@ export const POMESHCHENIE: Landing[] = [
       },
     ],
     blocks: ["lightModes", "materials", "priceFactors", "steps"],
-    gallery: ["roundAura", "rectAura", "archAura", "frontLight", "capsulesBlack", "ovalGold"],
+    gallery: ["roundAura", "rectAura", "archAura", "frontLight", "capsulesBlack", "ovalGold", "archesAuraDouble", "rectAuraMarble", "dropAura"],
     faq: [
       { q: "Какое зеркало лучше для ванной — с подсветкой или без?", a: "Если над раковиной нет хорошего света на лицо, лучше с фронтальной подсветкой. Если свет уже решён светильниками, можно без подсветки или с одной аурой для атмосферы." },
       { q: "Как сделать, чтобы зеркало не запотевало?", a: "Поставить подогрев: нагревательный элемент за полотном держит рабочую зону тёплой, и пар на ней не оседает." },
@@ -120,7 +120,7 @@ export const POMESHCHENIE: Landing[] = [
       },
     ],
     blocks: ["frames", "materials", "priceFactors", "steps"],
-    gallery: ["hallBlack", "wallTv", "ringWall", "capsuleBlack"],
+    gallery: ["hallBlack", "wallTv", "ringWall", "capsuleBlack", "archGoldFloor", "facetFrameNiche"],
     faq: [
       { q: "Какой высоты должно быть зеркало в прихожей?", a: "Чтобы видеть себя целиком, полотно делают в рост — от пола или от плинтуса. Если места мало, достаточно зеркала, в котором видно человека по колено." },
       { q: "Можно ли повесить большое зеркало на гипсокартон?", a: "Можно, но крепёж подбираем под основание и вес полотна — это проверяем на замере." },
@@ -179,7 +179,7 @@ export const POMESHCHENIE: Landing[] = [
       },
     ],
     blocks: ["materials", "frames", "priceFactors", "steps"],
-    gallery: ["ringWall", "wallTv", "hallBlack", "capsuleBlack"],
+    gallery: ["ringWall", "wallTv", "hallBlack", "capsuleBlack", "archGoldFloor", "facetFrameNiche"],
     faq: [
       { q: "Какой толщины делать зеркало в полный рост?", a: "Для больших полотен берём 6 мм: такое зеркало жёстче и меньше искажает отражение." },
       { q: "Как заносят большое зеркало в квартиру?", a: "Размеры лифта, лестницы и проёмов проверяем до изготовления. Если полотно не проходит, делим стену на несколько зеркал." },
@@ -235,13 +235,26 @@ export const FORMA: Landing[] = [
           "Крепление круга — на механический крепёж или скрытый подвес, по весу полотна",
         ],
       },
+      {
+        h2: "Какие круглые зеркала мы делали",
+        list: [
+          "Большой круг с аурой над раковиной — свет расходится по плитке ровным кольцом, тёплым или нейтральным",
+          "Круг с аурой на стене из дерева или стеновой панели: тёплый свет подчёркивает фактуру",
+          "Кольцо фронтального света по периметру круга над туалетным столиком — для макияжа",
+          "Круг в тонкой золотистой раме на мраморной стене ванной",
+          "Два круга в цветной металлической раме над двумя раковинами",
+          "Круг без рамы на терракотовой стене — акцент на цветной стене",
+        ],
+      },
     ],
     blocks: ["lightModes", "frames", "priceFactors", "steps"],
-    gallery: ["roundAura", "roundOrange", "roundPanel", "ringWall"],
+    gallery: ["roundAura", "roundOrange", "roundPanel", "roundRingFront", "roundWarmDesk", "roundAuraBlueTile", "roundAuraWood", "roundGoldFrame", "roundAuraPanel"],
     faq: [
       { q: "Какого диаметра делать круглое зеркало над раковиной?", a: "Обычно диаметр равен ширине тумбы или немного меньше. Пришлите ширину тумбы — предложим размер." },
       { q: "Круглое зеркало дороже прямоугольного?", a: "Немного: фигурный рез и обработка кромки по кругу сложнее прямой." },
       { q: "Можно ли круглое зеркало с фронтальной подсветкой?", a: "Можно — матовая полоса повторяет круг. Но чаще у круглых зеркал выбирают ауру." },
+      { q: "Делаете круглые зеркала в раме?", a: "Да, в тонкой металлической раме — чёрной, золотистой или цветной. Рама идёт по кромке круга, а сам круг режем под нужный диаметр." },
+      { q: "На какой высоте вешать круглое зеркало над раковиной?", a: "Центр круга — примерно на уровне глаз, низ — с зазором над смесителем. Подробно — в разделе вопросов «Как повесить зеркало на стену»." },
     ],
     related: ["ovalnye-zerkala", "arochnye-zerkala", "zerkala-s-podsvetkoj", "zerkala-v-vannuyu", "zerkala-v-rame"],
     serviceType: "Изготовление круглых зеркал",
@@ -296,7 +309,7 @@ export const FORMA: Landing[] = [
       },
     ],
     blocks: ["frames", "lightModes", "priceFactors", "steps"],
-    gallery: ["capsulesBlack", "capsuleBlack", "ovalGold", "archAura"],
+    gallery: ["capsulesBlack", "capsuleBlack", "ovalGold", "ovalFrameAuraHall", "capsuleBlackAura", "ovalBlackCeiling"],
     faq: [
       { q: "Чем капсула отличается от овала?", a: "У капсулы длинные стороны прямые, а концы — полукруглые. У овала контур скругляется плавно по всей длине." },
       { q: "Можно ли сделать два одинаковых зеркала над двумя раковинами?", a: "Да, делаем пару одинакового размера и формы — так, как в наших работах с капсулами и арками." },
@@ -353,7 +366,7 @@ export const FORMA: Landing[] = [
       },
     ],
     blocks: ["lightModes", "priceFactors", "steps"],
-    gallery: ["archAura", "figureAura", "capsulesBlack", "roundAura"],
+    gallery: ["archAura", "archesAuraDouble", "archGoldFloor", "salonArches", "salonArchSingle", "figureAura"],
     faq: [
       { q: "Можно ли сделать зеркало любой формы?", a: "Контур по шаблону или чертежу вырезаем. Если форма сложная, сначала согласуем чертёж." },
       { q: "Подсветка повторит форму арки?", a: "Да, аура идёт по тыльному периметру полотна и повторяет его контур." },
@@ -475,7 +488,7 @@ export const BIZNES: Landing[] = [
       },
     ],
     blocks: ["lightModes", "priceFactors", "steps"],
-    gallery: ["frontLight", "ringWall", "rectAura"],
+    gallery: ["salonArches", "salonArchSingle", "frontLight", "ringWall", "roundRingFront", "roundWarmDesk"],
     faq: [
       { q: "Какую подсветку выбрать для гримёрного зеркала?", a: "Фронтальную по периметру полотна, с нейтральным светом: она убирает тени и честно передаёт цвет." },
       { q: "Можно ли нанести логотип салона?", a: "Да, пескоструйным рисунком по вашему макету." },
@@ -546,7 +559,7 @@ export const USLUGI: Landing[] = [
       },
     ],
     blocks: ["materials", "priceFactors"],
-    gallery: ["plainMarble", "hallBlack", "capsuleBlack"],
+    gallery: ["plainMarble", "hallBlack", "capsuleBlack", "figureTwoOvals", "twoPieceFigure", "roundTerracotta"],
     faq: [
       { q: "Можно ли порезать зеркало по моим размерам без монтажа?", a: "Да, режем и обрабатываем полотно без монтажа. Как его получить, обсудим при расчёте." },
       { q: "Какие зеркала режете?", a: "Серебро 4, 5 и 6 мм, осветлённое 4 и 6 мм, бронзу и графит 4 и 6 мм, состаренное 4 мм." },
@@ -617,7 +630,7 @@ export const USLUGI: Landing[] = [
       },
     ],
     blocks: ["steps", "priceFactors"],
-    gallery: ["hallBlack", "wallTv", "rectAura", "archAura"],
+    gallery: ["hallBlack", "wallTv", "rectAura", "archAura", "wallAuraStone", "ovalBlackCeiling"],
     faq: [
       { q: "Сколько стоит установка зеркала?", a: "Зависит от размера и веса полотна, основания стены, этажа и того, нужно ли подключать подсветку. Монтаж считаем вместе с зеркалом." },
       { q: "Как крепите зеркало на плитку?", a: "Способ выбираем по основанию под плиткой и весу полотна — это смотрим на замере." },

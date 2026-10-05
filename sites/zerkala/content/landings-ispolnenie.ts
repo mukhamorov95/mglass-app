@@ -58,7 +58,7 @@ export const ISPOLNENIE: Landing[] = [
       },
     ],
     blocks: ["lightModes", "materials", "priceFactors", "steps"],
-    gallery: ["rectAura", "frontLight", "roundAura", "archAura", "figureAura", "ringWall"],
+    gallery: ["rectAura", "frontLight", "roundAura", "archAura", "figureAura", "ringWall", "dropAura", "archesAuraDouble", "twoPieceFigure"],
     faq: [
       { q: "Чем аура отличается от фронтальной подсветки?", a: "Аура светит на стену за зеркалом — это фоновый, декоративный свет. Фронтальная светит на вас через матовую полосу на самом зеркале — это рабочий свет для макияжа и бритья. Можно сделать оба контура в одном зеркале." },
       { q: "Можно ли сделать подсветку в зеркале нестандартной формы?", a: "Да. Круглые, овальные, арочные и фигурные зеркала с аурой мы уже делали — примеры в разделе работ. Фронтальная полоса повторяет форму полотна." },
@@ -126,9 +126,20 @@ export const ISPOLNENIE: Landing[] = [
           "Вид зеркала выбираете вы: серебро, осветлённое, бронза, графит, состаренное",
         ],
       },
+      {
+        h2: "Что делают без подсветки — по нашим работам",
+        list: [
+          "Арочное зеркало в полный рост в тонкой золотистой раме — для прихожей и спальни",
+          "Зеркальная стена с фацетным рисунком в кухне-гостиной",
+          "Панно из элементов с фацетом над столешницей между двумя бра",
+          "Большое зеркало в золотой раме над двойной раковиной, где свет дают подвесные светильники",
+          "Фигурное зеркало из двух частей без рамы над консолью в прихожей",
+          "Круг в тонкой золотистой раме на мраморе — рама делает его заметным и без света",
+        ],
+      },
     ],
     blocks: ["materials", "frames", "priceFactors", "steps"],
-    gallery: ["plainMarble", "hallBlack", "capsulesBlack", "ovalGold", "roundOrange", "roundPanel"],
+    gallery: ["plainMarble", "hallBlack", "capsulesBlack", "ovalGold", "roundOrange", "roundPanel", "archGoldFloor", "facetPanel", "facetWall", "goldFrameDouble", "roundGoldFrame", "figureTwoOvals"],
     faq: [
       { q: "Какую толщину зеркала выбрать?", a: "Для обычного зеркала над раковиной или в прихожую достаточно 4 мм. Для полотен в рост и во всю стену берут 6 мм — меньше искажений на большой площади. Под П-образный профиль нужно именно 6 мм." },
       { q: "Можно ли потом добавить подсветку?", a: "Ауру за зеркалом можно добавить, если есть вывод питания и зазор до стены. Фронтальную — нет: для неё на полотне делают матовую полосу ещё на производстве." },
@@ -200,7 +211,7 @@ export const ISPOLNENIE: Landing[] = [
       },
     ],
     blocks: ["frames", "materials", "priceFactors", "steps"],
-    gallery: ["capsulesBlack", "ovalGold", "hallBlack", "capsuleBlack", "roundOrange"],
+    gallery: ["capsulesBlack", "ovalGold", "hallBlack", "capsuleBlack", "roundOrange", "archGoldFloor", "goldFrameDouble", "roundGoldFrame", "ovalBlackCeiling", "ovalFrameAuraHall", "capsuleBlackAura", "roundedDarkFrame"],
     faq: [
       { q: "Какие цвета рамы бывают?", a: "На фото наших работ — чёрная, золотая и оранжевая металлическая рама. Другие цвета уточняйте при расчёте: подберём под вашу сантехнику и фурнитуру." },
       { q: "Почему П-образный профиль только для зеркала 6 мм?", a: "Профиль рассчитан на толщину полотна: на зеркале 4 мм он будет болтаться и не удержит кромку. Поэтому с П-профилем сразу считаем полотно 6 мм." },
@@ -392,7 +403,7 @@ export const ISPOLNENIE: Landing[] = [
       },
     ],
     blocks: ["materials", "priceFactors", "steps"],
-    gallery: ["plainMarble", "rectAura", "wallTv", "hallBlack"],
+    gallery: ["facetPanel", "facetWall", "facetFrameNiche", "plainMarble", "wallTv", "hallBlack"],
     faq: [
       { q: "Что такое фацет?", a: "Фацет — скошенная полированная кромка по краю зеркала. Ширина скоса у нас 10, 15 или 20 мм." },
       { q: "Можно ли фацет на круглом зеркале?", a: "Можно, форму и ширину фацета уточним при расчёте." },
@@ -514,7 +525,7 @@ export const ISPOLNENIE: Landing[] = [
       },
     ],
     blocks: ["materials", "priceFactors", "steps"],
-    gallery: ["wallTv", "ringWall", "roundPanel"],
+    gallery: ["facetWall", "facetPanel", "wallTv", "wcStripLight", "ringWall", "roundPanel"],
     faq: [
       { q: "Как крепят зеркальное панно?", a: "Элементы клеят на подготовленное ровное основание специальным зеркальным клеем. Ровность основания проверяем на замере." },
       { q: "Можно ли сделать панно из элементов разного размера?", a: "Да, по вашему эскизу или по нашему макету — согласуем раскладку до изготовления." },
