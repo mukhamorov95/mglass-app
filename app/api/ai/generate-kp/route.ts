@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { requireAnyPageAccess } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 const PRODUCT_LABELS: Record<string, string> = {
   mirror: 'Зеркало с подсветкой',
@@ -22,8 +16,8 @@ export async function POST(req: Request) {
   if (guard instanceof NextResponse) return guard
 
   try {
-    // Единственный ai-роут без авторизации (найдено аудитом 20.07): ходил
-    // service-ключом и отдавал calculations по id кому угодно.
+    // Расчёт читается под RLS вошедшего: service-ключ при гейте «вошёл» отдавал
+    // любой роли, включая партнёра, чужой расчёт по id (аудиты 20.07 и 30.09).
     const auth = await createServerClient()
     const { data: { user } } = await auth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
@@ -36,15 +30,14 @@ export async function POST(req: Request) {
     let prompt: string
 
     if (calculation_id) {
-      const { data: calc, error } = await supabase
+      const { data: calc, error } = await auth
         .from('calculations')
         .select('*')
         .eq('id', calculation_id)
-        .single()
+        .maybeSingle()
 
-      if (error || !calc) {
-        return NextResponse.json({ error: 'Расчёт не найден' }, { status: 404 })
-      }
+      if (error) return NextResponse.json({ error: `Расчёт не прочитан: ${error.message}` }, { status: 500 })
+      if (!calc) return NextResponse.json({ error: 'Расчёт не найден' }, { status: 404 })
 
       const productLabel = PRODUCT_LABELS[calc.product_type] ?? calc.product_type
       const clientText = (calc.client_text as string | null) ?? ''
