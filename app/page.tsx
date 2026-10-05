@@ -6,6 +6,10 @@ import { getRole, ROLE_HOME } from '@/lib/getRole'
 import MyDay from '@/components/MyDay'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { createServiceClient as serviceClient } from '@/lib/supabase-service'
+import { loadMorning, type Morning, type MorningPerson } from '@/lib/morningData'
+import MorningManager from '@/components/morning/MorningManager'
+import MorningTeam from '@/components/morning/MorningTeam'
 
 const DAYS = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота']
 const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
@@ -55,7 +59,7 @@ const OWNER_CENTER = [
   { href: '/admin/warehouse',      emoji: '📦', label: 'Склад',          desc: 'Остатки и алерты' },
 ]
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   const role = await getRole()
   // Роль-старт: специализированные роли уходят сразу в свой раздел, а не на
   // менеджерскую панель. manager/admin/ceo не в карте — остаются здесь.
@@ -71,6 +75,35 @@ export default async function Home() {
   const monthStr  = todayStr.slice(0, 7)
   const mskNow    = new Date(`${todayStr}T12:00:00Z`)   // полдень мск-дня: день недели и число берём из него
   const dateLabel = `${DAYS[mskNow.getUTCDay()]}, ${mskNow.getUTCDate()} ${MONTHS[mskNow.getUTCMonth()]}`
+
+  // «Утро» (docs/MANAGER_MORNING_ROUTE.md, М2–М3): менеджер видит только себя — его
+  // amo-id берётся из учётки, а не из адреса; владелец видит команду и любого по ?m=.
+  const isOwner = role === 'admin' || role === 'ceo'
+  let morning: Morning | null = null
+  let person: MorningPerson | undefined
+  let ownerView = false
+  if (role === 'manager') {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: me } = user
+      ? await supabase.from('users').select('amo_user_id').eq('id', user.id).maybeSingle()
+      : { data: null }
+    if (me?.amo_user_id) {
+      morning = await loadMorning(serviceClient(), { today: todayStr, only: Number(me.amo_user_id) })
+      person = morning.people[0]
+    }
+  } else if (isOwner) {
+    const { m } = await searchParams
+    if (m && /^\d+$/.test(m)) {
+      morning = await loadMorning(serviceClient(), { today: todayStr, only: Number(m) })
+      person = morning.people[0]
+      ownerView = true
+    } else {
+      morning = await loadMorning(serviceClient(), { today: todayStr })
+    }
+  }
+  const title = person
+    ? (ownerView ? `Утро — ${person.name}` : `Доброе утро, ${person.name}`)
+    : isOwner ? 'Доброе утро' : 'Панель менеджера'
 
   // Fetch B2C calc stats
   const { data: calcs, error: calcsErr } = await supabase
@@ -111,7 +144,7 @@ export default async function Home() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[13px] text-[#9a9a95]">{dateLabel}</p>
-          <h1 className="text-[22px] font-bold text-[#111110] tracking-tight mt-0.5">Панель менеджера</h1>
+          <h1 className="text-[22px] font-bold text-[#111110] tracking-tight mt-0.5">{title}</h1>
         </div>
         <Link href="/calculations"
           className="text-[13px] text-blue-600 hover:underline font-medium">
@@ -119,8 +152,13 @@ export default async function Home() {
         </Link>
       </div>
 
-      {/* Мой день — первое, что видит менеджер: кому позвонить и написать прямо сейчас */}
-      {role === 'manager' && <MyDay />}
+      {morning && morning.errors.length > 0 && (
+        <p role="alert" className="text-[12px] text-[#c23a2b]">Не всё загрузилось: {morning.errors.join(' · ')}</p>
+      )}
+      {morning && person && <MorningManager morning={morning} person={person} ownerView={ownerView} />}
+      {/* Учётка без связи с amo — «Утра» нет, остаются поводы дня */}
+      {role === 'manager' && !person && <MyDay />}
+      {isOwner && morning && !person && <MorningTeam morning={morning} />}
 
       {/* ── NEW CALCULATION – hero section ────────────────────────────── */}
       <section>
