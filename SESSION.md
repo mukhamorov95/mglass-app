@@ -1,3 +1,18 @@
+## Задача (05.10, девятая): разбор висящих PR безопасности — #724 и #733
+- #724 → перенесён на свежий main как #851 и смержен: /api/ai/chat (инструменты модели) и /api/ai/generate-kp
+  читают клиентом вызывающего (RLS), service-ключ из lib/ai-tools.ts убран; ворота экрана из #793 сохранены.
+  Сверено с базой: materials/financial_settings — SELECT not is_partner(); calculations — calc_select (свои или
+  sees_all_calculations(), политика #723 уже накатана) → менеджер в чате видит свои расчёты, чужие нет.
+- #733 → перенесён на ветку fix/pricing-inputs-write-rls-v2 (новый PR), код без изменений, конфликт был только в SESSION.md.
+  Писатели materials/financial_settings пересчитаны 05.10 — список из PR верен, новых нет; /admin/materials
+  открыт admin, ceo, buyer — все остаются в can_edit_materials().
+- Проба «было» 05.10 (откатываемый DO-блок, ceo/commercial/cfo — переназначением роли внутри отката):
+  admin, ceo, commercial, cfo, buyer, manager, production, accountant, measurer и authenticated без sub —
+  UPDATE/INSERT/DELETE 1/1/1 на обеих таблицах; partner 0/RLS/0; anon denied.
+- НЕ НАКАЧЕНО: apply_migration 20260930_pricing_inputs_write_rls заблокирован классификатором авторежима
+  («Protected-Scope IaC Apply»). Владелец выполняет SQL файла в Supabase → SQL Editor; затем повторить пробу
+  (ожидание: manager/production/accountant/measurer/без sub — 0/RLS/0; buyer — materials 1/1/1, fin_settings 0/RLS/0)
+  и только после этого мерж PR.
 ## Задача (05.10, восьмая): «Команда» за любой день/период; Вере — «Воронка и продажи» и правка «Маржи»; журнал действий
 - #846 «Команда»: меню Сегодня · Последний рабочий день · 7 дней · месяц · прошлый месяц · год · прошлый год +
   формы «День», «Месяц», «С … по …» (?d, ?month, ?year, ?from&to). Сегодня — POST /api/manager-day/today (владелец,
