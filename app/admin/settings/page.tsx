@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { FinancialSettings } from '@/lib/types'
+import { loadJson } from '@/lib/toast'
 
 type Row = FinancialSettings & { _dirty?: boolean }
 
@@ -24,9 +25,9 @@ export default function SettingsPage() {
 
   async function load() {
     setLoading(true)
-    const res = await fetch('/api/admin/settings')
-    if (!res.ok) { setError('Ошибка загрузки'); setLoading(false); return }
-    setRows(await res.json())
+    const res = await loadJson<Row[]>('/api/admin/settings')
+    if (res.error !== null) { setError(`Настройки не загружены: ${res.error}`); setLoading(false); return }
+    setRows(res.data)
     setLoading(false)
   }
 
@@ -38,14 +39,13 @@ export default function SettingsPage() {
     setSaving(row.id)
     setError(null)
     const { _dirty, ...fields } = row
-    const res = await fetch('/api/admin/settings', {
+    const { error } = await loadJson<{ ok: true }>('/api/admin/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(fields),
     })
-    const json = await res.json()
     setSaving(null)
-    if (!res.ok) { setError(json.error ?? 'Ошибка'); return }
+    if (error) { setError(`Не сохранено: ${error}`); return }
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, _dirty: false } : r))
     setSaved(row.id)
     setTimeout(() => setSaved(null), 2000)
@@ -64,7 +64,7 @@ export default function SettingsPage() {
 
       {error && <p className="text-[13px] text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-4">{error}</p>}
 
-      {rows.length === 0 && (
+      {rows.length === 0 && !error && (
         <p className="text-[13px] text-[#8a8a85]">Нет записей в таблице financial_settings</p>
       )}
 

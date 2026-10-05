@@ -27,11 +27,13 @@ export async function PUT(req: NextRequest) {
 
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
 
-  const { error } = await adminClient()
+  const { data, error } = await adminClient()
     .from('financial_settings')
     .update(fields)
     .eq('id', id)
+    .select('id')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data?.length) return NextResponse.json({ error: 'Строка настроек не найдена — обновите страницу' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }

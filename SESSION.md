@@ -31,6 +31,21 @@
 - Известное, не моё: в общем node_modules нет @electric-sql/pglite → tsc (7 ошибок) и vitest падают только в
   __tests__/access/managerStatsOwnRows.test.ts. Нужен npm install в основном каталоге.
 
+## Задача (05.10, девятая): разбор висящих PR безопасности — #724 и #733
+- #724 → перенесён на свежий main как #851 и смержен: /api/ai/chat (инструменты модели) и /api/ai/generate-kp
+  читают клиентом вызывающего (RLS), service-ключ из lib/ai-tools.ts убран; ворота экрана из #793 сохранены.
+  Сверено с базой: materials/financial_settings — SELECT not is_partner(); calculations — calc_select (свои или
+  sees_all_calculations(), политика #723 уже накатана) → менеджер в чате видит свои расчёты, чужие нет.
+- #733 → перенесён на ветку fix/pricing-inputs-write-rls-v2 (новый PR), код без изменений, конфликт был только в SESSION.md.
+  Писатели materials/financial_settings пересчитаны 05.10 — список из PR верен, новых нет; /admin/materials
+  открыт admin, ceo, buyer — все остаются в can_edit_materials().
+- Проба «было» 05.10 (откатываемый DO-блок, ceo/commercial/cfo — переназначением роли внутри отката):
+  admin, ceo, commercial, cfo, buyer, manager, production, accountant, measurer и authenticated без sub —
+  UPDATE/INSERT/DELETE 1/1/1 на обеих таблицах; partner 0/RLS/0; anon denied.
+- Накачено владельцем 05.10 через Supabase → SQL Editor (apply_migration из сессии заблокирован авторежимом;
+  в supabase_migrations запись не создаётся — файл 20260930_pricing_inputs_write_rls.sql в репо). Проба «стало» 05.10:
+  admin/ceo/commercial/cfo — 1/1/1 на обеих; buyer — materials 1/1/1, financial_settings 0/RLS/0; manager, production,
+  accountant, measurer, без sub — 0/RLS/0 на обеих; partner 0/RLS/0; anon denied; видимость у всех прежняя (11/7). PR #852 смержен.
 ## Задача (05.10, восьмая): «Команда» за любой день/период; Вере — «Воронка и продажи» и правка «Маржи»; журнал действий
 - #846 «Команда»: меню Сегодня · Последний рабочий день · 7 дней · месяц · прошлый месяц · год · прошлый год +
   формы «День», «Месяц», «С … по …» (?d, ?month, ?year, ?from&to). Сегодня — POST /api/manager-day/today (владелец,
@@ -64,7 +79,7 @@
 - По «да» владельца: manager_day_stats — «видеть все» открывает всех только менеджеру (миграция
   20261006_manager_day_stats_flag_role.sql, применена 20261005161930). Было: закупщик с флагом — 238 строк / 7 человек;
   стало: 0, у остальных без изменений. Тот же тест, контроль без миграции краснеет ровно на закупщике.
-- Открыто: отправка ветки fix/manager-stats-own-rows заблокирована классификатором авторежима — PR и мерж за владельцем.
+- Ветка fix/manager-stats-own-rows смержена как #845 (05.10, 16:42) — блок отправки снят.
   Новый псевдоним книги — правка и в lib/sales/bookNames.ts, и в users.book_name.
 ## Задача (05.10, шестая): решения 3 и 5 — план в поступлениях (М6) и «Мои деньги» по кассе (М5)
 - М6: manager_month_plans (миграция 20261006_manager_month_plans.sql применена через MCP), /api/manager-plans
