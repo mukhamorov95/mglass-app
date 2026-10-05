@@ -145,6 +145,40 @@ describe('сверка «Маржи» с «Продажами»', () => {
   })
 })
 
+describe('вкладка старого формата (до августа 2025): нет «Доставки» и «Налога»', () => {
+  const HEAD25 = HEAD.filter(h => h !== 'Доставка' && h !== 'Налог')
+  const line25 = (no: string, amount: string, costs: string[], varTotal: string, md: string) =>
+    [no, amount, '', '', '', '', '', ...costs, varTotal, md, '', '']
+  const tab = parseMarginTab(html([
+    HEAD25,
+    ['', 'р.100 000', ...Array(19).fill('')],
+    // стекло, фурнитура, конструктор, замерщик, монтажник, партнёры, рекламации, 3 бонуса
+    line25('0735-3', 'р.100 000', ['р.20 000', 'р.10 000', 'р.2 000', 'р.2 000', 'р.8 000', '', '', 'р.5 000', 'р.1 000', 'р.500'], 'р.48 500', 'р.51 500'),
+  ]), GID, 'Июль 25')
+
+  it('колонки «Доставка» нет — доставка 0, а не «не внесено»; налог не обязателен — остаётся пустым', () => {
+    expect(tab.absent).toEqual(['delivery'])
+    expect(tab.rows[0].costs.delivery).toBe(0)
+    expect(tab.rows[0].costs.tax).toBeNull()
+    expect(tab.rows[0].text_cells).toEqual([])
+  })
+
+  it('закрытый заказ с остальными статьями — закрыт и входит в маржу', () => {
+    const o = reconcileMonth('2025-07', tab.rows, [sale(9, '0735-3', 100000, 'closed')])
+    expect(o[0].issues.filter(i => i.kind === 'missing_costs')).toEqual([])
+    const t = periodTotals(o)
+    expect(t.closed).toBe(1)
+    expect(t.to_fill).toBe(0)
+    expect(t.costs).toBe(48500)
+  })
+
+  it('отчёт называет вкладки без колонки', () => {
+    const objects = reconcileMonth('2025-07', tab.rows, [sale(9, '0735-3', 100000, 'closed')])
+    const t = formatMarginReport({ dry: true, financeUpdated: 0, months: [{ month: '2025-07', tab: 'Июль 25', rows: 1, held: null, bookAmountTotal: 100000, rowsAmount: 100000, summary: summarize(objects), objects, absent: tab.absent }] })
+    expect(t).toContain('нет колонки «доставка» во вкладках Июль 25 — считается 0')
+  })
+})
+
 describe('деньги периода: продажи → расходы → маржа', () => {
   const objs = reconcileMonth('2026-01', parseMarginTab(BOOK, GID, 'Январь 26').rows, SALES)
 

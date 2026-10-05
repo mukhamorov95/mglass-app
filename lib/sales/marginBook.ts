@@ -45,7 +45,9 @@ export type MarginBookRow = {
   book_md: number | null
   dima: number | null
 }
-export type MarginTab = { month: string; tab: string; rows: MarginBookRow[]; bookAmountTotal: number | null }
+// absent — обязательные статьи, колонки которых во вкладке нет вовсе (до августа 2025 —
+// «Доставка»): ячейки нет, дописывать нечего, статья тех месяцев — 0.
+export type MarginTab = { month: string; tab: string; rows: MarginBookRow[]; bookAmountTotal: number | null; absent: CostKey[] }
 
 type SheetRow = { row: number; cells: { text: string; color: string | null }[] }
 
@@ -59,10 +61,11 @@ export function parseMarginTab(html: string, gid: string | number, tab: string):
   if (!month) throw new Error(`Вкладка «${tab}»: не месяц`)
   const rows = parseSheetRows(html, gid) as SheetRow[]
   const hdr = rows.find(r => r.cells.some(c => headerKey(c.text) === 'amount'))
-  if (!hdr) return { month, tab, rows: [], bookAmountTotal: null }
+  if (!hdr) return { month, tab, rows: [], bookAmountTotal: null, absent: [] }
   const col: Partial<Record<Col, number>> = {}
   hdr.cells.forEach((c, i) => { const k = headerKey(c.text); if (k && col[k] === undefined) col[k] = i })
   if (col.orderNo === undefined) col.orderNo = 0
+  const absent = REQUIRED_COSTS.filter(k => col[k] === undefined)
   const text = (r: SheetRow, k: Col) => (col[k] === undefined ? '' : r.cells[col[k]!]?.text ?? '').trim()
 
   let bookAmountTotal: number | null = null
@@ -77,7 +80,7 @@ export function parseMarginTab(html: string, gid: string | number, tab: string):
     const unformatted: CostKey[] = []
     for (const k of COST_KEYS) {
       const raw = text(r, k)
-      costs[k] = raw ? (parseMoneyLoose(raw).value as number | null) : null
+      costs[k] = raw ? (parseMoneyLoose(raw).value as number | null) : absent.includes(k) ? 0 : null
       if (raw && !raw.includes('р.')) unformatted.push(k)
     }
     const bookVar = parseMoney(text(r, 'varTotal')) as number | null
@@ -92,7 +95,7 @@ export function parseMarginTab(html: string, gid: string | number, tab: string):
       dima: parseMoney(text(r, 'dima')) as number | null,
     })
   }
-  return { month, tab, rows: out, bookAmountTotal }
+  return { month, tab, rows: out, bookAmountTotal, absent }
 }
 
 export type MarginSale = {
@@ -376,6 +379,7 @@ export type MarginMonthReport = {
   rowsAmount: number
   summary: MarginSummary
   objects: MarginObject[]
+  absent?: CostKey[]
 }
 export type MarginSyncReport = { dry: boolean; months: MarginMonthReport[]; financeUpdated: number; error?: string }
 
@@ -443,7 +447,7 @@ export async function syncMarginBook(
     months.push({
       month: tab.month, tab: tab.tab, rows: tab.rows.length, held,
       bookAmountTotal: tab.bookAmountTotal, rowsAmount: tab.rows.reduce((s, r) => s + r.amount, 0),
-      summary: summarize(objects), objects,
+      summary: summarize(objects), objects, absent: tab.absent,
     })
   }
 
@@ -571,6 +575,10 @@ export function formatMarginReport(r: MarginSyncReport, limit = 3900): string {
     if (shown < fixes.length) lines.push(tail(fixes.length - shown))
   }
   const info: string[] = []
+  for (const k of REQUIRED_COSTS) {
+    const tabs = r.months.filter(m => m.absent?.includes(k)).map(m => esc(m.tab))
+    if (tabs.length) info.push(`нет колонки «${COST_RU[k]}» во вкладках ${tabs.join(', ')} — считается 0`)
+  }
   if (notInMargin) info.push(`ещё не внесены в «Маржу» — ${notInMargin} открытых`)
   if (partnersInfo) info.push(`в «Продажах» не проставлены партнёрские у ${partnersInfo} (в «Марже» есть)`)
   if (info.length && lines.join('\n').length + 80 < limit) lines.push('', `ℹ️ ${info.join('; ')}`)
