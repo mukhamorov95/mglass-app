@@ -10,6 +10,7 @@ import { getRelevantExamples } from '@/lib/avito/managerExamples'
 import { loadBotKnowledge, recordKnowledgeGap } from '@/lib/knowledge/aiKnowledge'
 import { botGate, isOwnBotEcho, MUTE_LABEL } from '@/lib/avito/botGate'
 import { muteIfHumanInThread } from '@/lib/avito/humanInThread'
+import { webhookGate } from '@/lib/avito/webhookGate'
 import { CRM_ZONES } from '@/lib/crmStages'
 import { appUrl } from '@/lib/appUrl'
 
@@ -18,7 +19,8 @@ const QUALIFICATION_STAGES = new Set(CRM_ZONES.find(z => z.zone === 'Квали�
 
 // Вебхук Avito Messenger: входящее сообщение клиента → лид в crm_leads (по
 // avito_chat_id) → AI-менеджер отвечает → снятые данные и скоринг в карточку.
-// Путь в whitelist middleware; защита — секрет в query (?key=AVITO_WEBHOOK_SECRET).
+// Путь в whitelist middleware; защита — секрет в query (?key=AVITO_WEBHOOK_SECRET),
+// без секрета в env маршрут закрыт (503), а не открыт.
 
 // Даём первому вызову время завершить ответ модели, чтобы ретрай Авито успел
 // прийти к уже помеченному сообщению и был отсеян дедупом (не двойной ответ).
@@ -50,10 +52,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.AVITO_WEBHOOK_SECRET
-  if (secret && req.nextUrl.searchParams.get('key') !== secret) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  }
+  const denied = webhookGate(process.env.AVITO_WEBHOOK_SECRET, req.nextUrl.searchParams.get('key'))
+  if (denied) return NextResponse.json({ error: denied.error }, { status: denied.status })
 
   const body = (await req.json().catch(() => null)) as AvitoWebhook | null
   const v = body?.payload?.value

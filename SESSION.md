@@ -1,3 +1,14 @@
+## Задача (05.10, двенадцатая): вебхук Авито (розница) закрыт без секрета
+- Было: app/api/avito/webhook/route.ts — `if (secret && key !== secret)`: без AVITO_WEBHOOK_SECRET в env любой POST
+  создавал crm_leads service-role'ом и будил Ивана (runAvitoManager + avitoSendMessage). Путь в whitelist middleware.
+- Стало: lib/avito/webhookGate.ts — нет секрета → 503 «not configured», ключ не совпал → 403; на нём оба маршрута
+  (розница и glasmen). Тест __tests__/avitoWebhookGate.test.ts.
+- Прод проверен ДО выкладки: AVITO_WEBHOOK_SECRET есть в Vercel (Production+Preview); POST {} без ключа → 403 на
+  app.mglass.pro и vercel.app; подписка Авито (/messenger/v1/subscriptions) = https://mglass-app.vercel.app/api/avito/webhook
+  с key == секрету из .env.local; POST {} с ключом → 200 skipped. Розница после выкладки не остановится.
+- Заметка: розничный вебхук подписан на vercel.app, а glasmen — на app.mglass.pro (vercel.app из РФ режется по IP;
+  Авито шлёт со своих серверов, поэтому сейчас работает). Переподписка — решение владельца, не трогал.
+
 ## Задача (05.10, одиннадцатая): «закрыт» = статус + все расходы; колонка «Не закрыто»
 - Уточнение владельца: закрыт — «закрыт» в «Продажах» или отмечен в карточке объекта, И внесены все 6 обязательных
   расходов (стекло, фурнитура, конструктор, замерщик, монтажник, доставка). Без какой-то статьи — не закрыт, «дописать».
