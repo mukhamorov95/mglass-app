@@ -1,7 +1,8 @@
 import { createServiceClient } from '@/lib/supabase-service'
 import { amoGetAll } from '@/lib/amocrm'
 import { sendMessage, getChannels } from '@/lib/wazzup'
-import { buildMessage, normalizePhone, DAILY_LIMIT, MIN_GAP_MS } from '@/lib/reviewMessage'
+import { buildMessage, mskMidnightIso, DAILY_LIMIT, MIN_GAP_MS } from '@/lib/reviewMessage'
+import { selectRecipients, type ReviewLead, type ReviewContact, type SkipReason } from '@/lib/reviewEligibility'
 
 export { REVIEW_URL, buildMessage, DAILY_LIMIT } from '@/lib/reviewMessage'
 
@@ -14,104 +15,132 @@ export { REVIEW_URL, buildMessage, DAILY_LIMIT } from '@/lib/reviewMessage'
 const DONE_STATUS = 142
 const PIPELINE = 1654237
 
-type AmoLeadWithContacts = {
-  id: number; name: string; price: number; closed_at: number; updated_at: number
-  _embedded?: { contacts?: { id: number }[] }
-}
-type AmoContact = {
-  id: number; name: string
-  custom_fields_values?: { field_code?: string; values?: { value?: string }[] }[]
-}
+// Тому же человеку повторно — не раньше чем через полгода, даже по новому заказу
+const REPEAT_AFTER_DAYS = 180
 
-// Наполнение очереди. Идемпотентно: уникальный индекс не даёт поставить один и тот же
-// заказ дважды, поэтому запускать можно сколько угодно раз.
-export async function fillQueue(days = 90): Promise<{ found: number; added: number }> {
+// Функция живёт 300 с (maxDuration маршрута), между сообщениями 40 с — за один вызов
+// уходит 5–6 сообщений, остальное экран досылает следующими вызовами.
+const TIME_BUDGET_MS = 240_000
+
+// Наполнение очереди. Идемпотентно: повторный запуск не добавит ни ту же сделку
+// (уникальный индекс), ни того же человека (askedBefore).
+export async function fillQueue(days = 90): Promise<{ found: number; added: number; skipped: Partial<Record<SkipReason, number>> }> {
   const since = Math.floor(Date.now() / 1000) - days * 86400
-  const params: Record<string, string> = {
+  // Путь без /api/v4: amoGet добавляет его сам. С префиксом запрос уходил на
+  // /api/v4/api/v4/leads, получал 404, а 404 amoGet отдаёт как «пусто».
+  const leads = await amoGetAll<ReviewLead>('/leads', {
     with: 'contacts',
     'filter[closed_at][from]': String(since),
     'filter[statuses][0][pipeline_id]': String(PIPELINE),
     'filter[statuses][0][status_id]': String(DONE_STATUS),
-  }
+  }, 'leads')
+  // За 90 дней закрывается ~30 сделок в месяц: ноль — сломанный запрос, а не правда
+  if (!leads.length) throw new Error(`AmoCRM не вернул ни одной успешной сделки за ${days} дней — похоже на сбой запроса`)
 
-  const leads = await amoGetAll<AmoLeadWithContacts>('/api/v4/leads', params, 'leads')
+  // Все контакты сделки, а не первый: клиент бывает вторым после дизайнера
   const ids = [...new Set(leads.flatMap(l => (l._embedded?.contacts ?? []).map(c => c.id)))]
-
-  const byId = new Map<number, { name: string; phone: string }>()
+  const contacts: ReviewContact[] = []
   for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200)
     const p: Record<string, string> = {}
-    chunk.forEach((id, k) => { p[`filter[id][${k}]`] = String(id) })
-    const contacts = await amoGetAll<AmoContact>('/api/v4/contacts', p, 'contacts')
-    for (const c of contacts) {
-      const phone = c.custom_fields_values?.find(f => f.field_code === 'PHONE')?.values?.[0]?.value
-      if (phone) byId.set(c.id, { name: c.name, phone: normalizePhone(phone) })
-    }
+    ids.slice(i, i + 200).forEach((id, k) => { p[`filter[id][${k}]`] = String(id) })
+    contacts.push(...await amoGetAll<ReviewContact>('/contacts', p, 'contacts'))
   }
-
-  // Один человек — одно сообщение, даже если у него несколько закрытых сделок:
-  // две просьбы об отзыве подряд читаются как рассылка, а не как внимание.
-  const seen = new Set<string>()
-  const rows = leads
-    .sort((a, b) => b.closed_at - a.closed_at)
-    .flatMap(l => {
-      const c = byId.get(l._embedded?.contacts?.[0]?.id ?? -1)
-      if (!c?.phone || c.phone.length !== 11 || seen.has(c.phone)) return []
-      seen.add(c.phone)
-      const doneAt = new Date((l.closed_at || l.updated_at) * 1000).toISOString().slice(0, 10)
-      return [{
-        amo_lead_id: l.id, client_name: c.name, phone: c.phone,
-        order_title: l.name, amount: l.price, done_at: doneAt,
-        message_text: buildMessage(c.name, doneAt),
-      }]
-    })
 
   const sb = createServiceClient()
+  const { data: prev, error: prevErr } = await sb.from('review_requests')
+    .select('phone')
+    .gte('created_at', new Date(Date.now() - REPEAT_AFTER_DAYS * 86400_000).toISOString())
+  if (prevErr) throw new Error(prevErr.message)
+
+  const { rows, skipped } = selectRecipients(leads, contacts, new Set((prev ?? []).map(r => r.phone)))
+  if (!rows.length) return { found: leads.length, added: 0, skipped }
+
   const { data, error } = await sb.from('review_requests')
     .upsert(rows, { onConflict: 'phone,amo_lead_id', ignoreDuplicates: true })
     .select('id')
   if (error) throw new Error(error.message)
-  return { found: rows.length, added: data?.length ?? 0 }
+  return { found: leads.length, added: data?.length ?? 0, skipped }
 }
 
-async function pickChannel(): Promise<string> {
-  const explicit = process.env.WAZZUP_REVIEW_CHANNEL_ID
-  if (explicit) return explicit
+export type WaChannel = { channelId: string; name: string; tail: string }
+
+// Канал выбирает владелец на экране: у компании два рабочих номера WhatsApp, и с
+// незнакомого клиенту номера сообщение чаще уходит в «спам» — а за жалобы банят номер.
+export async function whatsappChannels(): Promise<WaChannel[]> {
   const list = await getChannels()
-  const arr = Array.isArray(list) ? list : (list?.data ?? [])
-  const wa = arr.find((c: { transport?: string; state?: string }) => c.transport === 'whatsapp' && c.state === 'active')
-  if (!wa) throw new Error('нет активного канала WhatsApp в Wazzup')
-  return wa.channelId ?? wa.id
+  const arr: { channelId?: string; transport?: string; state?: string; name?: string; plainId?: string }[] =
+    Array.isArray(list) ? list : (list?.data ?? [])
+  return arr
+    .filter(c => c.transport === 'whatsapp' && c.state === 'active' && c.channelId)
+    .map(c => ({ channelId: c.channelId!, name: c.name ?? '', tail: String(c.plainId ?? '').slice(-4) }))
 }
 
-// Отправка порции. Возвращает, сколько ушло, — экран показывает это владельцу.
-export async function sendBatch(limit = DAILY_LIMIT): Promise<{ sent: number; failed: number }> {
-  const sb = createServiceClient()
-  const { data: rows, error } = await sb.from('review_requests')
-    .select('id, phone, message_text')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .limit(Math.min(limit, DAILY_LIMIT))
-  if (error) throw new Error(error.message)
+type Sb = ReturnType<typeof createServiceClient>
 
-  const channelId = await pickChannel()
+// sending тоже считается: строка взята в отправку и могла уйти
+export async function sentToday(sb: Sb): Promise<number> {
+  const { count, error } = await sb.from('review_requests')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['sent', 'sending'])
+    .gte('sent_at', mskMidnightIso())
+  if (error) throw new Error(error.message)
+  return count ?? 0
+}
+
+// Отправка порции. Каждую строку сначала забираем (pending → sending) условным UPDATE:
+// вторая вкладка или повтор после таймаута получат 0 строк и не напишут человеку дважды.
+// Строка, застрявшая в sending, обратно в очередь не возвращается — ушло ли сообщение,
+// неизвестно, и повторная просьба хуже пропущенной.
+export async function sendBatch(channelId: string, limit: number): Promise<{ sent: number; failed: number; pending: number; left: number }> {
+  if (!(await whatsappChannels()).some(c => c.channelId === channelId)) {
+    throw new Error('этот номер не найден среди активных WhatsApp в Wazzup')
+  }
+  const sb = createServiceClient()
+  const started = Date.now()
   let sent = 0, failed = 0
 
-  for (const row of rows ?? []) {
+  while (sent + failed < limit && Date.now() - started + MIN_GAP_MS <= TIME_BUDGET_MS) {
+    if (await sentToday(sb) >= DAILY_LIMIT) break
+
+    const { data: next, error } = await sb.from('review_requests')
+      .select('id, phone, client_name, done_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(1)
+    if (error) throw new Error(error.message)
+    const row = next?.[0]
+    if (!row) break
+
+    const { data: claimed, error: claimErr } = await sb.from('review_requests')
+      .update({ status: 'sending', sent_at: new Date().toISOString(), channel_id: channelId })
+      .eq('id', row.id).eq('status', 'pending')
+      .select('id')
+    if (claimErr) throw new Error(claimErr.message)
+    if (!claimed?.length) continue
+
+    const text = buildMessage(row.client_name, row.done_at)
+    let sendErr = ''
     try {
-      await sendMessage(channelId, row.phone, 'whatsapp', row.message_text)
-      await sb.from('review_requests')
-        .update({ status: 'sent', sent_at: new Date().toISOString(), channel_id: channelId, chat_id: row.phone, error: null })
-        .eq('id', row.id)
-      sent++
+      await sendMessage(channelId, row.phone, 'whatsapp', text)
     } catch (e) {
-      await sb.from('review_requests')
-        .update({ status: 'failed', error: (e instanceof Error ? e.message : String(e)).slice(0, 300) })
-        .eq('id', row.id)
-      failed++
+      sendErr = (e instanceof Error ? e.message : String(e)).slice(0, 300)
     }
+    const { error: markErr } = await sb.from('review_requests')
+      .update(sendErr
+        ? { status: 'failed', error: sendErr }
+        : { status: 'sent', sent_at: new Date().toISOString(), chat_id: row.phone, message_text: text, error: null })
+      .eq('id', row.id)
+    if (sendErr) failed++; else sent++
+    // Сообщение ушло, а отметка нет — строка останется в sending и не уйдёт повторно
+    if (markErr) throw new Error(`отправлено ${sent}, но отметка не записалась: ${markErr.message}`)
+
     // пауза даже после ошибки: подряд идущие попытки — тот же признак бота
     await new Promise(r => setTimeout(r, MIN_GAP_MS))
   }
-  return { sent, failed }
+
+  const { count: pending, error: pendErr } = await sb.from('review_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending')
+  if (pendErr) throw new Error(pendErr.message)
+  return { sent, failed, pending: pending ?? 0, left: Math.max(0, DAILY_LIMIT - await sentToday(sb)) }
 }

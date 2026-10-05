@@ -11,7 +11,9 @@ import {
   distanceToNextTier,
   type CommissionTier,
 } from '@/lib/earnings/calculateProgressiveCommission'
-import { TIERS } from '@/lib/commissionTiers'
+import { cashOf, dayCommissions, payouts, planProgress } from '@/lib/earnings/cash'
+import { dayRange, monthName, ratePct } from '@/lib/morning'
+import type { CashData } from '@/lib/earnings/cashData'
 
 // Глобальная конфигурация мотивации (одна строка в public.earnings_settings,
 // scope='b2c_manager'). Загружается в useEffect; пока БД не ответила —
@@ -54,82 +56,38 @@ const EARNINGS_SETTINGS_FALLBACK: EarningsSettings = {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type Calc = {
-  id: number
-  created_at: string
-  product_type: string
-  final_price: number
-  margin: number
-  status: string
-}
-
-// Локально хранимые ручные продажи менеджера. TODO: вынести в Supabase
-// таблицу manager_sales после согласования схемы (status pending/counted/cancelled,
-// admin-подтверждение, история смены статусов). Сейчас — localStorage MVP.
-type LocalSaleStatus = 'pending' | 'counted' | 'cancelled'
-type LocalSale = {
-  id:          string
-  date:        string   // YYYY-MM-DD
-  order_ref:   string
-  client:      string
-  amount:      number
-  comment:     string
-  status:      LocalSaleStatus
-  created_at:  string   // ISO
+// Ответ /api/my-earnings: поступления из «Аналитики дохода» (кассовый метод, М5).
+type TeamRow = { amoUserId: number; name: string; plan: number | null; cash: number; payments: number }
+type EarningsResponse = {
+  role: string
+  cash: CashData | null
+  team: { month: string; bookLastDay: string | null; people: TeamRow[]; errors: string[] } | null
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const TIER_COLORS: Record<string, string> = {
   '2%':   'bg-gray-100 text-gray-600',
-  '2.5%': 'bg-sky-50 text-sky-700',
+  '2,5%': 'bg-sky-50 text-sky-700',
   '3%':   'bg-blue-50 text-blue-700',
   '4%':   'bg-amber-50 text-amber-700',
   '5%':   'bg-emerald-50 text-emerald-700',
 }
 
-const STATUS_BADGES: Record<LocalSaleStatus | 'approved' | 'draft' | 'sent' | 'rejected', { label: string; color: string }> = {
-  pending:   { label: 'Ожидает',   color: 'bg-amber-50 text-amber-700' },
-  counted:   { label: 'Засчитано', color: 'bg-emerald-50 text-emerald-700' },
-  cancelled: { label: 'Отменено',  color: 'bg-red-50 text-red-500' },
-  approved:  { label: 'Принят',    color: 'bg-emerald-50 text-emerald-700' },
-  draft:     { label: 'Черновик',  color: 'bg-gray-100 text-gray-500' },
-  sent:      { label: 'Отправлен', color: 'bg-blue-50 text-blue-600' },
-  rejected:  { label: 'Отклонён',  color: 'bg-red-50 text-red-500' },
-}
-
-const TYPE_LABELS: Record<string, string> = { mirror: 'Зеркало', loft: 'Лофт', shower: 'Душевая' }
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n: number)  { return n.toLocaleString('ru-RU') + ' ₽' }
-function fmtM(n: number) { return (n / 1_000_000).toFixed(1) + 'M' }
-function todayYMD()      { const d = new Date(); return d.toISOString().slice(0, 10) }
-function monthKey(dateStr: string) {
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-function ymdMonthKey(ymd: string) { return ymd.slice(0, 7) }
 function monthLabel(key: string) {
   const [y, m] = key.split('-')
   const names = ['', 'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
   return `${names[parseInt(m)]} ${y}`
 }
-function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36) }
-
-function loadLocalSales(userId: string | null): LocalSale[] {
-  if (!userId || typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(`mglass.manager_sales.local.v1.${userId}`)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as LocalSale[]) : []
-  } catch { return [] }
-}
-
-function saveLocalSales(userId: string | null, sales: LocalSale[]) {
-  if (!userId || typeof window === 'undefined') return
-  window.localStorage.setItem(`mglass.manager_sales.local.v1.${userId}`, JSON.stringify(sales))
+const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`
+// «октябрь» — для фраз; monthLabel («Окт 2026») — для заголовков и строк таблиц.
+const monthWord = (key: string) => monthName(key).toLowerCase()
+const prevMonthKey = (key: string) => {
+  const [y, m] = key.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7)
 }
 
 // Лейбл tier'а из активной конфигурации (для бейджей "ставка X%").
@@ -138,9 +96,8 @@ function tierLabelFor(revenue: number, tiers: CommissionTier[]): string {
   const idx = currentTierIndex(revenue, tiers)
   const t   = tiers[idx]
   if (!t) return '2%'
-  // целые → "2%", дробные → "2.5%"
-  const r = t.ratePercent
-  return Number.isInteger(r) ? `${r}%` : `${r}%`
+  // целые → "2%", дробные → "2,5%"
+  return `${t.ratePercent.toLocaleString('ru-RU')}%`
 }
 
 // Streak bonus: ищем наибольший порог, на котором последние 3 завершённых месяца ≥ minRevenue.
@@ -165,13 +122,11 @@ function calcStreakBonus(
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MyEarningsPage() {
-  const [calcs, setCalcs]           = useState<Calc[]>([])
-  const [localSales, setLocalSales] = useState<LocalSale[]>([])
-  const [userId, setUserId]         = useState<string | null>(null)
+  const [data, setData]             = useState<EarningsResponse | null>(null)
+  const [dataError, setDataError]   = useState<string | null>(null)
   const [role, setRole]             = useState<string | null>(null)
   const [loading, setLoading]       = useState(true)
   const [forbidden, setForbidden]   = useState(false)
-  const [showAddForm, setShowAddForm] = useState(false)
   const [showRules, setShowRules]     = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
@@ -200,34 +155,11 @@ export default function MyEarningsPage() {
   const [ownerSalary, setOwnerSalary]                 = useState(DEFAULT_MANAGER_SALARY_RUB)
   const [ownerBonus, setOwnerBonus]                   = useState(0)
 
-  // Форма добавления продажи
-  const [form, setForm] = useState<Omit<LocalSale, 'id' | 'created_at'>>({
-    date:      todayYMD(),
-    order_ref: '',
-    client:    '',
-    amount:    0,
-    comment:   '',
-    status:    'pending',
-  })
-
-  // Команда: поступления по менеджерам за текущий месяц из deal_payments (шаг 3 пути
-  // сделки). Только владельцу/РОП — API гейтит ролью; менеджеру придёт 403, income=null.
-  type TeamIncome = { managers: { manager_id: string; name: string; total: number; count: number }[]; totals: { total: number; count: number } }
-  const [income, setIncome] = useState<TeamIncome | null>(null)
-  useEffect(() => {
-    const owner = role === 'admin' || role === 'ceo' || role === 'owner'
-    if (!owner) return
-    let alive = true
-    fetch('/api/commercial/deal-income').then(r => (r.ok ? r.json() : null)).then(j => { if (alive && j) setIncome(j as TeamIncome) }).catch(() => {})
-    return () => { alive = false }
-  }, [role])
-
   useEffect(() => {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoading(false); return }
-      setUserId(user.id)
 
       const { data: userData } = await supabase
         .from('users').select('role').eq('id', user.id).single()
@@ -239,20 +171,20 @@ export default function MyEarningsPage() {
         setForbidden(true); setLoading(false); return
       }
 
-      const [{ data: calcsData }, { data: settingsRow, error: settingsError }] = await Promise.all([
-        supabase
-          .from('calculations')
-          .select('id,created_at,product_type,final_price,margin,status')
-          .eq('created_by', user.id)
-          .order('created_at', { ascending: false }),
+      // Владелец смотрит любого продавца по ?m=<amo-id>, как «Утро»; менеджеру API
+      // отдаёт только его самого, что бы ни стояло в адресе.
+      const m = new URLSearchParams(window.location.search).get('m')
+      const [earnings, { data: settingsRow, error: settingsError }] = await Promise.all([
+        fetch(`/api/my-earnings${m ? `?m=${encodeURIComponent(m)}` : ''}`)
+          .then(async r => (r.ok ? (await r.json()) as EarningsResponse : Promise.reject(new Error((await r.json().catch(() => ({}))).error ?? `ошибка ${r.status}`))))
+          .catch((e: Error) => { setDataError(e.message); return null }),
         supabase
           .from('earnings_settings')
           .select('scope, active, base_salary_rub, commission_tiers, streak_bonuses, effective_from, rules_note')
           .eq('scope', 'b2c_manager')
           .maybeSingle(),
       ])
-      setCalcs(calcsData ?? [])
-      setLocalSales(loadLocalSales(user.id))
+      setData(earnings)
 
       if (settingsError) {
         setSettingsFallbackReason(`Ошибка загрузки настроек: ${settingsError.message}. Используются базовые правила.`)
@@ -275,8 +207,8 @@ export default function MyEarningsPage() {
     load().catch(() => setLoading(false))
   }, [])
 
-  const nowKey   = monthKey(new Date().toISOString())
-  const todayStr = todayYMD()
+  const cash     = data?.cash ?? null
+  const nowKey   = cash?.month ?? new Date().toISOString().slice(0, 7)
 
   // Активная конфигурация: то, что загружено из БД, иначе fallback.
   // Все нижеследующие расчёты идут через effSettings — один источник правды.
@@ -285,34 +217,23 @@ export default function MyEarningsPage() {
   const effTiers    = effSettings.commissionTiers
   const effBonuses  = effSettings.streakBonuses
 
-  // ── Combined month aggregates ──────────────────────────────────────────────
-  // Источники выручки:
-  //   1. Supabase calculations.status='approved' (зачитанная КП-цена).
-  //   2. Local sales.status='counted' (ручные продажи менеджера).
-  // pending/cancelled/draft/sent/rejected в комиссию не идут.
+  // ── Месяцы из книги ────────────────────────────────────────────────────────
+  // Кассовый метод: выручка месяца = предоплаты + остатки из «Аналитики дохода».
+  // Закрытые месяцы — итогом месяца книги, текущий — по внесённым дням.
   const byMonth = useMemo(() => {
     const m: Record<string, { revenue: number; dealCount: number }> = {}
-    for (const c of calcs) {
-      if (c.status !== 'approved') continue
-      const k = monthKey(c.created_at)
-      if (!m[k]) m[k] = { revenue: 0, dealCount: 0 }
-      m[k].revenue   += c.final_price
-      m[k].dealCount += 1
-    }
-    for (const s of localSales) {
-      if (s.status !== 'counted') continue
-      const k = ymdMonthKey(s.date)
-      if (!m[k]) m[k] = { revenue: 0, dealCount: 0 }
-      m[k].revenue   += s.amount
-      m[k].dealCount += 1
+    for (const x of cash?.months ?? []) {
+      if (cashOf(x) === 0 && x.payments === 0 && x.month !== nowKey) continue
+      m[x.month] = { revenue: cashOf(x), dealCount: x.payments }
     }
     return m
-  }, [calcs, localSales])
+  }, [cash, nowKey])
 
   const sortedMonthKeys = useMemo(() => Object.keys(byMonth).sort((a, b) => b.localeCompare(a)), [byMonth])
+  // Серия — только закрытые месяцы с даты вступления правил в силу.
   const completedMonthsDesc = useMemo(
-    () => sortedMonthKeys.filter(k => k < nowKey).map(k => byMonth[k]),
-    [sortedMonthKeys, byMonth, nowKey],
+    () => sortedMonthKeys.filter(k => k < nowKey && k >= effSettings.effectiveFrom.slice(0, 7)).map(k => byMonth[k]),
+    [sortedMonthKeys, byMonth, nowKey, effSettings.effectiveFrom],
   )
 
   const curRevenue = byMonth[nowKey]?.revenue ?? 0
@@ -326,65 +247,17 @@ export default function MyEarningsPage() {
 
   const totalIncome = effSalary + curCommission.totalCommission + streak.bonus
 
-  // ── Today aggregates ───────────────────────────────────────────────────────
-  // Сегодняшняя добавленная активность: approved calculations + counted local sales.
-  // "Комиссия за сегодня" = маржинальный вклад в месячную прогрессивную комиссию:
-  // totalCommission(monthRevenue) − totalCommission(monthRevenue − todayRevenue).
-  const todayApprovedCalcs = useMemo(
-    () => calcs.filter(c => c.status === 'approved' && c.created_at.slice(0, 10) === todayStr),
-    [calcs, todayStr],
-  )
-  const todayCountedSales = useMemo(
-    () => localSales.filter(s => s.status === 'counted' && s.date === todayStr),
-    [localSales, todayStr],
-  )
-  const todayRevenue = useMemo(() => (
-    todayApprovedCalcs.reduce((s, c) => s + c.final_price, 0) +
-    todayCountedSales.reduce((s, s2) => s + s2.amount, 0)
-  ), [todayApprovedCalcs, todayCountedSales])
-  const todayAddedCount = todayApprovedCalcs.length + todayCountedSales.length
-  const todayCommission = useMemo(() => {
-    const before = calculateProgressiveCommission(curRevenue - todayRevenue, effTiers).totalCommission
-    return curCommission.totalCommission - before
-  }, [curRevenue, todayRevenue, curCommission.totalCommission, effTiers])
-
-  // ── Combined sales table ───────────────────────────────────────────────────
-  // Объединённый список: live calculations + local manual sales, отсортирован по дате DESC.
-  type Row = {
-    key:         string
-    date:        string      // YYYY-MM-DD
-    sourceLabel: string      // "Расчёт #ID" / "Ручная продажа"
-    isLocal:     boolean
-    localId?:    string
-    client:      string
-    amount:      number
-    statusKey:   keyof typeof STATUS_BADGES
-    counted:     boolean     // идёт ли в комиссию
-  }
-  const rows: Row[] = useMemo(() => {
-    const calcRows: Row[] = calcs.map(c => ({
-      key:         `c-${c.id}`,
-      date:        c.created_at.slice(0, 10),
-      sourceLabel: `${TYPE_LABELS[c.product_type] ?? c.product_type} #${c.id}`,
-      isLocal:     false,
-      client:      '—',
-      amount:      c.final_price,
-      statusKey:   (c.status in STATUS_BADGES ? c.status : 'draft') as keyof typeof STATUS_BADGES,
-      counted:     c.status === 'approved',
-    }))
-    const localRows: Row[] = localSales.map(s => ({
-      key:         `l-${s.id}`,
-      date:        s.date,
-      sourceLabel: s.order_ref ? `Ручная: ${s.order_ref}` : 'Ручная продажа',
-      isLocal:     true,
-      localId:     s.id,
-      client:      s.client || '—',
-      amount:      s.amount,
-      statusKey:   s.status,
-      counted:     s.status === 'counted',
-    }))
-    return [...calcRows, ...localRows].sort((a, b) => b.date.localeCompare(a.date))
-  }, [calcs, localSales])
+  // ── Поступления по дням, выплаты, план ─────────────────────────────────────
+  const days = useMemo(() => dayCommissions(cash?.days ?? [], effTiers).reverse(), [cash, effTiers])
+  const firstHalf = (cash?.days ?? []).filter(d => Number(d.date.slice(8, 10)) <= 15).reduce((s, d) => s + cashOf(d), 0)
+  const prevKey = prevMonthKey(nowKey)
+  const prevTotal = byMonth[prevKey]?.revenue ?? 0
+  const prevFirstHalf = (cash?.prevDays ?? []).filter(d => Number(d.date.slice(8, 10)) <= 15).reduce((s, d) => s + cashOf(d), 0)
+  const payoutRows = payouts({ month: nowKey, prevTotal, prevFirstHalf, monthCash: curRevenue, firstHalf, tiers: effTiers })
+  const plan = cash ? planProgress({ plan: cash.plan, cash: curRevenue, month: nowKey, today: cash.today, bookLastDay: cash.bookLastDay, workDays: cash.workDays }) : null
+  const bookNote = plan?.dataThrough
+    ? `книга внесена по ${ddmm(plan.dataThrough)}`
+    : `за ${monthWord(nowKey)} в книге пока нет записей${cash?.bookLastDay ? ` — она внесена по ${ddmm(cash.bookLastDay)}` : ''}`
 
   // ── Manager income calculator: производные ─────────────────────────────────
   const plannedCommission = useMemo(
@@ -411,39 +284,6 @@ export default function MyEarningsPage() {
     setOwnerSalary(effSalary)
   }
 
-  // ── Mutations: add / update / delete local sale ────────────────────────────
-  function addLocalSale() {
-    if (!userId) return
-    if (!form.amount || form.amount <= 0) return
-    const sale: LocalSale = {
-      id:         uid(),
-      date:       form.date || todayYMD(),
-      order_ref:  form.order_ref.trim(),
-      client:     form.client.trim(),
-      amount:     Number(form.amount) || 0,
-      comment:    form.comment.trim(),
-      status:     form.status,
-      created_at: new Date().toISOString(),
-    }
-    const next = [sale, ...localSales]
-    setLocalSales(next)
-    saveLocalSales(userId, next)
-    setForm({ date: todayYMD(), order_ref: '', client: '', amount: 0, comment: '', status: 'pending' })
-    setShowAddForm(false)
-  }
-  function setLocalStatus(id: string, status: LocalSaleStatus) {
-    if (!userId) return
-    const next = localSales.map(s => s.id === id ? { ...s, status } : s)
-    setLocalSales(next)
-    saveLocalSales(userId, next)
-  }
-  function deleteLocal(id: string) {
-    if (!userId) return
-    const next = localSales.filter(s => s.id !== id)
-    setLocalSales(next)
-    saveLocalSales(userId, next)
-  }
-
   if (loading)   return <div className="p-8 text-center text-[#9a9a95] text-xs">Загрузка...</div>
   if (forbidden) return <div className="p-8 text-center text-[#9a9a95] text-xs">Доступ только для менеджеров и владельцев</div>
 
@@ -460,9 +300,35 @@ export default function MyEarningsPage() {
 
         {/* Шапка */}
         <div>
-          <h1 className="text-sm font-semibold text-[#111110]">Мои заработки</h1>
-          <p className="text-[10px] text-[#9a9a95] mt-0.5">Оклад + прогрессивная комиссия + бонус за серию</p>
+          <h1 className="text-sm font-semibold text-[#111110]">
+            {isOwner && cash ? `Деньги — ${cash.name}` : 'Мои деньги'}
+          </h1>
+          <p className="text-[10px] text-[#9a9a95] mt-0.5">
+            Оклад + прогрессивная комиссия + бонус за серию · поступления из «Аналитики дохода»
+          </p>
+          {isOwner && data?.team && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {data.team.people.map(p => (
+                <a key={p.amoUserId} href={`/my-earnings?m=${p.amoUserId}`}
+                  className={`text-[11px] px-2 py-0.5 rounded-full border ${cash?.amoUserId === p.amoUserId ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#4b4b47] hover:border-[#9a9a95]'}`}>
+                  {p.name}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
+
+        {dataError && (
+          <p className="text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">Поступления не загрузились: {dataError}</p>
+        )}
+        {cash && cash.errors.length > 0 && (
+          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">Часть данных не загрузилась: {cash.errors.join('; ')}</p>
+        )}
+        {!cash && !dataError && (
+          <p className="text-[11px] text-[#6b6b66] bg-[#fafaf9] border border-[#e4e4e0] rounded-lg px-3 py-2">
+            {isOwner ? 'Выберите менеджера выше — здесь его поступления, комиссия и выплаты.' : 'Учётка не связана с пользователем AmoCRM — поступления не к кому привязать. Напишите руководителю.'}
+          </p>
+        )}
 
         {/* ── Регламент (как работает заработок) ─────────────────────────────── */}
         <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-lg px-4 py-3">
@@ -507,7 +373,7 @@ export default function MyEarningsPage() {
                     const finalPrefix = t.to == null ? `свыше ${fromM} млн` : prefix
                     return (
                       <li key={`${t.from}-${t.ratePercent}`}>
-                        · {finalPrefix} — <span className="font-mono font-semibold">{t.ratePercent}%</span>
+                        · {finalPrefix} — <span className="font-mono font-semibold">{ratePct(t.ratePercent)}</span>
                       </li>
                     )
                   })}
@@ -765,7 +631,7 @@ export default function MyEarningsPage() {
           {plannedDistance && (
             <p className="text-[10px] text-[#6b6b66] mt-2 leading-snug">
               До следующей ступени осталось <span className="font-mono font-semibold text-[#111110]">{fmt(plannedDistance.remaining)}</span>
-              {' '}(следующая ставка <span className="font-mono font-semibold">{plannedDistance.ratePercent}%</span>).
+              {' '}(следующая ставка <span className="font-mono font-semibold">{ratePct(plannedDistance.ratePercent)}</span>).
             </p>
           )}
         </div>
@@ -868,85 +734,84 @@ export default function MyEarningsPage() {
           </div>
         )}
 
-        {/* ── Рейтинг менеджеров — placeholder (только для owner/admin/ceo) ──── */}
-        {isOwner && (
+        {/* ── Рейтинг менеджеров (только владельцу) ─────────────────────────── */}
+        {isOwner && data?.team && (
           <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
-            <div className="flex items-baseline justify-between mb-2">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Рейтинг менеджеров</p>
-              <div className="flex items-center gap-1">
-                {(['Сегодня', 'Неделя', 'Месяц'] as const).map(p => (
-                  <span key={p} className="text-[10px] text-[#c4c4be] px-2 py-0.5 border border-[#e4e4e0] rounded">{p}</span>
-                ))}
-              </div>
-            </div>
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Рейтинг менеджеров · {monthLabel(data.team.month)}</p>
             <p className="text-[11px] text-[#6b6b66] leading-snug mb-3">
-              Фактические поступления менеджеров за текущий месяц (предоплата · остаток · остаток за монтаж, отмеченные в сделках). Комиссия — по прогрессивной шкале от суммы поступлений.
+              Поступления текущего месяца из «Аналитики дохода»: предоплаты + остатки
+              {data.team.bookLastDay ? `, книга внесена по ${ddmm(data.team.bookLastDay)}` : ''}. Комиссия — по прогрессивной шкале от суммы поступлений.
             </p>
             <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-1.5 bg-[#fafaf9] border-y border-[#e4e4e0]">
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Менеджер</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">B2C-поступления</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Поступило</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">План · выполнено</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Оплат</span>
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Комиссия</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Платежей</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Ср. платёж</span>
             </div>
-            {income === null ? (
-              <p className="px-3 py-3 text-[11px] text-[#9a9a95]">Загрузка…</p>
-            ) : income.managers.length === 0 ? (
-              <p className="px-3 py-3 text-[11px] text-[#9a9a95]">За текущий месяц поступлений по сделкам нет.</p>
-            ) : (
-              <>
-                {income.managers.map(m => {
-                  const c = calculateProgressiveCommission(m.total, effTiers).totalCommission
-                  return (
-                    <div key={m.manager_id} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 border-b border-[#f5f5f3]">
-                      <span className="text-[11px] text-[#4b4b47]">{m.name}</span>
-                      <span className="text-[11px] font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmt(m.total)}</span>
-                      <span className="text-[11px] font-mono text-emerald-700 text-right whitespace-nowrap">{fmt(c)}</span>
-                      <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.count}</span>
-                      <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.count > 0 ? fmt(Math.round(m.total / m.count)) : '—'}</span>
-                    </div>
-                  )
-                })}
-                <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 bg-[#fafaf9] font-semibold">
-                  <span className="text-[11px] text-[#111110]">Итого</span>
-                  <span className="text-[11px] font-mono text-[#111110] text-right whitespace-nowrap">{fmt(income.totals.total)}</span>
-                  <span className="text-[11px] text-right"></span>
-                  <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{income.totals.count}</span>
-                  <span></span>
-                </div>
-              </>
-            )}
+            {[...data.team.people].sort((a, b) => b.cash - a.cash).map(m => (
+              <a key={m.amoUserId} href={`/my-earnings?m=${m.amoUserId}`}
+                className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 border-b border-[#f5f5f3] hover:bg-[#fafaf9]">
+                <span className="text-[11px] text-[#4b4b47]">{m.name} ›</span>
+                <span className="text-[11px] font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmt(m.cash)}</span>
+                <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.plan ? `${fmt(m.plan)} · ${Math.floor((m.cash / m.plan) * 100)} %` : 'нет плана'}</span>
+                <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.payments}</span>
+                <span className="text-[11px] font-mono text-emerald-700 text-right whitespace-nowrap">{fmt(calculateProgressiveCommission(m.cash, effTiers).totalCommission)}</span>
+              </a>
+            ))}
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 bg-[#fafaf9] font-semibold">
+              <span className="text-[11px] text-[#111110]">Итого</span>
+              <span className="text-[11px] font-mono text-[#111110] text-right whitespace-nowrap">{fmt(data.team.people.reduce((s, m) => s + m.cash, 0))}</span>
+              <span></span>
+              <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{data.team.people.reduce((s, m) => s + m.payments, 0)}</span>
+              <span></span>
+            </div>
           </div>
         )}
 
-        {/* ── Сегодня ────────────────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
-          <div className="flex items-baseline justify-between mb-2">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Сегодня</p>
-            <p className="text-[10px] text-[#c4c4be]">{new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: 'long' })}</p>
+        {/* ── План и выплаты ─────────────────────────────────────────────────── */}
+        {cash && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">План · {monthLabel(nowKey)}</p>
+              {plan?.plan != null ? (
+                <>
+                  <p className="text-base font-mono font-semibold text-[#111110]">выполнено {Math.floor(plan.pct ?? 0)} %</p>
+                  <div className="h-1.5 rounded-full bg-[#efefeb] overflow-hidden my-1.5">
+                    <div className="h-full bg-[#111110]" style={{ width: `${Math.min(100, plan.pct ?? 0)}%` }} />
+                  </div>
+                  <p className="text-[11px] text-[#4b4b47] leading-snug">{fmt(curRevenue)} из {fmt(plan.plan)}</p>
+                  <p className="text-[11px] text-[#6b6b66] leading-snug">
+                    {plan.forecast != null ? `По темпу к концу месяца: ${fmt(plan.forecast)}.` : 'Прогноза по темпу пока нет.'}
+                    {plan.needPerDay != null && (plan.needPerDay > 0 ? ` Нужно ${fmt(plan.needPerDay)} в рабочий день, осталось ${plan.daysLeft}.` : ' План закрыт.')}
+                  </p>
+                </>
+              ) : (
+                <p className="text-[11px] text-[#6b6b66] leading-snug">План на месяц не поставлен — его ставит руководитель.</p>
+              )}
+              <p className="text-[10px] text-[#9a9a95] mt-1.5 leading-snug">План — в поступлениях: предоплаты + остатки · {bookNote}</p>
+            </div>
+            <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Выплаты комиссии</p>
+              {payoutRows.map(x => (
+                <div key={x.date} className="flex items-baseline justify-between gap-3 py-1 border-b border-[#f5f5f3] last:border-0">
+                  <span className="text-[11px] text-[#4b4b47]"><span className="font-mono font-semibold">{ddmm(x.date)}</span> · за {dayRange(x.from, x.to)}</span>
+                  <span className="text-[12px] font-mono font-semibold text-emerald-700 whitespace-nowrap">{fmt(x.amount)}</span>
+                </div>
+              ))}
+              <p className="text-[10px] text-[#9a9a95] mt-1.5 leading-snug">
+                Ступень — по накопленным поступлениям месяца, поэтому выплата 15-го добирает разницу. Текущий месяц — по тому, что уже внесено в книгу; оклад отдельно.
+              </p>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-[10px] text-[#9a9a95]">Поступлений добавлено</p>
-              <p className="text-base font-mono font-semibold text-[#111110]">{todayAddedCount}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#9a9a95]">Оплаченная выручка засчитана</p>
-              <p className="text-base font-mono font-semibold text-[#111110]">{fmt(todayRevenue)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#9a9a95]">Комиссия за сегодня</p>
-              <p className="text-base font-mono font-semibold text-emerald-700">{fmt(Math.max(0, todayCommission))}</p>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* ── Текущий месяц ──────────────────────────────────────────────────── */}
         <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
           <div className="flex items-baseline justify-between mb-3">
             <div>
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Текущий месяц · {monthLabel(nowKey)}</p>
-              <p className="text-[11px] text-[#4b4b47] mt-0.5">Оплаченная B2C-выручка: <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · {curDeals} поступлений</p>
+              <p className="text-[11px] text-[#4b4b47] mt-0.5">Поступило (предоплаты + остатки): <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · оплат {curDeals}{plan?.dataThrough ? ` · книга по ${ddmm(plan.dataThrough)}` : ''}</p>
             </div>
             <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TIER_COLORS[curTierLabel] ?? TIER_COLORS['2%']}`}>
               Ставка {curTierLabel}
@@ -983,7 +848,7 @@ export default function MyEarningsPage() {
             {distance ? (
               <p className="text-[11px] text-[#6b6b66] leading-snug">
                 До следующей ступени осталось <span className="font-mono font-semibold text-[#111110]">{fmt(distance.remaining)}</span>.
-                {' '}Следующая ставка: <span className={`font-mono font-semibold ${TIER_COLORS[nextTierLabel ?? '2%']?.split(' ')[1] ?? ''}`}>{distance.ratePercent}%</span>
+                {' '}Следующая ставка: <span className={`font-mono font-semibold ${TIER_COLORS[nextTierLabel ?? '2%']?.split(' ')[1] ?? ''}`}>{ratePct(distance.ratePercent)}</span>
               </p>
             ) : (
               <p className="text-[11px] text-emerald-700 font-semibold">Максимальный тир достигнут — каждый рубль выручки приносит 5%.</p>
@@ -1008,7 +873,7 @@ export default function MyEarningsPage() {
                     {(t.from / 1_000_000).toFixed(t.from % 1_000_000 === 0 ? 0 : 1)}M–{upperLabel}
                   </span>
                   <span className={`text-[11px] font-mono font-semibold w-12 flex-shrink-0 ${filled ? 'text-[#111110]' : 'text-[#c4c4be]'}`}>
-                    {t.ratePercent}%
+                    {ratePct(t.ratePercent)}
                   </span>
                   <span className={`flex-1 text-[11px] font-mono text-right ${filled ? 'text-[#4b4b47]' : 'text-[#c4c4be]'}`}>
                     {filled ? fmt(tierResult.amountInTier) : '—'}
@@ -1047,143 +912,48 @@ export default function MyEarningsPage() {
             </p>
           ) : streak.bonus === 0 ? (
             <p className="text-[10px] text-[#9a9a95] mt-2 leading-snug">
-              Последние 3 закрытых месяца на разных тирах — серия не сложилась.
+              Серии нет: из последних 3 закрытых месяцев не каждый дотянул до {fmt(Math.min(...effBonuses.map(b => b.minRevenue)))} поступлений.
             </p>
           ) : null}
         </div>
 
-        {/* ── Добавить продажу ────────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
-          <button onClick={() => setShowAddForm(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">+ Ручной ввод B2C-поступления</p>
-            <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">локальный режим / тест</span>
-          </button>
-          {showAddForm && (
-            <div className="px-4 pb-4 border-t border-[#f5f5f3] space-y-2">
-              <p className="text-[11px] text-[#6b6b66] mt-3 leading-snug">
-                Временный режим: менеджер может добавить фактическое поступление денег вручную (предоплата, остаток, полная оплата или доплата). Позже поступления будут подтягиваться из оплат и заказов автоматически.
-              </p>
-              <p className="text-[10px] text-[#9a9a95] leading-snug">
-                Каждый менеджер видит только свои ручные поступления в этом браузере (ключ привязан к user_id). После переноса в Supabase доступ будет ограничен по user_id на уровне RLS.
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-[#9a9a95]">Дата поступления</label>
-                  <input type="date" value={form.date}
-                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-[#9a9a95]">Сумма поступления, ₽</label>
-                  <input type="number" min={0} value={form.amount || ''}
-                    onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-[#9a9a95]">Номер заказа / КП</label>
-                  <input type="text" value={form.order_ref}
-                    onChange={e => setForm(f => ({ ...f, order_ref: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-[#9a9a95]">Клиент</label>
-                  <input type="text" value={form.client}
-                    onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] text-[#9a9a95]">Комментарий</label>
-                <input type="text" value={form.comment}
-                  onChange={e => setForm(f => ({ ...f, comment: e.target.value }))}
-                  className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
-              </div>
-              <div>
-                <label className="text-[10px] text-[#9a9a95]">Статус</label>
-                <select value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: e.target.value as LocalSaleStatus }))}
-                  className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs">
-                  <option value="pending">Ожидает подтверждения</option>
-                  <option value="counted">Засчитано</option>
-                  <option value="cancelled">Отменено</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2 pt-1">
-                <button onClick={addLocalSale} disabled={!form.amount || form.amount <= 0}
-                  className="bg-[#111110] hover:bg-[#2a2a28] text-white text-xs font-semibold px-3 py-1.5 rounded disabled:opacity-40">
-                  Добавить
-                </button>
-                <button onClick={() => setShowAddForm(false)}
-                  className="text-xs text-[#9a9a95] hover:text-[#111110]">Отмена</button>
-              </div>
+        {/* ── Поступления по дням ─────────────────────────────────────────────── */}
+        {cash && (
+          <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0]">
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Поступления по дням · {monthLabel(nowKey)}</p>
+              <p className="text-[10px] text-[#9a9a95] mt-0.5">Из «Аналитики дохода»; комиссия дня — на сколько выросла комиссия месяца от его поступлений. Если сумма неверна — её правят в книге, здесь она обновится в 8:05.</p>
             </div>
-          )}
-        </div>
-
-        {/* ── Таблица всех продаж ─────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
-          <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0] flex items-baseline justify-between">
-            <div>
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Мои B2C-поступления и заказы</p>
-              <p className="text-[10px] text-[#c4c4be] mt-0.5">В колонке «В комиссию» отражены только подтверждённые оплаченные поступления. B2B-продажи и неоплаченные заказы в комиссию не идут.</p>
-            </div>
-            <p className="text-[10px] text-[#c4c4be]">{rows.length} строк</p>
-          </div>
-          {rows.length === 0 ? (
-            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет B2C-поступлений. Добавьте через форму выше.</div>
-          ) : (
-            <>
-              <div className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 px-3 py-1.5 border-b border-[#e4e4e0]">
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Дата поступл.</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Заказ</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Клиент</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Сумма поступл.</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-center">Статус</span>
-                <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">В комиссию</span>
-                <span />
-              </div>
-              {rows.map(r => {
-                const st = STATUS_BADGES[r.statusKey] ?? STATUS_BADGES.draft
-                return (
-                  <div key={r.key}
-                    className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 items-center px-3 py-1.5 border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
-                    <span className="text-[11px] text-[#6b6b66] font-mono">{r.date}</span>
-                    <span className="text-[11px] text-[#4b4b47] truncate">{r.sourceLabel}</span>
-                    <span className="text-[11px] text-[#6b6b66] truncate">{r.client}</span>
-                    <span className="text-[11px] font-mono text-[#111110] text-right">{fmt(r.amount)}</span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded text-center ${st.color}`}>{st.label}</span>
-                    <span className={`text-[11px] font-mono font-semibold text-right ${r.counted ? 'text-emerald-700' : 'text-[#c4c4be]'}`}>
-                      {r.counted ? fmt(r.amount) : '—'}
-                    </span>
-                    {r.isLocal && r.localId ? (
-                      <div className="flex items-center gap-1 justify-end">
-                        {r.statusKey === 'pending' && (
-                          <button onClick={() => setLocalStatus(r.localId!, 'counted')}
-                            title="Засчитать"
-                            className="text-[10px] text-emerald-700 hover:underline">✓</button>
-                        )}
-                        {r.statusKey !== 'cancelled' && (
-                          <button onClick={() => setLocalStatus(r.localId!, 'cancelled')}
-                            title="Отменить"
-                            className="text-[10px] text-orange-500 hover:underline">×</button>
-                        )}
-                        <button onClick={() => deleteLocal(r.localId!)}
-                          title="Удалить"
-                          className="text-[10px] text-red-500 hover:underline">🗑</button>
-                      </div>
-                    ) : <span />}
+            {days.length === 0 ? (
+              <div className="p-6 text-center text-[#9a9a95] text-xs">Поступлений пока нет: {bookNote}.</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-[70px_1fr_1fr_1fr_90px] gap-2 px-3 py-1.5 border-b border-[#e4e4e0]">
+                  <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Дата</span>
+                  <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Предоплаты</span>
+                  <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Остатки</span>
+                  <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Всего</span>
+                  <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">Комиссия</span>
+                </div>
+                {days.map(d => (
+                  <div key={d.date} className="grid grid-cols-[70px_1fr_1fr_1fr_90px] gap-2 items-center px-3 py-1.5 border-b border-[#f5f5f3] last:border-0">
+                    <span className="text-[11px] text-[#6b6b66] font-mono">{ddmm(d.date)}</span>
+                    <span className="text-[11px] font-mono text-[#4b4b47] text-right">{d.prepay ? fmt(d.prepay) : '—'}</span>
+                    <span className="text-[11px] font-mono text-[#4b4b47] text-right">{d.remainder ? fmt(d.remainder) : '—'}</span>
+                    <span className="text-[11px] font-mono font-semibold text-[#111110] text-right">{fmt(d.cash)}</span>
+                    <span className="text-[11px] font-mono text-emerald-700 text-right">{fmt(d.commission)}</span>
                   </div>
-                )
-              })}
-            </>
-          )}
-        </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
 
         {/* ── По месяцам ──────────────────────────────────────────────────────── */}
         <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0]">
             <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">История по месяцам</p>
+            <p className="text-[10px] text-[#9a9a95] mt-0.5">Поступления — предоплаты + остатки из «Аналитики дохода». Ставка и комиссия — только с {effSettings.effectiveFrom.split('-').reverse().join('.')}, когда вступила нынешняя шкала; раньше платили по другим правилам.</p>
           </div>
           {sortedMonthKeys.length === 0 ? (
             <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет данных</div>
@@ -1191,13 +961,16 @@ export default function MyEarningsPage() {
             <>
               <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-1.5 border-b border-[#e4e4e0]">
                 <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Месяц</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Выручка</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Поступило</span>
                 <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-center">Ставка</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Сделки</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Оплат</span>
                 <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">Комиссия</span>
               </div>
               {sortedMonthKeys.map(k => {
                 const m = byMonth[k]
+                // Шкала действует с effectiveFrom: раньше платили по другим правилам, и
+                // комиссия по нынешней шкале за те месяцы выглядела бы как начисленная.
+                const ruled = k >= effSettings.effectiveFrom.slice(0, 7)
                 const c = calculateProgressiveCommission(m.revenue, effTiers).totalCommission
                 const tl = tierLabelFor(m.revenue, effTiers)
                 const isCurrent = k === nowKey
@@ -1207,10 +980,12 @@ export default function MyEarningsPage() {
                       isCurrent ? 'bg-emerald-50/40' : 'hover:bg-[#fafaf9]'
                     }`}>
                     <span className="text-xs text-[#111110]">{monthLabel(k)}{isCurrent && <span className="text-[10px] text-emerald-600 ml-1.5">сейчас</span>}</span>
-                    <span className="text-xs font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmtM(m.revenue)}</span>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded text-center whitespace-nowrap ${TIER_COLORS[tl] ?? TIER_COLORS['2%']}`}>{tl}</span>
-                    <span className="text-xs font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.dealCount} шт</span>
-                    <span className="text-xs font-mono font-bold text-emerald-700 text-right whitespace-nowrap">{fmt(c)}</span>
+                    <span className="text-xs font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmt(m.revenue)}</span>
+                    {ruled
+                      ? <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded text-center whitespace-nowrap ${TIER_COLORS[tl] ?? TIER_COLORS['2%']}`}>{tl}</span>
+                      : <span className="text-[10px] text-[#9a9a95] text-center">—</span>}
+                    <span className="text-xs font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.dealCount}</span>
+                    <span className={`text-xs font-mono text-right whitespace-nowrap ${ruled ? 'font-bold text-emerald-700' : 'text-[#9a9a95]'}`}>{ruled ? fmt(c) : '—'}</span>
                   </div>
                 )
               })}
