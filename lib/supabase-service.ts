@@ -9,7 +9,11 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-export function createServiceClient() {
+// actor — id проверенного пользователя, от чьего имени сервер пишет: триггер журнала
+// (activity_log, миграция 20261006_margin_edits_audit) берёт автора из заголовка
+// x-mglass-actor, потому что у service-ключа своего пользователя нет. Без actor —
+// запись «системы» (кроны, сверки книг). Получить клиент с автором — lib/serviceAs.ts.
+export function createServiceClient(opts?: { actor?: string | null }) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {
@@ -20,5 +24,6 @@ export function createServiceClient() {
   }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
+    ...(opts?.actor ? { global: { headers: { 'x-mglass-actor': opts.actor } } } : {}),
   })
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireOwner } from '@/lib/apiAuth'
 import { getSessionUser } from '@/lib/getRole'
-import { createServiceClient } from '@/lib/supabase-service'
+import { serviceAsMe } from '@/lib/serviceAs'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     rows.push({ month, amo_user_id: id, plan_money: plan == null ? null : Math.round(plan), updated_at: new Date().toISOString(), updated_by: user?.id ?? null })
   }
 
-  const sb = createServiceClient()
+  const sb = await serviceAsMe()
   const { data: sellers, error: sErr } = await sb.from('manager_schedules').select('amo_user_id').eq('is_seller', true)
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
   const known = new Set((sellers ?? []).map(s => Number(s.amo_user_id)))

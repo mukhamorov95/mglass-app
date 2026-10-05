@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceClient } from '@/lib/supabase-service'
+import { serviceAsMe } from '@/lib/serviceAs'
 import { requireOwner } from '@/lib/apiAuth'
 import { writeLogForCurrentUser } from '@/lib/activityLog'
 
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
-}
+// Правки пользователей пишутся от имени владельца: журнал запишет, кто менял права.
+const adminClient = () => createServiceClient()
 
 export async function GET() {
   const guard = await requireOwner()
@@ -51,7 +48,7 @@ export async function PATCH(req: NextRequest) {
   const { id, password_plain: newPassword, permissions, ...fields } = await req.json()
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
 
-  const db = adminClient()
+  const db = await serviceAsMe()
 
   // Password change — update Supabase Auth too
   if (newPassword) {

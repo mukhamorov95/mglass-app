@@ -57,6 +57,8 @@ const PERM_LABELS: { key: keyof UserPermissions; icon: string; label: string }[]
   { key: 'see_calendar', icon: '📅', label: 'Календарь' },
   { key: 'see_clients',  icon: '👤', label: 'Клиенты' },
   { key: 'see_earnings', icon: '💰', label: 'Заработки' },
+  // Видеть «Маржу» и дописывать расходы объектов; владельцы видят её всегда.
+  { key: 'margin_edit',  icon: '📐', label: 'Маржа' },
 ]
 
 // Две главные группы-заголовка: офис M-Glass и цех. Обе по умолчанию свёрнуты.
@@ -639,6 +641,12 @@ export default function UsersPage() {
                                 title="Вкладка «Менеджер»: полный контур MGlass (B2C) + B2B поверх закупщика"
                                 className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${perms.manager_workspace ? 'bg-[#111110] text-white hover:opacity-90' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
                                 {perms.manager_workspace ? '✓ Менеджер' : '+ Менеджер'}
+                              </button>
+                              <button
+                                onClick={() => togglePerm(u, 'margin_edit')}
+                                title="«Маржа» в «Воронке и продажах»: видеть и дописывать расходы объектов. Каждая правка — в журнале действий"
+                                className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${perms.margin_edit ? 'bg-[#111110] text-white hover:opacity-90' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                                {perms.margin_edit ? '✓ Маржа' : '+ Маржа'}
                               </button>
                             </div>
                           ) : (

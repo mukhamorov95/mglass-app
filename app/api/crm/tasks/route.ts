@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/lib/apiAuth'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
+import { serviceAsMe } from '@/lib/serviceAs'
 import { getSessionUser } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
@@ -22,7 +23,7 @@ async function whoAmI(): Promise<{ name: string; canAll: boolean } | null> {
 }
 
 export async function GET(req: NextRequest) {
-  const guard = await requireRole(['admin', 'ceo', 'commercial', 'manager'])
+  const guard = await requireAnyPageAccess(['/crm'])
   if (guard instanceof NextResponse) return guard
   const me = await whoAmI()
   if (!me) return NextResponse.json({ error: 'no user' }, { status: 401 })
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireRole(['admin', 'ceo', 'commercial', 'manager'])
+  const guard = await requireAnyPageAccess(['/crm'])
   if (guard instanceof NextResponse) return guard
   const me = await whoAmI()
   if (!me) return NextResponse.json({ error: 'no user' }, { status: 401 })
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
   if (!leadId || !title || !dueAt) return NextResponse.json({ error: 'lead_id, title, due_at обязательны' }, { status: 400 })
   const kind = KINDS.includes(body.kind ?? '') ? body.kind : 'followup'
 
-  const sb = createServiceClient()
+  const sb = await serviceAsMe()
   const { data, error } = await sb.from('crm_tasks').insert({
     lead_id: leadId, title, kind, due_at: dueAt,
     assignee: (body.assignee ?? '').trim() || me.name, created_by: me.name,
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const guard = await requireRole(['admin', 'ceo', 'commercial', 'manager'])
+  const guard = await requireAnyPageAccess(['/crm'])
   if (guard instanceof NextResponse) return guard
   const me = await whoAmI()
   if (!me) return NextResponse.json({ error: 'no user' }, { status: 401 })
@@ -81,7 +82,7 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
   const done = body.done !== false
 
-  const sb = createServiceClient()
+  const sb = await serviceAsMe()
   const { data, error } = await sb.from('crm_tasks')
     .update({ done, done_at: done ? new Date().toISOString() : null })
     .eq('id', id).select('lead_id,title').single()

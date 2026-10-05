@@ -1,18 +1,20 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getRole } from '@/lib/getRole'
+import { canMargin, getUserProfile } from '@/lib/getRole'
+import MarginObjectRow from '@/components/sales/MarginObjectRow'
 import { createServiceClient } from '@/lib/supabase-service'
 import { mskDayKey } from '@/lib/time'
 import { shiftMonth } from '@/lib/sales/period'
 import {
-  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, fixLine, fromDb, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
+  COST_KEYS, COST_RU, MARGIN_SINCE, SALE_COLUMNS, fixLine, fromDb, loadEdits, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
   type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals, type Scope,
 } from '@/lib/sales/marginBook'
 
 // Маржа объектов M-Glass: книга «Маржа», сверенная с «Продажами M-Glass».
 // Читается так, как владелец считает сам (05.10): месяц → продажи → прямые расходы
 // по заказам → маржа. Месяц раскрывается на месте, расходы — по статьям с долей от
-// продаж. Только владельцу — «маржа продаж — пока вижу только я». Витрина CFO
+// продаж. Владельцу и тому, кому выдано право «Маржа» (Вере — решение владельца 05.10):
+// он же дописывает пустые ячейки объекта в карточке (MarginObjectRow). Витрина CFO
 // /cfo/sales-ledger читает ту же себестоимость: её пишет та же утренняя сверка.
 
 export const dynamic = 'force-dynamic'
@@ -45,8 +47,8 @@ const step = (mode: Mode) => (mode === 'year' ? 12 : mode === 'quarter' ? 3 : 1)
 const GRID = 'grid grid-cols-[1.3fr_1.1fr_.7fr_.7fr_1.1fr_1.1fr_.8fr] gap-2 items-center'
 
 export default async function MarginPage({ searchParams }: { searchParams: Promise<{ mode?: string; month?: string; scope?: string }> }) {
-  const role = await getRole()
-  if (role !== 'admin' && role !== 'ceo') redirect('/sales')
+  const profile = await getUserProfile()
+  if (!profile || !canMargin(profile.role, profile.permissions)) redirect('/sales')
 
   const sp = await searchParams
   const mode: Mode = sp.mode === 'month' || sp.mode === 'quarter' ? sp.mode : 'year'
@@ -59,7 +61,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
     return `/sales/margin?${q}`
   }
 
-  // Service-role: роль проверена выше, а продажи всех менеджеров видит только владелец.
+  // Service-role: право на маржу проверено выше.
   const svc = createServiceClient()
   const [{ data: rowsData }, { data: salesData }] = await Promise.all([
     svc.from('margin_book_rows').select('*').in('ledger_month', months).eq('voided', false).order('row_no').range(0, 4999),
@@ -67,9 +69,13 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
   ])
   const rows = (rowsData ?? []) as (MarginDbRow & { ledger_month: string; tab: string })[]
   const sales = (salesData ?? []) as unknown as Sale[]
+  // Внесённое в приложении — поверх книги. Не загрузилось — говорим, а не показываем книгу молча.
+  const loaded = await loadEdits(svc, sales.map(s => s.id)).then(map => ({ map, error: null }), (e: Error) => ({ map: new Map(), error: e.message }))
+  const edits = loaded.map
+  const editsError = loaded.error
   const byMonth = months.map(m => {
     const own = rows.filter(r => r.ledger_month === m)
-    const objects = reconcileMonth(m, own.map(fromDb), sales.filter(s => s.ledger_month === m))
+    const objects = reconcileMonth(m, own.map(fromDb), sales.filter(s => s.ledger_month === m), edits)
     const tab = own[0]?.tab ?? `${monthRu(m)} ${m.slice(2, 4)}`
     return {
       month: m, tab, objects, t: periodTotals(objects, scope),
@@ -92,7 +98,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           <Link href="/sales/managers" className="text-[12px] text-[#0071e3] hover:underline">→ Показатели менеджеров</Link>
         </div>
         <p className="text-[12px] text-[#9a9a95] mb-3">
-          Маржа = продажи − прямые расходы по заказам. Расходы — из книги «Маржа», продажи — из «Продаж M-Glass»; сверка каждое утро в 8:10.
+          Маржа = продажи − прямые расходы по заказам. Расходы — из книги «Маржа» и внесённые здесь, продажи — из «Продаж M-Glass»; сверка с книгой каждое утро в 8:10.
+          Нажмите на объект — откроются все его ячейки: пустое можно дописать и сохранить.
         </p>
 
         <div className="flex items-center gap-2 flex-wrap mb-4">
@@ -109,6 +116,11 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           <Link href={href({ scope: 'closed' })} className={btn(scope === 'closed')}>Только закрытые</Link>
         </div>
 
+        {editsError && (
+          <p role="alert" className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+            Правки, внесённые в приложении, не загрузились ({editsError}) — ниже только книга «Маржа».
+          </p>
+        )}
         {beforeBook && (
           <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
             Книга «Маржа» сверяется с {monthRu(MARGIN_SINCE).toLowerCase()} {MARGIN_SINCE.slice(0, 4)} года — расходов за более ранние месяцы здесь нет.
@@ -192,7 +204,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
 
         <div className="text-[11px] text-[#9a9a95] space-y-1">
           <p>Продажи — сумма заказов месяца из «Продаж M-Glass». Расходы — прямые по заказам из «Маржи»: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, партнёры, рекламации, налог и бонусы. Статьи складываются здесь, а не берутся из итога книги: число, набранное текстом, книга не считает.</p>
-          <p>⚠ «Расходы неполные» — у объекта в «Марже» пусто хотя бы в одной из статей: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, — или его в «Марже» ещё нет. Маржа у такого объекта завышена. Если расхода не было — поставьте в книге 0.</p>
+          <p>⚠ «Расходы неполные» — у объекта в «Марже» пусто хотя бы в одной из статей: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, — или его в «Марже» ещё нет. Маржа у такого объекта завышена. Если расхода не было — поставьте 0 (в книге или в карточке объекта).</p>
+          <p>✎ — у объекта есть ячейки, внесённые в приложении: они сильнее книги, книга не меняется. Если книга потом заполнит ячейку по-другому, карточка покажет оба значения. Каждая правка — в журнале действий у владельца.</p>
         </div>
       </div>
     </div>
@@ -247,16 +260,12 @@ function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: Peri
             </thead>
             <tbody>
               {m.objects.map(o => (
-                <tr key={`${o.order_no}-${o.row ?? o.sale_id}`} className="border-b border-[#f5f5f3] last:border-0 align-top">
-                  <td className="px-3 py-1.5 font-medium text-[#111110]">{o.order_no ?? '—'}</td>
-                  <td className="px-3 py-1.5 max-w-[220px] truncate" title={o.client ?? ''}>{o.client ?? '—'}<span className="text-[#9a9a95]"> · {o.manager ?? '—'}</span></td>
-                  <td className="px-3 py-1.5">{o.sale_id == null ? <span className="text-[#9a9a95]">нет в продажах</span> : o.closed ? 'закрыт' : <span className="text-[#9a9a95]">в работе</span>}</td>
-                  <td className="px-3 py-1.5 text-right">{rub(o.amount)}</td>
-                  <td className="px-3 py-1.5 text-right">{o.var_total == null ? '—' : rub(o.var_total)}</td>
-                  <td className="px-3 py-1.5 text-right font-semibold">{o.md == null ? '—' : rub(o.md)}</td>
-                  <td className={`px-3 py-1.5 text-right font-semibold ${mCls(o.md_pct)}`}>{pct(o.md_pct)}</td>
-                  <td className="px-3 py-1.5 text-[#6b6b66] whitespace-normal min-w-[220px]">{issueText(o)}</td>
-                </tr>
+                <MarginObjectRow key={`${o.order_no}-${o.row ?? o.sale_id}`} d={{
+                  saleId: o.sale_id, orderNo: o.order_no, client: o.client, manager: o.manager,
+                  closed: o.closed, bookClosed: o.book_closed, amount: o.amount, partnerFee: o.partner_fee,
+                  varTotal: o.var_total, md: o.md, mdPct: o.md_pct, issue: issueText(o),
+                  book: o.book_costs, edits: o.edits,
+                }} />
               ))}
             </tbody>
           </table>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getRole, getSessionUser, getUserProfile, canAccessRoute, isOwnerRole, type Role } from './getRole'
+import { getRole, getSessionUser, getUserProfile, canAccessRoute, canMargin, isOwnerRole, type Role } from './getRole'
 
 // Shared 403 response — keeps Russian copy consistent across endpoints.
 function forbidden() {
@@ -53,6 +53,15 @@ export async function requireAnyPageAccess(pathnames: string[]): Promise<Role | 
   const opts = { b2bScope: permissions.b2b_client_scope ?? null, managerWorkspace: permissions.manager_workspace === true }
   if (!pathnames.some(p => canAccessRoute(role, p, opts))) return forbidden()
   return role
+}
+
+// «Маржа»: смотреть и править расходы объектов — владелец или право margin_edit.
+export async function requireMargin(): Promise<{ role: Role; userId: string } | NextResponse> {
+  const user = await getSessionUser()
+  if (!user) return NextResponse.json({ error: 'Нужно войти' }, { status: 401 })
+  const profile = await getUserProfile()
+  if (!profile || !canMargin(profile.role, profile.permissions)) return forbidden()
+  return { role: profile.role, userId: user.id }
 }
 
 // Boolean form for conditional logic (e.g. filtering sale-price rows in GETs).
