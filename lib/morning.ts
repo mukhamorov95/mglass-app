@@ -69,6 +69,11 @@ export function prevMonth(month: string): string {
   return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7)
 }
 
+export function nextMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7)
+}
+
 export const hm = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' }) : null
 

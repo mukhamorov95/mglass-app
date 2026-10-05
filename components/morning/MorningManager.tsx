@@ -1,16 +1,20 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import MyDay from '@/components/MyDay'
-import { calls, dayLabel, duration, hm, monthName, plural, rub, type MonthMoney } from '@/lib/morning'
+import { calls, dayLabel, duration, hm, monthName, nextMonth, plural, rub, type MonthMoney } from '@/lib/morning'
+import { monthEnd, payoutSplit, planProgress } from '@/lib/earnings/cash'
+import { currentTierIndex, distanceToNextTier } from '@/lib/earnings/calculateProgressiveCommission'
 import type { Morning, MorningPerson } from '@/lib/morningData'
 
 // «Утро» менеджера: вчера, сегодня, месяц. Все цифры собираются сами — менеджер
 // ничего не заполняет. Владелец открывает тот же экран из «Команды» (?m=<amo-id>).
 
-function Card({ label, value, sub, note }: { label: string; value: string; sub?: string; note?: string }) {
+function Card({ label, value, sub, note, children }: { label: string; value: string; sub?: ReactNode; note?: ReactNode; children?: ReactNode }) {
   return (
     <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5 flex flex-col gap-1">
       <p className="text-[11px] font-semibold text-[#6b6b66] uppercase tracking-wider">{label}</p>
       <p className="text-[20px] font-bold tabular-nums text-[#111110] leading-tight">{value}</p>
+      {children}
       {sub && <p className="text-[12px] text-[#3d3d3a] leading-snug">{sub}</p>}
       {note && <p className="text-[11px] text-[#6b6b66] leading-snug mt-auto pt-1.5 border-t border-dashed border-[#e4e4e0]">{note}</p>}
     </div>
@@ -46,6 +50,50 @@ export function YesterdayCards({ p }: { p: MorningPerson }) {
       <Card label="Документы" value={r.adv_kp == null ? '—' : `КП ${r.adv_kp} · счетов ${r.adv_invoice ?? 0}`}
         sub={`${docs}; в приложении: быстрых расчётов ${r.app_quick}, КП ${r.app_kp}, договоров ${r.app_contracts}`}
         note="КП и счета — вход сделки в этапы amo «КП отправлено» и «Счёт выставлен»" />
+    </div>
+  )
+}
+
+const pct = (x: number) => `${Math.floor(x)} %`
+const ddmm = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
+
+// План и комиссия месяца — оба от поступлений из «Аналитики дохода» (решения 3 и 5).
+function PlanPayCards({ morning, person, ownerView }: { morning: Morning; person: MorningPerson; ownerView: boolean }) {
+  const { month, today, bookLastDay, pay } = morning
+  const cash = person.month.prepay + person.month.remainder
+  const workDays = person.schedule?.work_days?.length ? person.schedule.work_days : [1, 2, 3, 4, 5]
+  const pp = planProgress({ plan: person.plan, cash, month, today, bookLastDay, workDays })
+  const split = payoutSplit(person.firstHalf, cash, pay.tiers)
+  const rate = pay.tiers[currentTierIndex(cash, pay.tiers)]?.ratePercent
+  const next = distanceToNextTier(cash, pay.tiers)
+  const m = monthName(month).toLowerCase()
+  const through = pp.dataThrough ? `книга внесена по ${ddmm(pp.dataThrough)}` : `за ${m} в книге пока нет записей`
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {pp.plan != null ? (
+        <Card label={`План · ${m}`} value={`выполнено ${pct(pp.pct ?? 0)}`}
+          sub={<>
+            {rub(cash)} из {rub(pp.plan)}<br />
+            {pp.forecast != null ? `по темпу к концу месяца: ${rub(pp.forecast)}` : 'прогноза по темпу пока нет'}
+            {pp.needPerDay != null && <><br />{pp.needPerDay > 0 ? `нужно ${rub(pp.needPerDay)} в рабочий день · осталось ${pp.daysLeft} ${plural(pp.daysLeft, 'день', 'дня', 'дней')}` : 'план закрыт'}</>}
+          </>}
+          note={`план в поступлениях: предоплаты + остатки; ставит руководитель · ${through}`}>
+          <div className="h-1.5 rounded-full bg-[#efefeb] overflow-hidden mt-0.5">
+            <div className="h-full bg-[#111110]" style={{ width: `${Math.min(100, pp.pct ?? 0)}%` }} />
+          </div>
+        </Card>
+      ) : (
+        <Card label={`План · ${m}`} value="не поставлен"
+          sub={ownerView ? <Link href="/" className="text-blue-600 hover:underline">поставить на «Команде»</Link> : 'план на месяц ставит руководитель'}
+          note="план считается в поступлениях: предоплаты + остатки из «Аналитики дохода»" />
+      )}
+      <Card label={`Комиссия · ${m}`} value={rub(split.total)}
+        sub={<>
+          ставка {rate} %{next ? ` · до ${next.ratePercent} % ещё ${rub(next.remaining)}` : ' — максимальная'}<br />
+          27.{month.slice(5, 7)} — {rub(split.first)} за 1–15 · 15.{nextMonth(month).slice(5, 7)} — {rub(split.second)} за 16–{monthEnd(month).slice(8, 10)}
+        </>}
+        note={<>от поступлений месяца, ступенчато; оклад {rub(pay.salary)} отдельно · {through} · <Link href={ownerView ? `/my-earnings?m=${person.amoUserId}` : '/my-earnings'} className="text-blue-600 hover:underline">Мои заработки</Link></>} />
     </div>
   )
 }
@@ -95,6 +143,7 @@ export default function MorningManager({ morning, person, ownerView }: { morning
           <h2 className="text-[16px] font-bold text-[#111110]">{monthName(month)}</h2>
           <span className="text-[13px] text-[#6b6b66]">с 1-го числа</span>
         </div>
+        <PlanPayCards morning={morning} person={person} ownerView={ownerView} />
         <MonthCards m={person.month} prev={person.prev} prevLabel={monthName(prev).toLowerCase()} />
         {bookLastDay && bookLastDay < yesterday && (
           <p className="text-[12px] text-amber-700">«Аналитика дохода» заполнена по {dm(bookLastDay)} — поступления, разговоры и замеры после этой даты ещё не внесены в книгу.</p>

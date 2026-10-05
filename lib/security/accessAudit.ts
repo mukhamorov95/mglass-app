@@ -36,7 +36,7 @@ export const SENSITIVE_TABLES = new Set([
   'materials', 'hardware_items', 'services', 'b2b_services', 'financial_settings',
   'supplier_price_rows', 'glass_price_matrix', 'purchase_orders', 'calculations',
   'commercial_proposals', 'deals', 'deal_payments', 'payments', 'manager_stats_daily',
-  'manager_stats_monthly', 'manager_day_stats', 'coefficients', 'process_cost_inputs', 'production_settings',
+  'manager_stats_monthly', 'manager_day_stats', 'manager_month_plans', 'coefficients', 'process_cost_inputs', 'production_settings',
   'security_audit_runs',   // сам отчёт прогона — список дыр
   'manager_schedules', 'wazzup_outgoing_messages', 'manager_coaching',
   'b2b_rates',        // закалка, кромка, мин. цены — себестоимость B2B
