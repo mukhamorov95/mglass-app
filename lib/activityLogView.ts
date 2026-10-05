@@ -47,6 +47,14 @@ const COLUMNS: Record<string, string> = {
   archived_at: 'в архиве', deal_id: 'сделка', label: 'название',
 }
 
+// Ключи jsonb-колонок (права пользователя): показываем только изменённые, по-русски.
+const KEYS: Record<string, string> = {
+  margin_edit: 'Маржа', manager_workspace: 'кабинет менеджера', b2b_client_scope: 'B2B-просчёт',
+  see_mglass: 'MGlass', see_b2b: 'B2B', see_calendar: 'календарь', see_clients: 'клиенты', see_earnings: 'заработки',
+  home_route: 'вход', all_clients: 'все клиенты', mglass_only: 'только M GLASS',
+}
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+
 const VERB: Record<string, { text: string; tone: 'add' | 'edit' | 'del' }> = {
   'row.insert': { text: 'создано', tone: 'add' },
   'row.update': { text: 'изменено', tone: 'edit' },
@@ -101,7 +109,14 @@ export function describe(e: LogEntry, sales: Map<number, { order_no: string | nu
 
   for (const [k, c] of Object.entries(d.changes ?? {})) {
     const what = COLUMNS[k] ?? k
-    if (Array.isArray(c)) changes.push({ what, before: fmtValue(c[0], k), after: fmtValue(c[1], k) })
+    if (Array.isArray(c) && isObj(c[0]) && isObj(c[1])) {
+      const [was, now] = c as [Record<string, unknown>, Record<string, unknown>]
+      for (const key of [...new Set([...Object.keys(was), ...Object.keys(now)])]) {
+        if (JSON.stringify(was[key]) === JSON.stringify(now[key])) continue
+        const v = (x: unknown) => (typeof x === 'string' && KEYS[x] ? KEYS[x] : x === undefined ? '—' : fmtValue(x))
+        changes.push({ what: `${what} · ${KEYS[key] ?? key}`, before: v(was[key]), after: v(now[key]) })
+      }
+    } else if (Array.isArray(c)) changes.push({ what, before: fmtValue(c[0], k), after: fmtValue(c[1], k) })
     else changes.push({ what, before: '', after: 'изменено' })
   }
   const name = row.order_no ? `заказ ${row.order_no}` : row.number ? `№ ${row.number}` : row.name ? String(row.name) : row.month && row.amo_user_id ? `${row.month}, amo #${row.amo_user_id}` : e.entity_id ? `#${e.entity_id}` : ''
