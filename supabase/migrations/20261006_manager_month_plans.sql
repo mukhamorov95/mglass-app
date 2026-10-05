@@ -15,9 +15,11 @@ create table if not exists manager_month_plans (
 alter table manager_month_plans enable row level security;
 
 -- Видимость как у снимка дня: руководство — всех, менеджер — только свой план.
+-- «Видеть все сделки» расширяет только менеджера: флаг стоит и у закупщика (для сделок),
+-- и сам по себе не должен открывать ему планы продавцов.
 drop policy if exists manager_month_plans_select on manager_month_plans;
 create policy manager_month_plans_select on manager_month_plans for select to authenticated using (
-  exists (select 1 from crm_caller() c where c.u_role in ('admin','ceo','commercial','cfo') or c.can_all)
+  exists (select 1 from crm_caller() c where c.u_role in ('admin','ceo','commercial','cfo') or (c.u_role = 'manager' and c.can_all))
   or amo_user_id = (select u.amo_user_id from users u where u.id = auth.uid())
 );
 -- INSERT/UPDATE/DELETE-политик нет: пишет только service-role.
