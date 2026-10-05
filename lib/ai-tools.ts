@@ -1,12 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Tool } from '@anthropic-ai/sdk/resources/messages/messages'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
 
 export const AI_TOOLS: Tool[] = [
   {
@@ -51,9 +44,11 @@ export const AI_TOOLS: Tool[] = [
   },
 ]
 
-export async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
+// supabase — клиент вызывающего (RLS): модель видит ровно то, что человек увидел бы на
+// экране. Service-ключ здесь отдавал партнёру закупочные цены, а любому сотруднику —
+// чужие расчёты с телефонами клиентов (30.09).
+export async function executeTool(name: string, input: Record<string, unknown>, supabase: SupabaseClient): Promise<string> {
   try {
-    const supabase = getSupabase()
     switch (name) {
       case 'get_materials': {
         let query = supabase
