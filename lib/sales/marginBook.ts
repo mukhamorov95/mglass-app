@@ -10,6 +10,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseMoney, parseMoneyLoose, parseSheetRows, parseTabList, parseTabMonth } from './salesSheetParse.mjs'
 
 export const MARGIN_BOOK_ID = '1E5jUrBxJUTXa74LAd7ZiNq6qMJq5e0J_yMWxqvRTdPY'
+// Вкладки «Маржи» апрель–июль 2025 — старого формата: колонок «Доставка» и «Налог» нет,
+// маржа этих месяцев посчитана без них и выше сопоставимой. Экран это подписывает.
+export const NO_TAX_DELIVERY_UNTIL = '2025-07'
 export const MARGIN_SINCE = '2025-04'   // первая вкладка книги; 2025 год заполнен 05.10
 
 // Статьи и правки — в отдельном модуле: его читает клиентская карточка объекта, а
