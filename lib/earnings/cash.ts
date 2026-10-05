@@ -3,7 +3,7 @@
 // __tests__/earnings/cash.test.ts. Комиссия — calculateProgressiveCommission.
 
 import { calculateProgressiveCommission, type CommissionTier } from '@/lib/earnings/calculateProgressiveCommission'
-import { nextMonth, prevMonth } from '@/lib/morning'
+import { monthEnd, nextMonth, prevMonth } from '@/lib/morning'
 
 export type CashMonth = { month: string; prepay: number; remainder: number; payments: number }
 export type CashDay = { date: string; prepay: number; remainder: number }
@@ -23,10 +23,7 @@ export function workdays(from: string, to: string, workDays: number[]): number {
   return n
 }
 
-export function monthEnd(month: string): string {
-  const [y, m] = month.split('-').map(Number)
-  return iso(Date.UTC(y, m, 0, 12))
-}
+export { monthEnd }
 
 export type PlanProgress = {
   plan: number | null

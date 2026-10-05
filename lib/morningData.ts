@@ -23,6 +23,7 @@ export type MorningPerson = {
 export type Morning = {
   today: string
   day: string | null
+  updatedAt: string | null   // когда снят день (сегодняшний — по кнопке)
   month: string
   prev: string
   bookLastDay: string | null
@@ -34,7 +35,8 @@ export type Morning = {
 const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10)
 const BOOK_METRICS = ['prepay', 'remainder', 'payments', 'talks', 'measure_assigned', 'measure_done']
 
-export async function loadMorning(sb: SupabaseClient, opts: { today: string; only?: number }): Promise<Morning> {
+// day — день выбран руками (владелец на «Утре» менеджера); иначе последний рабочий.
+export async function loadMorning(sb: SupabaseClient, opts: { today: string; only?: number; day?: string }): Promise<Morning> {
   const { today } = opts
   const month = today.slice(0, 7)
   const prev = prevMonth(month)
@@ -44,7 +46,9 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
   const [sch, users, snap, plans, settings] = await Promise.all([
     sb.from('manager_schedules').select('amo_user_id, name, work_from, work_to, work_days, starts_on, is_seller'),
     sb.from('users').select('name, amo_user_id').not('amo_user_id', 'is', null),
-    sb.from('manager_day_stats').select('*').gte('day', addDays(today, -14)).lt('day', today).limit(2000),
+    opts.day
+      ? sb.from('manager_day_stats').select('*').eq('day', opts.day).limit(200)
+      : sb.from('manager_day_stats').select('*').gte('day', addDays(today, -14)).lt('day', today).limit(2000),
     sb.from('manager_month_plans').select('month, amo_user_id, plan_money').in('month', [month, addMonth(month)]),
     sb.from('earnings_settings').select('base_salary_rub, commission_tiers').eq('scope', 'b2c_manager').maybeSingle(),
   ])
@@ -70,7 +74,7 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
   for (const r of rows) if (sellers.includes(Number(r.amo_user_id))) byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.actions)
   const sellerSchedules = sellers.map(id => schedules.get(id))
   const workday = (d: string) => sellerSchedules.some(s => isWorkday(d, s))
-  const day = pickDay([...byDay].map(([d, actions]) => ({ day: d, actions })), today, workday)
+  const day = opts.day ?? pickDay([...byDay].map(([d, actions]) => ({ day: d, actions })), today, workday)
     ?? pickDay(rows.map(r => ({ day: r.day, actions: r.actions })), today)
 
   const userName = new Map(((users.data ?? []) as { name: string | null; amo_user_id: number }[]).map(u => [Number(u.amo_user_id), u.name ?? '']))
@@ -88,7 +92,8 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
   })
   const byId = new Map(people.map(p => [p.amoUserId, p]))
   const names = [...owner.keys()]
-  if (!names.length) return { today, day, month, prev, bookLastDay: null, people, pay, errors }
+  const updatedAt = rows.filter(r => r.day === day).map(r => r.updated_at ?? '').sort().at(-1) || null
+  if (!names.length) return { today, day, updatedAt, month, prev, bookLastDay: null, people, pay, errors }
 
   const [sales, daily, monthly, last] = await Promise.all([
     sb.from('crm_sales').select('manager, amount, sale_date')
@@ -128,5 +133,5 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
     if (p) addBookFacts(p.prev, [f])
   }
 
-  return { today, day, month, prev, bookLastDay: (last.data?.stat_date as string | undefined) ?? null, people, pay, errors }
+  return { today, day, updatedAt, month, prev, bookLastDay: (last.data?.stat_date as string | undefined) ?? null, people, pay, errors }
 }
