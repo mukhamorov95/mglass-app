@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertText, classifyAnthropicError, cronVerdicts, freshness, type CronRunRow, type LiveCheck } from '@/lib/health/liveChecks'
+import { OWNER_SQL, alertText, classifyAnthropicError, cronVerdicts, freshness, ownerSqlVerdict, type CronRunRow, type LiveCheck } from '@/lib/health/liveChecks'
 
 describe('classifyAnthropicError', () => {
   // Сообщение с экрана владельца 06.10, как его отдаёт SDK.
@@ -99,5 +99,16 @@ describe('cronVerdicts', () => {
       row('leads', { last_ok_at: '2026-10-07T06:50:02Z', last_started_at: '2026-10-07T06:55:00Z' }),
     ], now, jobs)
     expect(running[0]).toMatchObject({ id: 'crons', status: 'ok', detail: '1 из 2 проходят по расписанию, 1 ещё не запускались с включения журнала' })
+  })
+})
+
+describe('ownerSqlVerdict', () => {
+  it('всё выполнено — зелёное; не выполнено — жёлтое с файлами и путём', () => {
+    expect(ownerSqlVerdict([]).status).toBe('ok')
+    const v = ownerSqlVerdict(OWNER_SQL)
+    expect(v.status).toBe('warn')
+    expect(v.detail).toContain('Не выполнен SQL (2)')
+    expect(v.action).toContain('supabase/migrations/20261006_cron_runs.sql')
+    expect(v.action).toContain('SQL Editor')
   })
 })

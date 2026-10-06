@@ -372,6 +372,33 @@ export async function loadEdits(sb: SupabaseClient, saleIds: number[]): Promise<
   return out
 }
 
+// Месяцы «Маржи» так, как их считает экран: строки книги + продажи + правки приложения
+// → объекты reconcileMonth. Один загрузчик на экран «Маржа» и AI-анализ, чтобы цифры
+// в рекомендации и на экране не разошлись. Не загрузились правки — говорим, а не
+// показываем книгу молча.
+export type MarginMonth = { month: string; tab: string; objects: MarginObject[] }
+
+export async function loadMarginMonths(sb: SupabaseClient, months: string[]): Promise<{ byMonth: MarginMonth[]; editsError: string | null }> {
+  const [rowsRes, salesRes] = await Promise.all([
+    sb.from('margin_book_rows').select('*').in('ledger_month', months).eq('voided', false).order('row_no').range(0, 4999),
+    sb.from('crm_sales').select(SALE_COLUMNS).in('ledger_month', months).eq('voided', false).neq('department', 'b2b').range(0, 4999),
+  ])
+  if (rowsRes.error) throw new Error(`Книга «Маржа»: ${rowsRes.error.message}`)
+  if (salesRes.error) throw new Error(`Продажи: ${salesRes.error.message}`)
+  const rows = (rowsRes.data ?? []) as unknown as (MarginDbRow & { ledger_month: string; tab: string })[]
+  const sales = (salesRes.data ?? []) as unknown as (MarginSale & { ledger_month: string })[]
+  const loaded = await loadEdits(sb, sales.map(x => x.id)).then(map => ({ map, error: null }), (e: Error) => ({ map: new Map<number, SaleEdits>(), error: e.message }))
+  const byMonth = months.map(m => {
+    const own = rows.filter(r => r.ledger_month === m)
+    return {
+      month: m,
+      tab: own[0]?.tab ?? `${monthRu(m)} ${m.slice(2, 4)}`,
+      objects: reconcileMonth(m, own.map(fromDb), sales.filter(x => x.ledger_month === m), loaded.map),
+    }
+  }).filter(x => x.objects.length > 0)
+  return { byMonth, editsError: loaded.error }
+}
+
 // ─── Синхронизация ────────────────────────────────────────────────────────────
 
 export type MarginMonthReport = {
