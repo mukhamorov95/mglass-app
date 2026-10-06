@@ -9,6 +9,7 @@ import {
 } from '@/lib/healthCheckRunner'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { PERSPECTIVES, REC_STATUS_LABEL, type Recommendation, type RecStatus } from '@/lib/ai/recommendationTypes'
+import LiveHealthPanel, { liveSummary, type LiveHealth } from '@/components/admin/LiveHealthPanel'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -225,8 +226,19 @@ export default function AIControlCenter() {
   const [recs, setRecs]               = useState<Recommendation[]>([])
   const [recFilter, setRecFilter]     = useState<RecStatus>('new')
 
-  // ── Overview metrics ────────────────────────────────────────────────────────
-  const [metrics, setMetrics]         = useState<{ calcs: number; orders: number; users: number } | null>(null)
+  // ── Всё ли работает (живые проверки) ─────────────────────────────────────────
+  const [live, setLive]               = useState<LiveHealth>(null)
+  const [liveLoading, setLiveLoading] = useState(false)
+  const loadLive = useCallback(async () => {
+    setLiveLoading(true)
+    try {
+      const r = await fetch('/api/admin/live-health')
+      const j = await r.json().catch(() => null)
+      setLive(r.ok && j ? j : { error: j?.error ?? `ошибка ${r.status}` })
+    } catch (e) {
+      setLive({ error: e instanceof Error ? e.message : String(e) })
+    } finally { setLiveLoading(false) }
+  }, [])
 
   // ── Init ────────────────────────────────────────────────────────────────────
 
@@ -265,17 +277,9 @@ export default function AIControlCenter() {
       })
       .catch(() => setRecsError('Не удалось загрузить рекомендации'))
 
-    // Load quick metrics
-    const fetchMetrics = async () => {
-      const [c, o, u] = await Promise.all([
-        sb.from('calculations').select('*', { count: 'exact', head: true }),
-        sb.from('orders').select('*', { count: 'exact', head: true }),
-        sb.from('users').select('*', { count: 'exact', head: true }),
-      ])
-      setMetrics({ calcs: c.count ?? 0, orders: o.count ?? 0, users: u.count ?? 0 })
-    }
-    fetchMetrics()
-  }, [])
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadLive()
+  }, [loadLive])
 
   // ── Health check ────────────────────────────────────────────────────────────
 
@@ -433,7 +437,7 @@ export default function AIControlCenter() {
 
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: 'overview',        label: 'Обзор' },
-    { id: 'health',          label: 'Health Check', badge: errorCount + warnCount > 0 ? errorCount + warnCount : undefined },
+    { id: 'health',          label: 'Справочники', badge: errorCount + warnCount > 0 ? errorCount + warnCount : undefined },
     { id: 'calculators',     label: 'Формула цены' },
     { id: 'ai',              label: 'AI Анализ' },
     { id: 'recommendations', label: 'Рекомендации', badge: recCount('new') || undefined },
@@ -441,6 +445,7 @@ export default function AIControlCenter() {
   ]
 
   const fmt = (n: number) => n.toLocaleString('ru-RU')
+  const liveSum = liveSummary(live)
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -458,15 +463,15 @@ export default function AIControlCenter() {
             Единый центр управления, диагностики и развития платформы MGlass
           </p>
         </div>
-        {hcDone && (
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-[12px] font-semibold ${
-            overallStatus === 'ok'   ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-            overallStatus === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-700' :
-                                       'bg-red-50 border-red-200 text-red-700'
+        {liveSum && (
+          <button onClick={() => setTab('overview')} className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-[12px] font-semibold ${
+            liveSum.fail ? 'bg-red-50 border-red-200 text-red-700' :
+            liveSum.warn ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                           'bg-emerald-50 border-emerald-200 text-emerald-700'
           }`}>
-            <span className="text-[16px]">{overallStatus === 'ok' ? '✓' : overallStatus === 'warn' ? '⚠' : '✕'}</span>
-            {overallStatus === 'ok' ? 'Система OK' : overallStatus === 'warn' ? `${warnCount} предупреждений` : `${errorCount} ошибок`}
-          </div>
+            <span className="text-[16px]">{liveSum.fail ? '✕' : liveSum.warn ? '⚠' : '✓'}</span>
+            {liveSum.fail ? `Не работает: ${liveSum.fail}` : liveSum.warn ? `Требует внимания: ${liveSum.warn}` : 'Всё работает'}
+          </button>
         )}
       </div>
 
@@ -495,27 +500,14 @@ export default function AIControlCenter() {
       {/* ══════════════════════ OVERVIEW ══════════════════════ */}
       {tab === 'overview' && (
         <div className="space-y-6">
-          {/* Metric cards */}
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: 'Расчётов в системе', value: metrics ? fmt(metrics.calcs) : '…', icon: '📋', color: 'border-blue-100' },
-              { label: 'Заказов в системе',  value: metrics ? fmt(metrics.orders) : '…', icon: '📦', color: 'border-emerald-100' },
-              { label: 'Пользователей',       value: metrics ? fmt(metrics.users) : '…', icon: '👥', color: 'border-purple-100' },
-            ].map(m => (
-              <div key={m.label} className={`bg-white rounded-xl border ${m.color} px-5 py-4`}>
-                <p className="text-[24px] mb-1">{m.icon}</p>
-                <p className="text-[22px] font-bold text-[#111110]">{m.value}</p>
-                <p className="text-[11px] text-[#8a8a85] mt-0.5">{m.label}</p>
-              </div>
-            ))}
-          </div>
+          <LiveHealthPanel health={live} onRefresh={() => void loadLive()} loading={liveLoading} />
 
           {/* Status + quick actions */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white rounded-xl border border-[#e8e8e5] p-5">
-              <p className="text-[12px] font-semibold text-[#4a4a46] mb-3">Статус системы</p>
+              <p className="text-[12px] font-semibold text-[#4a4a46] mb-3">Справочники и расчёты</p>
               {!hcDone ? (
-                <p className="text-[12px] text-[#9a9a95]">Запустите проверку, чтобы увидеть статус</p>
+                <p className="text-[12px] text-[#9a9a95]">Цены стекла, услуги, LED, роли пользователей — запустите проверку справочников</p>
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" /><span className="text-[12px] text-[#3a3a38]">{okCount} проверок успешно</span></div>
@@ -529,7 +521,7 @@ export default function AIControlCenter() {
               <p className="text-[12px] font-semibold text-[#4a4a46] mb-3">Быстрые действия</p>
               <div className="space-y-2">
                 <button onClick={() => { setTab('health'); startHealthCheck() }} className="w-full h-9 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-[#27272a] transition-colors">
-                  Запустить Health Check
+                  Проверить справочники
                 </button>
                 <button onClick={() => setTab('ai')} className="w-full h-9 rounded-lg border border-[#d8d8d4] text-[#4a4a46] text-[12px] font-semibold hover:bg-[#f0f0ec] transition-colors">
                   Получить рекомендации →
@@ -737,40 +729,29 @@ export default function AIControlCenter() {
       {/* ══════════════════════ AI ANALYSIS ══════════════════════ */}
       {tab === 'ai' && (
         <div className="grid grid-cols-[1fr_1.5fr] gap-6">
-          {/* Left: context */}
+          {/* Left: на чём строится анализ */}
           <div className="space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Контекст системы</h2>
-            <div className="bg-white rounded-xl border border-[#e8e8e5] p-4 space-y-3">
-              {metrics && (
-                <>
-                  <div className="flex justify-between items-center py-1.5 border-b border-[#f5f5f3]">
-                    <span className="text-[11px] text-[#8a8a85]">Расчётов в системе</span>
-                    <span className="text-[12px] font-semibold text-[#2a2a28]">{fmt(metrics.calcs)}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 border-b border-[#f5f5f3]">
-                    <span className="text-[11px] text-[#8a8a85]">Заказов</span>
-                    <span className="text-[12px] font-semibold text-[#2a2a28]">{fmt(metrics.orders)}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5">
-                    <span className="text-[11px] text-[#8a8a85]">Пользователей</span>
-                    <span className="text-[12px] font-semibold text-[#2a2a28]">{fmt(metrics.users)}</span>
-                  </div>
-                </>
-              )}
+            <h2 className="text-[14px] font-semibold text-[#2a2a28]">На чём строится анализ</h2>
+            {(() => {
+              const ai = live && !('error' in live) ? live.checks.find(c => c.id === 'ai_anthropic') : null
+              return ai && ai.status !== 'ok' ? (
+                <div role="alert" className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  <p className="text-[12px] text-red-700 font-semibold">AI сейчас не отвечает</p>
+                  <p className="text-[11px] text-red-700 mt-1">{ai.detail}</p>
+                  {ai.action && <p className="text-[11px] text-[#4a4a46] mt-1">→ {ai.action}</p>}
+                </div>
+              ) : null
+            })()}
+            <div className="bg-white rounded-xl border border-[#e8e8e5] p-4 space-y-2">
+              <p className="text-[12px] text-[#3a3a38]">Сейчас AI видит за последние 30 дней:</p>
+              <ul className="text-[11px] text-[#6b6b66] list-disc pl-4 space-y-0.5">
+                <li>заявки CRM: сколько, квалифицированы, отказ, дошли до замера;</li>
+                <li>число расчётов и B2B-заказов;</li>
+                <li>пустые разделы базы знаний и вопросы, на которые бот не ответил;</li>
+                <li>прошлые рекомендации и ваши решения по ним.</li>
+              </ul>
+              <p className="text-[11px] text-amber-700">Продаж, маржи, показателей менеджеров и сроков производства в анализе пока нет — это этап 3 маршрута.</p>
             </div>
-            {hcDone && (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] p-4 space-y-2">
-                <p className="text-[11px] font-semibold text-[#4a4a46] mb-2">Последний Health Check</p>
-                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-[11px] text-[#3a3a38]">{okCount} ок</span></div>
-                {warnCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400" /><span className="text-[11px] text-[#3a3a38]">{warnCount} предупреждений</span></div>}
-                {errorCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /><span className="text-[11px] text-[#3a3a38]">{errorCount} ошибок</span></div>}
-              </div>
-            )}
-            {!hcDone && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                <p className="text-[11px] text-amber-700">Запустите Health Check, чтобы передать AI данные о проблемах системы</p>
-              </div>
-            )}
           </div>
 
           {/* Right: AI panel */}

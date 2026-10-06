@@ -3,6 +3,7 @@ import { requireOwner } from '@/lib/apiAuth'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { generateRecommendations, type RecStatus } from '@/lib/ai/recommendations'
+import { aiErrorText } from '@/lib/health/liveChecks'
 
 // Рекомендации AI Control Center. Только владелец: он принимает решение по каждой.
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     const created = await generateRecommendations(createServiceClient(), { perspective: perspective ?? 'ceo', source: 'ai' })
     return NextResponse.json({ created })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Не удалось получить рекомендации' }, { status: 500 })
+    return NextResponse.json({ error: e ? aiErrorText(e) : 'Не удалось получить рекомендации' }, { status: 500 })
   }
 }
 

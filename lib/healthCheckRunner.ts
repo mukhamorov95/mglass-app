@@ -81,7 +81,6 @@ export const LOG_KEY = 'mglass_health_fix_log'
 
 export const INITIAL_CHECKS: Omit<CheckResult, 'status'>[] = [
   { id: 'db_calcs',         module: 'База данных',  name: 'Таблица calculations' },
-  { id: 'db_orders',        module: 'База данных',  name: 'Таблица orders' },
   { id: 'db_glass',         module: 'База данных',  name: 'Таблица glass_price_matrix' },
   { id: 'db_b2b_mat',       module: 'База данных',  name: 'Таблица b2b_materials' },
   { id: 'db_users',         module: 'База данных',  name: 'Таблица users' },
@@ -96,8 +95,6 @@ export const INITIAL_CHECKS: Omit<CheckResult, 'status'>[] = [
   { id: 'calc_recent',      module: 'Расчёты',      name: 'История расчётов доступна' },
   { id: 'calc_has_price',   module: 'Расчёты',      name: 'Расчёты имеют final_price > 0' },
   { id: 'calc_has_margin',  module: 'Расчёты',      name: 'Расчёты имеют margin в диапазоне 10–80%' },
-  { id: 'orders_table',     module: 'Заказы',        name: 'Заказы доступны' },
-  { id: 'orders_statuses',  module: 'Заказы',        name: 'Статусы заказов корректны' },
   { id: 'b2b_quotes',       module: 'B2B',           name: 'B2B просчёты доступны' },
   { id: 'b2b_materials',    module: 'B2B',           name: 'B2B материалы активны' },
   { id: 'roles_users',      module: 'Роли',          name: 'У пользователей назначены роли' },
@@ -122,19 +119,6 @@ export const ISSUE_META: Record<string, IssueMeta> = {
       data: 'Схема таблицы из файлов миграций проекта',
       who: 'Владислав / разработчик',
       verify: 'Повторная проверка показывает OK и кол-во записей',
-    },
-  },
-  db_orders: {
-    severity: 'critical',
-    cause: 'Таблица orders недоступна или RLS-политика блокирует доступ',
-    impact: 'Заказы не читаются и не сохраняются',
-    recommendation: 'Проверьте Supabase и RLS-политики таблицы orders',
-    instruction: {
-      where: 'Supabase → Table Editor → orders',
-      fields: 'id, status, created_at',
-      data: 'Схема из миграций проекта',
-      who: 'Владислав / разработчик',
-      verify: 'Проверка показывает OK с количеством заказов',
     },
   },
   db_glass: {
@@ -307,32 +291,6 @@ export const ISSUE_META: Record<string, IssueMeta> = {
       verify: 'Новые расчёты в диапазоне 10–80%',
     },
   },
-  orders_table: {
-    severity: 'critical',
-    cause: 'Таблица orders недоступна',
-    impact: 'Раздел заказов не работает',
-    recommendation: 'Проверьте Supabase и доступность таблицы orders',
-    instruction: {
-      where: 'Supabase → Table Editor → orders',
-      fields: 'Все поля таблицы',
-      data: 'Схема из миграций',
-      who: 'Владислав / разработчик',
-      verify: 'Проверка OK, /orders открывается',
-    },
-  },
-  orders_statuses: {
-    severity: 'low',
-    cause: 'Заказы с недопустимыми статусами',
-    impact: 'Некорректная фильтрация в аналитике',
-    recommendation: 'Обновите статусы через Supabase',
-    instruction: {
-      where: 'Supabase → Table Editor → orders',
-      fields: 'Допустимые: draft, approved, in_work, done, cancelled, paused',
-      data: 'Корректный статус для каждого заказа',
-      who: 'Владислав / разработчик',
-      verify: 'Проверка: "Статусы корректны"',
-    },
-  },
   b2b_quotes: {
     severity: 'critical',
     cause: 'Таблица b2b_quotes недоступна',
@@ -440,11 +398,6 @@ export async function runChecks(
     if (error) return { status: 'error', detail: error.message }
     return { status: 'ok', detail: `${count ?? 0} записей` }
   })
-  await check('db_orders', async () => {
-    const { count, error } = await sb.from('orders').select('*', { count: 'exact', head: true })
-    if (error) return { status: 'error', detail: error.message }
-    return { status: 'ok', detail: `${count ?? 0} записей` }
-  })
   await check('db_glass', async () => {
     const { count, error } = await sb.from('glass_price_matrix').select('*', { count: 'exact', head: true })
     if (error) return { status: 'error', detail: error.message }
@@ -540,19 +493,6 @@ export async function runChecks(
     const bad = (data ?? []).filter(c => c.margin != null && (c.margin < 5 || c.margin > 90))
     if (bad.length > 2) return { status: 'warn', detail: `${bad.length}/20 с аномальной маржой` }
     return { status: 'ok', detail: 'Маржа в допустимом диапазоне' }
-  })
-  await check('orders_table', async () => {
-    const { count, error } = await sb.from('orders').select('*', { count: 'exact', head: true })
-    if (error) return { status: 'error', detail: error.message }
-    return { status: 'ok', detail: `${count ?? 0} заказов` }
-  })
-  await check('orders_statuses', async () => {
-    const VALID = new Set(['draft', 'approved', 'in_work', 'done', 'cancelled', 'paused'])
-    const { data, error } = await sb.from('orders').select('status').limit(50)
-    if (error) return { status: 'error', detail: error.message }
-    const bad = (data ?? []).filter(o => o.status && !VALID.has(o.status))
-    if (bad.length) return { status: 'warn', detail: `${bad.length} с неизвестным статусом` }
-    return { status: 'ok', detail: 'Статусы корректны' }
   })
   await check('b2b_quotes', async () => {
     const { count, error } = await sb.from('b2b_quotes').select('*', { count: 'exact', head: true })
