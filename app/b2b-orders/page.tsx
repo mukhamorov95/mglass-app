@@ -13,6 +13,8 @@ import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
+import { DAY_PRESETS, clientKeyer, clientOptions, dayPresetRange, summarizeOrders } from '@/lib/b2b/ordersFilter'
+import { mskDayKey } from '@/lib/time'
 import PointBadge from '@/components/PointBadge'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 
@@ -348,6 +350,24 @@ function getOrderPayStatus(order: Order): OrderPayStatus {
   if (stages.invoice_sent)              return 'unpaid'
   return 'unknown'
 }
+
+// Поиск по номеру и клиенту. Заказы без custom_number идентифицируются по id (в ленте
+// показаны как 05066 = падинг id), поэтому ищем и по id, нормализуя ведущие нули.
+function matchesSearch(o: Order, raw: string): boolean {
+  const q = raw.trim().toLowerCase()
+  if (!q) return true
+  const qn = q.replace(/\D/g, '').replace(/^0+/, '')
+  return (
+    o.client_name.toLowerCase().includes(q) ||
+    (o.custom_number ?? '').toLowerCase().includes(q) ||
+    (o.client_order_number ?? '').toLowerCase().includes(q) ||
+    getOrderNum(o.parsedNotes).toLowerCase().includes(q) ||
+    (qn !== '' && String(o.id).includes(qn))
+  )
+}
+
+const rub = (n: number) => Math.round(n).toLocaleString('ru-RU')
+const launchedDay = (o: Order) => o.parsedNotes.launched_at ?? o.created_at.slice(0, 10)
 
 function getOrderNum(pn: NotesData): string {
   const notes = pn.user_notes ?? ''
@@ -820,6 +840,7 @@ export default function B2BOrdersPage() {
   }
 
   const [search, setSearch] = useState('')
+  const [clientKey, setClientKey] = useState('')
   const [stageFilter, setStageFilter] = useState('all_active')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -925,7 +946,20 @@ export default function B2BOrdersPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadOrders().catch(() => setLoading(false)) }, [])
 
-  const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null
+  const isFiltered = search.trim() !== '' || clientKey !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null
+  const isScoped = search.trim() !== '' || clientKey !== '' || dateFrom !== '' || dateTo !== ''
+  const clientKeyOf = useMemo(() => clientKeyer(orders), [orders])
+
+  // Выборка «покупатель + даты + поиск» без этапов и сроков: итог «на какую сумму
+  // заказали» не должен терять отгруженные из-за чипа «Все активные».
+  const scopeOrders = useMemo(() => orders.filter(o =>
+    matchesSearch(o, search) &&
+    (!clientKey || clientKeyOf(o) === clientKey) &&
+    (!dateFrom || launchedDay(o) >= dateFrom) &&
+    (!dateTo || launchedDay(o) <= dateTo),
+  ), [orders, search, clientKey, clientKeyOf, dateFrom, dateTo])
+  const clientOpts = useMemo(() => clientOptions(orders, clientKeyOf), [orders, clientKeyOf])
+  const pickedClient = clientOpts.find(c => c.key === clientKey) ?? null
 
   const filteredOrdersBase = useMemo(() => {
     const filtered = orders.filter(o => {
@@ -933,21 +967,10 @@ export default function B2BOrdersPage() {
       const stages = pn.stages ?? {}
       const isShipped = !!stages.shipped
 
-      if (search.trim()) {
-        const q = search.trim().toLowerCase()
-        // Заказы без custom_number идентифицируются по id (в ленте показаны как
-        // 05066 = падинг id). Поэтому ищем и по id, нормализуя ведущие нули.
-        const qn = q.replace(/\D/g, '').replace(/^0+/, '')
-        const match =
-          o.client_name.toLowerCase().includes(q) ||
-          (o.custom_number ?? '').toLowerCase().includes(q) ||
-          (o.client_order_number ?? '').toLowerCase().includes(q) ||
-          getOrderNum(pn).toLowerCase().includes(q) ||
-          (qn !== '' && String(o.id).includes(qn))
-        if (!match) return false
-      }
+      if (!matchesSearch(o, search)) return false
+      if (clientKey && clientKeyOf(o) !== clientKey) return false
 
-      const launchedAt = pn.launched_at ?? o.created_at.slice(0, 10)
+      const launchedAt = launchedDay(o)
       if (dateFrom && launchedAt < dateFrom) return false
       if (dateTo && launchedAt > dateTo) return false
 
@@ -990,7 +1013,7 @@ export default function B2BOrdersPage() {
     }
 
     return filtered
-  }, [orders, search, stageFilter, deadlineFilter, dateFrom, dateTo, boardFilter])
+  }, [orders, search, clientKey, clientKeyOf, stageFilter, deadlineFilter, dateFrom, dateTo, boardFilter])
 
   // Заказы точек — первыми внутри выбранного этапа/фильтра, дальше порядок как был.
   const filteredOrders = useMemo(
@@ -1058,26 +1081,13 @@ export default function B2BOrdersPage() {
   }, [monthGroups])
 
   const productionDayGroups = useMemo(() => {
-    const base = search.trim()
-      ? orders.filter(o => {
-          const q = search.trim().toLowerCase()
-          const qn = q.replace(/\D/g, '').replace(/^0+/, '')
-          const pn = o.parsedNotes
-          return (
-            o.client_name.toLowerCase().includes(q) ||
-            (o.custom_number ?? '').toLowerCase().includes(q) ||
-            (o.client_order_number ?? '').toLowerCase().includes(q) ||
-            getOrderNum(pn).toLowerCase().includes(q) ||
-            (qn !== '' && String(o.id).includes(qn))
-          )
-        })
-      : orders
+    const base = orders.filter(o => matchesSearch(o, search) && (!clientKey || clientKeyOf(o) === clientKey))
     const by = (st: string) => pointsFirst(
       base.filter(o => getDeadlineStatus(o).status === st),
       o => o.client_id != null && pointClients.has(o.client_id),
     )
     return { overdue: by('overdue'), today: by('today'), tomorrow: by('tomorrow'), ready: by('ready') }
-  }, [orders, search, pointClients])
+  }, [orders, search, clientKey, clientKeyOf, pointClients])
 
   function toggleMonth(key: string) {
     setExpandedMonths(prev => {
@@ -1599,8 +1609,13 @@ export default function B2BOrdersPage() {
 
   // Шапка считает ВСЕ заказы, а список ниже — отфильтрованные: показываем обе цифры,
   // иначе при включённом поиске сумма вверху не про то, что видно (аудит итогов, A10).
-  const totalSum = orders.reduce((s, o) => s + getFinalPrice(o), 0)
-  const filteredSum = filteredOrders.reduce((s, o) => s + getFinalPrice(o), 0)
+  // Рубли округляются по заказу, потом складываются — как в итоге выборки ниже, чтобы
+  // одна и та же сумма не отличалась на рубль в двух местах экрана.
+  const sumRub = (list: Order[]) => list.reduce((s, o) => s + Math.round(getFinalPrice(o)), 0)
+  const totalSum = sumRub(orders)
+  const filteredSum = sumRub(filteredOrders)
+  const scope = summarizeOrders(scopeOrders, getFinalPrice, o => !!o.parsedNotes.stages?.shipped, getOrderPayStatus)
+  const today = mskDayKey()
   // Готовность производства: отгружен ли заказ. Не связано с тем, найден ли клиент в базе.
   const shippedCount = orders.filter(o => !!o.parsedNotes.stages?.shipped).length
   const notShippedCount = orders.length - shippedCount
@@ -2198,8 +2213,8 @@ export default function B2BOrdersPage() {
           <h1 className="text-[18px] font-semibold text-[#111110] tracking-tight">B2B Заказы</h1>
           <p className="text-[12px] text-[#8a8a85] mt-0.5">
             {filteredOrders.length < orders.length
-              ? <>{filteredOrders.length} из {orders.length} заказов · {filteredSum.toLocaleString('ru-RU')} ₽ из {totalSum.toLocaleString('ru-RU')} ₽</>
-              : <>{orders.length} заказов · {totalSum.toLocaleString('ru-RU')} ₽</>}
+              ? <>{filteredOrders.length} из {orders.length} заказов · {rub(filteredSum)} ₽ из {rub(totalSum)} ₽</>
+              : <>{orders.length} заказов · {rub(totalSum)} ₽</>}
           </p>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-medium" title="Готовность производства: отгружено / в работе">
@@ -2273,12 +2288,17 @@ export default function B2BOrdersPage() {
             </svg>
             <input
               type="text"
-              placeholder="Номер заказа или клиент…"
+              placeholder="Номер заказа…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg outline-none focus:border-[#111110] text-[#111110] placeholder:text-[#b4b4ae]"
             />
           </div>
+          <select value={clientKey} onChange={e => setClientKey(e.target.value)} aria-label="Покупатель"
+            className={`max-w-[240px] border rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110] ${clientKey ? 'border-[#111110] text-[#111110] font-medium' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
+            <option value="">Все покупатели</option>
+            {clientOpts.map(c => <option key={c.key} value={c.key}>{c.label} · {c.count}</option>)}
+          </select>
           <div className="flex items-center gap-1.5 text-[12px] text-[#8a8a85]">
             <span>с</span>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
@@ -2289,13 +2309,28 @@ export default function B2BOrdersPage() {
           </div>
           {isFiltered && (
             <button
-              onClick={() => { setSearch(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all'); setBoardFilter(null) }}
+              onClick={() => { setSearch(''); setClientKey(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all'); setBoardFilter(null) }}
               className="text-[11px] text-[#8a8a85] hover:text-[#111110] px-2 py-1.5 rounded-lg hover:bg-[#f0f0ec] transition-colors whitespace-nowrap">
               Сбросить
             </button>
           )}
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 items-center">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-[#b0b0aa] mr-1">Период:</span>
+          {DAY_PRESETS.map(p => {
+            const r = dayPresetRange(p.id, today)
+            const on = dateFrom === r.from && dateTo === r.to
+            return (
+              <button key={p.id} onClick={() => { setDateFrom(on ? '' : r.from); setDateTo(on ? '' : r.to) }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border select-none ${
+                  on ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'
+                }`}>
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+        <div className="flex flex-wrap gap-1 border-t border-[#f4f4f0] pt-2">
           {STAGE_FILTERS.map(f => (
             <button
               key={f.key}
@@ -2325,6 +2360,36 @@ export default function B2BOrdersPage() {
           ))}
         </div>
       </div>
+
+      {/* Итог выборки: покупатель + период + поиск, отгруженные тоже. */}
+      {isScoped && !productionDayMode && (
+        <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-3">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <p className="text-[13px] text-[#111110]">
+              <span className="text-[#8a8a85]">
+                {pickedClient ? pickedClient.label : search.trim() ? `«${search.trim()}»` : 'Все покупатели'}
+                {(dateFrom || dateTo) && <> · {dateFrom ? dateFrom.split('-').reverse().join('.') : '…'} — {dateTo ? dateTo.split('-').reverse().join('.') : '…'}</>}
+                {': '}
+              </span>
+              <span className="font-semibold">заказано {scope.all.count} на {rub(scope.all.sum)} ₽</span>
+            </p>
+            {pickedClient?.clientId != null && (
+              <Link href={`/b2b-crm/report?${new URLSearchParams({ client: String(pickedClient.clientId), ...(dateFrom ? { from: dateFrom } : {}), ...(dateTo ? { to: dateTo } : {}) })}`}
+                className="text-[11px] text-[#0071e3] hover:underline whitespace-nowrap">Отчёт по клиенту →</Link>
+            )}
+          </div>
+          <p className="text-[11px] text-[#6b6b66] mt-1">
+            в работе {scope.active.count} · {rub(scope.active.sum)} ₽ · отгружено {scope.shipped.count} · {rub(scope.shipped.sum)} ₽
+            <span className="text-[#c4c4be]"> | </span>
+            <span className="text-emerald-700">оплачено {scope.paid.count} · {rub(scope.paid.sum)} ₽</span>
+            {scope.partial.count > 0 && <> · <span className="text-amber-700">частично {scope.partial.count} · {rub(scope.partial.sum)} ₽</span></>}
+            {' · '}<span className={scope.unpaid.count ? 'text-red-600' : ''}>не оплачено {scope.unpaid.count} · {rub(scope.unpaid.sum)} ₽</span>
+          </p>
+          {scope.all.count !== filteredOrders.length && (
+            <p className="text-[11px] text-[#9a9a95] mt-1">Ниже в списке {filteredOrders.length} из них — по выбранному этапу и сроку.</p>
+          )}
+        </div>
+      )}
 
       {/* Результат */}
       {productionDayMode ? (() => {
@@ -2526,7 +2591,7 @@ export default function B2BOrdersPage() {
       })() : isFiltered ? (
         <div>
           <p className="text-[11px] text-[#8a8a85] mb-2 px-1">
-            {filteredOrders.length === 0 ? 'Заказов не найдено' : `Найдено: ${filteredOrders.length} заказов`}
+            {filteredOrders.length === 0 ? 'Заказов не найдено' : `Найдено: ${filteredOrders.length} заказов на ${rub(filteredSum)} ₽`}
           </p>
           {filteredOrders.length === 0 ? (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center text-[13px] text-[#8a8a85]">
