@@ -155,9 +155,9 @@ export default function CeoPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
                 { href: '/commercial',          label: '📈 Коммерческий' },
-                { href: '/admin/health-check',  label: '🔧 Health Check' },
+                { href: '/admin/ai-control-center', label: '🎛️ Всё ли работает' },
                 { href: '/admin/users',         label: '👥 Пользователи' },
-                { href: '/admin/sales-center',  label: '📣 Sales Center' },
+                { href: '/sales/managers',      label: '📊 Менеджеры' },
               ].map(l => (
                 <Link key={l.href} href={l.href}
                   className="flex items-center gap-2 px-4 py-3 bg-white border border-[#e4e4e0] rounded-xl text-[13px] text-[#111110] hover:bg-[#f8f8f7] transition-colors">

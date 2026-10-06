@@ -234,7 +234,7 @@ export default async function CfoDashboardPage() {
                 { href: '/cfo/margins', label: 'Таблица маржинальности' },
                 { href: '/cfo/unit',    label: 'Unit-экономика заказов' },
                 { href: '/admin/cfo',   label: 'Финмодели и ДДС' },
-                { href: '/admin/pnl',   label: 'P&L отчёт' },
+                { href: '/cfo/sales-ledger', label: 'Продажи и маржа' },
                 { href: '/admin/settings', label: 'Финансовые настройки' },
               ].map(l => (
                 <Link key={l.href} href={l.href}

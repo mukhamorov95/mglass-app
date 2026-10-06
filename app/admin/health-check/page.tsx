@@ -368,7 +368,7 @@ const ISSUE_META: Record<string, IssueMeta> = {
     impact: 'Калькуляторы используют неверные или дефолтные формулы ценообразования',
     recommendation: 'Настройте формулу ценообразования в системе',
     instruction: {
-      where: '/admin/pricing-formula или /admin/owner',
+      where: '/admin/pricing-formula',
       fields: 'Массив параметров формулы — должен быть непустым',
       data: 'Коэффициенты и параметры формулы расчёта final_price',
       who: 'Владислав / разработчик',
