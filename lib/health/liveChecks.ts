@@ -179,19 +179,43 @@ export function cronVerdicts(rows: CronRunRow[], now: Date, jobs = CRON_JOBS): L
   }]
 }
 
+const isMissingSchema = (e: { code?: string; message: string }) =>
+  ['42P01', '42703', 'PGRST204', 'PGRST205'].includes(e.code ?? '') || /does not exist|schema cache|could not find/i.test(e.message)
+
 async function checkCrons(sb: SupabaseClient, now: Date): Promise<LiveCheck[]> {
   const { data, error } = await sb.from('cron_runs').select('job, last_started_at, last_ok_at, last_error, last_error_at')
   if (error) {
-    if (error.code === '42P01' || error.code === 'PGRST205' || /does not exist|schema cache/i.test(error.message)) {
-      return [{
-        id: 'crons', title: 'Кроны', status: 'warn',
-        detail: 'Журнал кронов не включён — не видно, прошли ли утренние синки, бэкап и распределение заявок.',
-        action: 'Выполнить SQL из supabase/migrations/20261006_cron_runs.sql: Supabase → SQL Editor → вставить → Run.',
-      }]
-    }
+    // Таблицы нет — об этом строка «SQL владельца», второй раз не повторяем.
+    if (isMissingSchema(error)) return []
     throw new Error(`cron_runs: ${error.message}`)
   }
   return cronVerdicts((data ?? []) as CronRunRow[], now)
+}
+
+// SQL, который выполняет владелец: агенту изменение схемы закрыто с 05.10. Пока SQL не
+// выполнен, функция тихо работает по-старому — строка говорит, что именно не работает.
+export const OWNER_SQL: { table: string; column: string; file: string; what: string }[] = [
+  { table: 'cron_runs', column: 'job', file: '20261006_cron_runs.sql', what: 'журнал кронов — не видно, прошли ли утренние синки, бэкап и распределение заявок' },
+  { table: 'ai_recommendations', column: 'evidence', file: '20261006_ai_recommendations_evidence.sql', what: 'рекомендации AI сохраняются без цифр и источников, сверки после «сделано» нет' },
+]
+
+export function ownerSqlVerdict(missing: typeof OWNER_SQL): Verdict {
+  if (!missing.length) return { status: 'ok', detail: 'Все нужные таблицы и колонки на месте' }
+  return {
+    status: 'warn',
+    detail: `Не выполнен SQL (${missing.length}): ${missing.map(m => m.what).join('; ')}.`,
+    action: `Supabase → SQL Editor → вставить и выполнить ${missing.map(m => `supabase/migrations/${m.file}`).join(', ')}.`,
+  }
+}
+
+async function checkOwnerSql(sb: SupabaseClient): Promise<Verdict> {
+  const missing: typeof OWNER_SQL = []
+  for (const m of OWNER_SQL) {
+    const { error } = await sb.from(m.table).select(m.column).limit(1)
+    if (error && isMissingSchema(error)) missing.push(m)
+    else if (error) throw new Error(`${m.table}: ${error.message}`)
+  }
+  return ownerSqlVerdict(missing)
 }
 
 const withTimeout = <T,>(p: Promise<T>, ms: number) =>
@@ -217,6 +241,7 @@ export async function runLiveChecks(sb: SupabaseClient, now = new Date()): Promi
     { id: 'book_montage', title: 'Книга «Монтажи»', run: checkMontageBook },
     { id: 'amocrm', title: 'AmoCRM', run: checkAmo },
     { id: 'avito_queue', title: 'Авито → AmoCRM', run: () => checkAvitoQueue(sb, now) },
+    { id: 'owner_sql', title: 'SQL владельца', run: () => checkOwnerSql(sb) },
   ]
   const failed = (id: string, title: string, e: unknown): LiveCheck =>
     ({ id, title, status: 'warn', detail: `Проверка не выполнилась: ${e instanceof Error ? e.message : String(e)}` })

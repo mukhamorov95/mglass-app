@@ -6,7 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { InlineKeyboard } from '@/lib/telegram'
 import { appUrl } from '@/lib/appUrl'
-import { PERSPECTIVES, REC_STATUS_LABEL, type RecStatus, type Recommendation } from './recommendationTypes'
+import { PERSPECTIVES, REC_STATUS_LABEL, factLine, type RecStatus, type Recommendation } from './recommendationTypes'
 
 export type TgDecision = 'in_work' | 'archived' | 'removed' | 'new'
 
@@ -31,6 +31,9 @@ export function recText(r: Recommendation): string {
     r.action && `<b>Что сделать.</b> ${esc(r.action)}`,
     r.metric && `<b>Как проверить.</b> ${esc(r.metric)}`,
   ]
+  const ev = r.evidence
+  if (ev?.facts.length) lines.push('', '📊 <b>Цифры</b>', ...ev.facts.map(f => `• ${esc(factLine(f))} — ${esc(f.source)}`))
+  if (ev?.unverified.length) lines.push(`⚠️ В тексте числа не из данных: ${esc(ev.unverified.join(', '))}`)
   if (r.status !== 'new') {
     lines.push('', `${STATUS_ICON[r.status]} <b>${REC_STATUS_LABEL[r.status]}</b>${r.decided_by ? ` · ${esc(r.decided_by)}` : ''}`)
   }

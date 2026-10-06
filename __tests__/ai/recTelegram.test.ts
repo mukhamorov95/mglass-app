@@ -31,6 +31,14 @@ describe('recText', () => {
     expect(recText(rec())).toContain('&lt;5%')
     expect(recText(rec())).not.toContain('<5%')
   })
+  it('цифры с источником и пометка чисел не из данных', () => {
+    const t = recText(rec({ evidence: {
+      facts: [{ id: 'leads.measure.30d', label: 'Дошли до замера', value: 5, unit: 'count', period: 'последние 30 дней', source: 'заявки Авито-бота' }],
+      check: 'leads.measure.30d', unverified: ['80'],
+    } }))
+    expect(t).toContain('• Дошли до замера: 5 (последние 30 дней) — заявки Авито-бота')
+    expect(t).toContain('числа не из данных: 80')
+  })
   it('после решения — статус и кто решил', () => {
     expect(recText(rec({ status: 'in_work', decided_by: 'admin@mglass.ru · Telegram' }))).toContain('В работе</b> · admin@mglass.ru · Telegram')
   })

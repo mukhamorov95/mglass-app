@@ -1,3 +1,33 @@
+## Задача (06.10, девятая): AI Control Center — этап 3а, анализ на реальных цифрах
+
+**Владелец:** «давай этап 3».
+
+**Что сделано:**
+- `lib/ai/recFacts.ts` — 73 цифры с id, периодом и источником: продажи, маржа за 3 месяца, менеджеры, B2B, отгрузки, заявки, расчёты.
+- `lib/ai/recEvidence.ts`:
+  - `pickEvidence` — без опоры рекомендация не сохраняется;
+  - `unverifiedNumbers` — числа не из данных помечаются.
+- `lib/ai/recommendations.ts`:
+  - новый промпт: цифры + как их читать + справка из `owner_strategy`;
+  - вся анкета стратегии вместо одной строки;
+  - разбор ответа с `stop_reason` и хвостом;
+  - вставка с откатом без `evidence`, пока нет SQL.
+- `lib/sales/marginBook.ts` → `loadMarginMonths`: общий загрузчик для экрана «Маржа» и AI. Экран переведён на него.
+- Справка для модели — `lib/ai/systemFacts.ts` (по умолчанию) + `components/admin/SystemFactsEditor.tsx` на вкладке «AI Анализ».
+- Карточка рекомендации и Telegram показывают цифры с источником. Вкладка «Формула цены» убрана.
+- `lib/health/liveChecks.ts`: строка «SQL владельца» (`OWNER_SQL`). Отсутствующую `cron_runs` теперь показывает она, а не «Кроны».
+- Миграция `supabase/migrations/20261006_ai_recommendations_evidence.sql`: `evidence`, `recheck`, `recheck_at`.
+- Проверено:
+  - tsc, eslint, vitest — 2367 тестов;
+  - на проде 73 цифры за 0,6 с;
+  - live-check показывает «Не выполнен SQL (2)».
+
+**Не проверено:** ответ модели в новом формате — на счёте Anthropic нет денег.
+
+**Ждёт владельца:** два SQL (`cron_runs`, `ai_recommendations_evidence`), пополнение Anthropic.
+
+**Следующий шаг:** 3б — сверка `evidence.check` через 30 дней после «сделано» в кроне ai-recommendations: `recheck` + Telegram «было → стало».
+
 ## Задача (06.10, восьмая): AI Control Center — этап 2, решения кнопками в Telegram
 
 **Что сделано:**

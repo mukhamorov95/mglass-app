@@ -9,8 +9,8 @@ import { shiftMonth } from '@/lib/sales/period'
 import { MontageFillAll, MontageFillButton, type FillItem } from '@/components/sales/MontageFill'
 import { checkMontage, montageBookCached, orderKey, type MarginOrder, type MontageBook, type MontageCheck } from '@/lib/sales/montageBook'
 import {
-  COST_KEYS, COST_RU, MARGIN_SINCE, NO_TAX_DELIVERY_UNTIL, SALE_COLUMNS, costsComplete, fixLine, fromDb, loadEdits, monthGen, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
-  type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals,
+  COST_KEYS, COST_RU, MARGIN_SINCE, NO_TAX_DELIVERY_UNTIL, costsComplete, fixLine, loadMarginMonths, monthGen, monthRu, needsFix, periodTotals, roundShares,
+  type MarginObject, type PeriodTotals,
 } from '@/lib/sales/marginBook'
 
 // Маржа объектов M-Glass: книга «Маржа», сверенная с «Продажами M-Glass».
@@ -23,7 +23,6 @@ import {
 export const dynamic = 'force-dynamic'
 
 type Mode = 'month' | 'quarter' | 'year'
-type Sale = MarginSale & { ledger_month: string }
 
 const rub = (n: number) => Math.round(n).toLocaleString('ru-RU')
 const pct1 = (n: number) => Math.round(n * 10) / 10
@@ -68,26 +67,13 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
 
   // Service-role: право на маржу проверено выше.
   const svc = createServiceClient()
-  const [{ data: rowsData }, { data: salesData }] = await Promise.all([
-    svc.from('margin_book_rows').select('*').in('ledger_month', months).eq('voided', false).order('row_no').range(0, 4999),
-    svc.from('crm_sales').select(SALE_COLUMNS).in('ledger_month', months).eq('voided', false).neq('department', 'b2b').range(0, 4999),
-  ])
-  const rows = (rowsData ?? []) as (MarginDbRow & { ledger_month: string; tab: string })[]
-  const sales = (salesData ?? []) as unknown as Sale[]
-  // Внесённое в приложении — поверх книги. Не загрузилось — говорим, а не показываем книгу молча.
-  const loaded = await loadEdits(svc, sales.map(s => s.id)).then(map => ({ map, error: null }), (e: Error) => ({ map: new Map(), error: e.message }))
-  const edits = loaded.map
-  const editsError = loaded.error
-  const byMonth = months.map(m => {
-    const own = rows.filter(r => r.ledger_month === m)
-    const objects = reconcileMonth(m, own.map(fromDb), sales.filter(s => s.ledger_month === m), edits)
-    const tab = own[0]?.tab ?? `${monthRu(m)} ${m.slice(2, 4)}`
-    return {
-      month: m, tab, objects, t: periodTotals(objects),
-      // До первой вкладки «Маржи» поправлять в книге нечего — этих месяцев в ней нет.
-      fixes: m < MARGIN_SINCE ? [] : objects.flatMap(o => o.issues.filter(i => needsFix(o, i)).map(i => fixLine({ month: m, tab }, o, i))),
-    }
-  }).filter(x => x.objects.length > 0)
+  // Внесённое в приложении — поверх книги (loadMarginMonths).
+  const { byMonth: loadedMonths, editsError } = await loadMarginMonths(svc, months)
+  const byMonth = loadedMonths.map(({ month: m, tab, objects }) => ({
+    month: m, tab, objects, t: periodTotals(objects),
+    // До первой вкладки «Маржи» поправлять в книге нечего — этих месяцев в ней нет.
+    fixes: m < MARGIN_SINCE ? [] : objects.flatMap(o => o.issues.filter(i => needsFix(o, i)).map(i => fixLine({ month: m, tab }, o, i))),
+  }))
   const total = periodTotals(byMonth.flatMap(x => x.objects))
   const fixes = byMonth.flatMap(x => x.fixes)
   const beforeBook = months[0] < MARGIN_SINCE

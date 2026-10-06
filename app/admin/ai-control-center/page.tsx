@@ -7,33 +7,13 @@ import {
   SEVERITY_LABEL, SEVERITY_COLOR, FIX_ACTION_LABEL, LOG_KEY,
   type CheckResult, type CheckStatus, type FixStatus, type IssueMeta, type FixLogEntry,
 } from '@/lib/healthCheckRunner'
-import { calcFinancialModel } from '@/lib/pricing/financialModel'
-import { PERSPECTIVES, REC_STATUS_LABEL, type Recommendation, type RecStatus } from '@/lib/ai/recommendationTypes'
+import { PERSPECTIVES, REC_STATUS_LABEL, factLine, type Recommendation, type RecStatus } from '@/lib/ai/recommendationTypes'
 import LiveHealthPanel, { liveSummary, type LiveHealth } from '@/components/admin/LiveHealthPanel'
+import SystemFactsEditor from '@/components/admin/SystemFactsEditor'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'health' | 'calculators' | 'ai' | 'recommendations' | 'log'
-
-type CalcBreakdown = {
-  materialName: string
-  widthMm: number
-  heightMm: number
-  areaSqm: number
-  costPerSqm: number
-  wastePct: number
-  materialCost: number
-  ledCost: number
-  directCost: number
-  marginPct: number
-  taxPct: number
-  marginAmount: number
-  taxAmount: number
-  productPrice: number
-  installCost: number | null
-  deliveryCost: number | null
-  totalPrice: number
-}
+type Tab = 'overview' | 'health' | 'ai' | 'recommendations' | 'log'
 
 const PRIORITY_COLOR: Record<string, string> = {
   critical: 'bg-red-100 text-red-700 border border-red-200',
@@ -156,6 +136,17 @@ function RecommendationCard({
         {rec.impact && <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Чем это стоит</p><p className="text-[12px] text-[#3a3a38]">{rec.impact}</p></div>}
         {rec.action && <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Что сделать</p><p className="text-[12px] text-[#3a3a38]">{rec.action}</p></div>}
         {rec.metric && <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2"><p className="text-[11px] text-emerald-800"><b>Результат:</b> {rec.metric}</p></div>}
+        {rec.evidence && rec.evidence.facts.length > 0 && (
+          <div className="rounded-lg border border-[#e8e8e5] px-3 py-2">
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Цифры, на которых держится вывод</p>
+            <ul className="space-y-0.5">
+              {rec.evidence.facts.map(f => (
+                <li key={f.id} className="text-[11px] text-[#3a3a38]">{factLine(f)} <span className="text-[#9a9a95]">· {f.source}</span>{f.id === rec.evidence?.check && <span className="text-emerald-700"> · сверим через месяц</span>}</li>
+              ))}
+            </ul>
+            {rec.evidence.unverified.length > 0 && <p className="text-[11px] text-amber-700 mt-1">В тексте есть числа не из данных: {rec.evidence.unverified.join(', ')} — проверьте, прежде чем опираться.</p>}
+          </div>
+        )}
         {rec.status === 'done' && (
           <div className="rounded-lg bg-[#f5f5f3] px-3 py-2">
             <p className="text-[11px] text-[#3a3a38]"><b>Сделано{rec.done_at ? ` ${new Date(rec.done_at).toLocaleDateString('ru-RU')}` : ''}.</b> {rec.result_note ?? 'Итог не записан'}</p>
@@ -210,10 +201,6 @@ export default function AIControlCenter() {
   const [fixLog, setFixLog]       = useState<FixLogEntry[]>([])
   const [canFix, setCanFix]       = useState(false)
   const [userEmail, setUserEmail] = useState('')
-
-  // ── Calculator state ────────────────────────────────────────────────────────
-  const [calcData, setCalcData]   = useState<CalcBreakdown | null>(null)
-  const [calcLoading, setCalcLoading] = useState(false)
 
   // ── AI analysis state ───────────────────────────────────────────────────────
   const [perspective, setPerspective]  = useState('ceo')
@@ -326,59 +313,6 @@ export default function AIControlCenter() {
     }).catch(() => {})
   }
 
-  // ── Calculator ──────────────────────────────────────────────────────────────
-
-  // Пример формулы цены на зеркале 900×500 по канонической формуле проекта:
-  // цена = себестоимость ÷ (1 − маржа − налог), маржа и налог 12% — из финансовых
-  // настроек зеркал. Раньше здесь была маржа без налога и вшитые 2500/1200 ₽.
-  const loadCalcExample = useCallback(async () => {
-    setCalcLoading(true)
-    try {
-      const sb = createClient()
-      const [glassRes, finRes, servRes, ledRes] = await Promise.all([
-        sb.from('glass_price_matrix').select('name, price').eq('price_type', 'cost').eq('category', 'mirror').limit(1).single(),
-        sb.from('financial_settings').select('default_margin, tax_percent').eq('product_type', 'mirror').eq('tier', 'standard').limit(1).maybeSingle(),
-        sb.from('services').select('name, price').eq('active', true),
-        sb.from('mirror_lighting_components').select('cost_price, unit').eq('component_type', 'led_strip').eq('active', true).limit(1).single(),
-      ])
-
-      const glass    = glassRes.data
-      const fin      = finRes.data as { default_margin: number | string; tax_percent: number | string } | null
-      const services = servRes.data ?? []
-      const led      = ledRes.data
-      if (!glass || !fin) { setCalcData(null); return }
-
-      const W = 900, H = 500
-      const areaSqm   = (W * H) / 1_000_000
-      const wastePct  = 10
-      const matCost   = Math.round(areaSqm * (1 + wastePct / 100) * glass.price)
-      const ledCost   = led ? Math.round((2 * (W + H) / 1000) * led.cost_price) : 0
-      const directCost = matCost + ledCost
-      const marginPct = Number(fin.default_margin)
-      const taxPct    = Number(fin.tax_percent)
-      const model = calcFinancialModel({ directCost, marginPercent: marginPct, taxPercent: taxPct })
-      if (!model) { setCalcData(null); return }
-
-      const installSvc  = services.find(s => s.name?.toLowerCase().includes('монтаж'))
-      const deliverySvc = services.find(s => s.name?.toLowerCase().includes('доставка'))
-      const installCost  = installSvc ? Math.round(installSvc.price) : null
-      const deliveryCost = deliverySvc ? Math.round(deliverySvc.price) : null
-      const productPrice = Math.round(model.basePrice)
-
-      setCalcData({
-        materialName: glass.name, widthMm: W, heightMm: H, areaSqm,
-        costPerSqm: glass.price, wastePct, materialCost: matCost, ledCost, directCost,
-        marginPct, taxPct, marginAmount: model.marginAmount, taxAmount: model.taxAmount, productPrice,
-        installCost, deliveryCost,
-        totalPrice: productPrice + (installCost ?? 0) + (deliveryCost ?? 0),
-      })
-    } catch { setCalcData(null) }
-    finally { setCalcLoading(false) }
-  }, [])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (tab === 'calculators') loadCalcExample() }, [tab, loadCalcExample])
-
   // ── AI Analysis ─────────────────────────────────────────────────────────────
 
   async function runAIAnalysis() {
@@ -438,13 +372,11 @@ export default function AIControlCenter() {
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: 'overview',        label: 'Обзор' },
     { id: 'health',          label: 'Справочники', badge: errorCount + warnCount > 0 ? errorCount + warnCount : undefined },
-    { id: 'calculators',     label: 'Формула цены' },
     { id: 'ai',              label: 'AI Анализ' },
     { id: 'recommendations', label: 'Рекомендации', badge: recCount('new') || undefined },
     { id: 'log',             label: 'Журнал' },
   ]
 
-  const fmt = (n: number) => n.toLocaleString('ru-RU')
   const liveSum = liveSummary(live)
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -647,85 +579,6 @@ export default function AIControlCenter() {
         </div>
       )}
 
-      {/* ══════════════════════ CALCULATORS ══════════════════════ */}
-      {tab === 'calculators' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-[#e8e8e5] px-5 py-4">
-            <p className="text-[13px] font-semibold text-[#2a2a28]">Что это за вкладка</p>
-            <p className="text-[12px] text-[#6b6b66] mt-1 max-w-3xl">
-              Наглядный пример, как система считает цену клиенту: на зеркале 900×500 мм по текущим ценам и финансовым настройкам.
-              Формула та же, что в калькуляторах: цена = себестоимость ÷ (1 − маржа − налог). Меняются настройки — меняется пример.
-            </p>
-          </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Пример расчёта</h2>
-            {calcLoading ? (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] p-8 text-center">
-                <p className="text-[13px] text-[#9a9a95]">Загрузка данных...</p>
-              </div>
-            ) : calcData ? (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-                <div className="bg-[#fafaf8] px-5 py-3 border-b border-[#f0f0ec]">
-                  <p className="text-[13px] font-semibold text-[#2a2a28]">Зеркало {calcData.widthMm}×{calcData.heightMm} мм</p>
-                  <p className="text-[11px] text-[#8a8a85]">{calcData.materialName}</p>
-                </div>
-                <div className="divide-y divide-[#f5f5f3]">
-                  {[
-                    { label: 'Площадь', value: `${calcData.areaSqm.toFixed(3)} м²` },
-                    { label: 'Цена материала (себест.)', value: `${fmt(calcData.costPerSqm)} ₽/м²` },
-                    { label: `Материал с потерями +${calcData.wastePct}%`, value: `${fmt(calcData.materialCost)} ₽` },
-                    ...(calcData.ledCost > 0 ? [{ label: 'Подсветка (себест.)', value: `${fmt(calcData.ledCost)} ₽` }] : []),
-                    { label: 'Себестоимость', value: `${fmt(calcData.directCost)} ₽`, bold: true },
-                    { label: `Маржа ${calcData.marginPct}%`, value: `+${fmt(calcData.marginAmount)} ₽` },
-                    { label: `Налог ${calcData.taxPct}%`, value: `+${fmt(calcData.taxAmount)} ₽` },
-                    { label: 'Цена изделия', value: `${fmt(calcData.productPrice)} ₽`, bold: true },
-                    { label: 'Монтаж', value: calcData.installCost != null ? `+${fmt(calcData.installCost)} ₽` : 'не задан в услугах' },
-                    { label: 'Доставка', value: calcData.deliveryCost != null ? `+${fmt(calcData.deliveryCost)} ₽` : 'не задана в услугах' },
-                  ].map((row, i) => (
-                    <div key={i} className={`flex items-center justify-between px-5 py-3 ${row.bold ? 'bg-[#fafaf8]' : ''}`}>
-                      <span className={`text-[12px] ${row.bold ? 'font-semibold text-[#2a2a28]' : 'text-[#5a5a55]'}`}>{row.label}</span>
-                      <span className={`text-[12px] font-mono ${row.bold ? 'font-semibold text-[#111110]' : 'text-[#4a4a46]'}`}>{row.value}</span>
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-between px-5 py-4 bg-[#111110]">
-                    <span className="text-[13px] font-bold text-white">Итого клиенту</span>
-                    <span className="text-[16px] font-bold text-white font-mono">{fmt(calcData.totalPrice)} ₽</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] p-8 text-center">
-                <p className="text-[12px] text-[#9a9a95]">Нет цены зеркала в справочнике стекла или финансовых настроек зеркал</p>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Формула</h2>
-            <div className="space-y-3">
-              {[
-                { step: '1', title: 'Себестоимость', formula: 'материал × (1 + потери) + подсветка', note: 'цены — из справочника стекла и компонентов подсветки' },
-                { step: '2', title: 'Цена изделия', formula: 'себестоимость ÷ (1 − маржа − налог)', note: 'маржа и налог 12% — из финансовых настроек зеркал; накладные уже внутри маржи' },
-                { step: '3', title: 'Итого клиенту', formula: 'цена изделия + монтаж + доставка', note: 'монтаж и доставка — из справочника услуг' },
-              ].map(s => (
-                <div key={s.step} className="bg-white rounded-xl border border-[#e8e8e5] px-5 py-4">
-                  <div className="flex items-start gap-3">
-                    <span className="w-6 h-6 rounded-full bg-[#111110] text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{s.step}</span>
-                    <div>
-                      <p className="text-[12px] font-semibold text-[#2a2a28] mb-1">{s.title}</p>
-                      <code className="text-[11px] text-violet-700 bg-violet-50 px-2 py-1 rounded font-mono block mb-1">{s.formula}</code>
-                      <p className="text-[11px] text-[#8a8a85]">{s.note}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        </div>
-      )}
-
       {/* ══════════════════════ AI ANALYSIS ══════════════════════ */}
       {tab === 'ai' && (
         <div className="grid grid-cols-[1fr_1.5fr] gap-6">
@@ -743,15 +596,17 @@ export default function AIControlCenter() {
               ) : null
             })()}
             <div className="bg-white rounded-xl border border-[#e8e8e5] p-4 space-y-2">
-              <p className="text-[12px] text-[#3a3a38]">Сейчас AI видит за последние 30 дней:</p>
+              <p className="text-[12px] text-[#3a3a38]">AI видит цифры, посчитанные кодом из учёта, — каждую с периодом и источником:</p>
               <ul className="text-[11px] text-[#6b6b66] list-disc pl-4 space-y-0.5">
-                <li>заявки CRM: сколько, квалифицированы, отказ, дошли до замера;</li>
-                <li>число расчётов и B2B-заказов;</li>
-                <li>пустые разделы базы знаний и вопросы, на которые бот не ответил;</li>
-                <li>прошлые рекомендации и ваши решения по ним.</li>
+                <li>«Продажи M-Glass»: сумма, заказы, средний чек за прошлый и позапрошлый месяц, по менеджерам;</li>
+                <li>«Маржа»: маржа закрытых заказов за три месяца, сколько закрыто и сколько ждут расходов;</li>
+                <li>«Показатели менеджеров»: разговоры, замеры, оплаты, деньги, разговор → замер;</li>
+                <li>B2B: запущено в работу, клиенты, доля крупнейшего, просроченные отгрузки;</li>
+                <li>заявки Авито-бота и расчёты за 30 дней, пробелы базы знаний, анкета стратегии, ваши прошлые решения.</li>
               </ul>
-              <p className="text-[11px] text-amber-700">Продаж, маржи, показателей менеджеров и сроков производства в анализе пока нет — это этап 3 маршрута.</p>
+              <p className="text-[11px] text-[#6b6b66]">Рекомендация без опоры на эти цифры не сохраняется. На карточке видно, какие цифры за ней стоят; число в тексте, которого нет в данных, помечено.</p>
             </div>
+            <SystemFactsEditor />
           </div>
 
           {/* Right: AI panel */}
