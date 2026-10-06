@@ -50,6 +50,19 @@ export function formatFactValue(value: number, unit: FactUnit): string {
   return Math.round(value).toLocaleString('ru-RU')
 }
 
+// «127 263 ₽ (сентябрь) → 135 000 ₽ (октябрь), +6,1 %»; процент — в пунктах.
+export function changeText(i: RecRecheck['items'][number]): string {
+  if (i.after == null) return 'сейчас посчитать нельзя — источник не ответил'
+  const arrow = `${formatFactValue(i.before, i.unit)} (${i.beforePeriod}) → ${formatFactValue(i.after, i.unit)} (${i.afterPeriod})`
+  if (i.unit === 'pct') {
+    const d = Math.round((i.after - i.before) * 10) / 10
+    return `${arrow}, ${d > 0 ? '+' : ''}${d.toLocaleString('ru-RU')} п.`
+  }
+  if (!i.before) return arrow
+  const d = Math.round((i.after - i.before) / Math.abs(i.before) * 1000) / 10
+  return `${arrow}, ${d > 0 ? '+' : ''}${d.toLocaleString('ru-RU')} %`
+}
+
 export const factLine = (f: Pick<Fact, 'label' | 'value' | 'unit' | 'period'>) => `${f.label}: ${formatFactValue(f.value, f.unit)} (${f.period})`
 
 export const PERSPECTIVES = [

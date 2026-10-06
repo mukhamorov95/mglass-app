@@ -7,7 +7,7 @@ import {
   SEVERITY_LABEL, SEVERITY_COLOR, FIX_ACTION_LABEL, LOG_KEY,
   type CheckResult, type CheckStatus, type FixStatus, type IssueMeta, type FixLogEntry,
 } from '@/lib/healthCheckRunner'
-import { PERSPECTIVES, REC_STATUS_LABEL, factLine, type Recommendation, type RecStatus } from '@/lib/ai/recommendationTypes'
+import { PERSPECTIVES, REC_STATUS_LABEL, changeText, factLine, type Recommendation, type RecStatus } from '@/lib/ai/recommendationTypes'
 import LiveHealthPanel, { liveSummary, type LiveHealth } from '@/components/admin/LiveHealthPanel'
 import SystemFactsEditor from '@/components/admin/SystemFactsEditor'
 
@@ -150,6 +150,14 @@ function RecommendationCard({
         {rec.status === 'done' && (
           <div className="rounded-lg bg-[#f5f5f3] px-3 py-2">
             <p className="text-[11px] text-[#3a3a38]"><b>Сделано{rec.done_at ? ` ${new Date(rec.done_at).toLocaleDateString('ru-RU')}` : ''}.</b> {rec.result_note ?? 'Итог не записан'}</p>
+            {rec.recheck ? (
+              <ul className="mt-1 space-y-0.5">
+                <li className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide">Сверка {new Date(rec.recheck.at).toLocaleDateString('ru-RU')}</li>
+                {rec.recheck.items.map(i => <li key={i.id} className="text-[11px] text-[#3a3a38]">{i.label}: {changeText(i)}</li>)}
+              </ul>
+            ) : rec.evidence?.facts.length ? (
+              <p className="text-[11px] text-[#9a9a95] mt-1">Сверка цифр — через 30 дней после «сделано», придёт в Telegram.</p>
+            ) : null}
           </div>
         )}
       </div>
