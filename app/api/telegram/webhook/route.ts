@@ -10,6 +10,8 @@ import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
 import { sendMessage as sendWA } from '@/lib/wazzup'
 import { captureMontageMedia } from '@/lib/montageMedia'
 import { appUrl, internalAppUrl } from '@/lib/appUrl'
+import { isOwnerRole } from '@/lib/getRole'
+import { decideRecommendation, parseRecCallback, recKeyboard, recText, undecidedRecommendations } from '@/lib/ai/recTelegram'
 
 export const maxDuration = 60
 
@@ -67,6 +69,7 @@ const HELP_TEXT = [
   '/calc — расчёт цены (текстом или голосом)',
   '/task — задача в систему (Клод заберёт при запуске)',
   '/agents — AI-агенты: вкл/выкл, запуск',
+  '/recs — рекомендации AI: решить кнопками',
   '/health — статус интеграций',
   '',
   'В любом режиме слова <b>«меню», «выход», «отмена»</b> возвращают в главное меню.',
@@ -374,6 +377,25 @@ async function handleHealth(chatId: number) {
   await sendMessage(chatId, checks.join('\n'), [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
 }
 
+// ─── Рекомендации AI Control Center ──────────────────────────────────────────
+
+// Бота привязывают и менеджерам, а решение по рекомендации — владельца.
+async function ownerDecider(userId: string): Promise<string | null> {
+  const { data } = await db().from('users').select('role, email').eq('id', userId).maybeSingle()
+  return data && isOwnerRole(data.role) ? `${data.email ?? 'владелец'} · Telegram` : null
+}
+
+async function handleRecsList(chatId: number) {
+  const recs = await undecidedRecommendations(db())
+  if (!recs.length) {
+    await sendMessage(chatId, '✅ Все рекомендации AI разобраны.')
+    return
+  }
+  const shown = recs.slice(0, 10)
+  await sendMessage(chatId, `💡 <b>Ждут решения: ${recs.length}</b>${recs.length > shown.length ? ` — здесь ${shown.length} самых важных` : ''}`)
+  for (const r of shown) await sendMessage(chatId, recText(r), recKeyboard(r))
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 // Telegram update — произвольная структура API, глубокая типизация здесь не оправдана
@@ -476,6 +498,11 @@ async function handle(update: any, baseUrl: string) {
       await handleAgentsMenu(chatId)
       return
     }
+    if (cmd === '/recs' || plain === 'рекомендации') {
+      if (await ownerDecider(tgUser.user_id)) await handleRecsList(chatId)
+      else await sendMessage(chatId, '🔒 Рекомендации AI решают только владельцы.')
+      return
+    }
     if (cmd === '/calc') {
       await sendMessage(chatId, '🧮 <b>Расчёт цены</b>\n\nОпиши изделие и размеры текстом или голосом.\n<i>Пример: Зеркало 800×600, Душевая 1000×2000 с монтажом</i>')
       await setSession(tid, 'calc_input')
@@ -493,6 +520,25 @@ async function handle(update: any, baseUrl: string) {
     await answerCallback(cb.id)
     const data: string  = cb.data
     const msgId: number = cb.message.message_id
+
+    // Рекомендации AI: список и решение кнопкой под сообщением
+    if (data === 'recs:list' || data.startsWith('rec:')) {
+      const who = await ownerDecider(tgUser.user_id)
+      if (!who) {
+        await sendMessage(chatId, '🔒 Рекомендации AI решают только владельцы.')
+        return
+      }
+      if (data === 'recs:list') {
+        await handleRecsList(chatId)
+        return
+      }
+      const d = parseRecCallback(data)
+      if (!d) return
+      const rec = await decideRecommendation(db(), d.id, d.status, who)
+      if (!rec) await editMessage(chatId, msgId, '⚠️ Рекомендация не найдена — возможно, её удалили.')
+      else await editMessage(chatId, msgId, recText(rec), recKeyboard(rec))
+      return
+    }
 
     // Главное меню
     if (data === 'menu:main') {

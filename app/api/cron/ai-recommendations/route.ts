@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { generateRecommendations, perspectiveForDay } from '@/lib/ai/recommendations'
-import { notifyAdmins } from '@/lib/telegram'
-import { appUrl } from '@/lib/appUrl'
+import { notifyAdminsWithKeyboard } from '@/lib/telegram'
+import { recKeyboard, recText } from '@/lib/ai/recTelegram'
 import { aiErrorText } from '@/lib/health/liveChecks'
 import { withCronRun } from '@/lib/cronRuns'
 
@@ -22,18 +22,20 @@ async function run(req: NextRequest) {
   const sb = createServiceClient()
   const { count } = await sb.from('ai_recommendations').select('id', { count: 'exact', head: true }).eq('status', 'new')
   if ((count ?? 0) >= MAX_UNDECIDED) {
+    // Напоминание по понедельникам и четвергам, а не каждый день: куча без решений
+    // видна и так, ежедневный повтор учит его пролистывать.
+    const day = new Date(Date.now() + 3 * 3_600_000).getUTCDay()
+    if (day === 1 || day === 4) {
+      await notifyAdminsWithKeyboard(
+        `💡 <b>Ждут решения: ${count} рекомендаций AI.</b> Новые не создаются, пока эти не разобраны.`,
+        [[{ text: '💡 Разобрать здесь', callback_data: 'recs:list' }]],
+      ).catch(() => {})
+    }
     return NextResponse.json({ ok: true, skipped: 'undecided', undecided: count })
   }
   try {
     const created = await generateRecommendations(sb, { perspective: perspectiveForDay(), count: 3, source: 'cron' })
-    if (created.length) {
-      await notifyAdmins([
-        `💡 <b>AI Control Center: новых рекомендаций — ${created.length}</b>`,
-        ...created.map(r => `• ${r.title}`),
-        '',
-        'Решить: в работу / в архив / убрать — ' + appUrl('/admin/ai-control-center'),
-      ].join('\n')).catch(() => {})
-    }
+    for (const r of created) await notifyAdminsWithKeyboard(recText(r), recKeyboard(r)).catch(() => {})
     return NextResponse.json({ ok: true, created: created.length })
   } catch (e) {
     return NextResponse.json({ ok: false, error: aiErrorText(e) }, { status: 500 })
