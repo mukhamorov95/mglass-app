@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { generateRecommendations, perspectiveForDay } from '@/lib/ai/recommendations'
 import { notifyAdmins } from '@/lib/telegram'
 import { appUrl } from '@/lib/appUrl'
+import { aiErrorText } from '@/lib/health/liveChecks'
 
 // Ежедневные рекомендации AI Control Center. Если владелец не разобрал прошлые —
 // новые не копим: рекомендация без решения ничего не меняет, а куча без решений
@@ -34,6 +35,6 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, created: created.length })
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : 'error' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: aiErrorText(e) }, { status: 500 })
   }
 }
