@@ -5,7 +5,7 @@
 **Проверка миграции `20260930_pricing_inputs_write_rls.sql` (PR #852) на живой базе:** применена, но записи в `schema_migrations` нет (идемпотентна, повтор безопасен). Пробы под ролями (всё откатано): правят `materials` — admin и buyer; правит `financial_settings` — только admin; manager/production/accountant/measurer — 0 строк; partner не видит ничего; anon — permission denied. `SENSITIVE_TABLES` содержит обе таблицы.
 
 **Открытые вопросы:**
-- В корне сайта на хостинге лежат и отдаются публично 4 zip-архива (`zerkala-site-2026-10-05.zip`, `zerkala-media-1.zip`, `zerkala-media-2.zip`, старый `zerkala-b.zip`) — внутри только файлы сайта; удаление в ISPmanager безвозвратное — клик владельца.
+- ~~Zip-архивы выкладки в корне сайта отдавались публично~~ — 06.10 все пять (`zerkala-site-2026-10-05`, `zerkala-media-1/2`, старые `zerkala-a`, `zerkala-b`) перенесены в `~/` хостинга, по адресам сайта 404. Дальше архивы грузить сразу в `~/` и распаковывать в `www/mglass-zerkala.ru`.
 - Чтение `materials` / `financial_settings` (себестоимость, маржа) открыто всему штату (`NOT is_partner()`): закрывать ли — решение владельца; сначала проверить, какие калькуляторы читают их под менеджером.
 - Мелочи RLS: `can_edit_pricing()` EXECUTE у PUBLIC (для anon вернёт false), две одинаковые SELECT-политики у `financial_settings`.
 
