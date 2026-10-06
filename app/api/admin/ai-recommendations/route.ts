@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { generateRecommendations, type RecStatus } from '@/lib/ai/recommendations'
 import { aiErrorText } from '@/lib/health/liveChecks'
+import { decideRecommendation } from '@/lib/ai/recTelegram'
 
 // Рекомендации AI Control Center. Только владелец: он принимает решение по каждой.
 
@@ -42,17 +43,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Нужны id и решение' }, { status: 400 })
   }
   const { data: { user } } = await (await createClient()).auth.getUser()
-  const now = new Date().toISOString()
-  const patch: Record<string, unknown> = {
-    status: body.status, updated_at: now,
-    decided_at: now, decided_by: user?.email ?? null,
+  try {
+    const rec = await decideRecommendation(createServiceClient(), body.id, body.status, user?.email ?? null, body.result_note)
+    if (!rec) return NextResponse.json({ error: 'Рекомендация не найдена' }, { status: 404 })
+    return NextResponse.json(rec)
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
-  if (body.status === 'done') {
-    patch.done_at = now
-    if (typeof body.result_note === 'string') patch.result_note = body.result_note.trim().slice(0, 1000) || null
-  }
-  const { data, error } = await createServiceClient().from('ai_recommendations')
-    .update(patch).eq('id', body.id).select('*').single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
 }
