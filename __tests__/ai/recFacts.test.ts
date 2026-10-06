@@ -53,7 +53,8 @@ describe('managerFacts', () => {
     const f = managerFacts(rows, totals, '2026-09')
     expect(val(f, 'mgr.айжан.conv_measure.last_month')).toBe(8)
     expect(val(f, 'mgr.команда.talks.last_month')).toBe(62)
-    expect(f.some(x => x.id.includes('conv_payment'))).toBe(false)
+    expect(f.filter(x => x.id.includes('.conv_')).map(x => x.id))
+      .toEqual(['mgr.айжан.conv_measure.last_month', 'mgr.команда.conv_measure.last_month'])
   })
 })
 

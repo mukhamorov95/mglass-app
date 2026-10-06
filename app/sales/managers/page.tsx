@@ -36,6 +36,9 @@ const monthRu = (ym: string) => `${MONTHS_RU[Number(ym.slice(5, 7)) - 1]} ${ym.s
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const num = (n: number) => Math.round(n).toLocaleString('ru-RU')
 const conv = (v: number | null) => (v == null ? '—' : `${v}%`)
+const TO_MEASURE = 'Назначено замеров на 100 разговоров того же периода'
+const NO_SHARE_DONE = 'Без процента от назначенных: проводят и замеры, назначенные в прошлом месяце, — доля выходила за 100 %'
+const NO_SHARE_PAID = 'Без процента от замеров: оплаты периода идут и по замерам прошлых месяцев, и по сделкам без замера — доля доходила до 500 %'
 const day = (d: string | null) => (d ? d.split('-').reverse().join('.') : '—')
 const START: Query = { mode: 'month', month: '', from: '', to: '', managers: [] }
 const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
@@ -149,7 +152,7 @@ export default function ManagerStatsPage() {
           <div className={tile}>
             <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Замеры</p>
             <p className="text-[20px] font-bold text-[#111110] mt-0.5">{num(t?.measure_done ?? 0)}</p>
-            <p className="text-[11px] text-[#c4c4be] mt-0.5">проведено из {num(t?.measure_assigned ?? 0)} назначенных</p>
+            <p className="text-[11px] text-[#c4c4be] mt-0.5">проведено · назначено {num(t?.measure_assigned ?? 0)}</p>
           </div>
           <div className={tile}>
             <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Оплат</p>
@@ -172,8 +175,8 @@ export default function ManagerStatsPage() {
                   <th className="text-left font-medium px-3 py-2">Менеджер</th>
                   <th className="text-right font-medium px-3 py-2">Разговоры</th>
                   <th className="text-right font-medium px-3 py-2">Замер назначен</th>
-                  <th className="text-right font-medium px-3 py-2">Замер проведён</th>
-                  <th className="text-right font-medium px-3 py-2">Оплат</th>
+                  <th className="text-right font-medium px-3 py-2" title={NO_SHARE_DONE}>Замер проведён</th>
+                  <th className="text-right font-medium px-3 py-2" title={NO_SHARE_PAID}>Оплат</th>
                   <th className="text-right font-medium px-3 py-2">Предоплаты</th>
                   <th className="text-right font-medium px-3 py-2">Остатки</th>
                   <th className="text-right font-medium px-3 py-2">Всего денег</th>
@@ -197,11 +200,11 @@ export default function ManagerStatsPage() {
                       </button>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{num(r.talks)}</td>
-                    {/* Рядом с числом — конверсия из предыдущего шага: столбик без неё
-                        не говорит, много это или мало. */}
-                    <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{num(r.measure_assigned)} <span className="text-[11px] text-[#c4c4be]">{conv(r.toMeasure)}</span></td>
-                    <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{num(r.measure_done)} <span className="text-[11px] text-[#c4c4be]">{conv(r.toDone)}</span></td>
-                    <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{num(r.payments)} <span className="text-[11px] text-[#c4c4be]">{conv(r.toPayment)}</span></td>
+                    {/* Процент только у назначенных: у проведённых и оплат счётчики месяца
+                        из разных когорт, доля выходила за 100 % (см. StatRow.toMeasure). */}
+                    <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{num(r.measure_assigned)} <span className="text-[11px] text-[#c4c4be]" title={TO_MEASURE}>{conv(r.toMeasure)}</span></td>
+                    <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{num(r.measure_done)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{num(r.payments)}</td>
                     <td className="px-3 py-2 text-right font-mono text-[#111110]">{fmt(r.prepay)}</td>
                     <td className="px-3 py-2 text-right font-mono text-[#111110]">{fmt(r.remainder)}</td>
                     <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700 whitespace-nowrap">
@@ -222,9 +225,9 @@ export default function ManagerStatsPage() {
                   <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
                     <td className="px-3 py-2 text-[#111110]">Итого{q.managers.length ? ` (${q.managers.join(', ')})` : ''}</td>
                     <td className="px-3 py-2 text-right font-mono text-[#111110]">{num(t.talks)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-[#111110]">{num(t.measure_assigned)} <span className="text-[11px] text-[#9a9a95]">{conv(t.toMeasure)}</span></td>
-                    <td className="px-3 py-2 text-right font-mono text-[#111110]">{num(t.measure_done)} <span className="text-[11px] text-[#9a9a95]">{conv(t.toDone)}</span></td>
-                    <td className="px-3 py-2 text-right font-mono text-[#111110]">{num(t.payments)} <span className="text-[11px] text-[#9a9a95]">{conv(t.toPayment)}</span></td>
+                    <td className="px-3 py-2 text-right font-mono text-[#111110]">{num(t.measure_assigned)} <span className="text-[11px] text-[#9a9a95]" title={TO_MEASURE}>{conv(t.toMeasure)}</span></td>
+                    <td className="px-3 py-2 text-right font-mono text-[#111110]">{num(t.measure_done)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-[#111110]">{num(t.payments)}</td>
                     <td className="px-3 py-2 text-right font-mono text-[#111110]">{fmt(t.prepay)}</td>
                     <td className="px-3 py-2 text-right font-mono text-[#111110]">{fmt(t.remainder)}</td>
                     <td className="px-3 py-2 text-right font-mono text-emerald-700">{fmt(t.money_total)}</td>

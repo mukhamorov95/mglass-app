@@ -29,13 +29,25 @@ describe('свод показателей менеджеров', () => {
     expect(gap.rows.find(r => r.manager === 'Айжан')).toMatchObject({ moneySum: 100, moneyGap: -10 })
   })
 
-  it('конверсии считаются по своим базам, деление на ноль даёт «—», а не ∞', () => {
+  it('доля назначенных замеров — от разговоров, без разговоров «—», а не ∞', () => {
     const { rows } = foldStats(FACTS)
-    expect(rows[0]).toMatchObject({ toMeasure: 3, toDone: 100, toPayment: 71 })
-    const yana = rows[1]
-    expect(yana.toMeasure).toBe(0)      // 94 разговора и ни одного замера — это ноль, а не «нет данных»
-    expect(yana.toDone).toBeNull()      // назначенных не было — делить не на что
-    expect(yana.toPayment).toBeNull()   // проведённых не было — конверсии нет
+    expect(rows[0].toMeasure).toBe(3)
+    expect(rows[1].toMeasure).toBe(0)   // 94 разговора и ни одного замера — это ноль, а не «нет данных»
+    const vlad = foldStats([f('Влад', 'measure_assigned', 1), f('Влад', 'payments', 3)]).rows[0]
+    expect(vlad.toMeasure).toBeNull()   // разговоров в книге нет — делить не на что
+  })
+
+  it('«назначен → проведён» и «проведён → оплата» не считаются: счётчики месяца из разных когорт', () => {
+    // Айжан, сентябрь 2026 в книге: оплаты шли и по замерам августа, доля вышла бы 250 %.
+    const { rows, totals } = foldStats([
+      f('Айжан', 'talks', 62), f('Айжан', 'measure_assigned', 5),
+      f('Айжан', 'measure_done', 2), f('Айжан', 'payments', 5),
+    ])
+    for (const r of [rows[0], totals]) {
+      expect(r).not.toHaveProperty('toDone')
+      expect(r).not.toHaveProperty('toPayment')
+      expect(r.toMeasure).toBe(8)
+    }
   })
 
   it('итог сходится со строками, средний чек — из предоплат на оплату', () => {
