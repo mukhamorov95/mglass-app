@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
 import { b2bPaymentKey, salePaymentKey } from '@/lib/payments/paymentKeys'
 import { upsertSaleFromB2B, voidSale } from '@/lib/salesLedger'
+import { withCronRun } from '@/lib/cronRuns'
 
 export const maxDuration = 300
 
@@ -23,7 +24,7 @@ const parseNotes = (raw: unknown): Notes => {
   try { return JSON.parse(String(raw)) as Notes } catch { return {} }
 }
 
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get('authorization')
   if (!secret || auth !== `Bearer ${secret}`) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -199,3 +200,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ ok: true, ...stat, corePayments: liveCount })
 }
+
+export const GET = (req: NextRequest) => withCronRun('payments-reconcile', req, () => run(req))

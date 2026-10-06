@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { notifyAdmins } from '@/lib/telegram'
 import { formatMarginReport, syncMarginBook } from '@/lib/sales/marginBook'
+import { withCronRun } from '@/lib/cronRuns'
 
 export const maxDuration = 300
 
@@ -9,7 +10,7 @@ export const maxDuration = 300
 // объектов и себестоимость для витрины CFO. Отчёт владельцу — каждый день: что
 // посчитано точно и что поправить в книгах.
 
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -27,3 +28,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }
+
+export const GET = (req: NextRequest) => withCronRun('margin-book-sync', req, () => run(req))

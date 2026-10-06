@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
 import { liveOrders, orderAmount } from '@/lib/liveOrders'
 import { companyFixed } from '@/lib/breakeven'
+import { withCronRun } from '@/lib/cronRuns'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -24,7 +25,7 @@ function parseNotes(raw: unknown): Record<string, unknown> {
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 
-export async function GET(req: Request) {
+async function run(req: Request) {
   // CRON_FAIL_GUARD: падение крона раньше было тихим 500 — теперь пинг владельцу
   try {
     const auth = req.headers.get('authorization')
@@ -170,3 +171,5 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
+
+export const GET = (req: Request) => withCronRun('morning-briefing', req, () => run(req))

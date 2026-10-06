@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { withCronRun } from '@/lib/cronRuns'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -24,7 +25,7 @@ async function sendTelegram(chatId: number, text: string) {
   })
 }
 
-export async function GET(req: Request) {
+async function run(req: Request) {
   if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -81,3 +82,5 @@ export async function GET(req: Request) {
 
   return NextResponse.json({ ok: errors.length === 0, date, results, totalRows })
 }
+
+export const GET = (req: Request) => withCronRun('backup', req, () => run(req))

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { notifyAdmins } from '@/lib/telegram'
 import { formatSyncReport, syncSalesBook } from '@/lib/sales/salesSheetSync'
+import { withCronRun } from '@/lib/cronRuns'
 
 export const maxDuration = 300
 
@@ -10,7 +11,7 @@ export const maxDuration = 300
 // владельцу — каждый день: просил сверку каждое утро, молчание читалось бы
 // как «не запускалось».
 
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -34,3 +35,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }
+
+export const GET = (req: NextRequest) => withCronRun('sales-sheet-sync', req, () => run(req))

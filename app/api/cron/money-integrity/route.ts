@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { notifyAdmins } from '@/lib/telegram'
+import { withCronRun } from '@/lib/cronRuns'
 
 export const maxDuration = 120
 
@@ -16,7 +17,7 @@ export const maxDuration = 120
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const TOL = 1 // рубли: округление построчной скидки допускает копейки
 
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -92,3 +93,5 @@ export async function GET(req: NextRequest) {
     monthsChecked: monthsAll.size, baselineMonths: baseline.size,
   })
 }
+
+export const GET = (req: NextRequest) => withCronRun('money-integrity', req, () => run(req))
