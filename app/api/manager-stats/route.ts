@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAnyPageAccess } from '@/lib/apiAuth'
-import { getSessionUser } from '@/lib/getRole'
-import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { statsViewer } from '@/lib/sales/managerStatsViewer'
 import { bookNames } from '@/lib/sales/bookNames'
 import { resolvePeriod, parseManagers } from '@/lib/sales/period'
 import { mskDayKey } from '@/lib/time'
@@ -16,17 +14,9 @@ export const dynamic = 'force-dynamic'
 // (дни). Догоняется scripts/import-manager-stats.mjs.
 
 export async function GET(req: NextRequest) {
-  const guard = await requireAnyPageAccess(['/sales/managers'])
-  if (guard instanceof NextResponse) return guard
-
-  const user = await getSessionUser()
-  if (!user) return NextResponse.json({ error: 'no user' }, { status: 401 })
-  const sbUser = await createClient()
-  const { data: profile } = await sbUser.from('users')
-    .select('name, role, can_view_all_deals').eq('id', user.id).maybeSingle()
-  const me = (profile?.name as string) ?? user.email ?? ''
-  const canAll = ['admin', 'ceo', 'commercial', 'cfo'].includes((profile?.role as string) ?? '')
-    || profile?.can_view_all_deals === true
+  const viewer = await statsViewer()
+  if (viewer instanceof NextResponse) return viewer
+  const { me, canAll } = viewer
 
   const sp = new URL(req.url).searchParams
   const period = resolvePeriod(

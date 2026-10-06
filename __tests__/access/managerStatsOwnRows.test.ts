@@ -224,10 +224,11 @@ describe('manager_day_stats: кто чей день читает', () => {
 })
 
 describe('база и экран согласны, кому видны все', () => {
+  // canAll для таблицы и для раскрытия по дням — одна функция statsViewer.
   it('роли руководства в политиках = роли canAll в /api/manager-stats', () => {
-    const route = readFileSync(join(process.cwd(), 'app/api/manager-stats/route.ts'), 'utf8')
+    const route = readFileSync(join(process.cwd(), 'lib/sales/managerStatsViewer.ts'), 'utf8')
     const inRoute = route.match(/const canAll = \[([^\]]*)\]\.includes/)
-    expect(inRoute, 'canAll не найден в /api/manager-stats').not.toBeNull()
+    expect(inRoute, 'canAll не найден в lib/sales/managerStatsViewer.ts').not.toBeNull()
     const inSql = [OWN_ROWS, DAY_FLAG].flatMap(f => [...file(f).matchAll(/c\.u_role in \(([^)]*)\)/g)].map(m => m[1]))
     expect(inSql).toHaveLength(3)
     const roles = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map(x => x[1]).sort()

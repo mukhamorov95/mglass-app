@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { foldStats, splitPeriod, describeNote, type StatFact } from '@/lib/sales/managerStats'
+import { foldStats, splitPeriod, describeNote, dayLedger, type StatFact } from '@/lib/sales/managerStats'
 
 const f = (manager: string, metric: string, value: number, stat_date = '2026-09-01'): StatFact =>
   ({ manager, metric, value, stat_date })
@@ -84,5 +84,46 @@ describe('период для показателей: целые месяцы и
   it('подпись расхождения называет день, который книга потеряла', () => {
     expect(describeNote({ month: '2025-07', manager: 'Яна', metric: 'prepay', book: 1405965, days: 1426260, value: 1426260, kind: 'total_misses_last_day', note_day: '2025-07-31' }))
       .toContain('31.07.2025')
+  })
+})
+
+describe('dayLedger', () => {
+  const f = (stat_date: string, metric: string, value: number) => ({ stat_date, manager: 'Яна', metric, value })
+
+  it('дни с деньгами по порядку; разговоры и нули не попадают', () => {
+    const lines = dayLedger([
+      f('2026-06-15', 'prepay', 100_000), f('2026-06-15', 'money_total', 100_000), f('2026-06-15', 'payments', 1),
+      f('2026-06-03', 'remainder', 40_000), f('2026-06-03', 'money_total', 40_000),
+      f('2026-06-04', 'talks', 12), f('2026-06-05', 'prepay', 0),
+    ], [], [])
+    expect(lines.map(l => l.date)).toEqual(['2026-06-03', '2026-06-15'])
+    expect(lines[1]).toMatchObject({ payments: 1, prepay: 100_000, remainder: 0, money_total: 100_000 })
+  })
+
+  it('целый месяц: сумма без дня отдельной строкой, и список складывается в итог месяца', () => {
+    const days = [f('2026-06-10', 'remainder', 20_000), f('2026-06-10', 'money_total', 20_000)]
+    const totals = [
+      { month: '2026-06', metric: 'remainder', value: 70_794 },
+      { month: '2026-06', metric: 'money_total', value: 70_794 },
+      { month: '2026-06', metric: 'payments', value: 6 },
+      { month: '2026-06', metric: 'prepay', value: 0 },
+    ]
+    const lines = dayLedger(days, totals, ['2026-06'])
+    expect(lines.at(-1)).toEqual({ date: null, month: '2026-06', payments: 6, prepay: 0, remainder: 50_794, money_total: 50_794 })
+    for (const t of totals) expect(lines.reduce((a, l) => a + l[t.metric as 'prepay'], 0)).toBe(t.value)
+  })
+
+  it('итог месяца равен дням — строки «без дня» нет', () => {
+    const lines = dayLedger([f('2026-07-01', 'prepay', 5_000)], [{ month: '2026-07', metric: 'prepay', value: 5_000 }], ['2026-07'])
+    expect(lines).toHaveLength(1)
+  })
+
+  it('месяцы по порядку, «без дня» в конце своего месяца', () => {
+    const lines = dayLedger(
+      [f('2026-02-20', 'prepay', 1), f('2026-03-02', 'prepay', 1)],
+      [{ month: '2026-02', metric: 'prepay', value: 5 }],
+      ['2026-02'],
+    )
+    expect(lines.map(l => l.date)).toEqual(['2026-02-20', null, '2026-03-02'])
   })
 })
