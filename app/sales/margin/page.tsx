@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { mskDayKey } from '@/lib/time'
 import { plural } from '@/lib/morning'
 import { shiftMonth } from '@/lib/sales/period'
+import { checkMontage, montageBookCached, orderKey, type MarginOrder, type MontageBook, type MontageCheck } from '@/lib/sales/montageBook'
 import {
   COST_KEYS, COST_RU, MARGIN_SINCE, NO_TAX_DELIVERY_UNTIL, SALE_COLUMNS, costsComplete, fixLine, fromDb, loadEdits, monthGen, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
   type MarginDbRow, type MarginObject, type MarginSale, type PeriodTotals,
@@ -89,6 +90,36 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
   const total = periodTotals(byMonth.flatMap(x => x.objects))
   const fixes = byMonth.flatMap(x => x.fixes)
   const beforeBook = months[0] < MARGIN_SINCE
+
+  // Сверка с «Монтажами»: монтажник и «Дима РОР» по заказам периода. Заказ периода берём
+  // с правками приложения; его строки в других месяцах (доплаты) — как в книге: связи
+  // строки с продажей в таблице нет, она находится только при разборе своего месяца.
+  const periodObjects = byMonth.flatMap(x => x.objects).filter(o => o.order_no)
+  const nos = [...new Set(periodObjects.map(o => o.order_no!))]
+  const [orderRowsRes, montageRes] = await Promise.all([
+    Promise.all(Array.from({ length: Math.ceil(nos.length / 150) }, (_, i) =>
+      svc.from('margin_book_rows').select('order_no, ledger_month, installer, dima')
+        .in('order_no', nos.slice(i * 150, i * 150 + 150)).eq('voided', false).range(0, 4999))),
+    montageBookCached().then(b => ({ b, error: null }), (e: Error) => ({ b: null as MontageBook | null, error: e.message })),
+  ])
+  const orderRowsError = orderRowsRes.find(r => r.error)?.error?.message ?? null
+  const marginOrders = new Map<string, MarginOrder>()
+  const add = (k: string, installer: number | null, dima: number | null) => {
+    const mo = marginOrders.get(k)!
+    if (installer != null) mo.installer = (mo.installer ?? 0) + installer
+    if (dima != null) mo.dima = (mo.dima ?? 0) + dima
+  }
+  for (const o of periodObjects) {
+    const k = orderKey(o.order_no)
+    if (!marginOrders.has(k)) marginOrders.set(k, { order_no: o.order_no!, month: o.month, installer: null, dima: null })
+    add(k, o.costs?.installer ?? null, o.dima)
+  }
+  for (const r of orderRowsRes.flatMap(x => (x.data ?? []) as { order_no: string; ledger_month: string; installer: number | null; dima: number | null }[])) {
+    if (months.includes(r.ledger_month) || !marginOrders.has(orderKey(r.order_no))) continue
+    add(orderKey(r.order_no), r.installer == null ? null : Number(r.installer), r.dima == null ? null : Number(r.dima))
+  }
+  const checks = montageRes.b ? checkMontage([...marginOrders.values()], montageRes.b.orders) : []
+  const checkOf = new Map(checks.map(c => [orderKey(c.order_no), c]))
   const hasOld = byMonth.some(x => oldFormat(x.month) && x.t.closed > 0)
 
   const tile = 'bg-white border border-[#e4e4e0] rounded-xl px-4 py-3'
@@ -194,7 +225,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
                   <span className="text-right font-semibold">{marginRub(m.t)}</span>
                   <span className={`text-right font-semibold ${mCls(marginPct(m.t))}`}>{pct(marginPct(m.t))}{oldFormat(m.month) && m.t.closed > 0 && <span className="text-amber-700" title={OLD_HINT}>*</span>}</span>
                 </summary>
-                <MonthBody m={m} />
+                <MonthBody m={m} checkOf={checkOf} />
               </details>
             ))}
             {byMonth.length > 1 && (
@@ -213,6 +244,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           </div>
         </div>
 
+        <MontageBlock checks={checks} book={montageRes.b} error={montageRes.error ?? orderRowsError} open={mode === 'month'} />
+
         {fixes.length > 0 && (
           <div id="fixes" className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-4">
             <p className="text-[13px] font-semibold text-[#111110] mb-2">✏️ Поправить в книгах · {fixes.length}</p>
@@ -226,6 +259,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           <p>Продажи — сумма всех заказов месяца из «Продаж M-Glass». Закрытый — «закрыт» там или отмечен закрытым в карточке объекта, и у него внесены стекло, фурнитура, конструктор, замерщик, монтажник и доставка. Расходы и маржа — только закрытых, процент маржи — от их продаж. Расходы — прямые по заказам из «Маржи»: стекло, фурнитура, конструктор, замерщик, монтажник, доставка, партнёры, рекламации, налог и бонусы. Статьи складываются здесь, а не берутся из итога книги: число, набранное текстом, книга не считает.</p>
           <p>«Дописать» — заказ закрыт по статусу, но в «Марже» пусто хотя бы в одной из этих шести статей или его там ещё нет. Он в «Не закрыто» и в маржу не входит, пока статью не заполнят. Если расхода не было — поставьте 0 (в книге или в карточке объекта): заказ сразу перейдёт в закрытые. </p>
           <p>* Апрель–июль 2025: в книге «Маржа» нет колонок «Доставка» и «Налог» — доставка считается 0, налог не учтён, поэтому маржа этих месяцев выше сопоставимой с последующими. Добавьте колонки в книгу — сверка прочитает их сама.</p>
+          <p>🔧 Сверка с «Монтажами»: монтажник — сумма выплат по колонкам с именами во всех вкладках книги «Монтажи» (с января 2025), «Дима РОР» — 5 % от маржинального дохода руководителю отдела реализации. В «Марже» — сумма всех строк заказа, с правками из приложения. Книга «Монтажи» только читается, раз в 10 минут.</p>
           <p>✎ — у объекта есть ячейки, внесённые в приложении: они сильнее книги, книга не меняется. Если книга потом заполнит ячейку по-другому, карточка покажет оба значения. Каждая правка — в журнале действий у владельца.</p>
         </div>
       </div>
@@ -233,7 +267,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
   )
 }
 
-function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: PeriodTotals; fixes: string[] } }) {
+function MonthBody({ m, checkOf }: { m: { month: string; objects: MarginObject[]; t: PeriodTotals; fixes: string[] }; checkOf: Map<string, MontageCheck> }) {
   const rows = COST_KEYS.map(k => ({ k, sum: m.t.byCost[k] })).filter(x => x.sum !== 0).sort((a, b) => b.sum - a.sum)
   const shares = roundShares(rows.map(x => x.sum), m.t.closed_sales)
   const sold = m.objects.filter(o => o.sale_id != null)
@@ -284,7 +318,7 @@ function MonthBody({ m }: { m: { month: string; objects: MarginObject[]; t: Peri
                 <MarginObjectRow key={`${o.order_no}-${o.row ?? o.sale_id}`} d={{
                   saleId: o.sale_id, orderNo: o.order_no, client: o.client, manager: o.manager,
                   closed: o.closed, needsCosts: o.closed && !costsComplete(o) && o.month >= MARGIN_SINCE, bookClosed: o.book_closed, amount: o.amount, partnerFee: o.partner_fee,
-                  varTotal: o.var_total, md: o.md, mdPct: o.md_pct, issue: issueText(o),
+                  varTotal: o.var_total, md: o.md, mdPct: o.md_pct, issue: withMontage(issueText(o), o.order_no ? checkOf.get(orderKey(o.order_no)) : undefined),
                   book: o.book_costs, edits: o.edits,
                 }} />
               ))}
@@ -308,6 +342,75 @@ function OpenCell({ t }: { t: PeriodTotals }) {
       {t.open}
       {t.to_fill > 0 && <span className="text-[11px] font-normal text-amber-700" title="закрыты по статусу, но расходы внесены не все — допишите, и заказ войдёт в маржу"> · {t.to_fill} дописать</span>}
     </span>
+  )
+}
+
+function withMontage(issue: string, c: MontageCheck | undefined): string {
+  if (!c?.montage) return issue
+  const extra: string[] = []
+  if (c.installerState === 'diff') extra.push(`«Монтажи»: монтажник ${rub(c.montage.installers)}`)
+  if (c.installerState === 'fill') extra.push(`«Монтажи»: монтажник ${rub(c.montage.installers)} — можно внести`)
+  if (c.dimaState === 'diff') extra.push(`«Монтажи»: Дима ${rub(c.montage.dima ?? 0)}`)
+  if (!extra.length) return issue
+  return issue === '—' ? extra.join('; ') : `${issue}; ${extra.join('; ')}`
+}
+
+function MontageBlock({ checks, book, error, open }: { checks: MontageCheck[]; book: MontageBook | null; error: string | null; open: boolean }) {
+  if (error) {
+    return <p role="alert" className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">Сверка с «Монтажами» не сделана: {error}</p>
+  }
+  if (!book || checks.length === 0) return null
+  const n = (f: (c: MontageCheck) => boolean) => checks.filter(f).length
+  const bad = checks.filter(c => c.installerState === 'diff' || c.installerState === 'fill' || c.dimaState === 'diff')
+    .sort((a, b) => a.month.localeCompare(b.month) || a.order_no.localeCompare(b.order_no))
+  const who = (c: MontageCheck) => Object.entries(c.montage?.byName ?? {}).map(([k, v]) => `${k} ${rub(v)}`).join(', ')
+  const cell = (v: number | null | undefined) => (v == null ? <span className="text-[#9a9a95]">пусто</span> : rub(v))
+  return (
+    <details open={open || bad.length <= 15} className="group/m bg-white border border-[#e4e4e0] rounded-xl mb-4">
+      <summary className="px-4 py-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <p className="text-[13px] font-semibold text-[#111110]">
+          <span className="inline-block w-4 text-[#9a9a95] transition-transform group-open/m:rotate-90">▸</span>
+          🔧 Сверка с «Монтажами» · {checks.length} {plural(checks.length, 'заказ', 'заказа', 'заказов')}
+        </p>
+        <p className="text-[12px] text-[#6b6b66] pl-4 mt-0.5">
+          Монтажник: совпало {n(c => c.installerState === 'ok')} · <span className={n(c => c.installerState === 'diff') ? 'text-red-700' : ''}>расходится {n(c => c.installerState === 'diff')}</span>
+          {' '}· <span className={n(c => c.installerState === 'fill') ? 'text-amber-700' : ''}>в «Марже» пусто, в «Монтажах» есть {n(c => c.installerState === 'fill')}</span>
+          {' '}· в «Монтажах» нет {n(c => c.installerState === 'none')}
+          <br />Дима РОР: совпало {n(c => c.dimaState === 'ok')} · <span className={n(c => c.dimaState === 'diff') ? 'text-red-700' : ''}>расходится {n(c => c.dimaState === 'diff')}</span>
+          {book.missing.length > 0 && <span className="text-amber-700"> · не прочитаны вкладки: {book.missing.join(', ')}</span>}
+        </p>
+      </summary>
+      {bad.length > 0 && (
+        <div className="overflow-x-auto border-t border-[#f0f0ec]">
+          <table className="w-full text-[12px] whitespace-nowrap">
+            <thead className="text-[#9a9a95] text-left">
+              <tr>
+                <th className="px-3 py-1.5 font-medium">Заказ</th>
+                <th className="px-3 py-1.5 font-medium text-right">Монтажник: «Маржа»</th>
+                <th className="px-3 py-1.5 font-medium text-right">«Монтажи»</th>
+                <th className="px-3 py-1.5 font-medium">кто</th>
+                <th className="px-3 py-1.5 font-medium text-right">Дима: «Маржа»</th>
+                <th className="px-3 py-1.5 font-medium text-right">«Монтажи»</th>
+                <th className="px-3 py-1.5 font-medium">вкладки «Монтажей»</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bad.map(c => (
+                <tr key={c.order_no} className="border-t border-[#f0f0ec]">
+                  <td className="px-3 py-1.5">{c.order_no} <span className="text-[#9a9a95]">· {monthRu(c.month).toLowerCase()} {c.month.slice(2, 4)}</span></td>
+                  <td className={`px-3 py-1.5 text-right ${c.installerState === 'diff' ? 'text-red-700' : c.installerState === 'fill' ? 'text-amber-700' : ''}`}>{cell(c.installer)}</td>
+                  <td className="px-3 py-1.5 text-right">{c.montage?.installers ? rub(c.montage.installers) : <span className="text-[#9a9a95]">—</span>}</td>
+                  <td className="px-3 py-1.5 text-[#6b6b66]">{who(c) || '—'}</td>
+                  <td className={`px-3 py-1.5 text-right ${c.dimaState === 'diff' ? 'text-red-700' : ''}`}>{cell(c.dima)}</td>
+                  <td className="px-3 py-1.5 text-right">{c.montage?.dima != null ? rub(c.montage.dima) : <span className="text-[#9a9a95]">—</span>}</td>
+                  <td className="px-3 py-1.5 text-[#9a9a95]">{c.montage?.tabs.join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </details>
   )
 }
 
