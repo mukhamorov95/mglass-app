@@ -3,13 +3,14 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { alertText, runLiveChecks } from '@/lib/health/liveChecks'
 import { notifyAdmins } from '@/lib/telegram'
 import { appUrl } from '@/lib/appUrl'
+import { withCronRun } from '@/lib/cronRuns'
 
 export const maxDuration = 60
 
 // Тревога «что сломалось» — в 9:30 и 14:30 МСК. Пишет только при красном; пока
 // поломка не устранена, это напоминание дважды в день (без таблицы состояния
 // повторы не отличить — журнал состояний будет на этапе 1б маршрута).
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -19,3 +20,5 @@ export async function GET(req: NextRequest) {
   if (text) await notifyAdmins(text)
   return NextResponse.json({ ok: true, alerted: !!text, checks: checks.map(c => ({ id: c.id, status: c.status })) })
 }
+
+export const GET = (req: NextRequest) => withCronRun('live-health', req, () => run(req))

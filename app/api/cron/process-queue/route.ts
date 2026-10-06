@@ -15,6 +15,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { withCronRun } from '@/lib/cronRuns'
 
 export const maxDuration = 60
 
@@ -251,7 +252,7 @@ async function processItem(item: QueueItem): Promise<'claimed' | 'skipped'> {
 }
 
 // ── Cron entry point ──────────────────────────────────────────────────────────
-export async function GET(req: Request) {
+async function run(req: Request) {
   const authHeader = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
@@ -311,4 +312,5 @@ export async function GET(req: Request) {
 }
 
 // Allow POST for manual trigger from admin
+export const GET = (req: Request) => withCronRun('process-queue', req, () => run(req))
 export const POST = GET

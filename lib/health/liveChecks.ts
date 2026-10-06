@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { amoGet } from '@/lib/amocrm'
 import { MONTAGE_BOOK_ID } from '@/lib/sales/montageBook'
+import { CRON_JOBS } from '@/lib/cronRuns'
 
 export type LiveStatus = 'ok' | 'warn' | 'fail'
 export type LiveCheck = { id: string; title: string; status: LiveStatus; detail: string; action?: string }
@@ -140,6 +141,59 @@ async function checkAvitoQueue(sb: SupabaseClient, now: Date): Promise<Verdict> 
   }
 }
 
+export type CronRunRow = {
+  job: string; last_started_at: string | null; last_ok_at: string | null
+  last_error: string | null; last_error_at: string | null
+}
+
+const UNFINISHED_MS = 15 * 60_000
+
+// Журнал кронов → строки «Всё ли работает». Всё в порядке — одна сводная строка,
+// иначе по строке на каждый крон с бедой: упал, давно не проходил, не завершился.
+export function cronVerdicts(rows: CronRunRow[], now: Date, jobs = CRON_JOBS): LiveCheck[] {
+  const by = new Map(rows.map(r => [r.job, r]))
+  const at = (iso: string | null) => (iso ? Date.parse(iso) : 0)
+  const bad: LiveCheck[] = []
+  let fine = 0, waiting = 0
+  for (const j of jobs) {
+    const r = by.get(j.job)
+    const okAt = at(r?.last_ok_at ?? null), errAt = at(r?.last_error_at ?? null), startAt = at(r?.last_started_at ?? null)
+    const id = `cron_${j.job}`, title = `Крон: ${j.title}`
+    const logs = `Подробности — логи Vercel по /api/cron/${j.job}.`
+    if (!okAt && !errAt && !startAt) { waiting++; continue }
+    if (errAt > okAt) {
+      bad.push({ id, title, status: 'fail', detail: `Запуск ${mskTime(r!.last_error_at!)} МСК упал: ${(r!.last_error ?? '').slice(0, 300)}`, action: logs })
+    } else if (okAt && now.getTime() - okAt > j.maxHours * 3_600_000) {
+      bad.push({ id, title, status: 'fail', detail: `Последний успешный запуск ${mskTime(r!.last_ok_at!)} МСК — больше ${j.maxHours} ч назад, по расписанию должен был пройти.`, action: logs })
+    } else if (startAt > Math.max(okAt, errAt) && now.getTime() - startAt > UNFINISHED_MS) {
+      bad.push({ id, title, status: 'warn', detail: `Запущен ${mskTime(r!.last_started_at!)} МСК и не завершился — вероятно, Vercel оборвал его по времени.`, action: logs })
+    } else if (okAt) fine++
+    else waiting++
+  }
+  if (bad.length) return bad
+  return [{
+    id: 'crons', title: 'Кроны', status: 'ok',
+    detail: fine
+      ? `${fine} из ${jobs.length} проходят по расписанию${waiting ? `, ${waiting} ещё не запускались с включения журнала` : ''}`
+      : 'Журнал включён, ждём первых запусков',
+  }]
+}
+
+async function checkCrons(sb: SupabaseClient, now: Date): Promise<LiveCheck[]> {
+  const { data, error } = await sb.from('cron_runs').select('job, last_started_at, last_ok_at, last_error, last_error_at')
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205' || /does not exist|schema cache/i.test(error.message)) {
+      return [{
+        id: 'crons', title: 'Кроны', status: 'warn',
+        detail: 'Журнал кронов не включён — не видно, прошли ли утренние синки, бэкап и распределение заявок.',
+        action: 'Выполнить SQL из supabase/migrations/20261006_cron_runs.sql: Supabase → SQL Editor → вставить → Run.',
+      }]
+    }
+    throw new Error(`cron_runs: ${error.message}`)
+  }
+  return cronVerdicts((data ?? []) as CronRunRow[], now)
+}
+
 const withTimeout = <T,>(p: Promise<T>, ms: number) =>
   Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`не ответила за ${ms / 1000} с`)), ms))])
 
@@ -164,13 +218,19 @@ export async function runLiveChecks(sb: SupabaseClient, now = new Date()): Promi
     { id: 'amocrm', title: 'AmoCRM', run: checkAmo },
     { id: 'avito_queue', title: 'Авито → AmoCRM', run: () => checkAvitoQueue(sb, now) },
   ]
-  return Promise.all(defs.map(async d => {
-    try {
-      return { id: d.id, title: d.title, ...(await withTimeout(d.run(), 20_000)) }
-    } catch (e) {
-      return { id: d.id, title: d.title, status: 'warn' as const, detail: `Проверка не выполнилась: ${e instanceof Error ? e.message : String(e)}` }
-    }
-  }))
+  const failed = (id: string, title: string, e: unknown): LiveCheck =>
+    ({ id, title, status: 'warn', detail: `Проверка не выполнилась: ${e instanceof Error ? e.message : String(e)}` })
+  const [single, crons] = await Promise.all([
+    Promise.all(defs.map(async d => {
+      try {
+        return { id: d.id, title: d.title, ...(await withTimeout(d.run(), 20_000)) }
+      } catch (e) {
+        return failed(d.id, d.title, e)
+      }
+    })),
+    withTimeout(checkCrons(sb, now), 20_000).catch(e => [failed('crons', 'Кроны', e)]),
+  ])
+  return [...single, ...crons]
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

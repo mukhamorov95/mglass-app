@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertText, classifyAnthropicError, freshness, type LiveCheck } from '@/lib/health/liveChecks'
+import { alertText, classifyAnthropicError, cronVerdicts, freshness, type CronRunRow, type LiveCheck } from '@/lib/health/liveChecks'
 
 describe('classifyAnthropicError', () => {
   // Сообщение с экрана владельца 06.10, как его отдаёт SDK.
@@ -53,5 +53,51 @@ describe('alertText', () => {
     expect(t).toMatch(/Требует внимания: 1/)
     expect(t).toContain('нет &lt;денег&gt;')
     expect(t).not.toContain('<b>ok</b>')
+  })
+})
+
+describe('cronVerdicts', () => {
+  const now = new Date('2026-10-07T07:00:00Z')
+  const jobs = [
+    { job: 'sync', title: 'Синк', maxHours: 26 },
+    { job: 'leads', title: 'Заявки', maxHours: 1 },
+  ]
+  const row = (job: string, r: Partial<CronRunRow>): CronRunRow =>
+    ({ job, last_started_at: null, last_ok_at: null, last_error: null, last_error_at: null, ...r })
+
+  it('всё прошло — одна сводная строка', () => {
+    const v = cronVerdicts([
+      row('sync', { last_started_at: '2026-10-07T05:00:00Z', last_ok_at: '2026-10-07T05:00:40Z' }),
+      row('leads', { last_started_at: '2026-10-07T06:55:00Z', last_ok_at: '2026-10-07T06:55:03Z' }),
+    ], now, jobs)
+    expect(v).toEqual([expect.objectContaining({ id: 'crons', status: 'ok', detail: '2 из 2 проходят по расписанию' })])
+  })
+
+  it('журнал пуст — ждём первых запусков, это не поломка', () => {
+    expect(cronVerdicts([], now, jobs)[0]).toMatchObject({ status: 'ok', detail: 'Журнал включён, ждём первых запусков' })
+  })
+
+  it('ошибка новее успеха — красное с текстом ошибки', () => {
+    const v = cronVerdicts([
+      row('sync', { last_ok_at: '2026-10-06T05:00:40Z', last_error_at: '2026-10-07T05:00:20Z', last_error: 'HTTP 500: книга закрыта' }),
+    ], now, jobs)
+    expect(v).toEqual([expect.objectContaining({ id: 'cron_sync', status: 'fail' })])
+    expect(v[0].detail).toContain('книга закрыта')
+  })
+
+  it('успех старше нормы — красное', () => {
+    const v = cronVerdicts([row('leads', { last_started_at: '2026-10-07T05:00:00Z', last_ok_at: '2026-10-07T05:00:02Z' })], now, jobs)
+    expect(v[0]).toMatchObject({ id: 'cron_leads', status: 'fail' })
+  })
+
+  it('старт без завершения дольше 15 минут — жёлтое; идущий сейчас — норма', () => {
+    const killed = cronVerdicts([
+      row('sync', { last_ok_at: '2026-10-06T05:01:00Z', last_started_at: '2026-10-07T05:00:00Z' }),
+    ], now, jobs)
+    expect(killed[0]).toMatchObject({ id: 'cron_sync', status: 'warn' })
+    const running = cronVerdicts([
+      row('leads', { last_ok_at: '2026-10-07T06:50:02Z', last_started_at: '2026-10-07T06:55:00Z' }),
+    ], now, jobs)
+    expect(running[0]).toMatchObject({ id: 'crons', status: 'ok', detail: '1 из 2 проходят по расписанию, 1 ещё не запускались с включения журнала' })
   })
 })

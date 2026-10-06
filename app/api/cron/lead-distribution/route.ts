@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { runDistribution } from '@/lib/leadDistribution/collect'
+import { withCronRun } from '@/lib/cronRuns'
 
 // Распределитель новых заявок «Продаж» (docs/LEAD_DISTRIBUTION_ROUTE.md), каждые 5 минут. Крон не
 // авторизован middleware — проверяет свой секрет сам. Тумблер владельца —
@@ -10,7 +11,7 @@ import { runDistribution } from '@/lib/leadDistribution/collect'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-export async function GET(req: Request) {
+async function run(req: Request) {
   if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
@@ -36,3 +37,5 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }
+
+export const GET = (req: Request) => withCronRun('lead-distribution', req, () => run(req))

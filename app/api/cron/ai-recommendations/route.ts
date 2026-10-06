@@ -4,6 +4,7 @@ import { generateRecommendations, perspectiveForDay } from '@/lib/ai/recommendat
 import { notifyAdmins } from '@/lib/telegram'
 import { appUrl } from '@/lib/appUrl'
 import { aiErrorText } from '@/lib/health/liveChecks'
+import { withCronRun } from '@/lib/cronRuns'
 
 // Ежедневные рекомендации AI Control Center. Если владелец не разобрал прошлые —
 // новые не копим: рекомендация без решения ничего не меняет, а куча без решений
@@ -13,7 +14,7 @@ export const maxDuration = 120
 
 const MAX_UNDECIDED = 8
 
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -38,3 +39,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: aiErrorText(e) }, { status: 500 })
   }
 }
+
+export const GET = (req: NextRequest) => withCronRun('ai-recommendations', req, () => run(req))
