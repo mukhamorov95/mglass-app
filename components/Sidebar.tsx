@@ -226,7 +226,9 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
 const ADMIN_B2B: NavEntry[] = [
   { href: '/b2b-growth',             label: 'Развитие B2B',      icon: '🚀' },
   { href: '/admin/b2b-clients',      label: 'Клиенты',           icon: '🏢' },
+  { href: '/admin/b2b-flow',         label: 'Поток заказов',     icon: '📊' },
   { href: '/admin/b2b-services',     label: 'Услуги',            icon: '🔧' },
+  { href: '/admin/b2b-surcharges',   label: 'Надбавки за габариты', icon: '📐', indent: true },
   { href: '/admin/sandblast-cost',   label: 'Себест. пескоструя', icon: '🪨', indent: true },
   { href: '/admin/b2b-materials',    label: 'Материалы',         icon: '🪟' },
   { href: '/admin/cutting-settings', label: 'Настройки раскроя', icon: '✂️' },
@@ -334,19 +336,16 @@ const PRODUCTION_NAV_REFERRAL: NavItem[] = [
 // роли, и один и тот же экран честно перечислили в каждом списке. Переключаясь
 // между рабочими местами, он видел одно и то же под одним заголовком и не понимал,
 // где искать. Здесь объединение обоих: ни один экран не потерян.
+//
+// 06.10 владелец убрал мёртвые и дубли: Прогресс работ, Owner Center, Дашборд, P&L,
+// Аналитика, Bonus Center, Sales Center, Финдиректор (есть в CFO), B2B Development —
+// по ссылке открываются. Страницы, куда вели только плитки Owner Center, — здесь и в B2B.
 const OWNER_CENTER: NavItem[] = [
-  { href: '/admin/progress',              label: 'Прогресс работ',    icon: '📈' },
   { href: '/admin/ai-control-center',     label: 'AI Control Center', icon: '🎛️' },
-  { href: '/admin/owner',                 label: 'Owner Center',      icon: '👑' },
-  { href: '/admin/dashboard',             label: 'Дашборд',           icon: '📊' },
+  { href: '/admin/owner-tasks',           label: 'Задачи владельца',  icon: '📋' },
   { href: '/cfo',                         label: 'CFO Center',        icon: '💼' },
-  { href: '/admin/cfo',                   label: 'Финдиректор',       icon: '💰' },
-  { href: '/admin/pnl',                   label: 'P&L отчёт',         icon: '📑' },
-  { href: '/admin/analytics-mglass',      label: 'Аналитика',         icon: '📉' },
-  { href: '/admin/bonus-center',          label: 'Bonus Center',      icon: '🎁' },
-  { href: '/admin/sales-center',          label: 'Sales Center',      icon: '🏆' },
   { href: '/admin/sales-control',         label: 'Контроль продаж',   icon: '🎯' },
-  { href: '/admin/b2b-development',       label: 'B2B Development',   icon: '🚀' },
+  { href: '/admin/avito-funnel',          label: 'Воронка Avito',     icon: '🤖' },
   { href: '/admin/org',                   label: 'Оргструктура',      icon: '🏛️' },
   { href: '/admin/users',                 label: 'Пользователи',      icon: '👥' },
   { href: '/admin/access-check',          label: 'Диагностика прав',  icon: '🔎' },
@@ -413,7 +412,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
     if (inSection(pathname, ['/production-app/guide'])) open.push('prod_learn')
   } else if (mode === 'ceo') {
-    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner-tasks', '/admin/avito-funnel', '/admin/sales-control', '/admin/org', '/admin/users', '/admin/access-check', '/admin/activity-log', '/production-app'])) open.push('owner')
     // /marketing/promo принадлежит «Продвижению», а не «Маркетингу» —
     // иначе по общему префиксу раскроется чужая группа.
     if (inSection(pathname, ['/marketing/promo'])) open.push('promo')
@@ -423,7 +422,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services', '/admin/quote-quality'])) open.push('system')
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/b2b-rates', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
-    if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/sandblast-cost', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
+    if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-flow', '/admin/b2b-services', '/admin/b2b-surcharges', '/admin/sandblast-cost', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
     if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/measurer-earnings', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity', '/commercial/activity'])) open.push('operations')
   }
   return open
@@ -460,7 +459,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     else if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
   } else if (role === 'ceo') {
-    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner-tasks', '/admin/avito-funnel', '/admin/sales-control', '/admin/org', '/admin/users', '/admin/access-check', '/admin/activity-log', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/b2b-analytics', '/vladislav', '/marketing', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap'])) open.push('system')
   }

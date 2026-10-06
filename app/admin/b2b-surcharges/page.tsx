@@ -90,7 +90,7 @@ export default function B2BSurchargesPage() {
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-[20px] font-semibold text-[#111110]">Надбавки за габариты</h1>
-          <Link href="/admin/owner" className="text-[12px] text-[#9a9a95] hover:text-[#111110]">← Справочники</Link>
+          <Link href="/admin/b2b-services" className="text-[12px] text-[#9a9a95] hover:text-[#111110]">← Услуги B2B</Link>
         </div>
         <p className="text-[12px] text-[#6b6b66] mb-5 leading-relaxed">
           Крупные и сложные изделия честно дороже (двое носят, дольше полируют, сложный рез).

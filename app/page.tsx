@@ -50,15 +50,15 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: 'Отказ',
 }
 const OWNER_CENTER = [
-  { href: '/admin/dashboard',      emoji: '📊', label: 'Дашборд',        desc: 'Выручка, маржа, конверсия' },
-  { href: '/admin/pnl',            emoji: '📈', label: 'P&L',            desc: 'Доходы, расходы, прибыль' },
+  { href: '/sales',                emoji: '📊', label: 'Продажи',        desc: 'Выручка и оплаты по книге' },
+  { href: '/sales/margin',         emoji: '📈', label: 'Маржа',          desc: 'Маржа закрытых заказов' },
   { href: '/admin/org',            emoji: '🏗️', label: 'Оргструктура',  desc: 'Роли, регламенты, KPI' },
   { href: '/admin/roadmap',        emoji: '🗺️', label: 'Roadmap',        desc: 'Прогресс внедрения' },
   { href: '/admin/infrastructure', emoji: '⚙️', label: 'Техцентр',       desc: 'ENV, инфраструктура, боты' },
-  { href: '/admin/analytics-mglass', emoji: '🔍', label: 'Аналитика',   desc: 'Менеджеры, продукты, каналы' },
+  { href: '/sales/managers',       emoji: '🔍', label: 'Менеджеры',      desc: 'Разговоры, замеры, оплаты' },
   { href: '/admin/users',          emoji: '👥', label: 'Пользователи',   desc: 'Доступы и роли' },
   { href: '/admin/suppliers',      emoji: '🏭', label: 'Поставщики',     desc: 'Контакты и условия' },
-  { href: '/admin/warehouse',      emoji: '📦', label: 'Склад',          desc: 'Остатки и алерты' },
+  { href: '/inventory',            emoji: '📦', label: 'Склад',          desc: 'Остатки и движения' },
 ]
 
 type Search = { m?: string; d?: string; from?: string; to?: string; month?: string; year?: string }
