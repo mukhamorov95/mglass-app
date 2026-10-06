@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { mskDayKey } from '@/lib/time'
 import { plural } from '@/lib/morning'
 import { shiftMonth } from '@/lib/sales/period'
+import { MontageFillAll, MontageFillButton, type FillItem } from '@/components/sales/MontageFill'
 import { checkMontage, montageBookCached, orderKey, type MarginOrder, type MontageBook, type MontageCheck } from '@/lib/sales/montageBook'
 import {
   COST_KEYS, COST_RU, MARGIN_SINCE, NO_TAX_DELIVERY_UNTIL, SALE_COLUMNS, costsComplete, fixLine, fromDb, loadEdits, monthGen, monthRu, needsFix, periodTotals, reconcileMonth, roundShares,
@@ -115,11 +116,27 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
     if (!marginOrders.has(k)) marginOrders.set(k, { order_no: o.order_no!, month: o.month, installer: null, dima: null })
     add(k, o.costs?.installer ?? null, o.dima)
   }
+  const outside = new Set<string>()
   for (const r of orderRowsRes.flatMap(x => (x.data ?? []) as { order_no: string; ledger_month: string; installer: number | null; dima: number | null }[])) {
     if (months.includes(r.ledger_month) || !marginOrders.has(orderKey(r.order_no))) continue
+    outside.add(orderKey(r.order_no))
     add(orderKey(r.order_no), r.installer == null ? null : Number(r.installer), r.dima == null ? null : Number(r.dima))
   }
   const checks = montageRes.b ? checkMontage([...marginOrders.values()], montageRes.b.orders) : []
+
+  // «Внести из «Монтажей»» — только когда у заказа ровно один объект с продажей и нет
+  // строк в других месяцах: у доплат выплату не на кого однозначно положить.
+  const objectsByOrder = new Map<string, typeof periodObjects>()
+  for (const o of periodObjects) objectsByOrder.set(orderKey(o.order_no), [...(objectsByOrder.get(orderKey(o.order_no)) ?? []), o])
+  const fillOf = new Map<string, FillItem | 'many'>()
+  for (const c of checks) {
+    if (c.installerState !== 'fill' || !c.montage) continue
+    const k = orderKey(c.order_no)
+    const objs = objectsByOrder.get(k) ?? []
+    fillOf.set(k, objs.length === 1 && objs[0].sale_id != null && !outside.has(k)
+      ? { saleId: objs[0].sale_id, orderNo: c.order_no, amount: c.montage.installers }
+      : 'many')
+  }
   const checkOf = new Map(checks.map(c => [orderKey(c.order_no), c]))
   const hasOld = byMonth.some(x => oldFormat(x.month) && x.t.closed > 0)
 
@@ -245,7 +262,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           </div>
         </div>
 
-        <MontageBlock checks={checks} book={montageRes.b} error={montageRes.error ?? orderRowsError} open={mode === 'month'} beforeBook={beforeBook} />
+        <MontageBlock checks={checks} book={montageRes.b} error={montageRes.error ?? orderRowsError} open={mode === 'month'} beforeBook={beforeBook} fillOf={fillOf} />
 
         {fixes.length > 0 && (
           <div id="fixes" className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-4">
@@ -356,7 +373,7 @@ function withMontage(issue: string, c: MontageCheck | undefined): string {
   return issue === '—' ? extra.join('; ') : `${issue}; ${extra.join('; ')}`
 }
 
-function MontageBlock({ checks, book, error, open, beforeBook }: { checks: MontageCheck[]; book: MontageBook | null; error: string | null; open: boolean; beforeBook: boolean }) {
+function MontageBlock({ checks, book, error, open, beforeBook, fillOf }: { checks: MontageCheck[]; book: MontageBook | null; error: string | null; open: boolean; beforeBook: boolean; fillOf: Map<string, FillItem | 'many'> }) {
   if (error) {
     return <p role="alert" className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">Сверка с «Монтажами» не сделана: {error}</p>
   }
@@ -366,9 +383,11 @@ function MontageBlock({ checks, book, error, open, beforeBook }: { checks: Monta
     .sort((a, b) => a.month.localeCompare(b.month) || a.order_no.localeCompare(b.order_no))
   const who = (c: MontageCheck) => Object.entries(c.montage?.byName ?? {}).map(([k, v]) => `${k} ${rub(v)}`).join(', ')
   const cell = (v: number | null | undefined) => (v == null ? <span className="text-[#9a9a95]">пусто</span> : rub(v))
+  const fillItems = [...fillOf.values()].filter((f): f is FillItem => f !== 'many')
   return (
     <details open={open || bad.length <= 15} className="group/m bg-white border border-[#e4e4e0] rounded-xl mb-4">
-      <summary className="px-4 py-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+      <summary className="px-4 py-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-start justify-between gap-3">
+        <div>
         <p className="text-[13px] font-semibold text-[#111110]">
           <span className="inline-block w-4 text-[#9a9a95] transition-transform group-open/m:rotate-90">▸</span>
           🔧 Сверка с «Монтажами» · {checks.length} {plural(checks.length, 'заказ', 'заказа', 'заказов')}
@@ -381,6 +400,8 @@ function MontageBlock({ checks, book, error, open, beforeBook }: { checks: Monta
           {book.missing.length > 0 && <span className="text-amber-700"> · не прочитаны вкладки: {book.missing.join(', ')}</span>}
           {beforeBook && <><br />Заказы до {monthGen(MARGIN_SINCE)} {MARGIN_SINCE.slice(0, 4)} не сверяются: книги «Маржа» тогда не было.</>}
         </p>
+        </div>
+        <MontageFillAll items={fillItems} />
       </summary>
       {bad.length > 0 && (
         <div className="overflow-x-auto border-t border-[#f0f0ec]">
@@ -394,6 +415,7 @@ function MontageBlock({ checks, book, error, open, beforeBook }: { checks: Monta
                 <th className="px-3 py-1.5 font-medium text-right">Дима: «Маржа»</th>
                 <th className="px-3 py-1.5 font-medium text-right">«Монтажи»</th>
                 <th className="px-3 py-1.5 font-medium">вкладки «Монтажей»</th>
+                <th className="px-3 py-1.5 font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -406,6 +428,14 @@ function MontageBlock({ checks, book, error, open, beforeBook }: { checks: Monta
                   <td className={`px-3 py-1.5 text-right ${c.dimaState === 'diff' ? 'text-red-700' : ''}`}>{cell(c.dima)}</td>
                   <td className="px-3 py-1.5 text-right">{c.montage?.dima != null ? rub(c.montage.dima) : <span className="text-[#9a9a95]">—</span>}</td>
                   <td className="px-3 py-1.5 text-[#9a9a95]">{c.montage?.tabs.join(', ')}</td>
+                  <td className="px-3 py-1.5">
+                    {(() => {
+                      const f = fillOf.get(orderKey(c.order_no))
+                      if (!f) return null
+                      if (f === 'many') return <span className="text-[11px] text-[#9a9a95]" title="У заказа несколько строк в «Марже» (доплаты) — на какую положить выплату, решает человек">несколько строк — в карточке</span>
+                      return <MontageFillButton item={f} />
+                    })()}
+                  </td>
                 </tr>
               ))}
             </tbody>
