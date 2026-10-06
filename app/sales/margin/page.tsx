@@ -94,7 +94,8 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
   // Сверка с «Монтажами»: монтажник и «Дима РОР» по заказам периода. Заказ периода берём
   // с правками приложения; его строки в других месяцах (доплаты) — как в книге: связи
   // строки с продажей в таблице нет, она находится только при разборе своего месяца.
-  const periodObjects = byMonth.flatMap(x => x.objects).filter(o => o.order_no)
+  // До первой вкладки «Маржи» сверять не с чем: пустая ячейка там — «книги не было», а не «не внесли».
+  const periodObjects = byMonth.flatMap(x => x.objects).filter(o => o.order_no && o.month >= MARGIN_SINCE)
   const nos = [...new Set(periodObjects.map(o => o.order_no!))]
   const [orderRowsRes, montageRes] = await Promise.all([
     Promise.all(Array.from({ length: Math.ceil(nos.length / 150) }, (_, i) =>
@@ -244,7 +245,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
           </div>
         </div>
 
-        <MontageBlock checks={checks} book={montageRes.b} error={montageRes.error ?? orderRowsError} open={mode === 'month'} />
+        <MontageBlock checks={checks} book={montageRes.b} error={montageRes.error ?? orderRowsError} open={mode === 'month'} beforeBook={beforeBook} />
 
         {fixes.length > 0 && (
           <div id="fixes" className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-4">
@@ -355,7 +356,7 @@ function withMontage(issue: string, c: MontageCheck | undefined): string {
   return issue === '—' ? extra.join('; ') : `${issue}; ${extra.join('; ')}`
 }
 
-function MontageBlock({ checks, book, error, open }: { checks: MontageCheck[]; book: MontageBook | null; error: string | null; open: boolean }) {
+function MontageBlock({ checks, book, error, open, beforeBook }: { checks: MontageCheck[]; book: MontageBook | null; error: string | null; open: boolean; beforeBook: boolean }) {
   if (error) {
     return <p role="alert" className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">Сверка с «Монтажами» не сделана: {error}</p>
   }
@@ -378,6 +379,7 @@ function MontageBlock({ checks, book, error, open }: { checks: MontageCheck[]; b
           {' '}· в «Монтажах» нет {n(c => c.installerState === 'none')}
           <br />Дима РОР: совпало {n(c => c.dimaState === 'ok')} · <span className={n(c => c.dimaState === 'diff') ? 'text-red-700' : ''}>расходится {n(c => c.dimaState === 'diff')}</span>
           {book.missing.length > 0 && <span className="text-amber-700"> · не прочитаны вкладки: {book.missing.join(', ')}</span>}
+          {beforeBook && <><br />Заказы до {monthGen(MARGIN_SINCE)} {MARGIN_SINCE.slice(0, 4)} не сверяются: книги «Маржа» тогда не было.</>}
         </p>
       </summary>
       {bad.length > 0 && (
