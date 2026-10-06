@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { generateRecommendations, perspectiveForDay } from '@/lib/ai/recommendations'
-import { notifyAdminsWithKeyboard } from '@/lib/telegram'
+import { notifyAdmins, notifyAdminsWithKeyboard } from '@/lib/telegram'
 import { recKeyboard, recText } from '@/lib/ai/recTelegram'
+import { runRechecks } from '@/lib/ai/recRecheck'
 import { aiErrorText } from '@/lib/health/liveChecks'
 import { withCronRun } from '@/lib/cronRuns'
 
@@ -20,6 +21,8 @@ async function run(req: NextRequest) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
   const sb = createServiceClient()
+  // Сверка сделанных — раньше проверки на нерешённые: она не зависит от новых рекомендаций.
+  const rechecked = await runRechecks(sb, t => notifyAdmins(t)).catch(() => 0)
   const { count } = await sb.from('ai_recommendations').select('id', { count: 'exact', head: true }).eq('status', 'new')
   if ((count ?? 0) >= MAX_UNDECIDED) {
     // Напоминание по понедельникам и четвергам, а не каждый день: куча без решений
@@ -31,12 +34,12 @@ async function run(req: NextRequest) {
         [[{ text: '💡 Разобрать здесь', callback_data: 'recs:list' }]],
       ).catch(() => {})
     }
-    return NextResponse.json({ ok: true, skipped: 'undecided', undecided: count })
+    return NextResponse.json({ ok: true, skipped: 'undecided', undecided: count, rechecked })
   }
   try {
     const created = await generateRecommendations(sb, { perspective: perspectiveForDay(), count: 3, source: 'cron' })
     for (const r of created) await notifyAdminsWithKeyboard(recText(r), recKeyboard(r)).catch(() => {})
-    return NextResponse.json({ ok: true, created: created.length })
+    return NextResponse.json({ ok: true, created: created.length, rechecked })
   } catch (e) {
     return NextResponse.json({ ok: false, error: aiErrorText(e) }, { status: 500 })
   }
