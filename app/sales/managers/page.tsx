@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { shiftMonth } from '@/lib/sales/period'
-import type { StatRow } from '@/lib/sales/managerStats'
+import type { DayLine, StatRow } from '@/lib/sales/managerStats'
 
 // Третий срез продаж: не сделки (воронка) и не заказы (реестр), а работа
 // менеджера за период — разговоры, замеры, оплаты и полученные деньги.
@@ -38,14 +38,21 @@ const num = (n: number) => Math.round(n).toLocaleString('ru-RU')
 const conv = (v: number | null) => (v == null ? '—' : `${v}%`)
 const day = (d: string | null) => (d ? d.split('-').reverse().join('.') : '—')
 const START: Query = { mode: 'month', month: '', from: '', to: '', managers: [] }
+const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+const WEEKDAYS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
+const dayLabel = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS_GEN[Number(d.slice(5, 7)) - 1]}, ${WEEKDAYS[new Date(`${d}T00:00:00Z`).getUTCDay()]}`
+type DaysState = { lines?: DayLine[]; error?: string }
 
 export default function ManagerStatsPage() {
   const [d, setD] = useState<Data | null>(null)
   const [q, setQ] = useState<Query>(START)
   const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState<string | null>(null)
+  const [days, setDays] = useState<Record<string, DaysState>>({})
 
   const load = useCallback(async (next: Query) => {
     setLoading(true)
+    setOpen(null)
     setQ(next)
     try {
       const p = new URLSearchParams()
@@ -61,8 +68,25 @@ export default function ManagerStatsPage() {
     } finally { setLoading(false) }
   }, [])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(START) }, [load])
+
+  // Раскрытие менеджера: деньги по дням того же периода, что и таблица.
+  const daysKey = (manager: string) => `${manager}|${d?.period.from}|${d?.period.to}`
+  const toggle = async (manager: string) => {
+    if (!d) return
+    if (open === manager) { setOpen(null); return }
+    setOpen(manager)
+    const key = daysKey(manager)
+    if (days[key]?.lines) return
+    setDays(cur => ({ ...cur, [key]: {} }))
+    try {
+      const r = await fetch('/api/manager-stats/days?' + new URLSearchParams({ manager, from: d.period.from, to: d.period.to }))
+      const j = await r.json()
+      setDays(cur => ({ ...cur, [key]: r.ok ? { lines: j.lines } : { error: j.error ?? `ошибка ${r.status}` } }))
+    } catch (e) {
+      setDays(cur => ({ ...cur, [key]: { error: (e as Error).message } }))
+    }
+  }
 
   const modeBtn = (m: PeriodMode) =>
     `px-3 py-1.5 rounded-lg text-[12px] font-medium border ${q.mode === m ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110]'}`
@@ -163,8 +187,15 @@ export default function ManagerStatsPage() {
                   </td></tr>
                 )}
                 {rows.map(r => (
-                  <tr key={r.manager} className="border-b border-[#f0f0ec] last:border-0 hover:bg-[#fafaf9]">
-                    <td className="px-3 py-2 font-medium text-[#111110] whitespace-nowrap">{r.manager}</td>
+                  <Fragment key={r.manager}>
+                  <tr className={`border-b border-[#f0f0ec] last:border-0 hover:bg-[#fafaf9] ${open === r.manager ? 'bg-[#fafaf9]' : ''}`}>
+                    <td className="px-3 py-2 font-medium text-[#111110] whitespace-nowrap">
+                      <button onClick={() => toggle(r.manager)} aria-expanded={open === r.manager} title="Деньги по дням"
+                        className="inline-flex items-center gap-1 hover:text-[#0071e3]">
+                        <span className={`inline-block w-3 text-[#9a9a95] transition-transform ${open === r.manager ? 'rotate-90' : ''}`}>▸</span>
+                        {r.manager}
+                      </button>
+                    </td>
                     <td className="px-3 py-2 text-right font-mono text-[#6b6b66]">{num(r.talks)}</td>
                     {/* Рядом с числом — конверсия из предыдущего шага: столбик без неё
                         не говорит, много это или мало. */}
@@ -178,6 +209,14 @@ export default function ManagerStatsPage() {
                       {r.moneyGap !== 0 && <span title={`Предоплаты + остатки = ${fmt(r.moneySum)}`} className="ml-1 text-amber-600">⚠</span>}
                     </td>
                   </tr>
+                  {open === r.manager && (
+                    <tr className="border-b border-[#e4e4e0]">
+                      <td colSpan={8} className="px-3 pb-3 pt-1 bg-[#fafaf9]">
+                        <DaysPanel state={days[daysKey(r.manager)]} row={r} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
                 {rows.length > 0 && t && (
                   <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
@@ -247,6 +286,64 @@ export default function ManagerStatsPage() {
           {gap ? ' ⚠ у отмеченных она не сходится с суммой предоплат и остатков.' : ' у всех сходится с суммой предоплат и остатков.'}
         </p>
       </div>
+    </div>
+  )
+}
+
+// Деньги менеджера по дням. Итог списка обязан совпасть со строкой таблицы:
+// если не совпал — это показывается, а не прячется.
+function DaysPanel({ state, row }: { state: DaysState | undefined; row: StatRow }) {
+  if (!state || (!state.lines && !state.error)) return <p className="text-[12px] text-[#9a9a95] py-2">Загрузка дней…</p>
+  if (state.error) return <p role="alert" className="text-[12px] text-red-700 py-2">Дни не загрузились: {state.error}</p>
+  const lines = state.lines ?? []
+  if (!lines.length) return <p className="text-[12px] text-[#9a9a95] py-2">За период оплат и денег по дням нет.</p>
+  const sum = (k: 'payments' | 'prepay' | 'remainder' | 'money_total') => lines.reduce((a, l) => a + l[k], 0)
+  const off = (['payments', 'prepay', 'remainder', 'money_total'] as const).filter(k => Math.round(sum(k)) !== Math.round(row[k]))
+  const manyMonths = new Set(lines.map(l => l.month)).size > 1
+  const cell = (v: number, money: boolean) => (v ? (money ? fmt(v) : num(v)) : <span className="text-[#d4d4cf]">—</span>)
+  return (
+    <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden max-w-[760px]">
+      <table className="w-full text-[12px]">
+        <thead>
+          <tr className="text-[#9a9a95] text-[10px] uppercase border-b border-[#f0f0ec]">
+            <th className="text-left font-medium px-3 py-1.5">День</th>
+            <th className="text-right font-medium px-3 py-1.5">Оплат</th>
+            <th className="text-right font-medium px-3 py-1.5">Предоплата</th>
+            <th className="text-right font-medium px-3 py-1.5">Остаток</th>
+            <th className="text-right font-medium px-3 py-1.5">Всего денег</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l, i) => (
+            <Fragment key={`${l.month}-${l.date ?? 'nodate'}`}>
+              {manyMonths && (i === 0 || lines[i - 1].month !== l.month) && (
+                <tr className="bg-[#f7f7f5]"><td colSpan={5} className="px-3 py-1 text-[11px] font-semibold text-[#6b6b66]">{monthRu(l.month)}</td></tr>
+              )}
+              <tr className="border-b border-[#f7f7f5] last:border-0">
+                <td className="px-3 py-1.5 whitespace-nowrap text-[#111110]">
+                  {l.date ? dayLabel(l.date) : <span className="text-amber-700">без дня — внесено только в итог месяца</span>}
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono text-[#6b6b66]">{cell(l.payments, false)}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-[#111110]">{cell(l.prepay, true)}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-[#111110]">{cell(l.remainder, true)}</td>
+                <td className="px-3 py-1.5 text-right font-mono font-semibold text-emerald-700">{cell(l.money_total, true)}</td>
+              </tr>
+            </Fragment>
+          ))}
+          <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
+            <td className="px-3 py-1.5 text-[#111110]">Итого за период</td>
+            <td className="px-3 py-1.5 text-right font-mono">{num(sum('payments'))}</td>
+            <td className="px-3 py-1.5 text-right font-mono">{fmt(sum('prepay'))}</td>
+            <td className="px-3 py-1.5 text-right font-mono">{fmt(sum('remainder'))}</td>
+            <td className="px-3 py-1.5 text-right font-mono text-emerald-700">{fmt(sum('money_total'))}</td>
+          </tr>
+        </tbody>
+      </table>
+      {off.length > 0 && (
+        <p role="alert" className="px-3 py-1.5 text-[11px] text-amber-700 border-t border-amber-100 bg-amber-50/50">
+          Сумма дней не сходится со строкой таблицы: {off.map(k => METRIC_LABEL[k]).join(', ')} — книгу стоит проверить.
+        </p>
+      )}
     </div>
   )
 }

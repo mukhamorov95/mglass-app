@@ -123,3 +123,39 @@ export function describeNote(n: MonthNote): string {
     default: return 'итог месяца в книге меньше суммы дней — показана сумма дней'
   }
 }
+
+// Деньги менеджера по дням — раскрытие строки таблицы. Целый месяц в таблице —
+// итог месяца книги, а в нём бывают суммы без дня (Дима, февраль–июнь 2026):
+// их разница с суммой дней идёт отдельной строкой «без дня», иначе список не
+// сложится в строку таблицы, и владелец перестанет верить обоим.
+export const DAY_METRICS = ['payments', 'prepay', 'remainder', 'money_total'] as const
+type DayMetric = (typeof DAY_METRICS)[number]
+export type DayLine = { date: string | null; month: string } & Record<DayMetric, number>
+
+const emptyLine = (date: string | null, month: string): DayLine =>
+  ({ date, month, payments: 0, prepay: 0, remainder: 0, money_total: 0 })
+const isDayMetric = (m: string): m is DayMetric => (DAY_METRICS as readonly string[]).includes(m)
+
+export function dayLedger(days: StatFact[], monthTotals: { month: string; metric: string; value: number | string }[], wholeMonths: string[]): DayLine[] {
+  const byDate = new Map<string, DayLine>()
+  for (const f of days) {
+    if (!isDayMetric(f.metric)) continue
+    const v = Number(f.value) || 0
+    if (!v) continue
+    const line = byDate.get(f.stat_date) ?? emptyLine(f.stat_date, f.stat_date.slice(0, 7))
+    line[f.metric] += v
+    byDate.set(f.stat_date, line)
+  }
+  const lines = [...byDate.values()]
+  for (const month of wholeMonths) {
+    const gap = emptyLine(null, month)
+    for (const t of monthTotals) {
+      if (t.month !== month || !isDayMetric(t.metric)) continue
+      const daySum = lines.filter(l => l.month === month).reduce((a, l) => a + l[t.metric as DayMetric], 0)
+      gap[t.metric] = Math.round(((Number(t.value) || 0) - daySum) * 100) / 100
+    }
+    if (DAY_METRICS.some(k => Math.abs(gap[k]) >= 0.5)) lines.push(gap)
+  }
+  // Внутри месяца — по дням, строка «без дня» последней.
+  return lines.sort((a, b) => a.month.localeCompare(b.month) || (a.date ?? '9999').localeCompare(b.date ?? '9999'))
+}
