@@ -26,9 +26,11 @@ export type StatRow = {
   moneySum: number
   moneyGap: number
   avgCheck: number
-  toMeasure: number | null   // разговор → замер назначен, %
-  toDone: number | null      // назначен → проведён, %
-  toPayment: number | null   // проведён → оплата, %
+  // Назначенные замеры на 100 разговоров того же периода. «Назначен → проведён» и
+  // «проведён → оплата» не считаем: проведённые и оплаты месяца идут и по замерам
+  // прошлых месяцев, оплаты — и по сделкам без замера. В книге такая доля была выше
+  // 100 % в 33 и 62 ячейках месяц × менеджер из 116 и 115 (Айжан, 09.2026: 250 %).
+  toMeasure: number | null
 }
 
 const pct = (part: number, whole: number): number | null =>
@@ -42,8 +44,6 @@ function makeRow(manager: string, v: Record<MetricKey, number>): StatRow {
     moneyGap: Math.round(v.money_total - moneySum),
     avgCheck: v.payments > 0 ? Math.round(v.prepay / v.payments) : 0,
     toMeasure: pct(v.measure_assigned, v.talks),
-    toDone: pct(v.measure_done, v.measure_assigned),
-    toPayment: pct(v.payments, v.measure_done),
   }
 }
 

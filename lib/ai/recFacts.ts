@@ -92,8 +92,8 @@ export function managerFacts(rows: StatRow[], totals: StatRow, month: string): F
       { id: id('money'), label: `${name}: денег всего`, value: r.money_total, unit: 'rub', period, source },
     )
     if (r.toMeasure != null) out.push({ id: id('conv_measure'), label: `${name}: разговор → замер назначен`, value: r.toMeasure, unit: 'pct', period, source })
-    // «Замер → оплата» в процентах не даём: оплаты месяца идут и по замерам прошлых
-    // месяцев, у Айжан в сентябре вышло 250 % — модель читала бы это как чудо-конверсию.
+    // Других долей нет и на экране (StatRow.toMeasure): проведённые замеры и оплаты месяца
+    // идут и по замерам прошлых месяцев, у Айжан в сентябре «замер → оплата» вышло 250 %.
   }
   return out
 }
