@@ -224,6 +224,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [clientOrderNumber, setClientOrderNumber] = useState('')
   const [notes, setNotes]           = useState('')
   const [fProductionDays, setFProductionDays] = useState(7)
+  // Редкие поля свёрнуты (замер 07.10, 455 просчётов за 60 дней: срок менялся 0 раз,
+  // примечание — 1, № клиента — 15 %, файл — 14 %). Значения видны на кнопке.
+  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false)
+  const [filesOpen, setFilesOpen]   = useState(false)
   const [items, setItems]           = useState<B2BOrderItem[]>([])
   // Инлайн-редактирование «Итого» позиции (договорная цена): localId редактируемой строки
   const [editTotalId, setEditTotalId] = useState<string | null>(null)
@@ -1632,6 +1636,26 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const attachPriceChange = origQuote?.noClient && clientId != null && totals && Math.abs(totals.totalAfterDiscount - origQuote.total) >= 1
     ? { was: origQuote.total, now: totals.totalAfterDiscount } : null
 
+  // Шапка заказа есть везде, кроме «Расчёта B2B для M-Glass»: там нет ни клиента, ни номеров, ни срока.
+  const showOrderBar = !mglassOnly || variant !== 'mglass'
+  const orderDetailsSummary = [
+    !mglassOnly ? (ourOrderNumber.trim() ? `№ ${ourOrderNumber.trim()}` : '№ авто') : null,
+    !mglassOnly && clientOrderNumber.trim() ? `№ клиента ${clientOrderNumber.trim()}` : null,
+    variant !== 'mglass' ? `срок ${fProductionDays} дн.` : null,
+    notes.trim() ? 'есть примечание' : null,
+  ].filter(Boolean).join(' · ')
+  const filesSummary = flParsing || parseBusy || parsingDrawing ? 'распознаю…'
+    : attachFile ? `к заказу: ${attachFile.name}`
+    : fKind === 'material' ? 'чертёж или список размеров → позиции'
+    : fKind === 'fmirror' ? 'чертёж → размеры зеркала' : 'чертёж → проём и створки'
+  const notesField = (
+    <textarea
+      className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all resize-none"
+      rows={2} value={notes} onChange={e => setNotes(e.target.value)}
+      placeholder="Общий комментарий к заказу..."
+    />
+  )
+
   if (isBuyer) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center space-y-4">
@@ -1667,6 +1691,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         .apple-calc{background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#1d1d1f}
         .apple-calc input:not([type=checkbox]):not([type=file]),.apple-calc select{height:44px;border-radius:12px;border:1px solid #d9d9df!important;background:#fff!important;color:#1d1d1f;font-size:14px;transition:box-shadow .15s,border-color .15s}
         .apple-calc input:not([type=checkbox]):not([type=file]):focus,.apple-calc select:focus{outline:none;border-color:#0071e3!important;box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
+        @media (min-width:1024px){.apple-calc input:not([type=checkbox]):not([type=file]),.apple-calc select{height:38px;border-radius:10px}}
         .apple-calc input::placeholder{color:#b0b0b8}
         .apple-calc h1{letter-spacing:-.02em}
         .ac-card{background:#fff;border:1px solid #ececf0;border-radius:20px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.04)}
@@ -1689,34 +1714,29 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-[28px] font-bold text-[#1d1d1f]">Просчёт заказа</h1>
-        </div>
+        <h1 className="text-[24px] font-bold text-[#1d1d1f] mb-3">Просчёт заказа</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6 items-start">
-
-          {/* ══ ЛЕВАЯ КОЛОНКА ══ */}
-          <div className="ac-card p-6 space-y-4 lg:sticky lg:top-6">
-
-            {/* Клиент. Во внутреннем контуре M-Glass клиент всегда M GLASS —
-                строку не показываем: выбора нет, а место занимает. */}
-            {!mglassOnly && (
-            <div>
+        {/* ══ ШАПКА ЗАКАЗА ══ Кому и откуда — один раз на заказ, поэтому над формой во
+            всю ширину. Раньше форма начиналась с шести рядов про заказ, и до размеров
+            стекла приходилось листать. Внутри M-Glass клиент и номера не спрашиваются. */}
+        {showOrderBar && (
+        <div className="ac-card px-5 py-3.5 mb-4 space-y-2">
+          {!mglassOnly && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.1fr)] gap-x-3 gap-y-2 items-end">
+            <div className="sm:col-span-2 lg:col-span-1">
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-[13px] font-medium text-[#6e6e73]">Клиент</label>
-                {!mglassOnly && (
-                  <button
-                    onClick={() => {
-                      // Заказчик из просчёта без карточки: имя из чата и источник — сразу в форму.
-                      if (!clientId) { if (leadContact.trim() && !ncName) setNcName(leadContact.trim()); if (leadSource && !ncSource) setNcSource(leadSource) }
-                      setShowNewClient(true)
-                    }}
-                    className="text-[10px] font-semibold text-orange-600 hover:text-orange-800 transition-colors">
-                    + Новый клиент
-                  </button>
-                )}
+                <label className="block text-[12px] font-medium text-[#6e6e73]">Клиент</label>
+                <button
+                  onClick={() => {
+                    // Заказчик из просчёта без карточки: имя из чата и источник — сразу в форму.
+                    if (!clientId) { if (leadContact.trim() && !ncName) setNcName(leadContact.trim()); if (leadSource && !ncSource) setNcSource(leadSource) }
+                    setShowNewClient(true)
+                  }}
+                  className="text-[10px] font-semibold text-orange-600 hover:text-orange-800 transition-colors">
+                  + Новый клиент
+                </button>
               </div>
-<ClientPicker
+              <ClientPicker
                 options={clientOptions}
                 value={clientId}
                 noneLabel={variant === 'mglass' ? undefined : '— Без заказчика —'}
@@ -1727,90 +1747,110 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 }}
               />
             </div>
-            )}
 
             {/* Откуда пришёл и кто он — две независимые отметки: с Авито приходит и опт. */}
-            {!mglassOnly && variant !== 'mglass' && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Откуда пришёл</label>
-                  <select value={leadSource ?? ''} onChange={e => { setLeadSource(e.target.value || null); setSavedOrderId(null) }}
-                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none">
-                    <option value="">— не указано —</option>
-                    {B2B_SOURCES.map(src => <option key={src.value} value={src.value}>{src.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Кто</label>
-                  <div className="flex gap-1">
-                    {CUSTOMER_KINDS.map(k => (
-                      <button key={k.value} type="button"
-                        onClick={() => { setLeadKind(leadKind === k.value ? null : k.value); setSavedOrderId(null) }}
-                        className={`flex-1 h-[44px] rounded-xl text-[13px] font-medium border transition-colors ${leadKind === k.value ? 'bg-[#1d1d1f] text-white border-[#1d1d1f]' : 'bg-white text-[#6e6e73] border-[#d9d9df] hover:border-[#1d1d1f]'}`}>
-                        {k.label}
-                      </button>
-                    ))}
-                  </div>
+            {variant !== 'mglass' && (<>
+              <div>
+                <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Откуда пришёл</label>
+                <select value={leadSource ?? ''} onChange={e => { setLeadSource(e.target.value || null); setSavedOrderId(null) }}
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none">
+                  <option value="">— не указано —</option>
+                  {B2B_SOURCES.map(src => <option key={src.value} value={src.value}>{src.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Кто</label>
+                <div className="flex gap-1">
+                  {CUSTOMER_KINDS.map(k => (
+                    <button key={k.value} type="button"
+                      onClick={() => { setLeadKind(leadKind === k.value ? null : k.value); setSavedOrderId(null) }}
+                      className={`flex-1 h-[44px] lg:h-[38px] rounded-xl lg:rounded-[10px] text-[13px] font-medium border transition-colors ${leadKind === k.value ? 'bg-[#1d1d1f] text-white border-[#1d1d1f]' : 'bg-white text-[#6e6e73] border-[#d9d9df] hover:border-[#1d1d1f]'}`}>
+                      {k.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-              {!clientId && (<>
-                <input type="text" maxLength={120} placeholder="Имя из чата — для приветствия (необязательно)"
-                  value={leadContact} onChange={e => { setLeadContact(e.target.value); setSavedOrderId(null) }}
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none placeholder:text-[#c4c4be]" />
-                <p className="text-[11px] text-[#9a9a95] leading-snug">
-                  Без заказчика цена — по общему прайсу. Заказчика добавите, когда клиент скажет «заказываю»; без него в работу не запускается.
-                </p>
+              {!clientId && (
+                <div>
+                  <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Имя из чата</label>
+                  <input type="text" maxLength={120} placeholder="для приветствия, необязательно"
+                    value={leadContact} onChange={e => { setLeadContact(e.target.value); setSavedOrderId(null) }}
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none placeholder:text-[#c4c4be]" />
+                </div>
+              )}
+            </>)}
+          </div>
+          )}
+
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap">
+            <button type="button" onClick={() => setOrderDetailsOpen(o => !o)} aria-expanded={orderDetailsOpen}
+              className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#6e6e73] hover:text-[#1d1d1f] transition-colors">
+              <span className={`text-[9px] inline-block transition-transform ${orderDetailsOpen ? 'rotate-90' : ''}`}>▶</span>
+              Детали заказа
+              {orderDetailsSummary && <span className="font-normal text-[#9a9a95]">· {orderDetailsSummary}</span>}
+            </button>
+            {!mglassOnly && variant !== 'mglass' && !clientId && (
+              <p className="text-[11px] text-[#9a9a95] leading-snug lg:ml-auto">
+                Без заказчика цена — по общему прайсу; заказчика добавите на «заказываю», без него в работу не запускается.
+              </p>
+            )}
+          </div>
+
+          {orderDetailsOpen && (
+            <div className="grid grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_minmax(0,2fr)] gap-x-3 gap-y-2 items-start">
+              {/* Номера заказа — внутри M-Glass не спрашиваем: номер присваивается сам. */}
+              {!mglassOnly && (<>
+                <div>
+                  <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">
+                    Наш номер <span className="text-[11px] font-normal text-[#9a9a95]">— пусто = авто</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="авто при запуске (05xxx)"
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
+                    value={ourOrderNumber}
+                    onChange={e => setOurOrderNumber(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">№ клиента</label>
+                  <input
+                    type="text"
+                    placeholder="необязательно"
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
+                    value={clientOrderNumber}
+                    onChange={e => setClientOrderNumber(e.target.value)}
+                  />
+                </div>
               </>)}
-            </div>
-            )}
-
-            {/* Номера заказа — внутри M-Glass не спрашиваем: номер присваивается сам. */}
-            {!mglassOnly && (
-            <div className="grid grid-cols-2 gap-2">
+              {/* Дней производства — во внутреннем контуре M-Glass не спрашиваем. */}
+              {variant !== 'mglass' && (
               <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
-                  Наш номер <span className="text-[11px] font-normal text-[#9a9a95]">— пусто = авто (05xxx)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="авто при запуске"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
-                  value={ourOrderNumber}
-                  onChange={e => setOurOrderNumber(e.target.value)}
+                <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Срок, дней</label>
+                <input type="number" min="1" max="90"
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  value={fProductionDays}
+                  onChange={e => setFProductionDays(Math.max(1, Number(e.target.value) || 1))}
                 />
               </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">№ клиента</label>
-                <input
-                  type="text"
-                  placeholder="необязательно"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
-                  value={clientOrderNumber}
-                  onChange={e => setClientOrderNumber(e.target.value)}
-                />
+              )}
+              <div className="col-span-2 lg:col-span-1">
+                <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Примечание к заказу</label>
+                {notesField}
               </div>
             </div>
-            )}
+          )}
+        </div>
+        )}
 
-            {/* Дней производства — во внутреннем контуре M-Glass не спрашиваем. */}
-            {variant !== 'mglass' && (
-            <div>
-              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Срок производства, дней</label>
-              <input type="number" min="1" max="90"
-                className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-                value={fProductionDays}
-                onChange={e => setFProductionDays(Math.max(1, Number(e.target.value) || 1))}
-              />
-            </div>
-            )}
+        <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-5 items-start">
 
-            {!mglassOnly && <div className="h-px bg-[#f0f0ec]" />}
+          {/* ══ ЛЕВАЯ КОЛОНКА: позиция ══ */}
+          <div className="ac-card p-5 space-y-3 lg:sticky lg:top-4">
 
             {/* Тип позиции: сырьё (стекло/зеркало) или готовое изделие производства */}
             <div>
-              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Тип позиции</label>
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5" role="group" aria-label="Тип позиции">
                 {([['material', 'Стекло / зеркало'], ['fmirror', 'Зеркало+свет/рама'], ['floft', 'Лофт']] as const).map(([k, l]) => (
                   <button key={k} onClick={() => switchKind(k)}
                     className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${fKind === k ? 'bg-[#1d1d1f] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
@@ -1823,15 +1863,134 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               )}
             </div>
 
-            {/* Чертёж — универсально для всех типов, сразу под выбором типа */}
-            <div className="flex items-center gap-2 flex-wrap border border-dashed border-[#d8d8d3] rounded-lg px-2.5 py-2 bg-[#fafaf9]">
-              <span className="text-[11px] text-[#6b6b66]">Есть чертёж? Прикрепи — {fKind === 'floft' ? 'сниму проём, тип и створки' : fKind === 'fmirror' ? 'сниму размеры зеркала' : 'добавлю каждое стекло отдельной позицией'}:</span>
-              <label className={`px-2.5 py-1 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[11px] font-medium rounded-lg hover:bg-[#f5f5f3] ${flParsing ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
-                {flParsing ? 'Читаю…' : 'Чертёж (PDF/фото)'}
-                <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" disabled={flParsing}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) parseItemDrawing(f); e.target.value = '' }} />
-              </label>
-              {flParseNote && <span className="text-[11px] text-emerald-700">{flParseNote}</span>}
+            {/* Файл клиента. Раньше это были три разных блока в трёх местах формы
+                (чертёж сверху, «файл → позиции» под кнопкой, «прикрепить» в самом низу),
+                и было непонятно, чем они отличаются. Теперь — один вход, у каждого
+                действия подпись. Сами действия прежние. */}
+            <div className="rounded-lg border border-dashed border-[#d8d8d3] bg-[#fafaf9]">
+              <button type="button" onClick={() => setFilesOpen(o => !o)} aria-expanded={filesOpen}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left">
+                <span className="text-[12px] font-medium text-[#6b6b66] whitespace-nowrap">📎 Файл клиента</span>
+                <span className="text-[11px] text-[#9a9a95] truncate flex-1 min-w-0">{filesSummary}</span>
+                <span className={`text-[9px] text-[#9a9a95] inline-block transition-transform ${filesOpen ? 'rotate-90' : ''}`}>▶</span>
+              </button>
+
+              {filesOpen && (
+                <div className="px-3 pb-2.5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className={`flex-shrink-0 px-2.5 py-1 bg-white border border-[#e4e4e0] text-[#111110] text-[11px] font-medium rounded-lg hover:bg-[#f5f5f3] ${flParsing ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
+                      {flParsing ? 'Читаю…' : 'Чертёж (PDF/фото)'}
+                      <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" disabled={flParsing}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) parseItemDrawing(f); e.target.value = '' }} />
+                    </label>
+                    <span className="text-[11px] text-[#9a9a95] leading-tight">
+                      {fKind === 'floft' ? 'сниму проём, тип и створки' : fKind === 'fmirror' ? 'сниму размеры зеркала' : 'каждое стекло — сразу отдельной позицией'}
+                    </span>
+                  </div>
+                  {fKind === 'material' && (<>
+                    <div className="flex items-center gap-2">
+                      <label className={`flex-shrink-0 px-2.5 py-1 bg-white border border-[#e4e4e0] text-[11px] font-medium rounded-lg ${
+                        parseBusy ? 'text-[#c4c4be] cursor-default' : 'text-[#111110] hover:bg-[#f5f5f3] cursor-pointer'}`}>
+                        {parseBusy ? 'Распознаю…' : 'Список размеров'}
+                        <input type="file" accept="application/pdf,image/png,image/jpeg" className="hidden"
+                          disabled={parseBusy}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) parseClientFile(f); e.target.value = '' }} />
+                      </label>
+                      <span className="text-[11px] text-[#9a9a95] leading-tight">PDF/фото — покажу найденное, добавите сами</span>
+                    </div>
+                    {!attachFile && (
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => attachInputRef.current?.click()}
+                          className="flex-shrink-0 px-2.5 py-1 bg-white border border-[#e4e4e0] text-[#111110] text-[11px] font-medium rounded-lg hover:bg-[#f5f5f3]">
+                          Приложить к заказу
+                        </button>
+                        <span className="text-[11px] text-[#9a9a95] leading-tight">файл сохранится вместе с просчётом</span>
+                      </div>
+                    )}
+                  </>)}
+                </div>
+              )}
+              <input ref={attachInputRef} type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.doc,.docx,.xls,.xlsx"
+                className="hidden"
+                onChange={e => setAttachFile(e.target.files?.[0] ?? null)} />
+
+              {/* Результаты — видны и при свёрнутом блоке: появляются только после действия. */}
+              {flParseNote && <p className="px-3 pb-2 text-[11px] text-emerald-700">{flParseNote}</p>}
+              {fKind === 'material' && (<>
+                {attachFile && (
+                  <div className="px-3 pb-2 space-y-1.5">
+                    <div className="flex items-center gap-2 px-3 py-1.5 border border-[#e4e4e0] rounded-lg bg-white">
+                      <span className="text-[10px] text-[#9a9a95] flex-shrink-0">к заказу:</span>
+                      <span className="text-[11px] text-[#111110] flex-1 truncate font-medium">{attachFile.name}</span>
+                      <span className="text-[10px] text-[#9a9a95] flex-shrink-0">
+                        {attachFile.size < 1024 * 1024
+                          ? `${(attachFile.size / 1024).toFixed(0)} КБ`
+                          : `${(attachFile.size / (1024 * 1024)).toFixed(1)} МБ`}
+                      </span>
+                      <button onClick={() => { setAttachFile(null); setDrawingInfo(null) }}
+                        className="text-[#9a9a95] hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
+                    </div>
+                    <button onClick={parseDrawing} disabled={parsingDrawing}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-50 transition-colors">
+                      {parsingDrawing ? 'Распознаю чертёж…' : '🔍 Распознать чертёж → позиции'}
+                    </button>
+                  </div>
+                )}
+                {drawingInfo && (
+                  <div className={`mx-3 mb-2 rounded-lg border px-3 py-2 text-[11px] ${drawingInfo.added > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                    {drawingInfo.added > 0
+                      ? <p className="font-semibold text-emerald-800">✓ Добавлено позиций: {drawingInfo.added}{drawingInfo.skipped > 0 ? ` · пропущено: ${drawingInfo.skipped}` : ''}</p>
+                      : <p className="font-semibold text-amber-800">Позиции не добавлены</p>}
+                    {(drawingInfo.holes > 0 || drawingInfo.cutouts > 0) && (
+                      <p className="mt-1 text-[#6b6b66]">
+                        Сложность: {drawingInfo.holes > 0 && `${drawingInfo.holes} отв.`} {drawingInfo.cutouts > 0 && `· ${drawingInfo.cutouts} слож. вырез(ов)`}
+                        {drawingInfo.cutouts > 0 && <span className="text-amber-700"> — трудоёмко, заложите наценку</span>}
+                        <span className="text-[#9a9a95]"> (точный тариф по операциям — с прайс-листом)</span>
+                      </p>
+                    )}
+                    {(drawingInfo.shaped ?? 0) > 0 && (
+                      <p className="mt-1 text-[#6b6b66]">
+                        Скошенных деталей: {drawingInfo.shaped} — раскрой по габаритному прямоугольнику (расход больше номинала учтён в размерах позиции).
+                      </p>
+                    )}
+                    {drawingInfo.warnings.length > 0 && (
+                      <ul className="mt-1 space-y-0.5 text-[#8a6d3b] list-disc list-inside">
+                        {drawingInfo.warnings.slice(0, 6).map((w, i) => <li key={i}>{w}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {parseError && <p className="px-3 pb-2 text-[11px] text-red-600">{parseError}</p>}
+                {parsed.length > 0 && (
+                  <div className="mx-3 mb-2.5 border border-[#e4e4e0] rounded-lg bg-white overflow-hidden">
+                    <div className="px-3 py-1.5 bg-[#fafaf9] border-b border-[#f0f0ec] flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-[#111110]">Распознано: {parsed.length}</span>
+                      <button onClick={() => setParsed([])} className="text-[11px] text-[#9a9a95] hover:text-[#111110]">Отменить</button>
+                    </div>
+                    <div className="max-h-44 overflow-y-auto divide-y divide-[#f8f8f7]">
+                      {parsed.map((p, i) => (
+                        <div key={p.id} className="px-3 py-1.5 flex items-center gap-2 text-[11px]">
+                          <span className="text-[#c4c4be] w-4">{i + 1}</span>
+                          <span className="font-mono text-[#111110]">{p.width}×{p.height}</span>
+                          <span className="text-[#6b6b66]">×{p.quantity}</span>
+                          <span className="text-[#9a9a95] truncate flex-1">{p.label || p.comment}</span>
+                          {p.needsReview && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 whitespace-nowrap">проверить</span>}
+                          <button onClick={() => setParsed(prev => prev.filter(x => x.id !== p.id))}
+                            className="text-[#c4c4be] hover:text-red-500">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={addParsedItems} disabled={!selectedMaterial}
+                      className="w-full text-[12px] font-semibold py-2 bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                      Добавить {parsed.length} поз. материалом «{selectedMaterial?.name ?? '—'}»
+                    </button>
+                    <p className="px-3 py-1.5 text-[10px] text-[#9a9a95]">
+                      Модель распознаёт только размеры. Цену считает калькулятор — как при ручном вводе.
+                    </p>
+                  </div>
+                )}
+              </>)}
             </div>
 
             {fKind !== 'material' && (
@@ -2210,8 +2369,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             {fKind === 'material' && (<>
             {/* Стекло / Зеркало — табы */}
             <div>
-              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1.5">Материал</label>
-              <div className="flex bg-[#f0f0f2] rounded-[10px] p-[3px] gap-[2px]">
+              <div className="flex bg-[#f0f0f2] rounded-[10px] p-[3px] gap-[2px]" role="group" aria-label="Материал">
                 {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
                   <button key={s.value} onClick={() => handleSuperCatChange(s.value)}
                     className={`flex-1 py-1.5 rounded-[8px] text-[13px] font-medium transition-all ${fSuperCat === s.value ? 'bg-white shadow-sm text-[#1d1d1f]' : 'text-[#6e6e73] hover:text-[#1d1d1f]'}`}>
@@ -2224,7 +2382,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             {/* Толщина + Тип */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Толщина</label>
+                <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Толщина</label>
                 <select
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
                   value={fThickness ?? ''}
@@ -2233,7 +2391,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 </select>
               </div>
               <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Тип</label>
+                <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Тип</label>
                 <select
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
                   value={fMatId ?? ''}
@@ -2249,11 +2407,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               </div>
             )}
 
-            <div className="h-px bg-[#f0f0ec]" />
-
             {/* Размеры */}
             <div>
-              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
+              <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
               <div className="grid grid-cols-3 gap-2">
                 <div className="relative">
                   <input ref={widthRef} type="number" min="1"
@@ -2277,27 +2433,17 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             </div>
 
             {/* Основа расчёта: отход и минимальная цена. Не обработка — поэтому
-                отдельной строкой, а не вперемешку с фацетом и сверловкой. */}
+                отдельной строкой, а не вперемешку с фацетом и сверловкой. Отход только
+                показывается (его не вводят), поэтому без подписи сверху — одной строкой. */}
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
-                  Отход
-                  {selectedMaterial?.passthrough
-                    ? <span className="ml-1 text-orange-500 normal-case font-normal text-[10px]">фикс.</span>
-                    : <span className="ml-1 normal-case font-normal text-emerald-600 text-[10px]">по раскрою</span>}
-                </label>
-                <div className={`w-full border rounded-lg px-3 min-h-[44px] flex items-center text-[12px] ${
-                  selectedMaterial?.passthrough
-                    ? 'bg-[#f8f8f7] border-[#e4e4e0] text-orange-600 font-semibold'
-                    : 'bg-[#f8f8f7] border-[#e4e4e0] text-[#6e6e73]'}`}>
-                  {selectedMaterial?.passthrough ? '10% — проходной' : 'авто по раскрою'}
-                </div>
+              <div className="w-full border border-[#e4e4e0] bg-[#f8f8f7] rounded-lg px-2.5 min-h-[44px] lg:min-h-[36px] flex items-center gap-1.5 text-[12px] min-w-0">
+                <span className="text-[#9a9a95]">Отход</span>
+                {selectedMaterial?.passthrough
+                  ? <span className="text-orange-600 font-semibold truncate">10% — проходной</span>
+                  : <span className="text-[#6e6e73] truncate">авто по раскрою</span>}
               </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Минимальная цена</label>
-                <TreatToggle on={fMinPrice} onChange={setFMinPrice} tone="indigo"
-                  label={fMinPrice ? 'Учитывать' : 'Чистый расчёт'} />
-              </div>
+              <TreatToggle on={fMinPrice} onChange={setFMinPrice} tone="indigo"
+                label={fMinPrice ? 'Мин. цена' : 'Без мин. цены'} />
             </div>
             {ratesMissing.length > 0 && (
               <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -2309,9 +2455,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 строят маршрут изделия по цеху. Не отметил — этап не создастся, и человек
                 на станции изделия не увидит. Раньше они были размазаны по трём рядам
                 вперемешку с отходом и минимальной ценой. */}
-            <div className="rounded-xl border border-[#e4e4e0] bg-[#fbfbfa] p-3 space-y-2.5">
+            <div className="rounded-xl border border-[#e4e4e0] bg-[#fbfbfa] p-2.5 space-y-2">
               <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                <p className="text-[13px] font-semibold text-[#111110]">Обработка</p>
+                <p className="text-[12px] font-semibold text-[#111110]">Обработка</p>
                 <p className="text-[11px] text-[#9a9a95]">определяет маршрут в цеху</p>
               </div>
 
@@ -2337,11 +2483,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   включают они один и тот же этап маршрута. Порознь они читались как
                   два несвязанных признака: вырезы стояли в конце сетки, через две
                   обработки от отверстий. Теперь это один блок, и видно, к кому он ведёт. */}
-              <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-2.5 space-y-2">
-                <p className="text-[11px] font-medium text-blue-900">Сверловка · одна станция</p>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-2 space-y-2">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+                  <p className="text-[11px] font-medium text-blue-900 leading-tight" title="Отверстия и вырезы делает один человек — сверловщик">Сверловка</p>
                   <TreatToggle on={fHoles} onChange={setFHoles} label="Отверстия" tone="blue" />
-                  <label className={`flex items-center gap-2 min-h-[44px] px-2.5 py-1.5 border rounded-lg ${
+                  <label className={`flex items-center gap-2 min-h-[44px] lg:min-h-[36px] px-2.5 py-1.5 border rounded-lg ${
                     fCutouts > 0 ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] bg-white'}`}>
                     <input type="number" min="0" value={fCutouts || ''} placeholder="0"
                       onChange={e => setFCutouts(Math.max(0, Number(e.target.value) || 0))}
@@ -2354,7 +2500,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   Раньше они раскрывались внутри ячейки и ломали ряды. */}
               {fFacet && (
                 <select
-                  className="w-full bg-white border border-purple-300 rounded-lg px-3 min-h-[44px] text-[13px] text-[#111110] outline-none focus:border-purple-500"
+                  className="w-full bg-white border border-purple-300 rounded-lg px-3 min-h-[44px] lg:min-h-[38px] text-[13px] text-[#111110] outline-none focus:border-purple-500"
                   value={fFacetMm} onChange={e => setFFacetMm(Number(e.target.value))}>
                   {facetPrices.map(f => (
                     <option key={f.type_mm} value={f.type_mm}>Фацет {f.type_mm} мм — {f.sale_price} ₽/м.п.</option>
@@ -2401,7 +2547,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   .sort((a, b) => a.thickness - b.thickness || a.name.localeCompare(b.name))
                 const layerSelect = (val: number | null, set: (v: number | null) => void, label: string) => (
                   <select
-                    className="w-full bg-white border border-indigo-200 rounded-lg px-3 min-h-[44px] text-[13px] outline-none focus:border-indigo-400"
+                    className="w-full bg-white border border-indigo-200 rounded-lg px-3 min-h-[44px] lg:min-h-[38px] text-[13px] outline-none focus:border-indigo-400"
                     value={val ?? ''} onChange={e => set(e.target.value === '' ? null : Number(e.target.value))}>
                     <option value="">{label}: как основное</option>
                     {glassOpts.map(m => <option key={m.id} value={m.id}>{label}: {m.name} {m.thickness} мм</option>)}
@@ -2410,7 +2556,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 return (
                   <div className="space-y-1.5">
                     <select
-                      className="w-full bg-white border border-indigo-200 rounded-lg px-3 min-h-[44px] text-[13px] outline-none focus:border-indigo-400"
+                      className="w-full bg-white border border-indigo-200 rounded-lg px-3 min-h-[44px] lg:min-h-[38px] text-[13px] outline-none focus:border-indigo-400"
                       value={fTriplexLayers} onChange={e => setFTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
                       <option value={2}>Триплекс: 2 стекла</option>
                       <option value={3}>Триплекс: 3 стекла</option>
@@ -2440,46 +2586,6 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               className="w-full bg-[#1d1d1f] text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-black disabled:opacity-40 transition-colors">
               + Добавить позицию
             </button>
-
-            {/* А19: файл клиента → позиции */}
-            <div className="space-y-1.5">
-              <label className={`block text-center text-[12px] font-medium py-2 rounded-lg border border-dashed cursor-pointer transition-colors ${
-                parseBusy ? 'border-[#e4e4e0] text-[#c4c4be]' : 'border-[#d4d4cf] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]'}`}>
-                {parseBusy ? 'Распознаю…' : '📎 Файл клиента (PDF/фото) → позиции'}
-                <input type="file" accept="application/pdf,image/png,image/jpeg" className="hidden"
-                  disabled={parseBusy}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) parseClientFile(f); e.target.value = '' }} />
-              </label>
-              {parseError && <p className="text-[11px] text-red-600">{parseError}</p>}
-              {parsed.length > 0 && (
-                <div className="border border-[#e4e4e0] rounded-lg bg-white overflow-hidden">
-                  <div className="px-3 py-1.5 bg-[#fafaf9] border-b border-[#f0f0ec] flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-[#111110]">Распознано: {parsed.length}</span>
-                    <button onClick={() => setParsed([])} className="text-[11px] text-[#9a9a95] hover:text-[#111110]">Отменить</button>
-                  </div>
-                  <div className="max-h-44 overflow-y-auto divide-y divide-[#f8f8f7]">
-                    {parsed.map((p, i) => (
-                      <div key={p.id} className="px-3 py-1.5 flex items-center gap-2 text-[11px]">
-                        <span className="text-[#c4c4be] w-4">{i + 1}</span>
-                        <span className="font-mono text-[#111110]">{p.width}×{p.height}</span>
-                        <span className="text-[#6b6b66]">×{p.quantity}</span>
-                        <span className="text-[#9a9a95] truncate flex-1">{p.label || p.comment}</span>
-                        {p.needsReview && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 whitespace-nowrap">проверить</span>}
-                        <button onClick={() => setParsed(prev => prev.filter(x => x.id !== p.id))}
-                          className="text-[#c4c4be] hover:text-red-500">✕</button>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={addParsedItems} disabled={!selectedMaterial}
-                    className="w-full text-[12px] font-semibold py-2 bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
-                    Добавить {parsed.length} поз. материалом «{selectedMaterial?.name ?? '—'}»
-                  </button>
-                  <p className="px-3 py-1.5 text-[10px] text-[#9a9a95]">
-                    Модель распознаёт только размеры. Цену считает калькулятор — как при ручном вводе.
-                  </p>
-                </div>
-              )}
-            </div>
 
             {/* Доп. услуги */}
             {services.length > 0 && (
@@ -2587,83 +2693,170 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 </div>
               )
             })()}
-
-            {/* Чертёж / файл */}
-            <div>
-              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
-                Чертёж / файл клиента
-              </label>
-              {attachFile ? (
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 px-3 py-2 border border-[#e4e4e0] rounded-lg bg-[#f8f8f7]">
-                    <span className="text-[11px] text-[#111110] flex-1 truncate font-medium">{attachFile.name}</span>
-                    <span className="text-[10px] text-[#9a9a95] flex-shrink-0">
-                      {attachFile.size < 1024 * 1024
-                        ? `${(attachFile.size / 1024).toFixed(0)} КБ`
-                        : `${(attachFile.size / (1024 * 1024)).toFixed(1)} МБ`}
-                    </span>
-                    <button onClick={() => { setAttachFile(null); setDrawingInfo(null) }}
-                      className="text-[#9a9a95] hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
-                  </div>
-                  <button onClick={parseDrawing} disabled={parsingDrawing}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-50 transition-colors">
-                    {parsingDrawing ? 'Распознаю чертёж…' : '🔍 Распознать чертёж → позиции'}
-                  </button>
-                </div>
-              ) : (
-                <button onClick={() => attachInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-[#d4d4ce] rounded-lg text-[12px] text-[#9a9a95] hover:border-[#9a9a95] hover:text-[#6b6b66] transition-colors">
-                  📎 Прикрепить файл
-                </button>
-              )}
-              <input ref={attachInputRef} type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.doc,.docx,.xls,.xlsx"
-                className="hidden"
-                onChange={e => setAttachFile(e.target.files?.[0] ?? null)} />
-
-              {drawingInfo && (
-                <div className={`mt-2 rounded-lg border px-3 py-2 text-[11px] ${drawingInfo.added > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                  {drawingInfo.added > 0
-                    ? <p className="font-semibold text-emerald-800">✓ Добавлено позиций: {drawingInfo.added}{drawingInfo.skipped > 0 ? ` · пропущено: ${drawingInfo.skipped}` : ''}</p>
-                    : <p className="font-semibold text-amber-800">Позиции не добавлены</p>}
-                  {(drawingInfo.holes > 0 || drawingInfo.cutouts > 0) && (
-                    <p className="mt-1 text-[#6b6b66]">
-                      Сложность: {drawingInfo.holes > 0 && `${drawingInfo.holes} отв.`} {drawingInfo.cutouts > 0 && `· ${drawingInfo.cutouts} слож. вырез(ов)`}
-                      {drawingInfo.cutouts > 0 && <span className="text-amber-700"> — трудоёмко, заложите наценку</span>}
-                      <span className="text-[#9a9a95]"> (точный тариф по операциям — с прайс-листом)</span>
-                    </p>
-                  )}
-                  {(drawingInfo.shaped ?? 0) > 0 && (
-                    <p className="mt-1 text-[#6b6b66]">
-                      Скошенных деталей: {drawingInfo.shaped} — раскрой по габаритному прямоугольнику (расход больше номинала учтён в размерах позиции).
-                    </p>
-                  )}
-                  {drawingInfo.warnings.length > 0 && (
-                    <ul className="mt-1 space-y-0.5 text-[#8a6d3b] list-disc list-inside">
-                      {drawingInfo.warnings.slice(0, 6).map((w, i) => <li key={i}>{w}</li>)}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
             </>)}
 
-            {/* Примечание к заказу */}
+            {/* Примечание к заказу — в шапке заказа; здесь только там, где шапки нет (Расчёт B2B для M-Glass). */}
+            {!showOrderBar && (
             <details className="group">
               <summary className="flex items-center gap-1.5 text-[11px] font-medium text-[#9a9a95] cursor-pointer select-none list-none hover:text-[#6b6b66] transition-colors">
                 <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                 Примечание к заказу
               </summary>
-              <textarea
-                className="mt-2 w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all resize-none"
-                rows={2} value={notes} onChange={e => setNotes(e.target.value)}
-                placeholder="Общий комментарий к заказу..."
-              />
+              <div className="mt-2">{notesField}</div>
             </details>
+            )}
           </div>
 
           {/* ══ ПРАВАЯ КОЛОНКА ══ */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
+
+            {/* ══ ИТОГ И ДЕЙСТВИЯ ══ — над списком позиций: сумма, маржа и «Сохранить» видны
+                без прокрутки, сколько бы позиций ни было. Справка по цене — под списком. */}
+            {totals && (
+              <div className="ac-card p-5 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    {discount > 0 && (
+                      <p className="text-[12px] text-[#9a9a95] line-through mb-0.5">{fmt(totals.totalSaleIncVat)}</p>
+                    )}
+                    <p className="text-[34px] font-bold text-[#1d1d1f] leading-none tracking-[-0.02em]">{fmt(totals.totalAfterDiscount)}</p>
+                    {discount > 0 && (
+                      <p className="text-[11px] text-emerald-600 mt-0.5">скидка {discount}%</p>
+                    )}
+                  </div>
+                  <div className="text-right text-[12px] text-[#8a8a85] space-y-0.5">
+                    <p className="font-mono">{fmtN(totals.totalAreaNet)} м²</p>
+                    <p className="font-mono">{fmtN(totals.totalWeight, 1)} кг</p>
+                    <p className="font-mono text-[11px]">
+                      расч. {fmtN(items.reduce((s, i) => s + i.totalAreaBilled, 0))} м²
+                    </p>
+                    {(() => {
+                      const billed = items.reduce((s, i) => s + i.totalAreaBilled, 0)
+                      return billed > 0 ? (
+                        <p className="font-mono text-[11px] font-semibold text-[#6b6b66] pt-0.5 border-t border-[#f0f0ec] mt-0.5">
+                          {fmt(Math.round(totals.totalAfterDiscount / billed))}/м²
+                        </p>
+                      ) : null
+                    })()}
+                  </div>
+                </div>
+
+                {/* Маржа и прибыль — итоговая строка */}
+                {(() => {
+                  const avgEm = orderMarginPct(itemsAuto, discount)
+                  return (
+                    <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[#f8f8f7] border border-[#f0f0ec]">
+                      <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm, rates)}`}>{avgEm}%</span>
+                      <span className="text-[12px] text-[#6b6b66]">маржа заказа</span>
+                      <span className="ml-auto text-[12px] font-semibold font-mono text-[#111110]">
+                        {totals.profit > 0 ? '+' : ''}{fmt(totals.profit)}
+                      </span>
+                      <span className="text-[11px] text-[#9a9a95]">прибыль</span>
+                    </div>
+                  )
+                })()}
+
+                {discount > maxDiscount && !isAdmin && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
+                    ⚠️ Скидка клиента {discount}% превышает ваш ориентир {maxDiscount}%. Просчёт сохранится и сразу готов к запуску.
+                  </div>
+                )}
+
+                {totalAfterDiscountWouldBreakMin && !isAdmin && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
+                    ⚠️ Скидка снижает итог ниже минимальной стоимости позиций. Просчёт сохранится и сразу готов к запуску.
+                  </div>
+                )}
+                {bomIssues.length > 0 && (
+                  <div className={`rounded-lg px-3 py-2.5 text-[12px] border ${bomSummary.blocking > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                    <p className="font-semibold mb-1">
+                      {bomSummary.blocking > 0
+                        ? `Нет в справочнике: ${bomSummary.blocking} ${bomSummary.blocking === 1 ? 'позиция' : 'позиций'} без себестоимости`
+                        : 'Спецификация: есть замечания'}
+                    </p>
+                    <ul className="space-y-0.5">
+                      {bomIssues.slice(0, 8).map((iss, n) => (
+                        <li key={n} className={iss.severity === 'warn' ? 'opacity-75' : ''}>
+                          Поз. {iss.itemIndex + 1}: {iss.detail}
+                        </li>
+                      ))}
+                    </ul>
+                    {bomIssues.length > 8 && <p className="mt-1 opacity-75">…и ещё {bomIssues.length - 8}</p>}
+                    {bomSummary.blocking > 0 && (
+                      <p className="mt-1.5 font-medium">Проверь позиции в справочнике до отправки клиенту — маржа по ним считается от нуля.</p>
+                    )}
+                  </div>
+                )}
+                {mappingsErr && items.length > 0 && (
+                  <p className="text-[11px] text-[#9a9a95]">Привязки к прайсу поставщика не загрузились — пункт «цена не обновится» в проверке сейчас не работает.</p>
+                )}
+
+                {editingOrderId != null && (
+                  <p className="text-[11px] text-[#9a9a95] text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
+                )}
+                {attachPriceChange && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-snug">
+                    С заказчиком цена другая: клиенту назвали {fmt(attachPriceChange.was)}, сейчас {fmt(attachPriceChange.now)} — у клиента свой прайс или скидка. Проверьте перед «Обновить просчёт».
+                  </p>
+                )}
+                {/* Все действия с просчётом — в одном ряду, сразу под суммой: раньше «Сохранить»
+                    стояла под рекомендацией и аналитикой, и до неё приходилось листать. */}
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={!kpText}
+                    onClick={() => { const el = document.getElementById('b2b-kp') as HTMLDetailsElement | null; if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }) } }}
+                    className="flex-1 min-w-[150px] bg-white border border-[#d9d9df] text-[#1d1d1f] text-[13px] font-semibold py-2.5 rounded-xl hover:bg-[#f5f5f4] disabled:opacity-40 transition-colors">
+                    Клиентский расчёт (КП)
+                  </button>
+                  {clientText && variant !== 'mglass' && (
+                    <button type="button" onClick={copyClientText}
+                      className="flex-1 min-w-[150px] bg-white border border-[#d9d9df] text-[#1d1d1f] text-[13px] font-semibold py-2.5 rounded-xl hover:bg-[#f5f5f4] transition-colors">
+                      {textCopied ? '✓ Скопировано' : leadSource === 'avito' ? '📋 Текст для Авито' : '📋 Текст клиенту'}
+                    </button>
+                  )}
+                  <button onClick={handleSave} disabled={saving || !!saveBlocker || items.length === 0 || savedOrderId != null}
+                    className="flex-[1.3] min-w-[180px] bg-[#1d1d1f] text-white text-[13px] font-semibold py-2.5 rounded-xl hover:bg-black disabled:opacity-40 transition-colors">
+                    {saving ? 'Сохранение...'
+                      : savedOrderId != null ? (editingOrderId != null ? 'Обновлено ✓' : 'Сохранено ✓')
+                      : saveBlocker ? saveBlocker
+                      : editingOrderId != null ? 'Обновить просчёт'
+                      : !clientId ? 'Сохранить без заказчика' : 'Сохранить просчёт'}
+                  </button>
+                </div>
+
+                {saveError && (
+                  <div className="border border-red-200 bg-red-50 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
+                    <p className="font-semibold mb-0.5">Ошибка сохранения:</p>
+                    <p className="font-mono break-all">{saveError}</p>
+                  </div>
+                )}
+
+                {savedOrderId && (
+                  <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 flex flex-col gap-2">
+                    <p className="text-[12px] font-semibold text-emerald-800">
+                      {savedAsPending ? 'Просчёт сохранён и отправлен на согласование ✓' : !clientId ? 'Просчёт сохранён без заказчика ✓' : 'Расчёт сохранён ✓'}
+                    </p>
+                    <p className="text-[11px] text-emerald-700">
+                      {!clientId
+                        ? 'Лежит в «Просчётах» с отметкой «без заказчика». Ответ клиенту — кнопка «📋 Текст» выше. Когда клиент скажет «заказываю»: «Просчёты» → «＋ Заказчик», выберите или создайте клиента и нажмите «Обновить просчёт».'
+                        : 'Коммерческое предложение (PDF) скачивается в разделе «Просчёты» — там же хранится вся история расчётов.'}
+                    </p>
+                    <button
+                      onClick={() => router.push('/b2b-quotes')}
+                      className="w-full text-[12px] font-medium py-2 rounded-lg bg-[#1d1d1f] text-white hover:bg-black transition-colors">
+                      Перейти к просчётам →
+                    </button>
+                  </div>
+                )}
+
+              </div>
+            )}
+            {/* Ошибка открытия просчёта (?orderId) пишется в saveError, а карточка итога
+                появляется только с позициями — без этого блока ошибка была не видна. */}
+            {!totals && saveError && (
+              <div className="border border-red-200 bg-red-50 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
+                <p className="font-mono break-all">{saveError}</p>
+              </div>
+            )}
 
             {/* Таблица позиций */}
             <div className="ac-card overflow-hidden">
@@ -2762,7 +2955,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               )}
 
               {items.length === 0 ? (
-                <div className="py-16 text-center text-[13px] text-[#c4c4be]">Добавьте первую позицию</div>
+                <div className="py-10 text-center text-[13px] text-[#c4c4be]">Добавьте первую позицию — сумма и «Сохранить» появятся над списком</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
@@ -3138,51 +3331,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               </div>
             )}
 
-            {/* Итоговый блок + кнопка сохранить */}
+            {/* Справка по цене и материалу — под списком: читают, но не нажимают. */}
             {totals && (
-              <div className="ac-card p-6 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    {discount > 0 && (
-                      <p className="text-[12px] text-[#9a9a95] line-through mb-0.5">{fmt(totals.totalSaleIncVat)}</p>
-                    )}
-                    <p className="text-[38px] font-bold text-[#1d1d1f] leading-none tracking-[-0.02em]">{fmt(totals.totalAfterDiscount)}</p>
-                    {discount > 0 && (
-                      <p className="text-[11px] text-emerald-600 mt-0.5">скидка {discount}%</p>
-                    )}
-                  </div>
-                  <div className="text-right text-[12px] text-[#8a8a85] space-y-0.5">
-                    <p className="font-mono">{fmtN(totals.totalAreaNet)} м²</p>
-                    <p className="font-mono">{fmtN(totals.totalWeight, 1)} кг</p>
-                    <p className="font-mono text-[11px]">
-                      расч. {fmtN(items.reduce((s, i) => s + i.totalAreaBilled, 0))} м²
-                    </p>
-                    {(() => {
-                      const billed = items.reduce((s, i) => s + i.totalAreaBilled, 0)
-                      return billed > 0 ? (
-                        <p className="font-mono text-[11px] font-semibold text-[#6b6b66] pt-0.5 border-t border-[#f0f0ec] mt-0.5">
-                          {fmt(Math.round(totals.totalAfterDiscount / billed))}/м²
-                        </p>
-                      ) : null
-                    })()}
-                  </div>
-                </div>
-
-                {/* Маржа и прибыль — итоговая строка */}
-                {(() => {
-                  const avgEm = orderMarginPct(itemsAuto, discount)
-                  return (
-                    <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[#f8f8f7] border border-[#f0f0ec]">
-                      <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm, rates)}`}>{avgEm}%</span>
-                      <span className="text-[12px] text-[#6b6b66]">маржа заказа</span>
-                      <span className="ml-auto text-[12px] font-semibold font-mono text-[#111110]">
-                        {totals.profit > 0 ? '+' : ''}{fmt(totals.profit)}
-                      </span>
-                      <span className="text-[11px] text-[#9a9a95]">прибыль</span>
-                    </div>
-                  )
-                })()}
-
+              <div className="ac-card p-5 space-y-3">
                 {/* Рекомендация по цене — рыночная аналитика для менеджера */}
                 {(() => {
                   const target = strategy.target_margin || 40
@@ -3315,96 +3466,6 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                     <span className="text-[12px] text-amber-700">{items.filter(i => i.minPriceApplied).length} поз. с мин. ценой</span>
                     <span className="ml-auto text-[12px] font-semibold font-mono text-amber-800">+{fmt(totalMinPriceDelta)}</span>
                     <span className="text-[11px] text-amber-600">доп. выручка</span>
-                  </div>
-                )}
-
-                {discount > maxDiscount && !isAdmin && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
-                    ⚠️ Скидка клиента {discount}% превышает ваш ориентир {maxDiscount}%. Просчёт сохранится и сразу готов к запуску.
-                  </div>
-                )}
-
-                {totalAfterDiscountWouldBreakMin && !isAdmin && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
-                    ⚠️ Скидка снижает итог ниже минимальной стоимости позиций. Просчёт сохранится и сразу готов к запуску.
-                  </div>
-                )}
-                {bomIssues.length > 0 && (
-                  <div className={`rounded-lg px-3 py-2.5 text-[12px] border ${bomSummary.blocking > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                    <p className="font-semibold mb-1">
-                      {bomSummary.blocking > 0
-                        ? `Нет в справочнике: ${bomSummary.blocking} ${bomSummary.blocking === 1 ? 'позиция' : 'позиций'} без себестоимости`
-                        : 'Спецификация: есть замечания'}
-                    </p>
-                    <ul className="space-y-0.5">
-                      {bomIssues.slice(0, 8).map((iss, n) => (
-                        <li key={n} className={iss.severity === 'warn' ? 'opacity-75' : ''}>
-                          Поз. {iss.itemIndex + 1}: {iss.detail}
-                        </li>
-                      ))}
-                    </ul>
-                    {bomIssues.length > 8 && <p className="mt-1 opacity-75">…и ещё {bomIssues.length - 8}</p>}
-                    {bomSummary.blocking > 0 && (
-                      <p className="mt-1.5 font-medium">Проверь позиции в справочнике до отправки клиенту — маржа по ним считается от нуля.</p>
-                    )}
-                  </div>
-                )}
-                {mappingsErr && items.length > 0 && (
-                  <p className="text-[11px] text-[#9a9a95]">Привязки к прайсу поставщика не загрузились — пункт «цена не обновится» в проверке сейчас не работает.</p>
-                )}
-
-                {editingOrderId != null && (
-                  <p className="text-[11px] text-[#9a9a95] text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
-                )}
-                {attachPriceChange && (
-                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-snug">
-                    С заказчиком цена другая: клиенту назвали {fmt(attachPriceChange.was)}, сейчас {fmt(attachPriceChange.now)} — у клиента свой прайс или скидка. Проверьте перед «Обновить просчёт».
-                  </p>
-                )}
-                <div className="flex gap-2">
-                  <button type="button" disabled={!kpText}
-                    onClick={() => { const el = document.getElementById('b2b-kp') as HTMLDetailsElement | null; if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }) } }}
-                    className="flex-1 bg-white border border-[#d9d9df] text-[#1d1d1f] text-[14px] font-semibold py-3 rounded-xl hover:bg-[#f5f5f4] disabled:opacity-40 transition-colors">
-                    Клиентский расчёт (КП)
-                  </button>
-                  <button onClick={handleSave} disabled={saving || !!saveBlocker || items.length === 0 || savedOrderId != null}
-                    className="flex-1 bg-[#1d1d1f] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-black disabled:opacity-40 transition-colors">
-                    {saving ? 'Сохранение...'
-                      : savedOrderId != null ? (editingOrderId != null ? 'Обновлено ✓' : 'Сохранено ✓')
-                      : saveBlocker ? saveBlocker
-                      : editingOrderId != null ? 'Обновить просчёт'
-                      : !clientId ? 'Сохранить без заказчика' : 'Сохранить просчёт'}
-                  </button>
-                </div>
-                {clientText && variant !== 'mglass' && (
-                  <button type="button" onClick={copyClientText}
-                    className="w-full bg-white border border-[#d9d9df] text-[#1d1d1f] text-[14px] font-semibold py-3 rounded-xl hover:bg-[#f5f5f4] transition-colors">
-                    {textCopied ? '✓ Скопировано' : leadSource === 'avito' ? '📋 Текст для Авито' : '📋 Текст клиенту'}
-                  </button>
-                )}
-
-                {saveError && (
-                  <div className="border border-red-200 bg-red-50 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
-                    <p className="font-semibold mb-0.5">Ошибка сохранения:</p>
-                    <p className="font-mono break-all">{saveError}</p>
-                  </div>
-                )}
-
-                {savedOrderId && (
-                  <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 flex flex-col gap-2">
-                    <p className="text-[12px] font-semibold text-emerald-800">
-                      {savedAsPending ? 'Просчёт сохранён и отправлен на согласование ✓' : !clientId ? 'Просчёт сохранён без заказчика ✓' : 'Расчёт сохранён ✓'}
-                    </p>
-                    <p className="text-[11px] text-emerald-700">
-                      {!clientId
-                        ? 'Лежит в «Просчётах» с отметкой «без заказчика». Ответ клиенту — кнопка «📋 Текст» выше. Когда клиент скажет «заказываю»: «Просчёты» → «＋ Заказчик», выберите или создайте клиента и нажмите «Обновить просчёт».'
-                        : 'Коммерческое предложение (PDF) скачивается в разделе «Просчёты» — там же хранится вся история расчётов.'}
-                    </p>
-                    <button
-                      onClick={() => router.push('/b2b-quotes')}
-                      className="w-full text-[12px] font-medium py-2 rounded-lg bg-[#1d1d1f] text-white hover:bg-black transition-colors">
-                      Перейти к просчётам →
-                    </button>
                   </div>
                 )}
 
