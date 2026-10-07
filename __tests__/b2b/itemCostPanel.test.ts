@@ -54,7 +54,7 @@ describe('itemCostPanel — обычное стекло', () => {
   it('себестоимость раскрывается по статьям, пустые опущены', () => {
     const p = itemCostPanel(glass)!
     expect(p.kind).toBe('glass')
-    expect(p.lines.map(l => l.name)).toEqual(['Материал', 'Закалка', 'Обработка кромки', 'Доставка', 'Упаковка'])
+    expect(p.lines.map(l => l.name)).toEqual(['Материал', 'Закалка', 'Обработка кромки', 'Транспорт на закалку', 'Упаковка'])
     expect(p.sum).toBe(6400)
     expect(p.reconciles).toBe(true)
   })

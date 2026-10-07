@@ -4,7 +4,8 @@ import { getRole, isOwnerRole } from '@/lib/getRole'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { finalTotalOf, type PriceApproval } from '@/lib/b2b/priceOverride'
 import { paidByOrder, remainderStatus } from '@/lib/b2b/orderPayments'
-import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { effectiveItemTotal, VAT, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { orderCostBreakdown } from '@/lib/b2b/orderCostBreakdown'
 import { loadB2BRates, marginTone, type MarginTone } from '@/lib/b2b/rates'
 import { deadlineFor } from '@/lib/b2b/deadline'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
@@ -200,10 +201,57 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 </div>
               </>
             )}
-            {owner && (
-              <div className="flex justify-between"><dt className="text-[#9a9a95]">Себестоимость</dt><dd className="font-mono text-[#6b6b66]">{fmt(Number(order.total_cost_net) || 0)}</dd></div>
-            )}
           </dl>
+          {/* Себестоимость раскрывается до статей (владелец 07.10: «не расписана — не понимаю,
+              что учтено»). К оплате — с НДС, себестоимость — без, поэтому внизу продажа без НДС
+              и прибыль: маржа из шапки проверяется вычитанием. */}
+          {owner && (() => {
+            const cb = orderCostBreakdown(items, total, Number(order.total_cost_net) || 0)
+            const row = 'flex justify-between gap-3'
+            return (
+              <details className="group mt-1 text-[12px]">
+                <summary className={`${row} cursor-pointer select-none list-none`}>
+                  <span className="text-[#9a9a95]">
+                    <span className="inline-block text-[8px] mr-1 transition-transform group-open:rotate-90">▶</span>
+                    Себестоимость без НДС
+                  </span>
+                  <span className="font-mono text-[#6b6b66]">{fmt(cb.stored)}</span>
+                </summary>
+                <div className="mt-2 rounded-xl bg-[#fafaf9] border border-[#f0f0ec] px-3 py-2 space-y-0.5">
+                  <p className="text-[10px] uppercase tracking-widest text-[#9a9a95] mb-1">Из чего сложилась · с НДС</p>
+                  {cb.lines.map(l => (
+                    <div key={l.name}>
+                      <div className={row}><span className="text-[#6b6b66]">{l.name}</span><span className="font-mono">{fmt(l.total)}</span></div>
+                      {l.note && <p className="text-[10px] text-[#9a9a95] -mt-0.5">{l.note}</p>}
+                    </div>
+                  ))}
+                  <div className={`${row} border-t border-[#ecece8] pt-1 mt-1`}><span>Итого с НДС</span><span className="font-mono">{fmt(cb.withVat)}</span></div>
+                  <div className={row}><span className="text-[#9a9a95]">Входной НДС {VAT}% — к вычету</span><span className="font-mono text-[#9a9a95]">−{fmt(cb.vat)}</span></div>
+                  <div className={`${row} font-semibold border-t border-[#ecece8] pt-1 mt-1`}><span>Себестоимость без НДС</span><span className="font-mono">{fmt(cb.exVat)}</span></div>
+                  {cb.storedDiff !== 0 && (
+                    <p className="text-[11px] text-amber-700">В заказе сохранено {fmt(cb.stored)} — с позициями расходится на {fmt(cb.storedDiff)}.</p>
+                  )}
+                  <div className={`${row} border-t border-[#ecece8] pt-1 mt-2`}><span className="text-[#6b6b66]">К оплате без НДС</span><span className="font-mono">{fmt(cb.saleExVat)}</span></div>
+                  <div className={`${row} font-semibold`}>
+                    <span>Прибыль <span className="font-normal text-[10px] text-[#9a9a95]">= без НДС − себестоимость</span></span>
+                    <span className={`font-mono ${cb.profit > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt(cb.profit)}</span>
+                  </div>
+                  {cb.positions.length > 1 && (
+                    <details className="mt-1.5">
+                      <summary className="text-[11px] text-[#9a9a95] cursor-pointer select-none">по позициям ▾</summary>
+                      <div className="mt-1 space-y-1">
+                        {cb.positions.map(p => (
+                          <p key={p.index} className="text-[11px] text-[#6b6b66]">
+                            <span className="font-semibold text-[#111110]">Поз. {p.index}</span> · {p.title}: {p.lines.map(l => `${l.name.toLowerCase()} ${fmt(l.total)}`).join(' + ')} = <span className="font-mono text-[#111110]">{fmt(p.withVat)}</span>
+                          </p>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </details>
+            )
+          })()}
         </Section>
 
         <Section title="Производство и отгрузка">
