@@ -22,7 +22,7 @@ import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import RowMenu, { type MenuItem } from '@/components/RowMenu'
 import { buildTelegramWorkText } from '@/lib/b2b/telegramWorkText'
-import { clientQuoteTextFromOrder, quoteLeadChips, readQuoteLead } from '@/lib/b2b/leadQuote'
+import { LEAD_REPLY_TEMPLATES, clientQuoteTextFromOrder, quoteLeadChips, readQuoteLead } from '@/lib/b2b/leadQuote'
 import type { InvoiceOrder } from '@/lib/b2b/invoiceMath'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 
@@ -268,6 +268,19 @@ export default function B2BQuotesPage() {
     } catch {
       await promptDialog({
         title: `Скопируйте: ${label.toLowerCase()}`,
+        text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
+        defaultValue: text, multiline: true, confirmLabel: 'Готово',
+      })
+    }
+  }
+
+  async function copyReplyTemplate(label: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast(`«${label.replace('📋 ', '')}» скопировано`)
+    } catch {
+      await promptDialog({
+        title: `Скопируйте: ${label.replace('📋 ', '').toLowerCase()}`,
         text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
         defaultValue: text, multiline: true, confirmLabel: 'Готово',
       })
@@ -1072,6 +1085,10 @@ export default function B2BQuotesPage() {
                         { label: sharing === quote.id ? '🔗 Готовлю ссылку…' : '🔗 Ссылка клиенту', onClick: () => shareQuote(quote), disabled: sharing === quote.id },
                         { label: copiedId === quote.id ? '✓ Текст скопирован' : '✈️ Текст для Telegram', onClick: () => copyTelegramText(quote) },
                         { label: readQuoteLead(parsed).source === 'avito' ? '📋 Текст для Авито' : '📋 Текст клиенту', onClick: () => { void copyClientText(quote) } },
+                        // Ответы вдогонку — для входящих (Авито и др.) и просчётов без заказчика.
+                        ...(!quote.client_id || readQuoteLead(parsed).source
+                          ? LEAD_REPLY_TEMPLATES.map(t => ({ label: t.label, onClick: () => { void copyReplyTemplate(t.label, t.text) } }))
+                          : []),
                         { kind: 'divider' },
                         { kind: 'link', label: '🧮 Открыть в калькуляторе', href: `/calculator/b2b?orderId=${quote.id}` },
                         { label: isTemplate(quote) ? '＋ Создать из шаблона' : '⧉ Дублировать', onClick: () => duplicateQuote(quote) },

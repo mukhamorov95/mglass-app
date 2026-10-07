@@ -23,7 +23,7 @@ import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { confirmDialog, promptDialog } from '@/lib/dialog'
 import ClientPicker, { type ClientOption } from '@/components/ClientPicker'
-import { CUSTOMER_KINDS, buildClientQuoteText, leadNotesPatch, noClientName, noClientSaveBlocker, readQuoteLead, type CustomerKind } from '@/lib/b2b/leadQuote'
+import { CUSTOMER_KINDS, LEAD_REPLY_TEMPLATES, buildClientQuoteText, leadNotesPatch, noClientName, noClientSaveBlocker, readQuoteLead, type CustomerKind } from '@/lib/b2b/leadQuote'
 import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
@@ -1456,6 +1456,19 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     }
   }
 
+  async function copyReplyTemplate(label: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`«${label.replace('📋 ', '')}» скопировано`, { detail: 'Вставьте в чат клиента.' })
+    } catch {
+      await promptDialog({
+        title: `Скопируйте: ${label.replace('📋 ', '').toLowerCase()}`,
+        text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
+        defaultValue: text, multiline: true, confirmLabel: 'Готово',
+      })
+    }
+  }
+
   async function handleCreateClient() {
     if (!ncName.trim()) { setNcError('Введите название компании'); return }
     setNcSaving(true)
@@ -2827,6 +2840,19 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       : !clientId ? 'Сохранить без заказчика' : 'Сохранить просчёт'}
                   </button>
                 </div>
+
+                {clientText && variant !== 'mglass' && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] -mt-1">
+                    <span className="text-[#9a9a95]">Ещё ответы в чат:</span>
+                    {LEAD_REPLY_TEMPLATES.map(t => (
+                      <button key={t.key} type="button" onClick={() => { void copyReplyTemplate(t.label, t.text) }}
+                        title={t.text}
+                        className="font-medium text-[#6e6e73] hover:text-[#1d1d1f] transition-colors">
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {saveError && (
                   <div className="border border-red-200 bg-red-50 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
