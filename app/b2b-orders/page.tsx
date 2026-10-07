@@ -14,6 +14,7 @@ import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/prod
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
+import { updCardState, type UpdStatus } from '@/lib/b2b/updStatus'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import { DAY_PRESETS, clientKeyer, clientOptions, dayPresetRange, summarizeOrders } from '@/lib/b2b/ordersFilter'
 import { mskDayKey } from '@/lib/time'
@@ -306,6 +307,16 @@ function requiresDeadlineControl(order: Order): boolean {
 
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
+// Этап 9: номер выданного УПД, нужен ли УПД и включена ли серия. Ошибка не мешает списку —
+// без статуса кнопка УПД остаётся обычной.
+function fetchUpdStatus(ids: number[]): Promise<UpdStatus | null> {
+  if (!ids.length) return Promise.resolve(null)
+  return fetch(`/api/b2b-orders/upd-status?ids=${ids.slice(0, 2000).join(',')}`)
+    .then(r => r.ok ? r.json() : null)
+    .then((j: UpdStatus | null) => j?.series ? j : null)
+    .catch(() => null)
+}
+
 function fmtDate(s: string) {
   return new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
 }
@@ -597,6 +608,18 @@ export default function B2BOrdersPage() {
   const [paidByOrderId, setPaidByOrderId] = useState<Record<number, number>>({})
   // Подтверждение отгрузки при неоплаченном остатке (не блок, второй клик).
   const [shipConfirmId, setShipConfirmId] = useState<number | null>(null)
+  // Этап 9: УПД у заказов — номер выданного и «Выдать УПД» у отгруженного. Пусто, пока не загрузилось.
+  const [updStatus, setUpdStatus] = useState<UpdStatus | null>(null)
+
+  // УПД выдают на отдельной вкладке: вернулись к списку — номер должен появиться без перезагрузки.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      fetchUpdStatus(orders.map(o => o.id)).then(st => { if (st) setUpdStatus(st) })
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [orders])
 
   // А17: рекламация по заказу — состояние заказа (notes.claim), не отдельный документ.
   const [claimOpenId, setClaimOpenId] = useState<number | null>(null)
@@ -678,6 +701,19 @@ export default function B2BOrdersPage() {
         className={`text-[12px] leading-none px-1.5 py-1 rounded-md border transition-colors ${done ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-[#e4e4e0] bg-white text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]'}`}>
         {done ? '✓' : '📋'}
       </button>
+    )
+  }
+
+  // УПД в строке: номер выданного или «Выдать УПД» у отгруженного, которому он нужен (этап 9).
+  function updRowChip(order: Order) {
+    const u = updCardState(order.id, !!order.parsedNotes.stages?.shipped, updStatus)
+    if (u.kind === 'none') return null
+    return (
+      <Link href={`/b2b-quotes/${order.id}/upd`} target="_blank" onClick={e => e.stopPropagation()}
+        title={u.kind === 'issued' ? `УПД № ${u.number} от ${fmtDate(u.docDate)} выдан` : 'Заказ отгружен, УПД не выдан'}
+        className={`text-[10px] leading-none font-medium px-1.5 py-1 rounded-md border whitespace-nowrap transition-colors ${u.kind === 'issued' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-500'}`}>
+        {u.kind === 'issued' ? `УПД ${u.number}` : 'Выдать УПД'}
+      </Link>
     )
   }
 
@@ -889,6 +925,7 @@ export default function B2BOrdersPage() {
           .then(r => r.ok ? r.json() : null)
           .then((j: { paid?: Record<number, number> } | null) => { if (j?.paid) setPaidByOrderId(j.paid) })
           .catch(() => {})
+        fetchUpdStatus(orderIds).then(st => { if (st) setUpdStatus(st) })
       }
 
       // По умолчанию раскрыт ТОЛЬКО текущий месяц (и его год); все остальные свёрнуты.
@@ -1117,6 +1154,14 @@ export default function B2BOrdersPage() {
     }
     const d = await r.json().catch(() => ({}))
     if (d?.notes) setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: d.notes as NotesData } : o))
+    // Этап 9: отгрузка — момент выдать УПД. Выдача на странице УПД: там покупатель и дата.
+    if (stageKey === 'shipped' && next && updCardState(orderId, true, updStatus).kind === 'issue') {
+      toast.success('Отгружен — выдайте УПД', {
+        detail: 'Номер присвоится на странице УПД после проверки покупателя и даты.',
+        action: { label: 'Выдать УПД', onClick: () => window.open(`/b2b-quotes/${orderId}/upd`, '_blank') },
+        durationMs: 10000,
+      })
+    }
   }
 
   async function updateMaterialStatus(orderId: number, newStatus: MaterialStatus) {
@@ -1686,9 +1731,17 @@ export default function B2BOrdersPage() {
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">🧾 Счёт клиенту</Link>
           <Link href={`/b2b-quotes/${order.id}/kp`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📄 КП</Link>
-          {/* А7: УПД — тот же документ, что в кабинете партнёра */}
-          <Link href={`/b2b-quotes/${order.id}/upd`} target="_blank"
-            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📑 УПД</Link>
+          {/* А7: УПД — тот же документ, что в кабинете партнёра. Этап 9: номер выданного, у отгруженного без УПД — «Выдать». */}
+          {(() => {
+            const u = updCardState(order.id, !!order.parsedNotes.stages?.shipped, updStatus)
+            return (
+              <Link href={`/b2b-quotes/${order.id}/upd`} target="_blank"
+                title={u.kind === 'issued' ? `Выдан ${fmtDate(u.docDate)}` : u.kind === 'issue' ? 'Заказ отгружен, УПД не выдан: номер присвоится на странице УПД' : undefined}
+                className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${u.kind === 'issued' ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:border-emerald-500' : u.kind === 'issue' ? 'font-semibold border-amber-400 bg-amber-50 text-amber-800 hover:border-amber-600' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]'}`}>
+                {u.kind === 'issued' ? `📑 УПД № ${u.number}` : u.kind === 'issue' ? '📑 Выдать УПД' : '📑 УПД'}
+              </Link>
+            )
+          })()}
           {/* А16: упаковочный лист на отгрузку */}
           <Link href={`/b2b-orders/${order.id}/packing`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📦 Упаковочный лист</Link>
@@ -2417,6 +2470,7 @@ export default function B2BOrdersPage() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {msgRowButton(order)}
+                        {updRowChip(order)}
                         {!pn.stages?.shipped && lastStageLabel(pn.stages) && (
                           <span className="text-[10px] text-[#9a9a95]">{lastStageLabel(pn.stages)}</span>
                         )}
@@ -2576,6 +2630,7 @@ export default function B2BOrdersPage() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {msgRowButton(order)}
+                        {updRowChip(order)}
                         {(() => {
                           // A23: компактный признак долга в свёрнутой строке — молчит без платежей
                           const rem = orderRemainder(order)
@@ -2767,6 +2822,7 @@ export default function B2BOrdersPage() {
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 {msgRowButton(order)}
+                                {updRowChip(order)}
                                 <div className="text-right">
                                   <p className="text-[13px] font-semibold text-[#111110]">{fmt(finalPrice)}</p>
                                   {(order.discount_percent ?? 0) > 0 && (
