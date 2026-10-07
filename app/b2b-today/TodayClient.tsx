@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import {
-  overdueShipments, splitShipments, unpaidInvoices, staleQuotes, otherBuckets, TOP_LIMIT,
+  overdueShipments, splitShipments, unpaidInvoices, staleQuotes, otherBuckets, readyNotShipped, updToIssue,
+  backfillCandidates, clientOrderRef, parseNotes, isShipped, TOP_LIMIT,
   STALE_QUOTE_MIN_DAYS, STALE_QUOTE_MAX_DAYS, SHIP_RECENT_DAYS,
   type TodayOrder, type TodayInvoice, type PriorityRow,
 } from '@/lib/b2b/todayPriorities'
+import type { UpdStatus } from '@/lib/b2b/updStatus'
+import { copyOrShow } from '@/lib/b2b/copyOrShow'
 import { loadTodayOrders } from '@/lib/b2b/loadTodayOrders'
 import PlanEditor from './PlanEditor'
 import { responseError, NETWORK_ERROR } from '@/lib/toast'
@@ -51,6 +54,9 @@ export default function TodayClient() {
   // Входящие без ответа: первое дело дня — от скорости ответа зависит уровень сервиса Авито.
   const [inquiries, setInquiries] = useState<Inquiry[] | null>(null)
   const [inqErr, setInqErr] = useState<string | null>(null)
+  // УПД к выдаче — статус по отгруженным заказам; null — не спрашивали или роли закрыто.
+  const [upd, setUpd] = useState<UpdStatus | null>(null)
+  const [updErr, setUpdErr] = useState<string | null>(null)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -94,6 +100,22 @@ export default function TodayClient() {
 
   useEffect(() => { loadPlans() }, [])
 
+  // Статус УПД нужен только отгруженным: их и спрашиваем (сервер режет до своих заказов).
+  useEffect(() => {
+    const ids = orders.filter(o => isShipped(parseNotes(o.notes))).map(o => o.id)
+    if (!ids.length) return
+    let alive = true
+    fetch(`/api/b2b-orders/upd-status?ids=${ids.slice(0, 2000).join(',')}`)
+      .then(async r => {
+        if (!alive || r.status === 403) return
+        if (!r.ok) { setUpdErr(await responseError(r)); return }
+        const j = await r.json().catch(() => null) as UpdStatus | null
+        if (alive && j?.series) setUpd(j)
+      })
+      .catch(() => { if (alive) setUpdErr(NETWORK_ERROR) })
+    return () => { alive = false }
+  }, [orders])
+
   useEffect(() => {
     fetch('/api/b2b/inquiries?status=new')
       .then(async r => {
@@ -107,16 +129,22 @@ export default function TodayClient() {
 
   const view = useMemo(() => {
     if (!nowTs) return null
+    const ship = splitShipments(overdueShipments(orders, nowTs))
+    const refs = new Map(orders.map(o => [o.id, clientOrderRef(o)]))
     return {
-      ship: splitShipments(overdueShipments(orders, nowTs)),
-      pay: invoices ? unpaidInvoices(invoices, nowTs) : null,
+      ship,
+      ready: readyNotShipped(orders, nowTs, new Set(ship.recent.map(r => r.key))),
+      upd: updToIssue(orders, upd, nowTs),
+      // Хвост — те же заказы, что на странице разбора: старше 14 дней с упаковки или срока.
+      tail: backfillCandidates(orders, nowTs).filter(r => r.days > SHIP_RECENT_DAYS),
+      pay: invoices ? unpaidInvoices(invoices, nowTs, refs) : null,
       quotes: staleQuotes(orders, nowTs),
       other: otherBuckets(orders, nowTs),
     }
-  }, [orders, invoices, nowTs])
+  }, [orders, invoices, upd, nowTs])
 
-  const topCount = view ? view.ship.recent.length + (view.pay?.length ?? 0) + view.quotes.length : 0
-  const oldShip = view?.ship.old ?? []
+  const topCount = view ? view.ship.recent.length + view.ready.length + view.upd.length + (view.pay?.length ?? 0) + view.quotes.length : 0
+  const oldShip = view?.tail ?? []
   const oldShipSum = oldShip.reduce((s, r) => s + r.amount, 0)
 
   return (
@@ -142,10 +170,18 @@ export default function TodayClient() {
             <PriorityCard tone="red" title="Просроченные отгрузки" rows={view.ship.recent}
               caption={`Срок прошёл в последние ${SHIP_RECENT_DAYS} дней, отметки «Отгружен» нет. Либо заказ не уехал, либо его не отметили — закройте с датой отгрузки.`}
               empty={`За ${SHIP_RECENT_DAYS} дней просроченных отгрузок нет`} allHref="/b2b-today/shipments" />
+            <PriorityCard tone="amber" title="Готов, не отгружен" rows={view.ready}
+              caption={`Упакован за последние ${SHIP_RECENT_DAYS} дней, отметки «Отгружен» нет. Сообщите клиенту — текст кнопкой «📋»; уехал — отметьте с датой отгрузки.`}
+              empty="Упакованных и не отгруженных нет" allHref="/b2b-today/shipments" />
+            {view.upd.length > 0 && (
+              <PriorityCard tone="amber" title="Выдать УПД" rows={view.upd}
+                caption="Отгружен после включения серии, у клиента есть ИНН, УПД не выдан. Дата УПД — день отгрузки." />
+            )}
+            {updErr && <p className="text-[12px] text-red-600">Статус УПД не загрузился: {updErr}</p>}
             {oldShip.length > 0 && (
               <div className="border border-[#e4e4e0] bg-white rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-[12px] text-[#6b6b66]">
-                  <span className="font-semibold text-[#111110]">{oldShip.length}</span> {ordersWord(oldShip.length)} старше {SHIP_RECENT_DAYS} дней без отметки об отгрузке
+                  <span className="font-semibold text-[#111110]">{oldShip.length}</span> {ordersWord(oldShip.length)} без отметки об отгрузке дольше {SHIP_RECENT_DAYS} дней после упаковки или срока
                   <span className="font-mono"> · {fmt(oldShipSum)}</span>. Почти всегда это отгружено, но не отмечено.
                 </p>
                 <Link href="/b2b-today/shipments" className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f3] whitespace-nowrap">
@@ -166,9 +202,9 @@ export default function TodayClient() {
                 Счета ждут оплаты — реестр счетов вашей роли недоступен.
               </div>
             )}
-            <PriorityCard tone="blue" title="Просчёты без движения" rows={view.quotes}
-              caption={`Не отправлены клиенту и не менялись ${STALE_QUOTE_MIN_DAYS}–${STALE_QUOTE_MAX_DAYS} дней. Сначала самые крупные — старше в списке просчётов.`}
-              empty="Остывающих просчётов нет" allHref="/b2b-quotes" />
+            <PriorityCard tone="blue" title="КП без движения" rows={view.quotes}
+              caption={`Не запущены, клиент не открывал ссылку, просчёт не менялся ${STALE_QUOTE_MIN_DAYS}–${STALE_QUOTE_MAX_DAYS} дней. Сначала самые крупные; напоминание — кнопкой «📋».`}
+              empty="Остывающих КП нет" allHref="/b2b-quotes" />
           </div>
 
           {view.other.length > 0 && (
@@ -268,6 +304,23 @@ function InquiriesCard({ rows, nowIso }: { rows: Inquiry[]; nowIso: string }) {
   )
 }
 
+function CopyButton({ copy }: { copy: NonNullable<PriorityRow['copy']> }) {
+  const [done, setDone] = useState(false)
+  return (
+    <button
+      onClick={async () => {
+        if (await copyOrShow(copy.text, { ok: copy.ok, title: copy.title })) {
+          setDone(true)
+          setTimeout(() => setDone(false), 2000)
+        }
+      }}
+      title={copy.text}
+      className={`text-[11px] font-medium px-2 py-1 rounded-lg border whitespace-nowrap transition-colors ${done ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]'}`}>
+      {done ? '✓ Скопировано' : copy.label}
+    </button>
+  )
+}
+
 function PriorityCard({ title, caption, rows, tone, empty, allHref, collapsed }: {
   title: string
   caption: string
@@ -321,10 +374,13 @@ function PriorityCard({ title, caption, rows, tone, empty, allHref, collapsed }:
                 <span className="text-[12px] font-mono text-[#111110] text-right">{fmt(r.amount)}</span>
                 <span className={`text-[11px] md:text-right ${tone === 'red' ? 'text-red-600' : 'text-[#6b6b66]'}`}>{r.daysLabel}</span>
                 <span className="text-[11px] text-[#6b6b66] truncate md:text-right">{r.owner ?? '—'}</span>
-                <Link href={r.actionHref ?? r.href}
-                  className="justify-self-end text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] whitespace-nowrap">
-                  {r.action}
-                </Link>
+                <div className="justify-self-end flex items-center gap-1.5">
+                  {r.copy && <CopyButton copy={r.copy} />}
+                  <Link href={r.actionHref ?? r.href}
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] whitespace-nowrap">
+                    {r.action}
+                  </Link>
+                </div>
               </div>
             ))}
           </div>

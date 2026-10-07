@@ -11,7 +11,8 @@ import { confirmDialog } from '@/lib/dialog'
 
 // Разбор отгрузок без отметки (решение владельца 30.09): менеджер закрывает хвост разом,
 // у каждого заказа — своя дата. По умолчанию выбраны заказы старше 14 дней: почти
-// всегда они уехали, но отметку никто не поставил.
+// всегда они уехали, но отметку никто не поставил. С 08.10 сюда же ведёт «Отметить месяц
+// отгруженным» из /b2b-orders: там всем ставилась сегодняшняя дата.
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const dm = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
@@ -122,13 +123,13 @@ export default function ShipmentsClient({ focusId }: { focusId: number | null })
         <Link href="/b2b-today" className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">← Мой день · B2B</Link>
         <h1 className="text-[22px] font-bold text-[#111110] mt-1">Отгрузки без отметки</h1>
         <p className="text-[13px] text-[#6b6b66] mt-1 max-w-[70ch]">
-          Срок прошёл, отметки «Отгружен» нет. У каждого заказа предложена дата — день упаковки, а если его нет, срок.
+          Заказ упакован или его срок прошёл, а отметки «Отгружен» нет. У каждого заказа предложена дата — день упаковки, а если его нет, срок.
           Поправьте, если помните точнее. Не уверены, что заказ уехал, — снимите галочку: он останется в списке.
         </p>
       </div>
 
       <div className="flex gap-1 mb-3">
-        {([['old', `Старше ${SHIP_RECENT_DAYS} дней`, oldCount], ['all', 'Все просроченные', rows?.length ?? 0]] as const).map(([k, label, n]) => (
+        {([['old', `Старше ${SHIP_RECENT_DAYS} дней`, oldCount], ['all', 'Все без отметки', rows?.length ?? 0]] as const).map(([k, label, n]) => (
           <button key={k} onClick={() => setMode(k)}
             className={`px-3 py-1.5 text-[12px] font-medium rounded-md border ${mode === k ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#f5f5f3]'}`}>
             {label} <span className="tabular-nums opacity-70">{n}</span>
@@ -142,7 +143,7 @@ export default function ShipmentsClient({ focusId }: { focusId: number | null })
         <p className="text-[13px] text-[#9a9a95]">Загрузка…</p>
       ) : shown.length === 0 ? (
         <p className="text-[13px] text-[#6b6b66] bg-white border border-[#e4e4e0] rounded-xl px-4 py-6 text-center">
-          {mode === 'old' ? `Разбирать нечего: заказов старше ${SHIP_RECENT_DAYS} дней без отметки нет.` : 'Просроченных отгрузок без отметки нет.'}
+          {mode === 'old' ? `Разбирать нечего: заказов старше ${SHIP_RECENT_DAYS} дней без отметки нет.` : 'Упакованных и просроченных заказов без отметки нет.'}
         </p>
       ) : (
         <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-x-auto">
@@ -173,7 +174,7 @@ export default function ShipmentsClient({ focusId }: { focusId: number | null })
                   </td>
                   <td className="px-2 py-2 text-right font-mono whitespace-nowrap">{fmt(r.amount)}</td>
                   <td className="px-2 py-2 whitespace-nowrap">
-                    {dm(r.deadlineDay)} <span className="text-[11px] text-[#c23a2b]">+{daysText(r.days)}</span>
+                    {dm(r.deadlineDay)}{r.overdueDays != null && <span className="text-[11px] text-[#c23a2b]"> +{daysText(r.overdueDays)}</span>}
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap text-[#6b6b66]">{r.packagedDay ? dm(r.packagedDay) : '—'}</td>
                   <td className="px-2 py-2">

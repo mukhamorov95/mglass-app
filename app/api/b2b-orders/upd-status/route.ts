@@ -65,10 +65,11 @@ export async function GET(req: NextRequest) {
       ...((entities.data ?? []) as { client_id: number }[]).map(e => e.client_id),
     ])
     const year = Number(mskDayKey().slice(0, 4))
+    const cur = series?.find(s => s.year === year) ?? null
     const out: UpdStatus = {
       issued,
       eligible: visible.filter(o => o.client_id != null && innClients.has(o.client_id)).map(o => o.id),
-      series: { pendingSql, set: !!series?.some(s => s.year === year) },
+      series: { pendingSql, set: !!cur, switchDay: cur ? mskDayKey(cur.set_at) : null },
     }
     return NextResponse.json(out, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {

@@ -8,7 +8,9 @@ export type UpdIssuedShort = { number: number; year: number; doc_date: string }
 export type UpdStatus = {
   issued: Record<number, UpdIssuedShort>
   eligible: number[]          // заказы, у клиента которых есть ИНН
-  series: { pendingSql: boolean; set: boolean }
+  // switchDay — день включения серии текущего года (по Москве): отгрузки раньше него закрыты
+  // программой бухгалтера, «Мой день» их не предлагает. Нет поля — группа «Выдать УПД» молчит.
+  series: { pendingSql: boolean; set: boolean; switchDay?: string | null }
 }
 
 export type UpdCardState =

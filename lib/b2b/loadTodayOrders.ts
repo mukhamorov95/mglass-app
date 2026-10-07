@@ -13,14 +13,20 @@ export async function loadTodayOrders(sb: SupabaseClient): Promise<{ orders: Tod
   const seeAll = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.see_all_orders === true
 
   const since = new Date(); since.setDate(since.getDate() - 120)
-  let q = sb.from('b2b_orders')
-    .select('id,client_name,custom_number,total_sale_inc_vat,total_after_discount,notes,created_at,updated_at,launched_at,created_by_name')
-    .is('archived_at', null)
-    .gte('created_at', since.toISOString())
-    .order('created_at', { ascending: false })
-    .limit(1000)
-  if (!seeAll) q = q.eq('created_by', user.id)
-  const { data, error } = await q
-  if (error) return { orders: [], error: `Не удалось загрузить заказы: ${error.message}. Обновите страницу.` }
-  return { orders: (data ?? []) as TodayOrder[], error: null }
+  // Страницами по 1000: PostgREST больше не отдаёт, а у владельца за 120 дней уже ~900 заказов.
+  const orders: TodayOrder[] = []
+  for (let page = 0; page < 20; page++) {
+    let q = sb.from('b2b_orders')
+      .select('id,client_name,custom_number,total_sale_inc_vat,total_after_discount,notes,created_at,updated_at,launched_at,created_by_name')
+      .is('archived_at', null)
+      .gte('created_at', since.toISOString())
+      .order('id', { ascending: false })
+      .range(page * 1000, page * 1000 + 999)
+    if (!seeAll) q = q.eq('created_by', user.id)
+    const { data, error } = await q
+    if (error) return { orders: [], error: `Не удалось загрузить заказы: ${error.message}. Обновите страницу.` }
+    orders.push(...((data ?? []) as TodayOrder[]))
+    if (!data || data.length < 1000) break
+  }
+  return { orders, error: null }
 }
