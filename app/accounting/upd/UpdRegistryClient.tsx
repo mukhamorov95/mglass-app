@@ -10,7 +10,8 @@ import type { UpdRegistryRow, UpdRegistryTotals } from '@/lib/b2b/updRegistryCsv
 import type { UpdQueue } from '@/lib/b2b/updQueue'
 
 // «Бухгалтерия → УПД» (этап 8 docs/b2b/ORDER_PANEL_ROUTE.md): серия номеров на год, реестр
-// выданных за месяц с выгрузкой для книги продаж и «ждут УПД» после переключения.
+// выданных за месяц с выгрузкой для книги продаж и «ждут УПД» после переключения — с выдачей
+// прямо отсюда (этап 8б).
 
 type Data = {
   pendingSql: boolean
@@ -46,7 +47,7 @@ const monthTitle = (month: string) => {
 const card = 'bg-white rounded-2xl border border-[#e4e4e0] p-4 sm:p-5'
 const btn = 'text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] bg-white text-[#6b6b66] hover:text-[#111110] hover:border-[#111110] transition-colors'
 
-export default function UpdRegistryClient({ canOpenOrders }: { canOpenOrders: boolean }) {
+export default function UpdRegistryClient() {
   const [month, setMonth] = useState(() => moscowDate().slice(0, 7))
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -268,7 +269,7 @@ export default function UpdRegistryClient({ canOpenOrders }: { canOpenOrders: bo
           <section className={card}>
             <h2 className="text-[15px] font-semibold text-[#111110]">Ждут УПД · {q.rows.length}</h2>
             <p className="text-[12px] text-[#9a9a95] mt-1">
-              Отгружено с {fmtDay(q.switchDay)} (включение серии), УПД ещё не выдан. Выдаёт менеджер на странице УПД заказа.
+              Отгружено с {fmtDay(q.switchDay)} (включение серии), УПД ещё не выдан. Выдать можно здесь или менеджеру на странице УПД заказа.
             </p>
             {q.rows.length === 0 ? (
               <p className="text-[13px] text-[#6b6b66] mt-3">Все отгрузки с ИНН закрыты УПД.</p>
@@ -276,12 +277,11 @@ export default function UpdRegistryClient({ canOpenOrders }: { canOpenOrders: bo
               <ul className="mt-3 divide-y divide-[#f0f0ec]">
                 {q.rows.map(r => (
                   <li key={r.id} className="py-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]">
-                    {canOpenOrders
-                      ? <Link href={`/b2b-quotes/${r.id}/upd`} className="font-semibold text-blue-600 hover:underline tabular-nums">{r.ref}</Link>
-                      : <span className="font-semibold text-[#111110] tabular-nums">{r.ref}</span>}
+                    <span className="font-semibold text-[#111110] tabular-nums">{r.ref}</span>
                     <span className="text-[#111110]">{r.client}</span>
                     <span className="text-[#6b6b66]">отгружен {fmtDay(r.shippedDay)}</span>
                     <span className="ml-auto tabular-nums text-[#111110]">{money2(r.total)} ₽</span>
+                    <Link href={`/accounting/upd/${r.id}`} className="text-[12px] font-semibold text-blue-600 hover:underline whitespace-nowrap">Выдать →</Link>
                   </li>
                 ))}
               </ul>
