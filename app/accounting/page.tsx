@@ -5,7 +5,8 @@
 // свёрнуты, клик раскрывает. Классы: переменные → маржа → постоянные → фонды.
 // Вносят Алёна и Екатерина (роль accountant); видят также cfo/admin/ceo.
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Fragment, useEffect, useState, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { RequestsTab, CommitteeTab } from '@/components/accounting/RequestsTabs'
 import { FinweekTab } from '@/components/accounting/FinweekTab'
@@ -292,13 +293,22 @@ export default function AccountingPage() {
               ? ([['requests', 'Заявки на оплату']] as const)
               : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['bank', 'Выписка'], ['payroll', 'Зарплата'], ['taxes', 'Налоги'], ['partners', 'Контрагенты'], ['docs', 'Документы'], ['audit', '✅ Проверка'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
-              <button key={k} onClick={() => setTab(k)}
-                className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
-                {label}
-                {k === 'unposted' && unposted > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">{unposted}</span>
+              <Fragment key={k}>
+                <button onClick={() => setTab(k)}
+                  className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
+                  {label}
+                  {k === 'unposted' && unposted > 0 && (
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">{unposted}</span>
+                  )}
+                </button>
+                {/* Реестр УПД — отдельная страница (этап 8 ORDER_PANEL_ROUTE), закупщику закрыт. */}
+                {k === 'docs' && (
+                  <Link href="/accounting/upd"
+                    className="px-3.5 py-2 text-[13px] font-medium border-b-2 border-transparent text-[#9a9a95] hover:text-[#111110] whitespace-nowrap flex-shrink-0">
+                    УПД ↗
+                  </Link>
                 )}
-              </button>
+              </Fragment>
             ))}
           </div>
         </div>
