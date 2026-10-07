@@ -5,10 +5,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { toast } from '@/lib/toast'
-import { promptDialog } from '@/lib/dialog'
 import { buildInstallationHref } from '@/components/AssignInstallationButton'
 import { buildTelegramWorkText, type TelegramQuote } from '@/lib/b2b/telegramWorkText'
 import { duplicateOrder, type DuplicableOrder } from '@/lib/b2b/duplicateOrder'
+import { copyOrShow as copyText } from '@/lib/b2b/copyOrShow'
+import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/productionMessage'
+import { PAYMENT_REMINDER_LABEL } from '@/lib/b2b/clientTexts'
+import LaunchPanel from '@/components/b2b/LaunchPanel'
 
 // Действия над заказом прямо в карточке (У5). Раньше жили только значками в строке
 // списка: чтобы отправить клиенту ссылку или скопировать текст для цеха, менеджер
@@ -19,24 +22,19 @@ type Props = {
   quote: TelegramQuote & DuplicableOrder
   orderTotal: number
   managerName: string | null
+  launched: boolean
+  productionDays: number | null
+  phone: string | null          // телефон клиента — ссылкой tel:, звонок в одно касание
+  contactName: string | null
+  payReminder: string | null    // готовый текст «напомнить об оплате»; null — оплачено или нечего напоминать
 }
 
-export default function DealActions({ dealId, quote, orderTotal, managerName }: Props) {
+export default function DealActions({ dealId, quote, orderTotal, managerName, launched, productionDays, phone, contactName, payReminder }: Props) {
   const router = useRouter()
   const [busy, setBusy] = useState<'share' | 'copy' | 'duplicate' | null>(null)
+  const [launchOpen, setLaunchOpen] = useState(false)
 
-  async function copyOrShow(value: string, okText: string, title: string) {
-    try {
-      await navigator.clipboard.writeText(value)
-      toast.success(okText)
-    } catch {
-      await promptDialog({
-        title,
-        text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
-        defaultValue: value, multiline: value.includes('\n'), confirmLabel: 'Готово',
-      })
-    }
-  }
+  const copyOrShow = (value: string, okText: string, title: string) => copyText(value, { ok: okText, title })
 
   async function shareLink() {
     setBusy('share')
@@ -68,10 +66,46 @@ export default function DealActions({ dealId, quote, orderTotal, managerName }: 
     } finally { setBusy(null) }
   }
 
+  // После запуска — сразу следующий шаг: производственное сообщение в чат цеха.
+  function onLaunched(columns: Record<string, unknown>) {
+    setLaunchOpen(false)
+    const msgOrder = { ...quote, ...(columns as Partial<typeof quote>) }
+    toast.success('Запущено в работу', {
+      detail: 'Задачи цеху созданы. Отправьте производственное сообщение в рабочий чат.',
+      action: {
+        label: '📋 Произв. сообщение',
+        onClick: () => { void copyText(buildProductionMessage(msgOrder), { ok: 'Производственное сообщение скопировано', title: 'Скопируйте производственное сообщение', detail: productionMessageSummary(msgOrder) }) },
+      },
+      durationMs: 15000,
+    })
+    router.refresh()
+  }
+
   const btn = 'px-3 py-1.5 rounded-xl border border-[#e4e4e0] text-[12px] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 transition-colors'
+  const primary = 'px-3 py-1.5 rounded-xl bg-[#111110] text-white text-[12px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40 transition-colors'
+  const tel = phone ? phone.replace(/[^\d+]/g, '') : ''
 
   return (
+    <div className="space-y-2">
     <div className="flex flex-wrap gap-2">
+      {!launched && (quote.client_id == null ? (
+        <Link href={`/calculator/b2b?orderId=${dealId}`} className={primary}
+          title="Без заказчика в работу нельзя: выберите или создайте клиента и нажмите «Обновить просчёт»">
+          ＋ Заказчик →
+        </Link>
+      ) : (
+        <button onClick={() => setLaunchOpen(o => !o)} className={primary}>▶ Запустить в работу</button>
+      ))}
+      {tel && (
+        <a href={`tel:${tel}`} className={btn} title={contactName ? `Позвонить: ${contactName}` : 'Позвонить клиенту'}>
+          📞 {phone}{contactName ? ` · ${contactName}` : ''}
+        </a>
+      )}
+      {payReminder && (
+        <button onClick={() => { void copyOrShow(payReminder, 'Напоминание об оплате скопировано', 'Текст клиенту: оплата') }} className={btn}>
+          {PAYMENT_REMINDER_LABEL}
+        </button>
+      )}
       <button onClick={shareLink} disabled={busy !== null} className={btn}>
         {busy === 'share' ? '🔗 Готовлю ссылку…' : '🔗 Ссылка клиенту'}
       </button>
@@ -83,6 +117,13 @@ export default function DealActions({ dealId, quote, orderTotal, managerName }: 
       <button onClick={duplicate} disabled={busy !== null} className={btn}>
         {busy === 'duplicate' ? '⧉ Копирую…' : '⧉ Дублировать как черновик'}
       </button>
+    </div>
+    {launchOpen && !launched && (
+      <div className="rounded-xl overflow-hidden border border-[#d0e0ff]">
+        <LaunchPanel orderId={dealId} initialNumber={quote.custom_number ?? null} productionDays={productionDays}
+          onLaunched={saved => onLaunched(saved.columns)} onCancel={() => setLaunchOpen(false)} />
+      </div>
+    )}
     </div>
   )
 }

@@ -12,6 +12,8 @@ import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { parseNotes } from '@/lib/b2b/publicQuote'
 import { isShipped } from '@/lib/b2b/todayPriorities'
 import { stageDayKey } from '@/lib/production/dayLists'
+import { paymentReminderText } from '@/lib/b2b/clientTexts'
+import { readQuoteLead } from '@/lib/b2b/leadQuote'
 import DealActions from './DealActions'
 
 const TONE_TEXT: Record<MarginTone, string> = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-500' }
@@ -75,7 +77,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   // без себестоимости.
   const [{ data: pays, error: paysErr }, { data: invs, error: invsErr }, { rates }] = await Promise.all([
     sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').eq('b2b_order_id', dealId).is('voided_at', null),
-    sb.from('invoices').select('id, order_ids, amount').overlaps('order_ids', [dealId]),
+    sb.from('invoices').select('id, invoice_no, status, order_ids, amount').overlaps('order_ids', [dealId]),
     loadB2BRates(sb),
   ])
   let invPays: { amount: number; b2b_order_id: number | null; invoice_id: number | null; voided_at: string | null }[] = []
@@ -97,6 +99,23 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   )
   const rem = remainderStatus(total, paidMap.get(dealId) ?? 0)
   const paid = rem.paid
+  // Напомнить об оплате — пока не оплачено полностью и есть что оплачивать: запущенный заказ
+  // или выставленный счёт. Номер счёта — только если счёт на один этот заказ: у общего счёта
+  // сумма другая, и текст с ней разошёлся бы.
+  const liveInvs = ((invs ?? []) as { invoice_no: string | null; status: string | null; order_ids: unknown[] | null }[])
+    .filter(i => i.status !== 'cancelled')
+  const ownInv = liveInvs.length === 1 && (liveInvs[0].order_ids ?? []).length === 1 ? liveInvs[0] : null
+  const payReminder = !moneyErr && total > 0 && (launched || liveInvs.length > 0) && (!rem.hasPayment || rem.outstanding)
+    ? paymentReminderText({ invoiceNo: ownInv?.invoice_no ?? null, orderRefs: [number], total, paid: rem.paid })
+    : null
+  // Телефон клиента — ссылкой tel: (этап 3). Без карточки клиента — контакт из просчёта, если в нём номер.
+  const { data: clientRow } = order.client_id
+    ? await sb.from('b2b_clients').select('phone, contact').eq('id', Number(order.client_id)).maybeSingle()
+    : { data: null }
+  const leadContact = readQuoteLead(notes).contact
+  const phone = (clientRow?.phone as string | null)?.trim()
+    || (leadContact && (leadContact.match(/\d/g) ?? []).length >= 10 ? leadContact : null)
+  const contactName = (clientRow?.contact as string | null)?.trim() || null
   // Отгрузка — отметка notes.stages.shipped (цех и экран заказов); shipped_date никто не пишет
   const shipped = isShipped(notes)
   const shippedDay = stageDayKey((notes.stages as Record<string, unknown> | undefined)?.shipped)
@@ -149,6 +168,11 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           dealId={dealId}
           orderTotal={total}
           managerName={(order.created_by_name as string | null) ?? null}
+          launched={launched}
+          productionDays={Number(notes.production_days) || null}
+          phone={phone || null}
+          contactName={contactName}
+          payReminder={payReminder}
           quote={{
             id: dealId,
             custom_number: (order.custom_number as string | null) ?? null,

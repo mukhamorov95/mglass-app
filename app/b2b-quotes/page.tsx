@@ -10,15 +10,15 @@ import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { orderContribution, applyCatalogWaste, buildWasteNorms, contributionColor, rub, pct } from '@/lib/unitEconomics'
 import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
-import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { checkSavedItems } from '@/lib/b2b/bomCheck'
 import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, type B2BRates, type RateRow } from '@/lib/b2b/rates'
-import { toast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { toast } from '@/lib/toast'
 import { promptDialog } from '@/lib/dialog'
 import { writeFailure } from '@/lib/rlsWrite'
-import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
+import { saveOrderNotes, type OrderNotesSaved } from '@/lib/b2b/orderNotesClient'
+import LaunchPanel from '@/components/b2b/LaunchPanel'
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import RowMenu, { type MenuItem } from '@/components/RowMenu'
 import { buildTelegramWorkText } from '@/lib/b2b/telegramWorkText'
@@ -213,22 +213,13 @@ export default function B2BQuotesPage() {
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
   const [mglassOnly, setMglassOnly]   = useState(false)
 
-  // «Запустить в работу» — единый запуск просчёта в производство (дата + № заказа)
+  // «Запустить в работу» — общая панель components/b2b/LaunchPanel (та же в карточке сделки)
   const [workDateId, setWorkDateId]   = useState<number | null>(null)
-  const [workDate, setWorkDate]       = useState(new Date().toISOString().slice(0, 10))
-  const [workNumber, setWorkNumber]   = useState('')
-  const [workDeadline, setWorkDeadline] = useState('')  // срок сдачи (notes.deadline_date)
   const [queueCount, setQueueCount] = useState<number | null>(null)  // А6: заказов в работе
   // А13: свободный остаток стекла по названию материала (м²). Склад читаем через
   // /api/inventory/items — напрямую к таблицам браузер не ходит (там RLS deny-by-default).
   const [stock, setStock] = useState<Map<string, number>>(new Map())
   const [stockErr, setStockErr] = useState(false)  // «—» в колонке без этого читалось бы как «на складе нет»
-  const [workDrawing, setWorkDrawing] = useState<File | null>(null)  // чертёж для цеха (notes.drawing_url)
-  const workDateRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (workDateId !== null) setTimeout(() => workDateRef.current?.focus(), 50)
-  }, [workDateId])
 
   // Delete modal
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -417,59 +408,18 @@ export default function B2BQuotesPage() {
     setPendingComment('')
   }
 
-  async function confirmWorkDate() {
-    if (!workDateId) return
-    const q = quotes.find(x => x.id === workDateId)
-    if (!q) return
+  function openLaunch(q: Quote) {
     if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
       showError(MGLASS_SCOPE_ERROR)
-      setWorkDateId(null)
       return
     }
-    // Чертёж для цеха: тот же bucket/путь, что «Прикрепить чертёж» в заказах —
-    // мастер увидит его в «Моих задачах» и в карточке заказа
-    let drawingUrl: string | null = null
-    if (workDrawing) {
-      const sbUp = createClient()
-      const ext = (workDrawing.name.split('.').pop() || 'jpg').toLowerCase()
-      const path = `order-drawings/${workDateId}.${ext}`
-      const { error: upErr } = await sbUp.storage.from('b2b-attachments').upload(path, workDrawing, { upsert: true })
-      if (upErr) { showError('Чертёж не загрузился — заказ не запущен', `${upErr.message}. Нажмите «Запустить» ещё раз`); return }
-      // bucket приватный, publicUrl не работает — храним путь, показ идёт через /api/b2b/drawing
-      drawingUrl = path
-    }
-    // «В работу» с датой = запуск в производство: выбранная дата это и есть дата запуска.
-    // launched_at пишется и колонкой, и в notes, иначе заказ висит «без даты запуска» в
-    // /b2b-orders. notes сервер собирает из свежей записи — чертёж, этапы и ответ клиента,
-    // появившиеся после открытия вкладки, не затираются (раньше спасали только чертёж).
-    const r = await saveOrderNotes(workDateId, {
-      action: 'launch', workDate, deadline: workDeadline || null, drawingUrl, customNumber: workNumber.trim() || null,
-    })
-    if (r.error !== null) { showError('Заказ не запущен', `${r.error}. Данные остались в окне — нажмите ещё раз`); return }
-    const launchedRow = r.data
-    // Генерация задач в цех. Раньше запрос уходил без await и с проглоченной
-    // ошибкой — заказ 0928-3 так и провисел 16 дней невидимым для цеха: статус
-    // «в работе» стоит, а задач ноль, и ни один производственный экран его не
-    // показывает. Теперь ждём ответ и говорим вслух, если не получилось.
-    const launchUrl = `/api/b2b-orders/${workDateId}/launch-production`
-    const launched = await fetch(launchUrl, { method: 'POST' }).catch(() => null)
-    if (!launched?.ok) {
-      // Генерация задач идемпотентна — повтор не задвоит их.
-      const retry = async () => {
-        const r = await sendOrToast('Задачи в цех снова не создались', launchUrl, { method: 'POST' }, 'Сообщите разработчику')
-        if (r) toast.success('Задачи в цех созданы', { detail: 'Цех увидит заказ в своих экранах.' })
-      }
-      toast.error('Заказ запущен, но задачи в цех не создались', {
-        detail: `${launched ? await responseError(launched) : NETWORK_ERROR}. Цех его не увидит — повторите или сообщите разработчику.`,
-        action: { label: 'Создать задачи ещё раз', onClick: () => { void retry() } },
-      })
-    }
-    setQuotes(prev => prev.map(x => x.id === workDateId ? {
-      ...x, ...(launchedRow.columns as Partial<Quote>), notes: launchedRow.notes,
-    } : x))
+    setWorkDateId(q.id)
+  }
+
+  function onLaunched(id: number, saved: OrderNotesSaved) {
+    setQuotes(prev => prev.map(x => x.id === id ? { ...x, ...(saved.columns as Partial<Quote>), notes: saved.notes } : x))
     showToast('Запущено в работу')
     setWorkDateId(null)
-    setWorkDrawing(null)
   }
 
   // ── Load ───────────────────────────────────────────────────────────────────
@@ -1057,7 +1007,7 @@ export default function B2BQuotesPage() {
                       )}
                       {(status === 'quote' || status === 'agreed') && quote.client_id != null && (
                         <button
-                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); setWorkDeadline(toDateInput(shipDateFrom(new Date(), Number(parseNotes(quote.notes).production_days) || null))) }}
+                          onClick={() => openLaunch(quote)}
                           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                           Запустить в работу →
                         </button>
@@ -1250,61 +1200,11 @@ export default function B2BQuotesPage() {
 
                 {/* ── В работу: выбор даты запуска ──────────────────────── */}
                 {isWorkDateThis && (
-                  <div className="px-4 py-3 border-t border-[#f0f0ec] bg-blue-50/50 flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Дата запуска:</span>
-                      <input ref={workDateRef} type="date"
-                        className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
-                        value={workDate}
-                        onChange={e => setWorkDate(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Срок сдачи:</span>
-                      <input type="date"
-                        title="Когда отдать клиенту — используется в Сводке производства"
-                        className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
-                        value={workDeadline}
-                        onChange={e => setWorkDeadline(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
-                      />
-                      <span className="text-[10px] text-blue-700/70 whitespace-nowrap">
-                        {DEFAULT_WORKING_DAYS} раб. дней{queueCount != null && ` · в работе сейчас: ${queueCount}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">№ заказа:</span>
-                      <input type="text" placeholder="напр. 1453-1"
-                        className="w-28 bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
-                        value={workNumber}
-                        onChange={e => setWorkNumber(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Чертёж:</span>
-                      <label className="cursor-pointer bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[12px] text-[#111110] hover:border-blue-400 max-w-[180px] truncate">
-                        {workDrawing ? `📐 ${workDrawing.name}` : '📐 Прикрепить (PDF/фото)'}
-                        <input type="file" accept="application/pdf,image/*" className="hidden"
-                          onChange={e => setWorkDrawing(e.target.files?.[0] ?? null)} />
-                      </label>
-                      {workDrawing && (
-                        <button onClick={() => setWorkDrawing(null)} className="text-[#9a9a95] hover:text-red-600 text-sm px-0.5" title="Убрать файл">✕</button>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-blue-600/70 flex-shrink-0">
-                      Заказ уйдёт в производство, задачи появятся в цеху
-                    </p>
-                    <div className="flex items-center gap-2 ml-auto">
-                      <button onClick={confirmWorkDate} disabled={!workDate}
-                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
-                        Запустить →
-                      </button>
-                      <button onClick={() => setWorkDateId(null)}
-                        className="text-[#9a9a95] hover:text-[#111110] transition-colors px-1 text-sm">✕</button>
-                    </div>
-                  </div>
+                  <LaunchPanel orderId={quote.id} initialNumber={quote.custom_number}
+                    productionDays={Number(parseNotes(quote.notes).production_days) || null}
+                    queueCount={queueCount}
+                    onLaunched={saved => onLaunched(quote.id, saved)}
+                    onCancel={() => setWorkDateId(null)} />
                 )}
 
                 {/* ── Status change comment panel ────────────────────────── */}
