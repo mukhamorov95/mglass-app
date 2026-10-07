@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { confirmDialog } from '@/lib/dialog'
+import { confirmTyped } from '@/lib/confirmTyped'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -210,8 +213,10 @@ export default function B2BDevelopmentPage() {
   }
 
   async function deleteLead(id: number) {
-    if (!confirm('Удалить лид?')) return
-    await fetch('/api/admin/b2b-leads', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    if (!await confirmDialog({ title: 'Удалить лид?', text: 'Вместе с ним пропадёт история касаний.', confirmLabel: 'Удалить', danger: true })) return
+    const r = await fetch('/api/admin/b2b-leads', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      .catch(() => null)
+    if (!r || !r.ok) { toast.error(`Лид не удалён: ${r ? await responseError(r) : NETWORK_ERROR}`); return }
     setLeads(prev => prev.filter(l => l.id !== id))
     if (selectedLead?.id === id) setSelectedLead(null)
   }
@@ -730,10 +735,19 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
   const [clearing, setClearing] = useState(false)
 
   async function clearAll() {
-    if (!confirm('Удалить ВСЕ лиды из базы? Это действие необратимо.')) return
+    const answer = await confirmTyped({
+      title: 'Удалить ВСЕ лиды из базы?',
+      text: 'Это необратимо: лиды и история касаний удаляются из базы целиком.',
+      expected: 'УДАЛИТЬ',
+      confirmLabel: 'Удалить все',
+    })
+    if (answer === 'mismatch') { toast.error('Слово не совпало — ничего не удалено'); return }
+    if (answer !== 'ok') return
     setClearing(true)
-    await fetch('/api/admin/b2b-seed', { method: 'DELETE' })
+    const r = await fetch('/api/admin/b2b-seed', { method: 'DELETE' }).catch(() => null)
     setClearing(false)
+    if (!r || !r.ok) { toast.error(`Лиды не удалены: ${r ? await responseError(r) : NETWORK_ERROR}`); return }
+    toast.success('Все лиды удалены')
     onAdded()
   }
 

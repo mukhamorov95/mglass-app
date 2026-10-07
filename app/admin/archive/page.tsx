@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { confirmDialog } from '@/lib/dialog'
+import { confirmTyped } from '@/lib/confirmTyped'
+import { toast as notify } from '@/lib/toast'
 
 // Архив расчётов B2B — полная история просчётов, сделанных людьми (created_by задан;
 // импорт из таблицы сюда не попадает). Группировка по месяцам (новые сверху, текущий
@@ -145,37 +148,60 @@ export default function ArchivePage() {
     const patch = toArchived
       ? { archived_at: new Date().toISOString(), updated_by_user_id: user?.id ?? null }
       : { archived_at: null }
-    const { error } = await sb.from('b2b_orders').update(patch).in('id', ids)
-    if (!error) {
-      setRows(prev => prev.map(r => ids.includes(r.id) ? { ...r, archived_at: toArchived ? new Date().toISOString() : null } : r))
+    // RLS молча отбирает запрещённые строки (0 строк без ошибки) — судим по вернувшимся id.
+    const { data, error } = await sb.from('b2b_orders').update(patch).in('id', ids).select('id')
+    const done = new Set((data ?? []).map(r => r.id as number))
+    if (done.size) {
+      setRows(prev => prev.map(r => done.has(r.id) ? { ...r, archived_at: toArchived ? new Date().toISOString() : null } : r))
       setSelectedIds(new Set())
-      showToast(toArchived ? `Удалено в корзину: ${ids.length}` : `Восстановлено: ${ids.length}`)
-    } else showToast('Ошибка')
+      showToast(toArchived ? `Удалено в корзину: ${done.size}` : `Восстановлено: ${done.size}`)
+    }
+    if (error) notify.error(`${toArchived ? 'Не удалено в корзину' : 'Не восстановлено'}: ${error.message}`)
+    else if (done.size < ids.length) notify.error(`${toArchived ? 'В корзину ушло' : 'Восстановлено'} ${done.size} из ${ids.length}: на остальные нет прав`)
     setBusy(false)
   }
   async function purgeIds(ids: number[]) {
     if (ids.length === 0) return
     setBusy(true)
-    const { error } = await createClient().from('b2b_orders').delete().in('id', ids)
-    if (!error) {
-      setRows(prev => prev.filter(r => !ids.includes(r.id)))
+    const { data, error } = await createClient().from('b2b_orders').delete().in('id', ids).select('id')
+    const done = new Set((data ?? []).map(r => r.id as number))
+    if (done.size) {
+      setRows(prev => prev.filter(r => !done.has(r.id)))
       setSelectedIds(new Set())
-      showToast(`Удалено навсегда: ${ids.length}`)
-    } else showToast('Ошибка')
+      showToast(`Удалено навсегда: ${done.size}`)
+    }
+    if (error) notify.error(`Не удалено: ${error.message}`)
+    else if (done.size < ids.length) notify.error(`Удалено ${done.size} из ${ids.length}: на остальные нет прав`)
     setBusy(false)
   }
 
-  function deleteSelected() {
-    if (!window.confirm(`Удалить в корзину ${selectedIds.size} просчёт(ов)? Их можно восстановить.`)) return
+  async function deleteSelected() {
+    const n = selectedIds.size
+    if (!await confirmDialog({ title: `Удалить в корзину ${n} просч.?`, text: 'Их можно восстановить из «Корзины».', confirmLabel: 'В корзину', danger: true })) return
     updateArchived([...selectedIds], true)
   }
-  function deleteMonth(g: { label: string; rows: Row[] }) {
-    if (!window.confirm(`Удалить в корзину весь месяц «${g.label}» — ${g.rows.length} просч.? Восстановимо.`)) return
+  async function deleteMonth(g: { label: string; rows: Row[] }) {
+    if (!await confirmDialog({ title: `Удалить в корзину весь месяц «${g.label}»?`, text: `${g.rows.length} просч. Их можно восстановить из «Корзины».`, confirmLabel: 'В корзину', danger: true })) return
     updateArchived(g.rows.map(r => r.id), true)
   }
-  function purgeSelected() {
-    if (!window.confirm(`НАВСЕГДА удалить ${selectedIds.size} просчёт(ов)? Восстановить будет нельзя.`)) return
-    purgeIds([...selectedIds])
+  async function deleteOne(id: number) {
+    if (!await confirmDialog({ title: 'Удалить просчёт в корзину?', text: 'Его можно восстановить из «Корзины».', confirmLabel: 'В корзину', danger: true })) return
+    updateArchived([id], true)
+  }
+  // Навсегда — только набрав число просчётов (или слово для одного): «ОК» по привычке
+  // здесь стирает строки без возврата.
+  async function purge(ids: number[]) {
+    const n = ids.length
+    if (!n) return
+    const expected = n === 1 ? 'УДАЛИТЬ' : String(n)
+    const answer = await confirmTyped({
+      title: n === 1 ? 'Удалить просчёт навсегда?' : `Удалить навсегда ${n} просч.?`,
+      text: 'Восстановить будет нельзя: просчёт удаляется из базы, а не в «Корзину».',
+      expected,
+    })
+    if (answer === 'mismatch') { notify.error(`Не совпало с «${expected}» — ничего не удалено`); return }
+    if (answer !== 'ok') return
+    purgeIds(ids)
   }
 
   const activeCount = rows.filter(r => !r.archived_at).length
@@ -234,7 +260,7 @@ export default function ArchivePage() {
           ) : (
             <>
               <button onClick={() => updateArchived([...selectedIds], false)} disabled={busy} className="text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg disabled:opacity-40">Восстановить</button>
-              <button onClick={purgeSelected} disabled={busy} className="text-[12px] font-semibold text-white bg-red-700 hover:bg-red-800 px-3 py-1 rounded-lg disabled:opacity-40">Удалить навсегда</button>
+              <button onClick={() => purge([...selectedIds])} disabled={busy} className="text-[12px] font-semibold text-white bg-red-700 hover:bg-red-800 px-3 py-1 rounded-lg disabled:opacity-40">Удалить навсегда</button>
             </>
           )}
           <button onClick={() => setSelectedIds(new Set())} className="text-[12px] text-[#6b6b66] hover:text-[#111110] ml-auto">Отмена</button>
@@ -333,13 +359,13 @@ export default function ArchivePage() {
                                 <a href={`/api/quotes/${r.id}/pdf`} target="_blank" download title="Скачать КП (PDF)" className="inline-flex text-[#9a9a95] hover:text-[#111110] p-1.5 rounded hover:bg-[#f5f5f4] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15"><IcDownload className="w-4 h-4" /></a>
                                 <Link href={`/b2b-quotes/${r.id}/kp`} target="_blank" title="КП для печати" className="text-[11px] font-medium text-[#6b6b66] hover:text-violet-600 px-1.5 py-1 rounded hover:bg-violet-50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15">КП</Link>
                                 {isAdmin && (
-                                  <button onClick={() => { if (window.confirm('Удалить в корзину этот просчёт?')) updateArchived([r.id], true) }} title="Удалить" className="inline-flex text-[#9a9a95] hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-300"><IcX className="w-4 h-4" /></button>
+                                  <button onClick={() => deleteOne(r.id)} title="Удалить" className="inline-flex text-[#9a9a95] hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-300"><IcX className="w-4 h-4" /></button>
                                 )}
                               </span>
                             ) : isAdmin && (
                               <span className="inline-flex items-center gap-2">
                                 <button onClick={() => updateArchived([r.id], false)} className="text-[11px] text-blue-600 hover:text-blue-800">Восстановить</button>
-                                <button onClick={() => { if (window.confirm('Удалить НАВСЕГДА? Восстановить нельзя.')) purgeIds([r.id]) }} className="text-[11px] text-red-600 hover:text-red-800">Навсегда</button>
+                                <button onClick={() => purge([r.id])} disabled={busy} className="text-[11px] text-red-600 hover:text-red-800 disabled:opacity-40">Навсегда</button>
                               </span>
                             )}
                           </td>
