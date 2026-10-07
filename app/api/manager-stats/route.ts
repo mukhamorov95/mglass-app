@@ -4,6 +4,7 @@ import { statsViewer } from '@/lib/sales/managerStatsViewer'
 import { bookNames } from '@/lib/sales/bookNames'
 import { resolvePeriod, parseManagers } from '@/lib/sales/period'
 import { mskDayKey } from '@/lib/time'
+import { pageAll } from '@/lib/supabase/pageAll'
 import { METRIC_KEYS, foldStats, splitPeriod, describeNote, type StatFact, type MonthNote } from '@/lib/sales/managerStats'
 
 export const dynamic = 'force-dynamic'
@@ -33,28 +34,40 @@ export async function GET(req: NextRequest) {
   const facts: StatFact[] = []
   const notes: MonthNote[] = []
 
+  // .limit(5000/20000) потолок PostgREST в 1000 строк не поднимал — читаем страницами
+  // в порядке первичного ключа, ошибку отдаём, а не показываем неполный итог.
+  type MonthRow = Omit<MonthNote, 'kind'> & { kind: MonthNote['kind'] | 'match' }
   if (months.length) {
-    let mq = sb.from('manager_stats_monthly')
-      .select('month, manager, metric, book, days, value, kind, note_day')
-      .in('month', months).limit(5000)
-    if (!canAll) mq = mq.in('manager', bookNames(me))
-    const { data: mrows, error: merr } = await mq
-    if (merr) return NextResponse.json({ error: merr.message }, { status: 500 })
-    type MonthRow = Omit<MonthNote, 'kind'> & { kind: MonthNote['kind'] | 'match' }
-    for (const r of (mrows ?? []) as MonthRow[]) {
+    let mrows: MonthRow[]
+    try {
+      mrows = await pageAll<MonthRow>((from, to) => {
+        let mq = sb.from('manager_stats_monthly')
+          .select('month, manager, metric, book, days, value, kind, note_day')
+          .in('month', months)
+        if (!canAll) mq = mq.in('manager', bookNames(me))
+        return mq.order('month').order('manager').order('metric').range(from, to)
+      })
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    }
+    for (const r of mrows) {
       facts.push({ stat_date: `${r.month}-01`, manager: r.manager, metric: r.metric, value: r.value })
       if (r.kind === 'match' || (r.kind === 'no_total' && !Number(r.days))) continue
       notes.push({ ...r, kind: r.kind })
     }
   }
   for (const [lo, hi] of dayRanges) {
-    let dq = sb.from('manager_stats_daily')
-      .select('stat_date, manager, metric, value')
-      .gte('stat_date', lo).lte('stat_date', hi).limit(20000)
-    if (!canAll) dq = dq.in('manager', bookNames(me))
-    const { data: drows, error: derr } = await dq
-    if (derr) return NextResponse.json({ error: derr.message }, { status: 500 })
-    facts.push(...((drows ?? []) as StatFact[]))
+    try {
+      facts.push(...await pageAll<StatFact>((from, to) => {
+        let dq = sb.from('manager_stats_daily')
+          .select('stat_date, manager, metric, value')
+          .gte('stat_date', lo).lte('stat_date', hi)
+        if (!canAll) dq = dq.in('manager', bookNames(me))
+        return dq.order('stat_date').order('manager').order('metric').range(from, to)
+      }))
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    }
   }
 
   const { rows, totals } = foldStats(facts, picked)

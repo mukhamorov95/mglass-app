@@ -5,6 +5,7 @@ import { resolvePeriod } from '@/lib/sales/period'
 import { mskDayKey } from '@/lib/time'
 import { DAY_METRICS, dayLedger, splitPeriod, type StatFact } from '@/lib/sales/managerStats'
 import { statsViewer } from '@/lib/sales/managerStatsViewer'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,21 +28,26 @@ export async function GET(req: NextRequest) {
   )
   const { months } = splitPeriod(period.from, period.to)
   const sb = createServiceClient()
-  const [daysRes, monthsRes] = await Promise.all([
-    sb.from('manager_stats_daily').select('stat_date, manager, metric, value')
-      .eq('manager', manager).in('metric', [...DAY_METRICS]).neq('value', 0)
-      .gte('stat_date', period.from).lte('stat_date', period.to).order('stat_date').limit(20000),
-    months.length
-      ? sb.from('manager_stats_monthly').select('month, metric, value')
-        .eq('manager', manager).in('month', months).in('metric', [...DAY_METRICS]).limit(5000)
-      : Promise.resolve({ data: [] as { month: string; metric: string; value: number }[], error: null }),
-  ])
-  const error = daysRes.error ?? monthsRes.error
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Год одного менеджера по дням — под тысячу строк и растёт; .limit(20000) потолок
+  // PostgREST в 1000 не поднимал. Ключ сортировки — первичный (stat_date, manager, metric).
+  let days: StatFact[], monthRows: { month: string; metric: string; value: number }[]
+  try {
+    [days, monthRows] = await Promise.all([
+      pageAll<StatFact>((from, to) => sb.from('manager_stats_daily').select('stat_date, manager, metric, value')
+        .eq('manager', manager).in('metric', [...DAY_METRICS]).neq('value', 0)
+        .gte('stat_date', period.from).lte('stat_date', period.to).order('stat_date').order('metric').range(from, to)),
+      months.length
+        ? pageAll<{ month: string; metric: string; value: number }>((from, to) => sb.from('manager_stats_monthly').select('month, metric, value')
+          .eq('manager', manager).in('month', months).in('metric', [...DAY_METRICS]).order('month').order('metric').range(from, to))
+        : Promise.resolve([]),
+    ])
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
 
   return NextResponse.json({
     manager,
     period: { from: period.from, to: period.to, label: period.label },
-    lines: dayLedger((daysRes.data ?? []) as StatFact[], monthsRes.data ?? [], months),
+    lines: dayLedger(days, monthRows, months),
   })
 }

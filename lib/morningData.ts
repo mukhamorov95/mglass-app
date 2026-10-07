@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { bookNames } from '@/lib/sales/bookNames'
+import { pageAllOrError as all } from '@/lib/supabase/pageAll'
 import { addBookFacts, emptyMonth, isWorkday, nextMonth as addMonth, pickDay, prevMonth, type DayRow, type MonthMoney, type Schedule } from '@/lib/morning'
 import { DEFAULT_MANAGER_COMMISSION_TIERS, DEFAULT_MANAGER_SALARY_RUB, type CommissionTier } from '@/lib/earnings/calculateProgressiveCommission'
 
@@ -46,9 +47,11 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
   const [sch, users, snap, plans, settings] = await Promise.all([
     sb.from('manager_schedules').select('amo_user_id, name, work_from, work_to, work_days, starts_on, is_seller'),
     sb.from('users').select('name, amo_user_id').not('amo_user_id', 'is', null),
+    // Один день — по строке на сотрудника amo, 200 с запасом; две недели читаем целиком.
     opts.day
       ? sb.from('manager_day_stats').select('*').eq('day', opts.day).limit(200)
-      : sb.from('manager_day_stats').select('*').gte('day', addDays(today, -14)).lt('day', today).limit(2000),
+      : all<DayRow>((a, b) => sb.from('manager_day_stats').select('*').gte('day', addDays(today, -14)).lt('day', today)
+        .order('day').order('amo_user_id').range(a, b)),
     sb.from('manager_month_plans').select('month, amo_user_id, plan_money').in('month', [month, addMonth(month)]),
     sb.from('earnings_settings').select('base_salary_rub, commission_tiers').eq('scope', 'b2c_manager').maybeSingle(),
   ])
@@ -96,28 +99,31 @@ export async function loadMorning(sb: SupabaseClient, opts: { today: string; onl
   if (!names.length) return { today, day, updatedAt, month, prev, bookLastDay: null, people, pay, errors }
 
   const [sales, daily, monthly, last] = await Promise.all([
-    sb.from('crm_sales').select('manager, amount, sale_date')
+    // Деньги двух месяцев — страницами: .limit(5000) потолок PostgREST в 1000 не поднимал.
+    all<{ manager: string; amount: number; sale_date: string }>((a, b) => sb.from('crm_sales').select('manager, amount, sale_date')
       .gte('sale_date', `${prev}-01`).lt('sale_date', `${addMonth(month)}-01`)
-      .eq('voided', false).neq('department', 'b2b').in('manager', names).limit(5000),
-    sb.from('manager_stats_daily').select('stat_date, manager, metric, value')
+      .eq('voided', false).neq('department', 'b2b').in('manager', names).order('id').range(a, b)),
+    all<{ stat_date: string; manager: string; metric: string; value: number }>((a, b) => sb.from('manager_stats_daily')
+      .select('stat_date, manager, metric, value')
       .gte('stat_date', `${prev}-01`).lt('stat_date', `${addMonth(month)}-01`)
-      .in('manager', names).in('metric', BOOK_METRICS).limit(5000),
-    // Прошлый месяц — итогом месяца из книги, как на «Показателях менеджеров».
+      .in('manager', names).in('metric', BOOK_METRICS).order('stat_date').order('manager').order('metric').range(a, b)),
+    // Прошлый месяц — итогом месяца из книги, как на «Показателях менеджеров». Один месяц —
+    // по строке на метрику человека (07.10 — 37 строк на месяц всего), 1000 хватает.
     sb.from('manager_stats_monthly').select('manager, metric, value')
-      .eq('month', prev).in('manager', names).in('metric', BOOK_METRICS).limit(5000),
+      .eq('month', prev).in('manager', names).in('metric', BOOK_METRICS).limit(1000),
     sb.from('manager_stats_daily').select('stat_date').neq('value', 0)
       .order('stat_date', { ascending: false }).limit(1).maybeSingle(),
   ])
   note('продажи', sales.error); note('книга по дням', daily.error); note('книга по месяцам', monthly.error)
 
-  for (const s of (sales.data ?? []) as { manager: string; amount: number; sale_date: string }[]) {
+  for (const s of sales.data) {
     const p = byId.get(owner.get(s.manager) ?? -1)
     if (!p) continue
     const m = s.sale_date.startsWith(month) ? p.month : p.prev
     m.salesCount++
     m.salesSum += Number(s.amount) || 0
   }
-  for (const f of (daily.data ?? []) as { stat_date: string; manager: string; metric: string; value: number }[]) {
+  for (const f of daily.data) {
     const p = byId.get(owner.get(f.manager) ?? -1)
     if (!p) continue
     const cur = f.stat_date.startsWith(month)
