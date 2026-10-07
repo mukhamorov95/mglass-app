@@ -120,6 +120,9 @@ const CFO_ITEMS: NavItem[] = [
   { href: '/cfo/order-economics', label: 'Экономика заказов', icon: '🧾' },
   { href: '/cfo/order-economics/retail', label: 'Фонды розницы', icon: '🚿', indent: true },
   { href: '/cfo/breakeven', label: 'Точка безубыточности', icon: '🎯' },
+  // Бывший «Финмодели / ДДС»: финмодель там — дубль /cfo/model и /cfo/breakeven (07.10),
+  // но вкладка «Настройки» — единственный редактор cfo_settings (решение владельца 06.10).
+  { href: '/admin/cfo?tab=settings', label: 'Налог и расходы CFO', icon: '💰' },
   { href: '/admin/settings', label: 'Фин. настройки', icon: '⚙️' },
 ]
 
@@ -590,7 +593,10 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     }
   }
 
-  const active = (href: string) => pathname === href || pathname.startsWith(href + '/')
+  const active = (link: string) => {
+    const href = link.split('?')[0]
+    return pathname === href || pathname.startsWith(href + '/')
+  }
 
   // ── Nav item ────────────────────────────────────────────────────────────────
 
