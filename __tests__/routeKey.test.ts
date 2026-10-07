@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { routeKey, isTrackablePageRequest, isWallRoute } from '@/lib/routeKey'
+import { routeKey, createPageViewDeduper, isWallRoute } from '@/lib/routeKey'
 
 describe('routeKey', () => {
   it('идентификаторы сводит в [id], обычные сегменты с цифрами не трогает', () => {
@@ -29,48 +29,35 @@ describe('routeKey', () => {
   })
 })
 
-describe('isTrackablePageRequest', () => {
-  const h = (o: Record<string, string> = {}) => new Headers(o)
-  it('страница — да; API, статика, POST и предзагрузка — нет', () => {
-    expect(isTrackablePageRequest('/b2b-today', 'GET', h())).toBe(true)
-    expect(isTrackablePageRequest('/b2b-today', 'GET', h({ rsc: '1' }))).toBe(true)
-    expect(isTrackablePageRequest('/api/invoices', 'GET', h())).toBe(false)
-    expect(isTrackablePageRequest('/_next/data/x.json', 'GET', h())).toBe(false)
-    expect(isTrackablePageRequest('/b2b-today', 'POST', h())).toBe(false)
-    expect(isTrackablePageRequest('/b2b-today', 'GET', h({ 'next-router-prefetch': '1' }))).toBe(false)
-    expect(isTrackablePageRequest('/b2b-today', 'GET', h({ 'sec-purpose': 'prefetch' }))).toBe(false)
-  })
-})
-
-describe('что считается переходом человека (У12)', () => {
-  const h = (o: Record<string, string>) => new Headers(o)
-
-  it('загрузка страницы целиком считается', () => {
-    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'document' }))).toBe(true)
+describe('счётчик в браузере (08.10)', () => {
+  it('смена пути — переход, тот же путь подряд — нет', () => {
+    const next = createPageViewDeduper()
+    expect(next('/b2b-today')).toBe('/b2b-today')
+    expect(next('/b2b-today')).toBeNull()
+    expect(next('/b2b-deal/5564')).toBe('/b2b-deal/[id]')
+    expect(next('/b2b-deal/5565')).toBe('/b2b-deal/[id]')
+    expect(next('/b2b-today')).toBe('/b2b-today')
   })
 
-  it('переход внутри приложения считается', () => {
-    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'empty', rsc: '1' }))).toBe(true)
+  it('пустой путь, API и внутренние адреса не считаются', () => {
+    const next = createPageViewDeduper()
+    expect(next(null)).toBeNull()
+    expect(next(undefined)).toBeNull()
+    expect(next('')).toBeNull()
+    expect(next('/api/search')).toBeNull()
+    expect(next('/_next/static/x.js')).toBeNull()
   })
 
-  it('фоновый запрос к адресу страницы не считается', () => {
-    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'empty' }))).toBe(false)
-    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'iframe' }))).toBe(false)
+  it('у каждой вкладки свой счётчик подряд', () => {
+    const a = createPageViewDeduper()
+    const b = createPageViewDeduper()
+    expect(a('/')).toBe('/')
+    expect(b('/')).toBe('/')
   })
 
-  it('подгрузка ссылки роутером не считается', () => {
-    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-fetch-dest': 'document', 'next-router-prefetch': '1' }))).toBe(false)
-    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({ 'sec-purpose': 'prefetch;prerender' }))).toBe(false)
-  })
-
-  it('браузер без Sec-Fetch-* не теряется', () => {
-    expect(isTrackablePageRequest('/b2b-quotes', 'GET', h({}))).toBe(true)
-  })
-
-  it('API и внутренние адреса не считаются', () => {
-    expect(isTrackablePageRequest('/api/search', 'GET', h({ 'sec-fetch-dest': 'document' }))).toBe(false)
-    expect(isTrackablePageRequest('/_next/static/x.js', 'GET', h({ 'sec-fetch-dest': 'document' }))).toBe(false)
-    expect(isTrackablePageRequest('/b2b-quotes', 'POST', h({ 'sec-fetch-dest': 'document' }))).toBe(false)
+  it('middleware больше не пишет переходы — иначе двойной счёт', () => {
+    const mw = readFileSync(join(process.cwd(), 'middleware.ts'), 'utf8')
+    expect(mw).not.toContain('track_page_view')
   })
 
   it('экраны-стены помечены', () => {
