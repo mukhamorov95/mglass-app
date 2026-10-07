@@ -1,34 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { liveOrders, orderAmount } from '@/lib/liveOrders'
+import { loadJson, sendOrToast, toast } from '@/lib/toast'
+import { confirmDialog, promptDialog } from '@/lib/dialog'
+import { BUCKETS, type Bucket, type DebtRow, type Receivables } from '@/lib/money/receivables'
 
-// Дебиторская задолженность: кто должен, сколько и сколько дней.
-// B2B — из b2b_orders (счёт: notes.stages.invoice_sent/invoice_paid, notes.payment_status,
-// предоплата notes.prepayment_amount, долг = сумма − предоплата).
-// Только не архивные заказы (liveOrders): архивные дубли импорта давали здесь
-// «долг» 33 964 ₽, которого /ceo не видел — две страницы, одна метрика, разные ответы.
+// Долг клиентов: кто должен, сколько и сколько дней. Одна функция на все экраны
+// (lib/money/receivables через /api/accounting/receivables): запущенные неархивные
+// B2B-заказы, итог − оплачено по payments. Срок — дни с отгрузки, без отгрузки — с запуска.
+// Раньше страница считала по notes.stages.invoice_sent, который с июня никто не ставит, — 0 ₽.
 // B2C — договоры/счета (contracts, status sent/signed): оплата живёт в AmoCRM,
 // здесь список выставленного для контроля менеджерами.
 
-type Stages = Record<string, string | undefined>
-type Notes = {
-  status?: string
-  payment_status?: 'unpaid' | 'partial' | 'paid'
-  prepayment_amount?: number
-  stages?: Stages
-}
-type B2BOrder = {
-  id: number
-  custom_number: string | null
-  client_name: string | null
-  total_sale_inc_vat: number | null
-  total_after_discount: number | null
-  created_at: string
-  launched_at: string | null
-  notes: Notes
-}
 type Contract = {
   id: number
   number: string | null
@@ -39,110 +23,79 @@ type Contract = {
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
-const parseNotes = (raw: unknown): Notes => {
-  if (!raw) return {}
-  if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return {} } }
-  return raw as Notes
+const DD = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`
+const BUCKET_CLS: Record<Bucket, string> = {
+  b7: 'text-emerald-700', b14: 'text-amber-600', b30: 'text-orange-600', b99: 'text-red-600',
 }
-const daysSince = (iso: string | null | undefined): number | null => {
-  if (!iso) return null
-  const d = new Date(iso).getTime()
-  if (Number.isNaN(d)) return null
-  return Math.floor((Date.now() - d) / 86400000)
-}
-// Вёдра старения долга — стандартный aging: чем правее, тем тревожнее
-const BUCKETS = [
-  { key: 'b7',  label: '0–7 дней',   max: 7,        cls: 'text-emerald-700' },
-  { key: 'b14', label: '8–14 дней',  max: 14,       cls: 'text-amber-600' },
-  { key: 'b30', label: '15–30 дней', max: 30,       cls: 'text-orange-600' },
-  { key: 'b99', label: '30+ дней',   max: Infinity, cls: 'text-red-600' },
-]
-const bucketOf = (days: number) => BUCKETS.find(b => days <= b.max)!
 
 export default function ReceivablesPage() {
-  const sb = createClient()
-  const [orders, setOrders] = useState<B2BOrder[]>([])
+  const [rec, setRec] = useState<Receivables | null>(null)
+  const [recErr, setRecErr] = useState<string | null>(null)
   const [contracts, setContracts] = useState<Contract[]>([])
+  const [conErr, setConErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<number | null>(null)
+  const [reload, setReload] = useState(0)
+  const [view, setView] = useState<'orders' | 'clients'>('orders')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const cols = 'id, custom_number, client_name, total_sale_inc_vat, total_after_discount, created_at, launched_at, notes'
-    // Постранично: PostgREST режет ответ на 1000 строках, живых заказов больше —
-    // без этого просроченный счёт мог просто не доехать до экрана.
-    const bo: B2BOrder[] = []
-    const { data: ct } = await sb.from('contracts')
-      .select('id, number, total, status, customer, created_at')
-      .in('status', ['sent', 'signed'])
-      .order('created_at', { ascending: false }).limit(300)
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await liveOrders(sb, cols).order('created_at', { ascending: false }).range(from, from + 999)
-      if (error || !data?.length) break
-      bo.push(...(data as unknown as B2BOrder[]))
-      if (data.length < 1000) break
-    }
-    setOrders(bo.map(o => ({ ...o, notes: parseNotes(o.notes) })))
-    setContracts((ct ?? []) as Contract[])
-    setLoading(false)
-  }, [sb])
+  useEffect(() => {
+    let alive = true
+    const sb = createClient()
+    Promise.all([
+      loadJson<Receivables>('/api/accounting/receivables'),
+      sb.from('contracts').select('id, number, total, status, customer, created_at')
+        .in('status', ['sent', 'signed']).order('created_at', { ascending: false }).limit(300),
+    ]).then(([r, ct]) => {
+      if (!alive) return
+      if (r.error !== null) setRecErr(r.error)
+      else { setRec(r.data); setRecErr(null) }
+      if (ct.error) setConErr(ct.error.message)
+      else { setContracts((ct.data ?? []) as Contract[]); setConErr(null) }
+      setLoading(false)
+    })
+    return () => { alive = false }
+  }, [reload])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
-
-  // Дебиторка B2B: счёт выставлен, оплаты нет (или частичная)
-  const rows = useMemo(() => {
-    return orders.flatMap(o => {
-      const n = o.notes
-      const st = n.stages ?? {}
-      if (!['confirmed', 'agreed', 'sent'].includes(n.status ?? '')) return []
-      if (!st.invoice_sent) return []                 // счёт не выставлялся
-      if (st.invoice_paid || n.payment_status === 'paid') return []
-      const total = orderAmount(o)
-      const prepay = n.payment_status === 'partial' ? (n.prepayment_amount || 0) : (n.prepayment_amount || 0)
-      const debt = Math.max(0, total - prepay)
-      if (debt <= 0) return []
-      const days = daysSince(st.invoice_sent) ?? 0
-      return [{ order: o, total, prepay, debt, days, bucket: bucketOf(days) }]
-    }).sort((a, b) => b.days - a.days)
-  }, [orders])
-
-  // Запущено в работу, а счёт так и не выставлен — упущенные деньги.
-  // Только свежие заказы (60 дней): исторический массив без stages.invoice_sent — не сигнал.
-  const noInvoice = useMemo(() =>
-    orders.filter(o => o.notes.status === 'confirmed' && !(o.notes.stages?.invoice_sent)
-      && !(o.notes.stages?.invoice_paid) && o.notes.payment_status !== 'paid'
-      && (daysSince(o.launched_at ?? o.created_at) ?? 999) <= 60),
-  [orders])
-
-  const totals = useMemo(() => {
-    const sum = rows.reduce((s, r) => s + r.debt, 0)
-    const byBucket = BUCKETS.map(b => ({
-      ...b, sum: rows.filter(r => r.bucket.key === b.key).reduce((s, r) => s + r.debt, 0),
-      count: rows.filter(r => r.bucket.key === b.key).length,
-    }))
-    return { sum, byBucket }
-  }, [rows])
+  const noInvoice = useMemo(() => (rec?.rows ?? []).filter(r => !r.invoiceNo), [rec])
 
   // Оплата пишется только через единый роут (Д2): notes + payments + ведомость.
-  async function postPayment(id: number, body: { status: string; amount?: number }) {
-    setBusyId(id)
+  // Роут сам видит пришедшие платежи и не задваивает их.
+  async function postPayment(row: DebtRow, body: { status: string; amount?: number }) {
+    setBusyId(row.id)
     try {
-      const r = await fetch(`/api/b2b-orders/${id}/payment`, {
+      const r = await sendOrToast('Оплата не отмечена', `/api/b2b-orders/${row.id}/payment`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
-      if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error ?? 'Не удалось отметить оплату'); return }
-      await load()
+      if (!r) return
+      const d = await r.json().catch(() => ({})) as { warnings?: string[] }
+      if (d.warnings?.length) toast.info(d.warnings[0])
+      else toast.success(body.status === 'paid' ? `Заказ ${row.ref} оплачен` : `Оплата по ${row.ref} записана`)
+      setReload(n => n + 1)
     } finally { setBusyId(null) }
   }
 
-  const markPaid = (o: B2BOrder) => postPayment(o.id, { status: 'paid' })
+  async function markPaid(row: DebtRow) {
+    const ok = await confirmDialog({
+      title: `Заказ ${row.ref} оплачен полностью?`,
+      text: `Запишется платёж на остаток ${fmt(row.debt)} (итог ${fmt(row.total)}, уже пришло ${fmt(row.paid)}).`,
+      confirmLabel: 'Записать оплату',
+    })
+    if (ok) await postPayment(row, { status: 'paid' })
+  }
 
-  async function markPartial(o: B2BOrder) {
-    const raw = window.prompt('Сколько оплачено всего по заказу, ₽ (накопленная предоплата)?', String(o.notes.prepayment_amount || ''))
+  async function markPartial(row: DebtRow) {
+    const raw = await promptDialog({
+      title: `Частичная оплата · ${row.ref}`,
+      text: `Сколько клиент внёс всего (накопленная предоплата). Итог заказа ${fmt(row.total)}.`,
+      label: 'Оплачено всего, ₽',
+      defaultValue: row.paid > 0 ? String(Math.round(row.paid)) : '',
+      confirmLabel: 'Записать',
+    })
     if (raw == null) return
-    const amount = Number(raw.replace(/\s/g, '')) || 0
-    await postPayment(o.id, { status: amount > 0 ? 'partial' : 'unpaid', amount })
+    const amount = Number(raw.replace(/\s/g, '').replace(',', '.'))
+    if (!Number.isFinite(amount) || amount < 0) { toast.error('Сумма не записана', { detail: 'Нужно число не меньше нуля' }); return }
+    if (amount >= row.total) { toast.error('Сумма не записана', { detail: `Это не частичная оплата: ${fmt(amount)} ≥ итога ${fmt(row.total)} — нажмите «✓ Оплачен»` }); return }
+    await postPayment(row, { status: amount > 0 ? 'partial' : 'unpaid', amount })
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
@@ -150,91 +103,135 @@ export default function ReceivablesPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Дебиторская задолженность</h1>
-        <p className="text-[12px] text-[#9a9a95] mt-0.5">Кто должен, сколько и сколько дней. B2B — счета из заказов; розница — выставленные договоры/счета.</p>
+        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Долг клиентов</h1>
+        <p className="text-[12px] text-[#9a9a95] mt-0.5">
+          Запущенные B2B-заказы минус оплаты из платежей{rec ? ` · с запуска ${DD(rec.since)}.${rec.since.slice(2, 4)}` : ''}. Розница — выставленные договоры/счета.
+        </p>
       </div>
 
       <div className="px-5 pt-4 space-y-4 max-w-[1280px]">
-        {/* Итоги и старение */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="bg-[#111110] text-white rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#8a8a85]">Всего должны (B2B)</p>
-            <p className="text-[20px] font-bold font-mono mt-1">{fmt(totals.sum)}</p>
-            <p className="text-[11px] text-[#c4c4be]">{rows.length} счёт(ов)</p>
-          </div>
-          {totals.byBucket.map(b => (
-            <div key={b.key} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a9a95]">{b.label}</p>
-              <p className={`text-[18px] font-bold font-mono mt-1 ${b.cls}`}>{fmt(b.sum)}</p>
-              <p className="text-[11px] text-[#9a9a95]">{b.count} счёт(ов)</p>
-            </div>
-          ))}
-        </div>
+        {recErr && <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-[13px]">Долг не загрузился: {recErr}</div>}
 
-        {/* B2B: неоплаченные счета */}
-        <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-          <p className="px-4 pt-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">B2B · счёт выставлен, оплаты нет</p>
-          {rows.length === 0 ? (
-            <p className="px-4 pb-4 text-[12px] text-[#c4c4be]">Неоплаченных счетов нет 🎉</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-wider text-[#9a9a95] border-b border-[#f0f0ec]">
-                    <th className="px-4 py-2">Заказ</th><th className="px-2 py-2">Клиент</th>
-                    <th className="px-2 py-2 text-right">Сумма</th><th className="px-2 py-2 text-right">Оплачено</th>
-                    <th className="px-2 py-2 text-right">Долг</th><th className="px-2 py-2 text-right">Счёт выставлен</th>
-                    <th className="px-2 py-2 text-right">Дней</th><th className="px-4 py-2 text-right">Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({ order: o, total, prepay, debt, days, bucket }) => (
-                    <tr key={o.id} className="border-b border-[#f8f8f7] hover:bg-[#fafaf9]">
-                      <td className="px-4 py-2 font-mono font-semibold">
-                        <a href={`/b2b-orders`} className="hover:underline">№{o.custom_number || o.id}</a>
-                      </td>
-                      <td className="px-2 py-2">{o.client_name || '—'}</td>
-                      <td className="px-2 py-2 text-right font-mono">{fmt(total)}</td>
-                      <td className="px-2 py-2 text-right font-mono text-[#6b6b66]">{prepay > 0 ? fmt(prepay) : '—'}</td>
-                      <td className={`px-2 py-2 text-right font-mono font-bold ${bucket.cls}`}>{fmt(debt)}</td>
-                      <td className="px-2 py-2 text-right text-[#6b6b66]">{o.notes.stages?.invoice_sent ? new Date(o.notes.stages.invoice_sent).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'}</td>
-                      <td className={`px-2 py-2 text-right font-mono font-semibold ${bucket.cls}`}>{days}</td>
-                      <td className="px-4 py-2 text-right whitespace-nowrap">
-                        <button onClick={() => markPartial(o)} disabled={busyId === o.id}
-                          className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1 hover:bg-[#f5f5f3] disabled:opacity-40 mr-1">Частично</button>
-                        <button onClick={() => markPaid(o)} disabled={busyId === o.id}
-                          className="text-[11px] font-semibold bg-emerald-600 text-white rounded-lg px-2 py-1 hover:bg-emerald-700 disabled:opacity-40">✓ Оплачен</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        {rec && (
+          <>
+            {rec.coverage.orders > 0 && rec.coverage.withPayment < rec.coverage.orders && (
+              <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-900">
+                Оплаты заведены у {rec.coverage.withPayment} из {rec.coverage.orders} заказов с {DD(rec.since)}. Пока выписка банка не
+                загружается в «Бухгалтерия → Выписка», часть этой суммы — оплаты, которых нет в системе, а не долг.
+              </div>
+            )}
 
-        {/* B2B: в работе без счёта */}
-        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-amber-700">⚠ Запущено в производство, а счёт не выставлен — {noInvoice.length} заказ(ов)</p>
-          {noInvoice.length === 0 ? (
-            <p className="text-[12px] text-amber-700 mt-1">Таких нет — все запущенные заказы со счетами.</p>
-          ) : (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {noInvoice.map(o => (
-                <a key={o.id} href="/b2b-orders" className="text-[12px] bg-white border border-amber-200 rounded-lg px-2.5 py-1 hover:bg-amber-100">
-                  №{o.custom_number || o.id} · {o.client_name || '—'} · <span className="font-mono">{fmt(orderAmount(o))}</span>
-                </a>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-[#111110] text-white rounded-xl p-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#8a8a85]">Всего должны (B2B)</p>
+                <p className="text-[20px] font-bold font-mono mt-1">{fmt(rec.total)}</p>
+                <p className="text-[11px] text-[#c4c4be]">{rec.count} заказ(ов) · {rec.byClient.length} клиент(ов)</p>
+              </div>
+              {rec.buckets.map(b => (
+                <div key={b.key} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a9a95]">{b.label}</p>
+                  <p className={`text-[18px] font-bold font-mono mt-1 ${BUCKET_CLS[b.key]}`}>{fmt(b.sum)}</p>
+                  <p className="text-[11px] text-[#9a9a95]">{b.count} заказ(ов)</p>
+                </div>
               ))}
             </div>
-          )}
-          <p className="text-[10px] text-amber-600 mt-2">Счёт выставляется в B2B Просчётах/Заказах — там же отмечается этап «Счёт выставлен». Заказы старше 60 дней здесь не показываются.</p>
-        </div>
+
+            <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+              <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-3">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">B2B · долг по заказам</p>
+                <div className="flex bg-[#f0f0ec] rounded-lg p-[3px]">
+                  {([['orders', 'Заказы'], ['clients', 'Клиенты']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => setView(k)}
+                      className={`px-2.5 py-1 rounded-md text-[12px] font-medium ${view === k ? 'bg-white shadow-sm text-[#111110]' : 'text-[#6b6b66]'}`}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              {rec.rows.length === 0 ? (
+                <p className="px-4 pb-4 text-[12px] text-[#9a9a95]">Долгов нет — все запущенные заказы оплачены по платежам.</p>
+              ) : view === 'clients' ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="text-left text-[10px] uppercase tracking-wider text-[#9a9a95] border-b border-[#f0f0ec]">
+                        <th className="px-4 py-2">Клиент</th><th className="px-2 py-2 text-right">Заказов</th>
+                        <th className="px-2 py-2 text-right">Долг</th><th className="px-4 py-2 text-right">Самый старый, дней</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rec.byClient.map(c => (
+                        <tr key={c.key} className="border-b border-[#f8f8f7]">
+                          <td className="px-4 py-2">{c.client}</td>
+                          <td className="px-2 py-2 text-right font-mono">{c.count}</td>
+                          <td className="px-2 py-2 text-right font-mono font-bold">{fmt(c.debt)}</td>
+                          <td className={`px-4 py-2 text-right font-mono ${BUCKET_CLS[BUCKETS.find(b => c.maxDays <= b.max)!.key]}`}>{c.maxDays}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="text-left text-[10px] uppercase tracking-wider text-[#9a9a95] border-b border-[#f0f0ec]">
+                        <th className="px-4 py-2">Заказ</th><th className="px-2 py-2">Клиент</th>
+                        <th className="px-2 py-2 text-right">Сумма</th><th className="px-2 py-2 text-right">Оплачено</th>
+                        <th className="px-2 py-2 text-right">Долг</th><th className="px-2 py-2 text-right">С какого дня</th>
+                        <th className="px-2 py-2 text-right">Дней</th><th className="px-4 py-2 text-right">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rec.rows.map(r => (
+                        <tr key={r.id} className="border-b border-[#f8f8f7] hover:bg-[#fafaf9]">
+                          <td className="px-4 py-2 font-mono font-semibold">
+                            <a href={`/b2b-deal/${r.id}`} className="hover:underline">{r.ref}</a>
+                            {r.invoiceNo && <span className="ml-1 text-[10px] font-normal text-[#9a9a95]">сч. {r.invoiceNo}</span>}
+                          </td>
+                          <td className="px-2 py-2">{r.client}</td>
+                          <td className="px-2 py-2 text-right font-mono">{fmt(r.total)}</td>
+                          <td className="px-2 py-2 text-right font-mono text-[#6b6b66]">{r.paid > 0 ? fmt(r.paid) : '—'}</td>
+                          <td className={`px-2 py-2 text-right font-mono font-bold ${BUCKET_CLS[r.bucket]}`}>{fmt(r.debt)}</td>
+                          <td className="px-2 py-2 text-right text-[#6b6b66]">{DD(r.fromDay)} · {r.shipped ? 'отгружен' : 'запущен'}</td>
+                          <td className={`px-2 py-2 text-right font-mono font-semibold ${BUCKET_CLS[r.bucket]}`}>{r.days}</td>
+                          <td className="px-4 py-2 text-right whitespace-nowrap">
+                            <button onClick={() => markPartial(r)} disabled={busyId === r.id}
+                              className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1 hover:bg-[#f5f5f3] disabled:opacity-40 mr-1">Частично</button>
+                            <button onClick={() => markPaid(r)} disabled={busyId === r.id}
+                              className="text-[11px] font-semibold bg-emerald-600 text-white rounded-lg px-2 py-1 hover:bg-emerald-700 disabled:opacity-40">✓ Оплачен</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-amber-700">⚠ С долгом, а счёта в реестре нет — {noInvoice.length} заказ(ов)</p>
+              {noInvoice.length === 0 ? (
+                <p className="text-[12px] text-amber-700 mt-1">Таких нет — на все заказы с долгом выставлены счета.</p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {noInvoice.map(r => (
+                    <a key={r.id} href={`/b2b-deal/${r.id}`} className="text-[12px] bg-white border border-amber-200 rounded-lg px-2.5 py-1 hover:bg-amber-100">
+                      {r.ref} · {r.client} · <span className="font-mono">{fmt(r.debt)}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-amber-600 mt-2">Счёт попадает в реестр при печати счёта из просчёта или «Единого счёта».</p>
+            </div>
+          </>
+        )}
 
         {/* B2C: выставленные договоры/счета */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
           <p className="px-4 pt-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Розница · выставленные договоры/счета ({contracts.length})</p>
           <p className="px-4 pb-2 text-[11px] text-[#9a9a95]">Оплаты розницы отслеживаются в AmoCRM (этап «Счёт выставлен — ждём оплату»). Здесь — что выставлено из системы.</p>
-          {contracts.length === 0 ? (
+          {conErr ? (
+            <p className="px-4 pb-4 text-[12px] text-red-700">Договоры не загрузились: {conErr}</p>
+          ) : contracts.length === 0 ? (
             <p className="px-4 pb-4 text-[12px] text-[#c4c4be]">Выставленных договоров нет.</p>
           ) : (
             <div className="overflow-x-auto">
