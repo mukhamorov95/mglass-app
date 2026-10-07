@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase-service'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 // Воронка живого Avito-бота «Иван» из crm_leads. Раньше аналитики по нему не было:
 // /ai-stats смотрит на отключённый старый контур (ai_managed_chats). Доступ гейтит
@@ -44,11 +45,13 @@ function Bars({ title, data, total }: { title: string; data: [string, number][];
 
 export default async function AvitoFunnelPage() {
   const svc = createServiceClient()
-  const { data } = await svc.from('crm_leads')
+  const desc = { ascending: false } as const
+  const loadErrors: string[] = []
+  const leads = await pageAll<Lead>((from, to) => svc.from('crm_leads')
     .select('id, stage, status, heat, qualified, score, readiness, est_amount, created_at')
     .eq('source', 'avito').gte('created_at', since(30))
-    .order('created_at', { ascending: false }).limit(5000)
-  const leads = (data ?? []) as Lead[]
+    .order('created_at', desc).order('id', desc).range(from, to))
+    .catch((e: Error) => { loadErrors.push(e.message); return [] as Lead[] })
 
   const total = leads.length
   const qualified = leads.filter(l => l.qualified).length
@@ -79,6 +82,11 @@ export default async function AvitoFunnelPage() {
       </div>
 
       <div className="px-5 pt-4 max-w-[900px] space-y-4">
+        {loadErrors.length > 0 && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl px-4 py-3">
+            Лиды не загрузились — цифры ниже неверны. {loadErrors.join(' · ')}
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {kpi('Лидов за 30 дн', String(total), `${Math.round(total / 30 * 10) / 10} в день`)}
           {kpi('Квалифицировано', String(qualified), total > 0 ? `${Math.round(qualified / total * 100)}% конверсия` : '')}

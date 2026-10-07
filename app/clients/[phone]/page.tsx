@@ -7,6 +7,7 @@ import type { OrderStatus } from '@/lib/types'
 import { phoneKey, formatPhone, extractPhone } from '@/lib/b2c/phoneKey'
 import NewCalcButtons from './NewCalcButtons'
 import { calcTypeLabel } from '@/lib/calcLabel'
+import { pageAll, type PageResult } from '@/lib/supabase/pageAll'
 
 // М1: единая карточка сделки B2C. Раньше здесь были только заказы и расчёты, и
 // сопоставлялись они точным равенством строки телефона — «8(915)129-12-77» и
@@ -70,45 +71,53 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
   const seeAllClients = role === 'admin' || role === 'ceo' || profile?.can_view_all_clients === true
 
   // Телефоны в базе записаны как попало, поэтому сравниваем не в SQL, а по
-  // нормализованному ключу. Таблицы B2C маленькие — выбираем свежий срез и
-  // фильтруем в коде; иначе половина сделки просто не находилась бы.
+  // нормализованному ключу. Таблицы B2C маленькие — читаем их и фильтруем в
+  // коде; иначе половина сделки просто не находилась бы.
   const matches = (row: Row, ...fields: string[]) =>
     pk == null
       ? fields.some(f => s(row[f]) === key) || s(row.client_name) === key
       : fields.some(f => phoneKey(row[f]) === pk)
 
-  let ordersQuery = supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(500)
-  if (!seeAllClients) ordersQuery = ordersQuery.eq('manager_id', user!.id)
+  // Целиком, а не «свежий срез» .limit(500): PostgREST и так отдаёт не больше 1000 строк,
+  // и старая сделка клиента молча пропадала из карточки.
+  const loadErrors: string[] = []
+  const all = (what: string, build: (from: number, to: number) => PromiseLike<PageResult<Row>>) =>
+    pageAll(build).catch((e: Error) => { loadErrors.push(`${what}: ${e.message}`); return [] as Row[] })
+  const desc = { ascending: false } as const
 
-  const [{ data: ordersRaw }, { data: calcsRaw }, { data: leadsRaw }, { data: contractsRaw }, { data: measuresRaw }, { data: installsRaw }] =
+  const [ordersRaw, calcsRaw, leadsRaw, contractsRaw, measuresRaw, installsRaw] =
     await Promise.all([
-      ordersQuery,
-      supabase.from('calculations')
+      all('заказы', (from, to) => {
+        let q = supabase.from('orders').select('*').order('created_at', desc).order('id', desc)
+        if (!seeAllClients) q = q.eq('manager_id', user!.id)
+        return q.range(from, to)
+      }),
+      all('расчёты', (from, to) => supabase.from('calculations')
         .select('id, product_type, final_price, margin, status, created_at, client_name, client_phone')
-        .order('created_at', { ascending: false }).limit(500),
-      supabase.from('crm_leads')
+        .order('created_at', desc).order('id', desc).range(from, to)),
+      all('заявки', (from, to) => supabase.from('crm_leads')
         .select('id, name, phone, source, product, stage, status, created_at, address, note, manager, est_amount')
-        .order('created_at', { ascending: false }).limit(1000),
-      supabase.from('contracts')
+        .order('created_at', desc).order('id', desc).range(from, to)),
+      all('договоры', (from, to) => supabase.from('contracts')
         .select('id, number, date, customer, total, status, product_kind, manager_name, created_at')
-        .order('created_at', { ascending: false }).limit(500),
-      supabase.from('measure_requests')
+        .order('created_at', desc).order('id', desc).range(from, to)),
+      all('замеры', (from, to) => supabase.from('measure_requests')
         .select('id, deal_number, client_name, phone, address, scope, scheduled_at, status, measurer_name, created_at')
-        .order('created_at', { ascending: false }).limit(500),
-      supabase.from('installations')
+        .order('created_at', desc).order('id', desc).range(from, to)),
+      all('монтажи', (from, to) => supabase.from('installations')
         .select('id, order_no, title, client_name, phone, address, scheduled_date, status, amount, created_at')
-        .order('created_at', { ascending: false }).limit(500),
+        .order('created_at', desc).order('id', desc).range(from, to)),
     ])
 
-  const orders    = ((ordersRaw ?? []) as Row[]).filter(r => matches(r, 'client_phone'))
-  const calcs     = ((calcsRaw ?? []) as Row[]).filter(r => matches(r, 'client_phone'))
-  const leads     = ((leadsRaw ?? []) as Row[]).filter(r => matches(r, 'phone'))
-  const measures  = ((measuresRaw ?? []) as Row[]).filter(r => matches(r, 'phone'))
-  const installs  = ((installsRaw ?? []) as Row[]).filter(r => matches(r, 'phone'))
-  const contracts = ((contractsRaw ?? []) as Row[]).filter(r =>
+  const orders    = ordersRaw.filter(r => matches(r, 'client_phone'))
+  const calcs     = calcsRaw.filter(r => matches(r, 'client_phone'))
+  const leads     = leadsRaw.filter(r => matches(r, 'phone'))
+  const measures  = measuresRaw.filter(r => matches(r, 'phone'))
+  const installs  = installsRaw.filter(r => matches(r, 'phone'))
+  const contracts = contractsRaw.filter(r =>
     pk != null && extractPhone(r.customer) === pk)
 
-  if (!orders.length && !calcs.length && !leads.length && !contracts.length && !measures.length && !installs.length) {
+  if (!loadErrors.length && !orders.length && !calcs.length && !leads.length && !contracts.length && !measures.length && !installs.length) {
     notFound()
   }
 
@@ -145,6 +154,12 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
           <span className="text-[#d4d4d0]">/</span>
           <span className="font-semibold text-[#111110]">{clientName}</span>
         </div>
+
+        {loadErrors.length > 0 && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl px-4 py-3 mb-4">
+            Не всё загрузилось — карточка может быть неполной. {loadErrors.join(' · ')}
+          </div>
+        )}
 
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 mb-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">

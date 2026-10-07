@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase-server'
+import { inChunks, pageAll } from '@/lib/supabase/pageAll'
 import Link from 'next/link'
 import { getRole } from '@/lib/getRole'
 import { redirect } from 'next/navigation'
@@ -46,24 +47,28 @@ export default async function SeoDashboardPage() {
 
   // Заявки с сайта. select('*') — устойчиво к отсутствию колонок landing_page/utm
   // (если миграция 20260803_crm_lead_site_meta ещё не прогнана).
-  const { data: leadsRaw, error: leadsErr } = await supabase
+  // Все заявки, а не первые 1000 PostgREST (.limit(2000) потолок не поднимал): по ним
+  // считаются счётчики и выручка канала.
+  const loadErrors: string[] = []
+  const desc = { ascending: false } as const
+  const leads = await pageAll<Lead>((from, to) => supabase
     .from('crm_leads')
     .select('*')
     .eq('source', 'site')
-    .order('created_at', { ascending: false })
-    .limit(2000)
-
-  const leads = (leadsRaw ?? []) as Lead[]
+    .order('created_at', desc).order('id', desc)
+    .range(from, to))
+    .catch((e: Error) => { loadErrors.push(e.message); return [] as Lead[] })
   const ids = leads.map((l) => l.id)
 
   // Выручка сделок, привязанных к лидам с сайта.
   let sales: Sale[] = []
   if (ids.length) {
-    const { data: salesRaw } = await supabase
+    sales = await inChunks(ids, 300, part => pageAll<Sale>((from, to) => supabase
       .from('crm_sales')
       .select('lead_id, amount, sale_date, status')
-      .in('lead_id', ids)
-    sales = (salesRaw ?? []) as Sale[]
+      .in('lead_id', part)
+      .order('id').range(from, to)))
+      .catch((e: Error) => { loadErrors.push(`продажи по заявкам: ${e.message}`); return [] as Sale[] })
   }
 
   // ── Временные окна ──────────────────────────────────────────────────────────
@@ -156,9 +161,9 @@ export default async function SeoDashboardPage() {
         </div>
       </div>
 
-      {leadsErr && (
+      {loadErrors.length > 0 && (
         <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-200">
-          Не удалось загрузить заявки: {leadsErr.message}
+          Не удалось загрузить заявки: {loadErrors.join(' · ')}
         </div>
       )}
 
