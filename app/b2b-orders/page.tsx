@@ -984,8 +984,8 @@ export default function B2BOrdersPage() {
   // Internal B2B registry: group by month of effective launch date (column
   // launched_at, fallback notes.launched_at). Orders without any launch date go
   // into a separate "no_launch" group at the end of the list. Inside each
-  // month, orders are sorted by launch date ASC (1st of month at top, 31st at
-  // bottom) — first order launched in the month is on top.
+  // month — новые сверху (владелец 07.10: «запустил заказ, захожу — и надо листать
+  // в самый низ»). Номер слева остаётся порядковым номером запуска в месяце.
   const monthGroups = useMemo(() => {
     const groups: { key: string; label: string; orders: Order[]; total: number; noLaunch: boolean }[] = []
     const noLaunchGroup = { key: 'no_launch', label: 'Без даты запуска', orders: [] as Order[], total: 0, noLaunch: true }
@@ -1011,17 +1011,17 @@ export default function B2BOrdersPage() {
       group.orders.push(order)
       group.total += getFinalPrice(order)
     }
-    // Sort orders inside each month by launch date ASC (earliest at the top).
+    // Внутри месяца — по дате запуска, новые сверху; при равной дате — больший id выше.
     for (const g of groups) {
       g.orders.sort((a, b) => {
         const da = effectiveLaunchDate(a) ?? ''
         const db = effectiveLaunchDate(b) ?? ''
-        return da.localeCompare(db)
+        return db.localeCompare(da) || b.id - a.id
       })
     }
     // Chronological month order (oldest month at top, newest at bottom). Pushing
     // the "no launch" bucket to the very end so it is visible but separate.
-    // Новые месяцы сверху (июль → январь). Внутри месяца порядок запуска — ASC (см. выше).
+    // Новые месяцы сверху (июль → январь), внутри месяца тоже новые сверху (см. выше).
     groups.sort((a, b) => b.key.localeCompare(a.key))
     if (noLaunchGroup.orders.length > 0) groups.push(noLaunchGroup)
     return groups
@@ -2716,7 +2716,8 @@ export default function B2BOrdersPage() {
                                     className="cursor-pointer accent-[#111110] w-3.5 h-3.5"
                                   />
                                 </span>
-                                <span className="text-[10px] font-bold text-[#d4d4ce] flex-shrink-0 w-4 text-right">{orderIdx + 1}</span>
+                                {/* Порядковый номер запуска в месяце: список идёт с новых, номер — с первого запуска. */}
+                                <span className="text-[10px] font-bold text-[#d4d4ce] flex-shrink-0 w-4 text-right">{group.orders.length - orderIdx}</span>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     {isOwner ? (
