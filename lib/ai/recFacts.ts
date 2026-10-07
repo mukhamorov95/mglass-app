@@ -11,6 +11,7 @@ import { foldStats, type StatFact, type StatRow } from '@/lib/sales/managerStats
 import { launchedOrders, orderAmount, canonicalClient, isOwnRetail } from '@/lib/liveOrders'
 import { overdueShipments, splitShipments, type TodayOrder } from '@/lib/b2b/todayPriorities'
 import { mskDayKey } from '@/lib/time'
+import { pageAll, type PageResult } from '@/lib/supabase/pageAll'
 import type { Fact } from './recommendationTypes'
 
 export const SOURCE = {
@@ -149,10 +150,10 @@ export async function collectFacts(sb: SupabaseClient, now = new Date()): Promis
   const last = shiftMonth(cur, -1), prev = shiftMonth(cur, -2), third = shiftMonth(cur, -3)
   const blocks: [string, () => Promise<Fact[]>][] = [
     [SOURCE.sales, async () => {
-      const { data, error } = await sb.from('crm_sales').select('sale_date, amount, manager')
-        .gte('sale_date', `${prev}-01`).lt('sale_date', `${cur}-01`).eq('voided', false).neq('department', 'b2b').range(0, 4999)
-      if (error) throw new Error(error.message)
-      const rows = (data ?? []) as SaleRow[]
+      // .range(0, 4999) потолок PostgREST в 1000 строк не поднимал — страницами.
+      const rows = await pageAll<SaleRow>((from, to) => sb.from('crm_sales').select('sale_date, amount, manager')
+        .gte('sale_date', `${prev}-01`).lt('sale_date', `${cur}-01`).eq('voided', false).neq('department', 'b2b')
+        .order('id').range(from, to))
       return [...salesFacts(rows, last, 'last_month'), ...salesFacts(rows, prev, 'prev_month')]
     }],
     [SOURCE.margin, async () => {
@@ -160,28 +161,28 @@ export async function collectFacts(sb: SupabaseClient, now = new Date()): Promis
       return marginFacts(periodTotals(byMonth.flatMap(m => m.objects)), `${monthPeriod(third).split(' ')[0]} — ${monthPeriod(last)}`)
     }],
     [SOURCE.managers, async () => {
-      const { data, error } = await sb.from('manager_stats_monthly').select('manager, metric, value').eq('month', last).limit(5000)
+      // Один месяц книги — по строке на метрику человека (07.10 — 37 строк), 1000 с запасом.
+      const { data, error } = await sb.from('manager_stats_monthly').select('manager, metric, value').eq('month', last).limit(1000)
       if (error) throw new Error(error.message)
       const facts = ((data ?? []) as { manager: string; metric: string; value: number }[]).map(r => ({ ...r, stat_date: `${last}-01` }) as StatFact)
       const { rows, totals } = foldStats(facts)
       return rows.length ? managerFacts(rows, totals, last) : []
     }],
     [SOURCE.b2b, async () => {
-      const q = launchedOrders(sb, 'launched_at, client_name, total_after_discount, total_sale_inc_vat') as unknown as {
-        gte(c: string, v: string): { lt(c: string, v: string): { range(a: number, b: number): PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> } }
-      }
-      const { data, error } = await q.gte('launched_at', mskMonthStart(prev)).lt('launched_at', mskMonthStart(cur)).range(0, 4999)
-      if (error) throw new Error(error.message)
-      const rows = (data ?? []) as B2bRow[]
+      type Q = { gte(c: string, v: string): { lt(c: string, v: string): { order(c: string): { range(a: number, b: number): PromiseLike<PageResult<B2bRow>> } } } }
+      const rows = await pageAll<B2bRow>((from, to) =>
+        (launchedOrders(sb, 'launched_at, client_name, total_after_discount, total_sale_inc_vat') as unknown as Q)
+          .gte('launched_at', mskMonthStart(prev)).lt('launched_at', mskMonthStart(cur)).order('id').range(from, to))
       return [...b2bFacts(rows, last, 'last_month'), ...b2bFacts(rows, prev, 'prev_month')]
     }],
     [SOURCE.ship, async () => {
       // Тот же набор, что у «Мой день · B2B» (loadTodayOrders), но без пользователя: крон.
-      const { data, error } = await sb.from('b2b_orders')
+      // За 120 дней уже ~900 заказов (07.10) — .limit(1000) вот-вот начал бы терять отгрузки.
+      const desc = { ascending: false } as const
+      const rows = await pageAll<TodayOrder>((from, to) => sb.from('b2b_orders')
         .select('id,client_name,custom_number,total_sale_inc_vat,total_after_discount,notes,created_at,updated_at,launched_at,created_by_name')
-        .is('archived_at', null).gte('created_at', since(now, 120)).order('created_at', { ascending: false }).limit(1000)
-      if (error) throw new Error(error.message)
-      return shipFacts((data ?? []) as TodayOrder[], now)
+        .is('archived_at', null).gte('created_at', since(now, 120)).order('created_at', desc).order('id', desc).range(from, to))
+      return shipFacts(rows, now)
     }],
     [SOURCE.leads, async () => {
       const base = () => sb.from('crm_leads').select('id', { count: 'exact', head: true }).gte('created_at', since(now, 30))

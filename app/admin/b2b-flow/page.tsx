@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase-service'
 import { deadlineOf } from '@/lib/orderFlags'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 // А10: сквозная аналитика B2B-потока (капстоун роадмапа). Объём и пропускная
 // способность: сколько заказов входит в производство и сколько выходит (отгрузка),
@@ -35,10 +36,14 @@ const toneFor = (pct: number | null) =>
 
 export default async function B2BFlowPage() {
   const svc = createServiceClient()
-  const { data } = await svc.from('b2b_orders')
+  // .limit(5000) потолок PostgREST в 1000 строк не поднимал: за год запущено ~3000, и
+  // «В срок %» считался по случайной трети. Читаем страницами; не прочиталось — так и пишем.
+  const errors: string[] = []
+  const desc = { ascending: false } as const
+  const rows = await pageAll<Row>((from, to) => svc.from('b2b_orders')
     .select('id, launched_at, notes, total_after_discount, total_sale_inc_vat')
-    .gte('launched_at', daysAgoISO(84)).order('launched_at', { ascending: false }).limit(5000)
-  const rows = (data ?? []) as Row[]
+    .gte('launched_at', daysAgoISO(84)).order('launched_at', desc).order('id', desc).range(from, to))
+    .catch((e: Error) => { errors.push(`поток 84 дня: ${e.message}`); return [] as Row[] })
 
   const d30 = new Date(daysAgoISO(30)).getTime()
   const launched30 = rows.filter(r => new Date(r.launched_at).getTime() >= d30).length
@@ -58,9 +63,11 @@ export default async function B2BFlowPage() {
   // «В срок %» — отдельный широкий запрос (год), а не окно потока: срок при запуске
   // проставляется недавно, а датированные отгрузки накоплены раньше, и в 84-дневном
   // окне их пересечения почти нет.
-  const { data: otData } = await svc.from('b2b_orders')
+  type OtRow = { launched_at: string | null; notes: string | null }
+  const otData = await pageAll<OtRow>((from, to) => svc.from('b2b_orders')
     .select('id, launched_at, notes')
-    .gte('launched_at', daysAgoISO(365)).limit(5000)
+    .gte('launched_at', daysAgoISO(365)).order('id').range(from, to))
+    .catch((e: Error) => { errors.push(`отгрузки за год: ${e.message}`); return [] as OtRow[] })
 
   // Два измерения: точное — против обещанного срока; оценка — против норматива
   // 15 рабочих дней от запуска (для заказов, отгруженных до внедрения сроков).
@@ -71,7 +78,7 @@ export default async function B2BFlowPage() {
   // поэтому долю честно показываем рядом с процентом, чтобы 100% по узкой выборке
   // не читались как 100% по всем отгрузкам.
   let shippedTotal = 0, shippedDated = 0
-  for (const r of (otData ?? []) as { launched_at: string | null; notes: string | null }[]) {
+  for (const r of otData) {
     if (isShipped(r.notes)) shippedTotal++
     const sd = shippedDate(r.notes); if (!sd) continue
     shippedDated++
@@ -117,6 +124,11 @@ export default async function B2BFlowPage() {
       </div>
 
       <div className="px-5 pt-4 max-w-[920px] space-y-4">
+        {errors.length > 0 && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl px-4 py-3">
+            Данные загрузились не полностью — цифры ниже неверны. {errors.join(' · ')}
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {kpi('Запущено за 30 дн', String(launched30), fmtRub(rev30))}
           {kpi('Отгружено за 30 дн', String(shipped30), launched30 > 0 ? `${Math.round(shipped30 / launched30 * 100)}% от запуска` : '')}

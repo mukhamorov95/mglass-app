@@ -2,6 +2,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { getRole, isOwnerRole } from '@/lib/getRole'
 import { redirect } from 'next/navigation'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 function pct(n: number)  { return n.toFixed(1) + '%' }
@@ -30,12 +31,17 @@ export default async function PnLPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Fetch orders (completed + in_work)
-  const { data: orders } = await supabase
+  // Заказы (completed + in_work) — страницами: по возрастанию даты без пагинации потолок
+  // PostgREST в 1000 строк отрезал бы как раз свежие месяцы.
+  type PnlOrder = { id: number; total_sale_price: number | null; total_cost_price: number | null; gross_profit: number | null; created_at: string; status: string }
+  const loadErrors: string[] = []
+  const orders = await pageAll<PnlOrder>((from, to) => supabase
     .from('orders')
     .select('id, total_sale_price, total_cost_price, gross_profit, created_at, status')
     .in('status', ['completed', 'in_work', 'approved'])
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: true }).order('id', { ascending: true })
+    .range(from, to))
+    .catch((e: Error) => { loadErrors.push(e.message); return [] as PnlOrder[] })
 
   // Fetch financial settings for expenses %
   const { data: fin } = await supabase
@@ -53,7 +59,7 @@ export default async function PnLPage() {
   // Group by year-month
   const monthMap = new Map<string, MonthRow>()
 
-  for (const o of (orders ?? [])) {
+  for (const o of orders) {
     const d     = new Date(o.created_at)
     const year  = d.getFullYear()
     const month = d.getMonth()
@@ -106,6 +112,12 @@ export default async function PnLPage() {
           Выручка / Себестоимость / Валовая прибыль / Расходы / Чистая прибыль по месяцам
         </p>
       </div>
+
+      {loadErrors.length > 0 && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl px-5 py-3 mb-5">
+          Заказы не загрузились — цифры ниже неверны. {loadErrors.join(' · ')}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { notifyAdmins } from '@/lib/telegram'
 import { withCronRun } from '@/lib/cronRuns'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 export const maxDuration = 120
 
@@ -19,16 +20,25 @@ async function run(req: NextRequest) {
   }
   const svc = createServiceClient()
 
-  const { data: payRows } = await svc.from('payments')
-    .select('b2b_order_id, amount').is('voided_at', null).not('b2b_order_id', 'is', null)
+  // Обе стороны — целиком, страницами в порядке id: без пагинации и сортировки PostgREST
+  // отдаёт по 1000 произвольных строк, и «оплачено без продажи» сравнивало разные куски.
+  // Проглоченная ошибка давала «всё сходится» на пустых данных — теперь 500 с причиной.
+  let payRows: { b2b_order_id: number; amount: number }[], saleRows: { b2b_order_id: number }[]
+  try {
+    [payRows, saleRows] = await Promise.all([
+      pageAll<{ b2b_order_id: number; amount: number }>((from, to) => svc.from('payments')
+        .select('b2b_order_id, amount').is('voided_at', null).not('b2b_order_id', 'is', null).order('id').range(from, to)),
+      pageAll<{ b2b_order_id: number }>((from, to) => svc.from('crm_sales')
+        .select('b2b_order_id').not('b2b_order_id', 'is', null).eq('voided', false).order('id').range(from, to)),
+    ])
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: `Чтение платежей и продаж: ${(e as Error).message}` }, { status: 500 })
+  }
   const paidOrders = new Map<number, number>()
-  for (const p of (payRows ?? []) as { b2b_order_id: number; amount: number }[]) {
+  for (const p of payRows) {
     paidOrders.set(p.b2b_order_id, (paidOrders.get(p.b2b_order_id) ?? 0) + Number(p.amount))
   }
-
-  const { data: saleRows } = await svc.from('crm_sales')
-    .select('b2b_order_id').not('b2b_order_id', 'is', null).eq('voided', false)
-  const inLedger = new Set((saleRows ?? []).map(s => (s as { b2b_order_id: number }).b2b_order_id))
+  const inLedger = new Set(saleRows.map(s => s.b2b_order_id))
 
   const orphans = [...paidOrders.entries()].filter(([id]) => !inLedger.has(id))
   const orphanSum = orphans.reduce((s, [, amt]) => s + amt, 0)

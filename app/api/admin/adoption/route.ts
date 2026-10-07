@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireOwner } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
+import { pageAll } from '@/lib/supabase/pageAll'
 import { classify, sortFlows, summarize, type FlowSpec, type FlowMeasure, type FlowRow } from '@/lib/b2b/adoptionAudit'
 
 export const dynamic = 'force-dynamic'
@@ -50,13 +51,18 @@ export async function GET() {
   const measures = new Map<string, FlowMeasure>()
 
   // PostgREST не умеет count filter(where jsonb) — читаем notes и считаем в коде.
-  // Флоу маленькие, тянем срез без истории 2024/2025.
+  // Все живые заказы страницами: .limit(20000) упирался в потолок 1000 из ~3400.
   {
-    const { data: orders } = await svc
-      .from('b2b_orders')
-      .select('notes, created_at')
-      .is('archived_at', null)
-      .limit(20000)
+    let orders: { notes: string | null; created_at: string }[]
+    try {
+      orders = await pageAll<{ notes: string | null; created_at: string }>((from, to) => svc
+        .from('b2b_orders')
+        .select('notes, created_at')
+        .is('archived_at', null)
+        .order('id').range(from, to))
+    } catch (e) {
+      return NextResponse.json({ error: `Заказы B2B: ${(e as Error).message}` }, { status: 500 })
+    }
     const nowT = Date.now()
     const w90 = nowT - 90 * 86_400_000, w30 = nowT - 30 * 86_400_000
     const hit = (parsed: Record<string, unknown>, key: string): boolean => {
@@ -77,7 +83,7 @@ export async function GET() {
     }
     const acc = new Map<string, { t: number; c90: number; c30: number }>()
     for (const f of notesFlows) acc.set(f.key, { t: 0, c90: 0, c30: 0 })
-    for (const o of (orders ?? []) as { notes: string | null; created_at: string }[]) {
+    for (const o of orders) {
       const parsed = parseNotesSafe(o.notes)
       const ts = new Date(o.created_at).getTime()
       for (const f of notesFlows) {
@@ -96,12 +102,15 @@ export async function GET() {
   const [{ count: cp }, { count: mp }, defect, tg] = await Promise.all([
     svc.from('b2b_client_prices').select('id', { count: 'exact', head: true }),
     svc.from('b2b_manager_plans').select('id', { count: 'exact', head: true }),
-    svc.from('production_tasks').select('status, updated_at').eq('status', 'problem').limit(5000),
+    pageAll<{ updated_at: string | null }>((from, to) => svc.from('production_tasks')
+      .select('status, updated_at').eq('status', 'problem').order('id').range(from, to))
+      .then(rows => ({ rows, error: null as string | null }), (e: Error) => ({ rows: [] as { updated_at: string | null }[], error: e.message as string | null })),
     svc.from('telegram_users').select('user_id'),
   ])
+  if (defect.error) return NextResponse.json({ error: `Задачи цеха: ${defect.error}` }, { status: 500 })
+  const defectRows = defect.rows
   const now = Date.now()
   const d90 = now - 90 * 86_400_000, d30 = now - 30 * 86_400_000
-  const defectRows = (defect.data ?? []) as { updated_at: string | null }[]
   const defect90 = defectRows.filter(r => r.updated_at && new Date(r.updated_at).getTime() >= d90).length
   const defect30 = defectRows.filter(r => r.updated_at && new Date(r.updated_at).getTime() >= d30).length
 

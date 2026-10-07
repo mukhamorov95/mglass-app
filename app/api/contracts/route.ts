@@ -51,6 +51,7 @@ export async function GET() {
     .from('contracts')
     .select('id, number, kp_id, customer_type, total, status, manager_name, created_at, content')
     .order('created_at', { ascending: false })
+    // История на экране — последние 1000 (потолок PostgREST); при ~130 договоров в год (07.10) это годы.
     .limit(1000)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ items: data ?? [], role, canDelete: OWNER.has(role) })

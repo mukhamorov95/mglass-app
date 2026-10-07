@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
+import { pageAll } from '@/lib/supabase/pageAll'
 import { materialDupes, serviceDupes, type MaterialRow, type ServiceRow } from '@/lib/b2b/dupeAudit'
 
 export const dynamic = 'force-dynamic'
@@ -18,15 +19,20 @@ export async function GET() {
 
   const svc = createServiceClient()
 
-  const [{ data: mats }, { data: svcs }, { data: orders }] = await Promise.all([
+  const [{ data: mats }, { data: svcs }, ordersRes] = await Promise.all([
     svc.from('b2b_materials').select('id,name,category,thickness,cost_price,waste_percent,active'),
     svc.from('b2b_services').select('id,name,type,cost_price,active'),
-    // Частота использования за ~4 месяца — по materialId (точно, а не по имени).
-    svc.from('b2b_orders').select('items').is('archived_at', null).gte('created_at', '2026-05-01').limit(6000),
+    // Частота использования за ~4 месяца — по materialId (точно, а не по имени). Заказов
+    // с мая уже больше 1000 — читаем страницами, иначе счётчики занижены.
+    pageAll<{ items: unknown }>((from, to) => svc.from('b2b_orders').select('items')
+      .is('archived_at', null).gte('created_at', '2026-05-01').order('id').range(from, to))
+      .then(rows => ({ rows, error: null as string | null }), (e: Error) => ({ rows: [] as { items: unknown }[], error: e.message as string | null })),
   ])
+  if (ordersRes.error) return NextResponse.json({ error: `Заказы B2B: ${ordersRes.error}` }, { status: 500 })
+  const orders = ordersRes.rows
 
   const usesByMat = new Map<number, number>()
-  for (const o of (orders ?? []) as { items: unknown }[]) {
+  for (const o of orders) {
     const items = Array.isArray(o.items) ? o.items as Record<string, unknown>[] : []
     for (const it of items) {
       const mid = n(it.materialId)
@@ -43,7 +49,7 @@ export async function GET() {
 
   // Услуги в позициях лежат вложенным массивом services[{id,...}] — считаем по нему.
   const usesBySvc = new Map<number, number>()
-  for (const o of (orders ?? []) as { items: unknown }[]) {
+  for (const o of orders) {
     const items = Array.isArray(o.items) ? o.items as Record<string, unknown>[] : []
     for (const it of items) {
       const services = Array.isArray(it.services) ? it.services as Record<string, unknown>[] : []

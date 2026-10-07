@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { digits10, normalizePhone } from '@/lib/onlinepbx'
 import { notifyAdmins } from '@/lib/telegram'
 import { appUrl } from '@/lib/appUrl'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 // Вебхук OnlinePBX: события звонков (входящие/исходящие/пропущенные) и ссылки на
 // записи → в ленту лида (crm_lead_events kind='call'). API-ключ здесь НЕ нужен —
@@ -118,7 +119,15 @@ export async function POST(req: NextRequest) {
 
   // Ищем лид по номеру: быстрый путь ILIKE по 10 цифрам, иначе скан с
   // нормализацией в JS (номера в базе бывают с +7/8/скобками).
-  let lead = await findLeadByPhone(sb, d10)
+  // Поиск не удался — лид не заводим (иначе дубль) и отпускаем call_id, чтобы ретрай АТС
+  // обработал звонок заново, а не отбросил его как дубль.
+  let lead: LeadRow | null
+  try {
+    lead = await findLeadByPhone(sb, d10)
+  } catch (e) {
+    if (callId) await sb.from('crm_processed_calls').delete().eq('call_id', callId).then(() => {}, () => {})
+    return NextResponse.json({ error: `Поиск лида: ${(e as Error).message}` }, { status: 500 })
+  }
 
   // Режим приёма лидов (тумблер на /crm, owner_strategy.crm_ingest_mode):
   // 'avito_only' — звонки с неизвестных номеров НЕ создают лид (события по
@@ -177,13 +186,15 @@ type LeadRow = { id: number; manager: string | null; name: string | null }
 async function findLeadByPhone(sb: ReturnType<typeof createServiceClient>, d10: string): Promise<LeadRow | null> {
   // Быстрый путь: телефон в базе содержит эти 10 цифр подряд (частый случай:
   // +7XXXXXXXXXX / 8XXXXXXXXXX / XXXXXXXXXX без разделителей).
-  const { data: fast } = await sb.from('crm_leads')
+  const { data: fast, error: fastErr } = await sb.from('crm_leads')
     .select('id,manager,name').ilike('phone', `%${d10}%`).order('id', { ascending: false }).limit(1)
+  if (fastErr) throw new Error(fastErr.message)
   if (fast && fast.length) return fast[0] as LeadRow
 
-  // Медленный путь: номера с разделителями — нормализуем в JS.
-  const { data: rows } = await sb.from('crm_leads')
-    .select('id,manager,name,phone').not('phone', 'is', null).order('id', { ascending: false }).limit(4000)
-  const hit = ((rows ?? []) as (LeadRow & { phone: string })[]).find(r => digits10(r.phone) === d10)
+  // Медленный путь: номера с разделителями — нормализуем в JS. Весь список, а не
+  // .limit(4000): PostgREST отдаёт 1000 строк, и старый клиент становился новым лидом.
+  const rows = await pageAll<LeadRow & { phone: string }>((from, to) => sb.from('crm_leads')
+    .select('id,manager,name,phone').not('phone', 'is', null).order('id', { ascending: false }).range(from, to))
+  const hit = rows.find(r => digits10(r.phone) === d10)
   return hit ? { id: hit.id, manager: hit.manager, name: hit.name } : null
 }

@@ -18,7 +18,10 @@ export async function GET() {
     sb.from('referral_clients').select('id,referrer_id,name,note,b2b_client_id').order('name'),
     sb.from('referral_turnover').select('referral_client_id,ym,amount').order('ym'),
   ])
-  const autoTurnover = await buildAutoTurnover(sb, (clients ?? []) as RefClient[])
+  let autoTurnover: Awaited<ReturnType<typeof buildAutoTurnover>>
+  try { autoTurnover = await buildAutoTurnover(sb, (clients ?? []) as RefClient[]) } catch (e) {
+    return NextResponse.json({ error: `Оборот по заказам: ${(e as Error).message}` }, { status: 500 })
+  }
 
   return NextResponse.json({
     users: users ?? [],

@@ -10,6 +10,7 @@ import { computeMarginStatus, MARGIN_STATUS_LABELS } from '@/lib/types'
 import { calcDetail } from '@/lib/calcLabel'
 import { CALC_LIST_COLS } from '@/lib/calcDuplicate'
 import { writeFailure } from '@/lib/rlsWrite'
+import { pageAll, type PageResult } from '@/lib/supabase/pageAll'
 
 type Calc = {
   id: number
@@ -240,23 +241,27 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
     return () => clearTimeout(t)
   }, [notice])
 
-  // eslint-disable-next-line react-hooks/immutability
-  useEffect(() => { fetchCalcs() }, [])
-
-  async function fetchCalcs() {
+  // Все расчёты страницами: без пагинации PostgREST отдаёт первые 1000, и старые расчёты
+  // (с ними — заказы-группы) молча пропадали бы из списка.
+  useEffect(() => {
+    let alive = true
     const supabase = createClient()
-    let query = supabase
-      .from('calculations')
-      .select(CALC_LIST_COLS)
-      .order('created_at', { ascending: false })
-    if (!canViewAll && userId) {
-      query = query.eq('created_by', userId)
-    }
-    const { data, error } = await query
-    setLoadError(error ? error.message : null)
-    setCalcs((data ?? []) as unknown as Calc[])
-    setLoading(false)
-  }
+    const desc = { ascending: false } as const
+    pageAll<Calc>((from, to) => {
+      let query = supabase
+        .from('calculations')
+        .select(CALC_LIST_COLS)
+        .order('created_at', desc).order('id', desc)
+      if (!canViewAll && userId) {
+        query = query.eq('created_by', userId)
+      }
+      return query.range(from, to) as unknown as PromiseLike<PageResult<Calc>>
+    }).then(
+      rows => { if (alive) { setLoadError(null); setCalcs(rows) } },
+      (e: Error) => { if (alive) { setLoadError(e.message); setCalcs([]) } },
+    ).finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [canViewAll, userId])
 
   function groupSize(groupId: string) {
     return calcs.filter(c => c.order_group_id === groupId).length

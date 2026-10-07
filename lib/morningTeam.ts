@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { bookNames } from '@/lib/sales/bookNames'
+import { pageAllOrError as all } from '@/lib/supabase/pageAll'
 import {
   addBookFacts, addDays, bookSplit, emptyMonth, isWorkday, monthEnd, nextMonth, pickDay, prevMonth, sumActivity,
   type Activity, type DayRow, type MonthMoney, type Schedule, type View,
@@ -41,19 +42,6 @@ export type Team = {
   errors: string[]
 }
 
-type Res<T> = { data: T[] | null; error: { message: string } | null }
-
-// PostgREST отдаёт не больше 1000 строк за раз — год книги по дням длиннее.
-async function all<T>(page: (from: number, to: number) => PromiseLike<Res<T>>): Promise<{ data: T[]; error: { message: string } | null }> {
-  const out: T[] = []
-  for (let i = 0; ; i += 1000) {
-    const r = await page(i, i + 999)
-    if (r.error) return { data: out, error: r.error }
-    out.push(...(r.data ?? []))
-    if (!r.data || r.data.length < 1000) return { data: out, error: null }
-  }
-}
-
 const DAY_COLS = '*'
 const BOOK_METRICS = ['prepay', 'remainder', 'payments', 'talks', 'measure_assigned', 'measure_done']
 
@@ -82,13 +70,14 @@ export async function loadTeam(sb: SupabaseClient, opts: { today: string; view: 
   } else if (view.kind === 'day') {
     actFrom = actTo = day = view.day
   } else {
-    const recent = await sb.from('manager_day_stats').select('day, amo_user_id, actions').gte('day', addDays(today, -14)).lt('day', today).limit(2000)
+    const recent = await all<{ day: string; amo_user_id: number; actions: number }>((a, b) => sb.from('manager_day_stats')
+      .select('day, amo_user_id, actions').gte('day', addDays(today, -14)).lt('day', today).order('day').order('amo_user_id').range(a, b))
     note('снимок дня', recent.error)
     const byDay = new Map<string, number>()
-    for (const r of recent.data ?? []) if (sellers.includes(Number(r.amo_user_id))) byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.actions)
+    for (const r of recent.data) if (sellers.includes(Number(r.amo_user_id))) byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.actions)
     const workday = (d: string) => sellers.some(id => isWorkday(d, schedules.get(id)))
     day = pickDay([...byDay].map(([d, actions]) => ({ day: d, actions })), today, workday)
-      ?? pickDay((recent.data ?? []).map(r => ({ day: r.day, actions: r.actions })), today)
+      ?? pickDay(recent.data.map(r => ({ day: r.day, actions: r.actions })), today)
     actFrom = actTo = day ?? yesterday
   }
 
@@ -115,6 +104,7 @@ export async function loadTeam(sb: SupabaseClient, opts: { today: string; view: 
       ? all<{ manager: string; metric: string; value: number }>((a, b) => sb.from('manager_stats_monthly')
         .select('manager, metric, value').in('month', split.months).in('metric', BOOK_METRICS).order('month').order('manager').order('metric').range(a, b))
       : Promise.resolve({ data: [] as { manager: string; metric: string; value: number }[], error: null }),
+    // Один месяц, две метрики — по строке на человека книги (07.10 — 37 строк на месяц всего).
     moneyMonth
       ? sb.from('manager_stats_monthly').select('value').eq('month', prevMonth(moneyMonth)).in('metric', ['prepay', 'remainder']).limit(1000)
       : Promise.resolve({ data: null, error: null }),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 // Сводка B2B-клиентов для админ-справочника. По каждому клиенту:
 //  • базовые поля (имя/контакт/телефон/скидка/активность/примечание);
@@ -18,16 +19,21 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard
   const a = admin()
 
-  const [{ data: clients }, { data: orders }, { data: members }] = await Promise.all([
+  // Заказы за всё время — страницами: без них PostgREST отдавал 1000 случайных из ~4600
+  // запущенных, и счётчики/суммы клиентов были занижены.
+  const [{ data: clients }, ordersRes, { data: members }] = await Promise.all([
     a.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,user_id,can_self_invoice'),
-    a.from('b2b_orders').select('client_id,total_after_discount,created_at').not('launched_at', 'is', null),
+    pageAll<OrderRow>((from, to) => a.from('b2b_orders').select('client_id,total_after_discount,created_at')
+      .not('launched_at', 'is', null).order('id').range(from, to))
+      .then(rows => ({ rows, error: null as string | null }), (e: Error) => ({ rows: [] as OrderRow[], error: e.message as string | null })),
     a.from('b2b_client_members').select('client_id,user_id'),
   ])
+  if (ordersRes.error) return NextResponse.json({ error: `Заказы B2B: ${ordersRes.error}` }, { status: 500 })
 
   const year = new Date().getFullYear()
   type Agg = { count: number; sum: number; sumYear: number; last: string | null }
   const agg = new Map<number, Agg>()
-  for (const o of (orders ?? []) as OrderRow[]) {
+  for (const o of ordersRes.rows) {
     if (o.client_id == null) continue
     const g = agg.get(o.client_id) ?? { count: 0, sum: 0, sumYear: 0, last: null }
     const amt = Number(o.total_after_discount) || 0

@@ -27,11 +27,13 @@ export async function collectManagerDay(sb: SupabaseClient, day: string): Promis
   if (pbxReport && !pbxReport.configured) problems.push('АТС не подключена — звонки только из amo')
 
   const range = { from: new Date(from * 1000).toISOString(), to: new Date(to * 1000).toISOString() }
+  // Документы одного дня: рекорд — 14 расчётов за день (07.10), так что 1000 — честный
+  // потолок PostgREST, а не обрезка; .limit(5000) его всё равно не поднимал.
   const [users, calcs, kp, contracts, names] = await Promise.all([
     sb.from('users').select('id, amo_user_id'),
-    sb.from('calculations').select('created_by, product_type').gte('created_at', range.from).lt('created_at', range.to).limit(5000),
-    sb.from('commercial_proposals').select('manager_id').gte('created_at', range.from).lt('created_at', range.to).limit(5000),
-    sb.from('contracts').select('manager_id').gte('created_at', range.from).lt('created_at', range.to).limit(5000),
+    sb.from('calculations').select('created_by, product_type').gte('created_at', range.from).lt('created_at', range.to).limit(1000),
+    sb.from('commercial_proposals').select('manager_id').gte('created_at', range.from).lt('created_at', range.to).limit(1000),
+    sb.from('contracts').select('manager_id').gte('created_at', range.from).lt('created_at', range.to).limit(1000),
     getAmoUserNames(),
   ])
   for (const [what, r] of [['users', users], ['calculations', calcs], ['commercial_proposals', kp], ['contracts', contracts]] as const) {

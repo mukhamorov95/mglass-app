@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireDealActor } from '@/lib/b2c/dealScope'
 import { getLeads, getPipelines, getUsers } from '@/lib/amocrm'
+import { inChunks, pageAll } from '@/lib/supabase/pageAll'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,8 +47,17 @@ export async function GET(req: NextRequest) {
   }
 
   // Уже импортированные отсекаем по amo_lead_id — второй раз ту же заявку не заводим.
-  const { data: mine } = await svc.from('deals').select('amo_lead_id').not('amo_lead_id', 'is', null).limit(2000)
-  const taken = new Set((mine ?? []).map(d => String((d as { amo_lead_id: string }).amo_lead_id)))
+  // Спрашиваем только про заявки из ответа amo: «все сделки» упирались бы в потолок
+  // PostgREST (1000 строк), и уже заведённая заявка снова показывалась бы к импорту.
+  let taken: Set<string>
+  try {
+    const rows = await inChunks([...new Set(leads.map(l => String(l.id)))], 300, part =>
+      pageAll<{ amo_lead_id: string }>((from, to) => svc.from('deals').select('amo_lead_id')
+        .in('amo_lead_id', part).order('id').range(from, to)))
+    taken = new Set(rows.map(d => String(d.amo_lead_id)))
+  } catch (e) {
+    return NextResponse.json({ error: `Сделки: ${(e as Error).message}` }, { status: 500 })
+  }
 
   const [pipelines, users] = await Promise.all([
     getPipelines().catch(() => []),

@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { isOwnerRole } from '@/lib/getRole'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 // А18: план/факт менеджера по B2B за месяц.
 // План — из b2b_manager_plans (ставит владелец/коммерческий).
@@ -34,14 +35,26 @@ export async function GET(req: NextRequest) {
   const from = new Date(`${month}-01T00:00:00.000Z`)
   const to = new Date(from); to.setMonth(to.getMonth() + 1)
 
-  const [{ data: plans }, { data: orders }] = await Promise.all([
-    sb.from('b2b_manager_plans').select('manager_id, plan_amount, note').eq('month', month),
-    sb.from('b2b_orders')
-      .select('id, created_by, created_by_name, launched_at, total_after_discount, total_sale_inc_vat, notes')
-      .is('archived_at', null)
-      .gte('created_at', new Date(from.getTime() - 120 * 86_400_000).toISOString())
-      .limit(3000),
-  ])
+  // Заказ не запускается и не оплачивается раньше, чем создан, — верхняя граница периода
+  // ничего не отрезает, а прошлый месяц не тянет за собой всё созданное после него.
+  // Читаем страницами: .limit(3000) потолок PostgREST в 1000 строк не поднимал.
+  let plans: unknown[] | null, orders: Record<string, unknown>[]
+  try {
+    const [plansRes, ordersRows] = await Promise.all([
+      sb.from('b2b_manager_plans').select('manager_id, plan_amount, note').eq('month', month),
+      pageAll<Record<string, unknown>>((a, b) => sb.from('b2b_orders')
+        .select('id, created_by, created_by_name, launched_at, total_after_discount, total_sale_inc_vat, notes')
+        .is('archived_at', null)
+        .gte('created_at', new Date(from.getTime() - 120 * 86_400_000).toISOString())
+        .lt('created_at', to.toISOString())
+        .order('id').range(a, b)),
+    ])
+    if (plansRes.error) throw new Error(plansRes.error.message)
+    plans = plansRes.data
+    orders = ordersRows
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
+  }
 
   const inMonth = (iso: string | null | undefined) => {
     if (!iso) return false
@@ -51,7 +64,7 @@ export async function GET(req: NextRequest) {
 
   type Agg = { managerId: string | null; name: string; launched: number; paid: number; count: number }
   const byManager = new Map<string, Agg>()
-  for (const o of (orders ?? []) as Record<string, unknown>[]) {
+  for (const o of orders) {
     const managerId = (o.created_by as string | null) ?? null
     if (!seeAll && managerId !== user.id) continue
     const n = parseNotes(o.notes)

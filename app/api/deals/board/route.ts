@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireDealActor } from '@/lib/b2c/dealScope'
 import { DEAL_STAGES, dealStageKey, dealValue, type DealArtifacts } from '@/lib/b2c/dealProgress'
+import { pageAll, type PageResult } from '@/lib/supabase/pageAll'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,7 @@ export async function GET(req: NextRequest) {
   // считать проигранное «в работе» и «зависшим».
   const lost = req.nextUrl.searchParams.get('lost') === '1'
 
+  // Доска — экран: 500 свежих сделок (07.10 их всего 5); артефакты к ним ниже читаются целиком.
   let dq = svc.from('deals').select(DEAL_COLS).order('updated_at', { ascending: false }).limit(500)
   dq = archived ? dq.not('archived_at', 'is', null) : dq.is('archived_at', null)
   dq = lost ? dq.not('lost_at', 'is', null) : dq.is('lost_at', null)
@@ -47,16 +49,26 @@ export async function GET(req: NextRequest) {
   // Везде по возрастанию created_at: последняя строка = самая свежая, поэтому
   // «последнее КП / последний договор / последний замер» берётся простым
   // перезаписыванием, а не первой попавшейся строкой в произвольном порядке.
+  // Страницами, вторым ключом id: по возрастанию без пагинации потолок PostgREST в 1000 строк
+  // отрезал бы как раз свежие артефакты 500 сделок.
   const asc = { ascending: true } as const
-  const [{ data: calcs }, { data: kps }, { data: contracts }, { data: measures }, { data: files }, { data: pays }] =
-    await Promise.all([
-      svc.from('calculations').select('deal_id, status, final_price, created_at').in('deal_id', ids).order('created_at', asc),
-      svc.from('commercial_proposals').select('deal_id, total, status, created_at').in('deal_id', ids).order('created_at', asc),
-      svc.from('contracts').select('deal_id, total, created_at').in('deal_id', ids).order('created_at', asc),
-      svc.from('measure_requests').select('deal_id, status, scheduled_at, created_at').in('deal_id', ids).order('created_at', asc),
-      svc.from('deal_files').select('deal_id, kind, created_at').in('deal_id', ids).order('created_at', asc),
-      svc.from('deal_payments').select('deal_id, amount, paid_at, created_at').in('deal_id', ids).order('created_at', asc),
+  type R = Record<string, unknown>
+  const artifacts = (table: string, cols: string) =>
+    pageAll<R>((from, to) => svc.from(table).select(cols).in('deal_id', ids).order('created_at', asc).order('id', asc)
+      .range(from, to) as unknown as PromiseLike<PageResult<R>>)
+  let calcs: R[], kps: R[], contracts: R[], measures: R[], files: R[], pays: R[]
+  try {
+    [calcs, kps, contracts, measures, files, pays] = await Promise.all([
+      artifacts('calculations', 'deal_id, status, final_price, created_at'),
+      artifacts('commercial_proposals', 'deal_id, total, status, created_at'),
+      artifacts('contracts', 'deal_id, total, created_at'),
+      artifacts('measure_requests', 'deal_id, status, scheduled_at, created_at'),
+      artifacts('deal_files', 'deal_id, kind, created_at'),
+      artifacts('deal_payments', 'deal_id, amount, paid_at, created_at'),
     ])
+  } catch (e) {
+    return NextResponse.json({ error: `Артефакты сделок: ${(e as Error).message}` }, { status: 500 })
+  }
 
   // Сводим артефакты по deal_id.
   type Agg = {
@@ -79,29 +91,29 @@ export async function GET(req: NextRequest) {
   // таблицы). По нему «зависшей» выглядела сделка, где вчера была предоплата.
   const touch = (a: Agg, v: unknown) => { const t = ms(v); if (t > a.lastAt) a.lastAt = t }
 
-  for (const c of (calcs ?? []) as Record<string, unknown>[]) {
+  for (const c of calcs) {
     const a = get(Number(c.deal_id)); a.calcCount++
     a.calcMax = Math.max(a.calcMax, num(c.final_price))
     if (c.status === 'sent' || c.status === 'approved') a.hasSentCalc = true
     touch(a, c.created_at)
   }
-  for (const k of (kps ?? []) as Record<string, unknown>[]) {
+  for (const k of kps) {
     const a = get(Number(k.deal_id)); a.kpCount++; a.kpTotal = num(k.total); touch(a, k.created_at)
   }
-  for (const c of (contracts ?? []) as Record<string, unknown>[]) {
+  for (const c of contracts) {
     const a = get(Number(c.deal_id)); a.contractCount++; a.contractTotal = num(c.total); touch(a, c.created_at)
   }
-  for (const m of (measures ?? []) as Record<string, unknown>[]) {
+  for (const m of measures) {
     const a = get(Number(m.deal_id))
     a.measure = { status: (m.status as string) ?? null, scheduled_at: (m.scheduled_at as string) ?? null }
     touch(a, m.created_at)
   }
-  for (const f of (files ?? []) as Record<string, unknown>[]) {
+  for (const f of files) {
     const a = get(Number(f.deal_id))
     if (f.kind === 'drawing') a.hasDrawing = true
     touch(a, f.created_at)
   }
-  for (const p of (pays ?? []) as Record<string, unknown>[]) {
+  for (const p of pays) {
     const a = get(Number(p.deal_id)); a.paid += num(p.amount); a.payCount++
     touch(a, p.created_at); touch(a, p.paid_at)
   }

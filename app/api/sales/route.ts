@@ -9,6 +9,7 @@ import { salePaymentKey } from '@/lib/payments/paymentKeys'
 import { bookNames } from '@/lib/sales/bookNames'
 import { resolvePeriod, parseManagers } from '@/lib/sales/period'
 import { mskDayKey } from '@/lib/time'
+import { inChunks, pageAll } from '@/lib/supabase/pageAll'
 
 // Отдел продаж: леджер продаж. GET — продажи за месяц + итоги + по менеджерам
 // (владелец/РОП — все, менеджер — свои). POST — создать продажу (в т.ч. из лида).
@@ -61,17 +62,23 @@ export async function GET(req: NextRequest) {
   // (lib/salesLedger.upsertSaleFromB2B + ночной реконсилиатор), и без фильтра
   // они занижали средний чек. То же правило уже действует в сверке денег
   // (api/cron/money-integrity) и в замороженном базлайне.
-  let query = sb.from('crm_sales').select('*')
-    .gte('sale_date', period.from).lt('sale_date', period.toExclusive)
-    .eq('voided', false).neq('department', 'b2b')
-    .order('sale_date', { ascending: true }).order('id', { ascending: true })
-    .limit(2000)
-  if (!me.canAll) query = query.in('manager', bookNames(me.name))
-  const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Сортировка по возрастанию + .limit(2000) при потолке PostgREST в 1000 строк срезала
+  // бы как раз свежие продажи годового периода — читаем страницами.
+  let all: SaleRow[]
+  try {
+    all = await pageAll<SaleRow>((from, to) => {
+      let query = sb.from('crm_sales').select('*')
+        .gte('sale_date', period.from).lt('sale_date', period.toExclusive)
+        .eq('voided', false).neq('department', 'b2b')
+        .order('sale_date', { ascending: true }).order('id', { ascending: true })
+      if (!me.canAll) query = query.in('manager', bookNames(me.name))
+      return query.range(from, to)
+    })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
   // Весь период целиком — разрез по менеджерам считаем по нему, иначе, выбрав
   // одного, нельзя вернуться к остальным: их просто не будет в списке.
-  const all = (data ?? []) as SaleRow[]
   const sales = picked.length ? all.filter(r => picked.includes(r.manager ?? '—')) : all
 
   // «Поступило» ≠ «продано»: продажа считается полной суммой счёта в месяце
@@ -81,11 +88,15 @@ export async function GET(req: NextRequest) {
   const saleIds = all.map(r => r.id)
   const paidBySale = new Map<number, number>()
   if (saleIds.length > 0) {
-    const { data: pays } = await sb.from('payments')
-      .select('crm_sale_id, amount')
-      .in('crm_sale_id', saleIds)
-      .is('voided_at', null)
-    for (const p of (pays ?? []) as { crm_sale_id: number | null; amount: number }[]) {
+    let pays: { crm_sale_id: number | null; amount: number }[]
+    try {
+      pays = await inChunks(saleIds, 500, part => pageAll<{ crm_sale_id: number | null; amount: number }>((from, to) =>
+        sb.from('payments').select('crm_sale_id, amount')
+          .in('crm_sale_id', part).is('voided_at', null).order('id').range(from, to)))
+    } catch (e) {
+      return NextResponse.json({ error: `Платежи: ${(e as Error).message}` }, { status: 500 })
+    }
+    for (const p of pays) {
       if (p.crm_sale_id == null) continue
       paidBySale.set(p.crm_sale_id, (paidBySale.get(p.crm_sale_id) ?? 0) + Number(p.amount || 0))
     }

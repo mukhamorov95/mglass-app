@@ -26,8 +26,9 @@ export async function GET() {
     clients.length
       ? sb.from('referral_turnover').select('referral_client_id,ym,amount').in('referral_client_id', clients.map(c => c.id))
       : Promise.resolve({ data: [] as { referral_client_id: number; ym: string; amount: number }[] }),
-    buildAutoTurnover(sb, clients),
+    buildAutoTurnover(sb, clients).catch((e: Error) => e),
   ])
+  if (auto instanceof Error) return NextResponse.json({ error: `Оборот по заказам: ${auto.message}` }, { status: 500 })
 
   return NextResponse.json({
     rate,
