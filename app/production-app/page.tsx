@@ -2,9 +2,12 @@ import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
-import { PROD_SINCE } from '@/lib/orderFlags'
+import { PROD_SINCE, parseNotes } from '@/lib/orderFlags'
 import { stageLabel } from '@/lib/productionStages'
 import { shopHome, type ShopTask, type ShopOrder, type ShopOrderRow } from '@/lib/production/shopHome'
+import { isShipped } from '@/lib/b2b/todayPriorities'
+import { readPaged, readIn, errorText } from '@/lib/production/paged'
+import { mskDayKey } from '@/lib/time'
 
 // Главная цеха (ТЗ 4.3, маршрут Н3). Раньше адрес сразу уводил в «Мои задачи»
 // (решение 14.07); теперь сверху те же «Мои задачи» одной кнопкой, а ниже — что
@@ -13,38 +16,80 @@ import { shopHome, type ShopTask, type ShopOrder, type ShopOrderRow } from '@/li
 
 export const dynamic = 'force-dynamic'
 
-const PAGE = 1000
+const TASK_COLS = 'id,order_id,station,stage_key,status,assigned_to,started_by_name,completed_at,completed_by_name'
+
+type HomeData = { tasks: ShopTask[]; orders: ShopOrder[]; reqOpen: number; stations: string[] | null }
+
+// Окно данных — то, что главная показывает, а не вся история: раньше на каждый заход
+// читались все 6600+ задач цеха с июля. Теперь — задачи живых заказов (запущен, не в
+// архиве, не уехал) и закрытые сегодня (для «Загрузки людей»). Всё — страницами
+// (lib/production/paged.ts): PostgREST молча режет ответ на тысяче строк.
+async function loadHome(userId: string | null): Promise<HomeData> {
+  const svc = createServiceClient()
+  const todayStart = new Date(`${mskDayKey()}T00:00:00+03:00`).toISOString()
+
+  const [orders, { count: reqOpen, error: reqErr }, { data: me }] = await Promise.all([
+    readPaged<ShopOrder>((from, to) => svc.from('b2b_orders')
+      .select('id,client_name,custom_number,notes,launched_at,created_at')
+      .is('archived_at', null).not('launched_at', 'is', null).gte('created_at', PROD_SINCE)
+      .order('id', { ascending: false }).range(from, to)),
+    svc.from('shop_purchase_requests').select('id', { count: 'exact', head: true }).neq('status', 'arrived'),
+    userId ? svc.from('users').select('production_stations').eq('id', userId).maybeSingle() : Promise.resolve({ data: null }),
+  ])
+  if (reqErr) throw new Error(reqErr.message)
+
+  const liveIds = orders.filter(o => {
+    const n = parseNotes(o.notes)
+    return n.is_template !== true && !isShipped(n)
+  }).map(o => o.id)
+
+  const [live, doneToday] = await Promise.all([
+    readIn<ShopTask & { id: number }, number>(liveIds, (part, from, to) => svc.from('production_tasks')
+      .select(TASK_COLS).in('order_id', part).order('id').range(from, to)),
+    readPaged<ShopTask & { id: number }>((from, to) => svc.from('production_tasks')
+      .select(TASK_COLS).eq('status', 'done').gte('completed_at', todayStart).order('id').range(from, to)),
+  ])
+  const seen = new Set(live.map(t => t.id))
+  const tasks: ShopTask[] = [...live, ...doneToday.filter(t => !seen.has(t.id))]
+
+  return { tasks, orders, reqOpen: reqOpen ?? 0, stations: (me as { production_stations?: string[] | null } | null)?.production_stations ?? null }
+}
 
 export default async function ProductionHome() {
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
-  const svc = createServiceClient()
 
-  // PostgREST молча режет ответ до 1000 строк — читаем страницами
-  const tasks: ShopTask[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data } = await svc.from('production_tasks')
-      .select('order_id,station,stage_key,status,assigned_to,started_by_name,completed_at,completed_by_name')
-      .order('id').range(from, from + PAGE - 1)
-    const page = (data ?? []) as ShopTask[]
-    tasks.push(...page)
-    if (page.length < PAGE) break
+  let data: HomeData | null = null
+  let loadError: string | null = null
+  try {
+    data = await loadHome(user?.id ?? null)
+  } catch (e) {
+    loadError = errorText(e)
+  }
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-[#f5f5f3] pb-20">
+        <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
+          <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Цех сегодня</h1>
+          <ProductionTabs />
+        </div>
+        <div className="px-4 pt-4 max-w-5xl space-y-3">
+          <Link href="/production-app/my-queue"
+            className="block bg-[#111110] text-white rounded-2xl px-4 py-4 text-[16px] font-semibold">Мои задачи →</Link>
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-4">
+            <p className="text-[14px] font-semibold text-red-800">Сводка цеха не загрузилась: {loadError}</p>
+            <Link href="/production-app" prefetch={false} className="inline-block mt-3 px-5 py-3 rounded-lg bg-[#111110] text-white text-[14px] font-semibold">Повторить</Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const [{ data: orderData }, { count: reqOpen }, { data: me }] = await Promise.all([
-    svc.from('b2b_orders')
-      .select('id,client_name,custom_number,notes,launched_at,created_at')
-      .is('archived_at', null).not('launched_at', 'is', null).gte('created_at', PROD_SINCE)
-      .order('id', { ascending: false }).limit(2000),
-    svc.from('shop_purchase_requests').select('id', { count: 'exact', head: true }).neq('status', 'arrived'),
-    user ? svc.from('users').select('production_stations').eq('id', user.id).maybeSingle() : Promise.resolve({ data: null }),
-  ])
-
   const h = shopHome({
-    tasks,
-    orders: (orderData ?? []) as ShopOrder[],
-    purchaseRequestsOpen: reqOpen ?? 0,
-    me: { id: user?.id ?? null, stations: (me as { production_stations?: string[] | null } | null)?.production_stations ?? null },
+    tasks: data.tasks,
+    orders: data.orders,
+    purchaseRequestsOpen: data.reqOpen,
+    me: { id: user?.id ?? null, stations: data.stations },
   })
 
   return (

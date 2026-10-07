@@ -9,6 +9,8 @@ import { PROD_SINCE, urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf,
 import { materialLabelShort } from '@/lib/materialLabel'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import PointBadge from '@/components/PointBadge'
+import { readPaged, readIn, errorText } from '@/lib/production/paged'
+import { isLiveShopOrder } from '@/lib/production/liveOrder'
 
 // Единый экран «Заказы»: список по срочности → клик раскрывает заказ (чертёж
 // сверху, детали × этапы кнопками, «Упаковано» = всё готово, «Проблема»).
@@ -42,6 +44,7 @@ export default function OrdersScreen() {
   const [open, setOpen] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [problemFor, setProblemFor] = useState<number | null>(null)
   const [pReason, setPReason] = useState(ANDON_REASONS[0].code)
   const [pComment, setPComment] = useState('')
@@ -61,38 +64,44 @@ export default function OrdersScreen() {
     }
     // Открытые задачи задают список «заказы в работе», но грузим потом ВСЕ задачи
     // этих заказов — иначе закрытые этапы выглядят неотмеченными, а счётчик = 0/N.
-    const { data: openRows } = await sb.from('production_tasks')
-      .select('order_id').in('status', ['queued', 'in_progress', 'problem'])
-    const ids = [...new Set((openRows ?? []).map(r => (r as { order_id: number }).order_id))]
+    // Всё страницами и пачками (lib/production/paged.ts): открытых задач больше тысячи,
+    // и одним запросом список «в работе» молча терял заказы.
+    const openRows = await readPaged<{ order_id: number }>((from, to) => sb.from('production_tasks')
+      .select('id,order_id').in('status', ['queued', 'in_progress', 'problem']).order('id').range(from, to))
+    const ids = [...new Set(openRows.map(r => r.order_id))]
     let ts: Task[] = []
     if (ids.length) {
-      // Производственный контур — только заказы с PROD_SINCE; задачи старых заказов скрываем
-      const [{ data: ords }, points] = await Promise.all([
-        sb.from('b2b_orders').select('id,client_id,custom_number,client_name,items,notes')
-          .in('id', ids).gte('created_at', PROD_SINCE),
+      // Производственный контур — только заказы с PROD_SINCE, не в архиве и не уехавшие
+      const [ords, points] = await Promise.all([
+        readIn<Order & { archived_at: string | null }, number>(ids, (part, from, to) => sb.from('b2b_orders')
+          .select('id,client_id,custom_number,client_name,items,notes,archived_at')
+          .in('id', part).gte('created_at', PROD_SINCE).order('id').range(from, to)),
         loadPointClientIds(sb),
       ])
       setPointClients(points)
-      const fresh = new Map((ords ?? []).map((o: Order) => [o.id, o]))
+      const fresh = new Map(ords.filter(o => isLiveShopOrder(o)).map(o => [o.id, o as Order]))
       setOrders(fresh)
       const freshIds = [...fresh.keys()]
-      if (freshIds.length) {
-        const cols = 'id,order_id,item_index,stage_key,station,status,sequence_order'
-        const { data: rows, error } = await sb.from('production_tasks')
-          .select(`${cols},auto_closed`).in('order_id', freshIds).order('sequence_order')
-        if (error) {
-          // колонка auto_closed могла ещё не попасть в кэш схемы PostgREST
-          const { data: bare } = await sb.from('production_tasks')
-            .select(cols).in('order_id', freshIds).order('sequence_order')
-          ts = (bare ?? []) as Task[]
-        } else ts = (rows ?? []) as Task[]
-      }
+      ts = await readIn<Task, number>(freshIds, (part, from, to) => sb.from('production_tasks')
+        .select('id,order_id,item_index,stage_key,station,status,sequence_order,auto_closed')
+        .in('order_id', part).order('id').range(from, to))
+      ts.sort((a, b) => a.sequence_order - b.sequence_order || a.id - b.id)
     }
     setTasks(ts)
-    setLoading(false)
   }, [sb])
+
+  const reload = useCallback(async () => {
+    try {
+      await load()
+      setLoadError(null)
+    } catch (e) {
+      setLoadError(errorText(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [load])
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
+  useEffect(() => { void reload() }, [reload])
 
   const canMark = (station: string) => me.production_lead || (me.role != null && OWNER.has(me.role)) || (me.production_stations ?? []).includes(station)
 
@@ -102,7 +111,7 @@ export default function OrdersScreen() {
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { flash(d.message || d.error || 'Не удалось отметить'); return }
     const n = Array.isArray(d.cascaded) ? d.cascaded.length : 0
-    await load()
+    await reload()
     if (n > 0) flash(`Готово · предыдущие этапы закрыты автоматически (${n})`)
   }
 
@@ -110,14 +119,14 @@ export default function OrdersScreen() {
     if (!(me.production_lead || (me.role != null && OWNER.has(me.role)))) { flash('«Упаковано разом» — только ответственный'); return }
     const rest = tasks.filter(t => t.order_id === orderId && t.status !== 'done')
     for (const t of rest) await fetch(`/api/production-tasks/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'done', force: true }) }).catch(() => {})
-    await load(); flash('Заказ отмечен готовым')
+    await reload(); flash('Заказ отмечен готовым')
   }
 
   async function submitProblem(orderId: number) {
     const frontier = tasks.filter(t => t.order_id === orderId && t.status !== 'done').sort((a, b) => a.sequence_order - b.sequence_order)[0]
     if (!frontier) return
     await fetch(`/api/production-tasks/${frontier.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'problem', reason_code: pReason, comment: pComment || null }) }).catch(() => {})
-    setProblemFor(null); setPComment(''); await load(); flash('Проблема зафиксирована')
+    setProblemFor(null); setPComment(''); await reload(); flash('Проблема зафиксирована')
   }
 
   async function uploadDrawing(order: Order, file: File) {
@@ -130,7 +139,7 @@ export default function OrdersScreen() {
     // и запись блобом стирала бы всё, что за это время положили туда другие контуры —
     // оплату, доставку, отметки этапов.
     await sb.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { drawing_url: path } })
-    await load()
+    await reload()
   }
 
   // Заказы по срочности; заказы точек — первыми (решение владельца 01.10).
@@ -151,7 +160,13 @@ export default function OrdersScreen() {
       </div>
 
       <div className="px-4 pt-4 space-y-2 max-w-[760px] mx-auto">
-        {orderIds.length === 0 && <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center text-[13px] text-[#9a9a95]">Нет заказов в работе</div>}
+        {loadError && (
+          <div className="bg-red-50 rounded-xl border border-red-200 p-4 text-center">
+            <p className="text-[14px] font-semibold text-red-800">Не загрузилось: {loadError}</p>
+            <button onClick={() => { setLoading(true); void reload() }} className="mt-3 px-5 py-3 rounded-lg bg-[#111110] text-white text-[14px] font-semibold">Повторить</button>
+          </div>
+        )}
+        {!loadError && orderIds.length === 0 && <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center text-[13px] text-[#9a9a95]">Нет заказов в работе</div>}
         {orderIds.map(oid => {
           const o = orders.get(oid)
           const oTasks = tasks.filter(t => t.order_id === oid)

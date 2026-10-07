@@ -16,6 +16,7 @@ import LeadSummary from './LeadSummary'
 import { materialLabelShort } from '@/lib/materialLabel'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import { isLiveShopOrder } from '@/lib/production/liveOrder'
+import { readPaged, readIn } from '@/lib/production/paged'
 import PointBadge from '@/components/PointBadge'
 
 // «Мои задачи»: карточка = ЗАКАЗ (раскрывается на месте — детали с кнопками и
@@ -228,7 +229,7 @@ export default function MyQueuePage() {
       monday.setHours(0, 0, 0, 0)
       monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
 
-      const [taskRows, { data: doneRows }] = await Promise.all([
+      const [taskRows, doneRows] = await Promise.all([
         // Берём и закрытые задачи: в обычном списке они не показываются, но
         // нужны поиску — иначе отмеченный заказ пропадает и его не найти.
         // Только незакрытые: рабочая очередь. Закрытые задачи (их столько же, сколько
@@ -239,41 +240,56 @@ export default function MyQueuePage() {
         // Страницами: у Никиты одних незакрытых больше тысячи, а PostgREST отдаёт
         // не больше страницы за раз. Одним запросом часть очереди молча терялась.
         fetchAllTasks(sb, orFilter),
+        // Отмеченное за неделю — тоже страницами: у упаковщика за неделю бывает больше тысячи.
         stations.length
-          ? sb.from('production_tasks').select('order_id,item_index,completed_at')
+          ? readPaged<DoneRow>((from, to) => sb.from('production_tasks').select('order_id,item_index,completed_at')
               .eq('status', 'done').in('station', stations).gte('completed_at', monday.toISOString())
-          : Promise.resolve({ data: [] as DoneRow[] }),
+              .order('id').range(from, to))
+          : Promise.resolve([] as DoneRow[]),
       ])
 
       const list = taskRows
       setRawCount(list.length)
-      const dw = (doneRows ?? []) as DoneRow[]
+      const dw = doneRows
 
       const orderIds = [...new Set(list.map(t => t.order_id))]
       const doneOrderIds = [...new Set(dw.map(t => t.order_id))].filter(id => !orderIds.includes(id))
       const blockerIds = [...new Set(list.map(t => t.blocked_by_task_id).filter((x): x is number => x != null))]
 
-      const [{ data: orderRows, error: ordersErr }, { data: doneOrderRows }, { data: blockerRows }, points] = await Promise.all([
-        orderIds.length
-          ? sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes').in('id', orderIds).gte('created_at', PROD_SINCE).is('archived_at', null)
-          : Promise.resolve({ data: [] as OrderLite[], error: null }),
-        doneOrderIds.length
-          ? sb.from('b2b_orders').select('id,items').in('id', doneOrderIds).gte('created_at', PROD_SINCE)
-          : Promise.resolve({ data: [] as OrderLite[] }),
-        blockerIds.length
-          ? sb.from('production_tasks').select('id,status,stage_key').in('id', blockerIds)
-          : Promise.resolve({ data: [] as BlockerLite[] }),
+      // Списки id — пачками по 500 (lib/production/paged.ts): у Никиты заказов в очереди
+      // сотни, и одним .in() упираемся и в длину адреса, и в потолок строк.
+      const [orderRows, doneOrderRows, blockerRows, points] = await Promise.all([
+        readIn<OrderLite, number>(orderIds, (part, from, to) => sb.from('b2b_orders')
+          .select('id,client_id,client_name,custom_number,items,notes')
+          .in('id', part).gte('created_at', PROD_SINCE).is('archived_at', null)
+          .order('id').range(from, to)),
+        readIn<Pick<OrderLite, 'id' | 'items'>, number>(doneOrderIds, (part, from, to) => sb.from('b2b_orders')
+          .select('id,items').in('id', part).gte('created_at', PROD_SINCE)
+          .order('id').range(from, to)),
+        readIn<BlockerLite, number>(blockerIds, (part, from, to) => sb.from('production_tasks')
+          .select('id,status,stage_key').in('id', part).order('id').range(from, to)),
         loadPointClientIds(sb),
       ])
-      if (ordersErr) throw new Error(`Заказы не прочитаны: ${ordersErr.message}`)
       setPointClients(points)
 
-      // Что по этим заказам ещё открыто у ВСЕГО цеха, а не только у меня.
-      const { data: workRows } = orderIds.length
-        ? await sb.from('production_tasks').select('order_id,station').in('order_id', orderIds).neq('status', 'done')
-        : { data: [] as { order_id: number; station: string }[] }
+      // Производственный контур — только заказы с PROD_SINCE, не в архиве и не уехавшие:
+      // задачи отгруженного заказа — не работа, даже если их никто не закрыл.
+      const freshOrders = new Map(orderRows.filter(o => isLiveShopOrder(o)).map(o => [o.id, o]))
+      const freshIds = [...freshOrders.keys()]
+      setTasks(list.filter(t => freshOrders.has(t.order_id)))
+      setOrders(freshOrders)
+
+      // Маршрут целиком по видимым заказам: без этого рабочий видит только свою станцию и не
+      // понимает, готова ли деталь и кто её вёл до него. Это ВСЕ задачи заказов (и закрытые) —
+      // на сотне заказов их тысячи, поэтому пачками и страницами. Из них же — что открыто
+      // у всего цеха (orderWork): отдельный запрос по тем же заказам был бы вторым чтением.
+      const routeRows = await readIn<RouteStage & { order_id: number }, number>(freshIds, (part, from, to) => sb.from('production_tasks')
+        .select('id,item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
+        .in('order_id', part).order('id').range(from, to))
+
       const workMap = new Map<number, Map<string, number>>()
-      for (const w of (workRows ?? []) as { order_id: number; station: string }[]) {
+      for (const w of routeRows) {
+        if (w.status === 'done') continue
         const byStation = workMap.get(w.order_id) ?? new Map<string, number>()
         byStation.set(w.station, (byStation.get(w.station) ?? 0) + 1)
         workMap.set(w.order_id, byStation)
@@ -282,53 +298,36 @@ export default function MyQueuePage() {
         [id, [...m].map(([station, n]) => ({ station, n })).sort((a, b) => b.n - a.n)])))
       setWorkLoaded(true)
 
-      // Производственный контур — только заказы с PROD_SINCE, не в архиве и не уехавшие:
-      // задачи отгруженного заказа — не работа, даже если их никто не закрыл.
-      const freshOrders = new Map(((orderRows ?? []) as OrderLite[]).filter(o => isLiveShopOrder(o)).map(o => [o.id, o]))
-      setTasks(list.filter(t => freshOrders.has(t.order_id)))
-      setOrders(freshOrders)
-
       // Статус закупки для заказов с пометкой «нет материала» — мастер видит,
       // когда стекло заказано и когда пришло, не выходя из очереди
       const marked = [...freshOrders.values()].filter(o => {
         const n = parseNotes(o.notes)
         return materialStatus(o.notes) === 'needed' || (Array.isArray(n.material_needed_items) && (n.material_needed_items as number[]).length > 0)
       }).map(o => o.id)
-      if (marked.length) {
-        const { data: reqs } = await sb.from('shop_purchase_requests')
+      const reqs = await readIn<{ b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }, number>(
+        marked, (part, from, to) => sb.from('shop_purchase_requests')
           .select('id,b2b_order_id,item_index,status,expected_date')
-          .in('b2b_order_id', marked)
-          .order('id', { ascending: true })
-        const m = new Map<string, { status: string; expected: string | null }>()
-        for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }[]) {
-          m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, { status: r.status, expected: r.expected_date }) // позднейшая заявка перезаписывает
-        }
-        setMatReq(m)
-      } else setMatReq(new Map())
-      const dMap = new Map<number, OrderLite>(((doneOrderRows ?? []) as OrderLite[]).map(o => [o.id, o]))
+          .in('b2b_order_id', part).order('id', { ascending: true }).range(from, to))
+      const m = new Map<string, { status: string; expected: string | null }>()
+      for (const r of reqs) {
+        m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, { status: r.status, expected: r.expected_date }) // позднейшая заявка перезаписывает
+      }
+      setMatReq(m)
+      // Для табло нужны только количества изделий — имя клиента здесь не читаем.
+      const dMap = new Map<number, OrderLite>(doneOrderRows.map(o => [o.id, { ...o, client_name: '', custom_number: null }]))
       for (const [id, o] of freshOrders) dMap.set(id, o)
       setDoneOrders(dMap)
       setDoneWeek(dw.filter(t => dMap.has(t.order_id)))
-      setBlockers(new Map((blockerRows ?? []).map((b: BlockerLite) => [b.id, b])))
+      setBlockers(new Map(blockerRows.map(b => [b.id, b])))
 
-      // Маршрут целиком по видимым заказам: без этого рабочий видит только свою
-      // станцию и не понимает, готова ли деталь и кто её вёл до него.
-      if (orderIds.length) {
-        const { data: routeRows } = await sb.from('production_tasks')
-          .select('id,item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
-          .in('order_id', orderIds)
-          .order('sequence_order', { ascending: true })
-        const rm = new Map<string, RouteStage[]>()
-        for (const r of (routeRows ?? []) as (RouteStage & { order_id: number })[]) {
-          const k = `${r.order_id}:${r.item_index}`
-          const arr = rm.get(k) ?? []
-          arr.push(r)
-          rm.set(k, arr)
-        }
-        setRoutes(rm)
-      } else {
-        setRoutes(new Map())
+      const rm = new Map<string, RouteStage[]>()
+      for (const r of [...routeRows].sort((a, b) => a.sequence_order - b.sequence_order || a.id - b.id)) {
+        const k = `${r.order_id}:${r.item_index}`
+        const arr = rm.get(k) ?? []
+        arr.push(r)
+        rm.set(k, arr)
       }
+      setRoutes(rm)
       setLoadError(null)
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e))
@@ -403,7 +402,12 @@ export default function MyQueuePage() {
       .filter(r => r.status !== 'done')
       .sort((a, b) => a.sequence_order - b.sequence_order)
     const last = route[route.length - 1]
-    if (!last) return
+    // Маршрута нет в памяти — значит не догрузился или деталь уже закрыта. Молча ничего
+    // не делать нельзя: рабочий решит, что отметил.
+    if (!last) {
+      toast.error('Деталь не закрыта', { detail: 'Маршрут детали не загружен или все этапы уже закрыты — обновите экран' })
+      return
+    }
     const ok = await optimistic(t => t.order_id === orderId && t.item_index === itemIndex,
       'Деталь не закрыта', `/api/production-tasks/${last.id}`, patchDone)
     if (ok) void load()
