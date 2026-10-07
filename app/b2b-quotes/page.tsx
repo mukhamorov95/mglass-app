@@ -22,6 +22,8 @@ import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import RowMenu, { type MenuItem } from '@/components/RowMenu'
 import { buildTelegramWorkText } from '@/lib/b2b/telegramWorkText'
+import { clientQuoteTextFromOrder, quoteLeadChips, readQuoteLead } from '@/lib/b2b/leadQuote'
+import type { InvoiceOrder } from '@/lib/b2b/invoiceMath'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 
 
@@ -249,6 +251,23 @@ export default function B2BQuotesPage() {
     } catch {
       await promptDialog({
         title: 'Скопируйте текст для Telegram',
+        text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
+        defaultValue: text, multiline: true, confirmLabel: 'Готово',
+      })
+    }
+  }
+
+  // Ответ клиенту в чат (Авито и др.) по сохранённому просчёту — суммы строк как в счёте.
+  async function copyClientText(q: Quote) {
+    const notes = parseNotes(q.notes)
+    const text = clientQuoteTextFromOrder(q as unknown as InvoiceOrder, notes)
+    const label = readQuoteLead(notes).source === 'avito' ? 'Текст для Авито' : 'Текст клиенту'
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast(`${label} скопирован`)
+    } catch {
+      await promptDialog({
+        title: `Скопируйте: ${label.toLowerCase()}`,
         text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
         defaultValue: text, multiline: true, confirmLabel: 'Готово',
       })
@@ -882,6 +901,9 @@ export default function B2BQuotesPage() {
                           </span>
                         )}
                         <p className="text-[13px] font-semibold text-[#111110] truncate">{quote.client_name}</p>
+                        {quoteLeadChips(readQuoteLead(parsed), quote.client_id != null).map(chip => (
+                          <span key={chip} className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap ${chip === 'без заказчика' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-[#f0f0ec] text-[#6b6b66]'}`}>{chip}</span>
+                        ))}
                         {isOverridden && (
                           <span
                             className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap"
@@ -1013,7 +1035,14 @@ export default function B2BQuotesPage() {
                         </button>
                       </>)}
                       {/* Согласование отключено: quote и agreed сразу запускаются в работу */}
-                      {(status === 'quote' || status === 'agreed') && (
+                      {(status === 'quote' || status === 'agreed') && quote.client_id == null && (
+                        <Link href={`/calculator/b2b?orderId=${quote.id}`}
+                          title="Без заказчика в работу нельзя: выберите или создайте клиента и нажмите «Обновить просчёт»"
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
+                          ＋ Заказчик →
+                        </Link>
+                      )}
+                      {(status === 'quote' || status === 'agreed') && quote.client_id != null && (
                         <button
                           onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); setWorkDeadline(toDateInput(shipDateFrom(new Date(), Number(parseNotes(quote.notes).production_days) || null))) }}
                           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
@@ -1042,6 +1071,7 @@ export default function B2BQuotesPage() {
                         { kind: 'link', label: '⬇ Скачать КП в PDF', href: `/api/quotes/${quote.id}/pdf`, newTab: true, external: true },
                         { label: sharing === quote.id ? '🔗 Готовлю ссылку…' : '🔗 Ссылка клиенту', onClick: () => shareQuote(quote), disabled: sharing === quote.id },
                         { label: copiedId === quote.id ? '✓ Текст скопирован' : '✈️ Текст для Telegram', onClick: () => copyTelegramText(quote) },
+                        { label: readQuoteLead(parsed).source === 'avito' ? '📋 Текст для Авито' : '📋 Текст клиенту', onClick: () => { void copyClientText(quote) } },
                         { kind: 'divider' },
                         { kind: 'link', label: '🧮 Открыть в калькуляторе', href: `/calculator/b2b?orderId=${quote.id}` },
                         { label: isTemplate(quote) ? '＋ Создать из шаблона' : '⧉ Дублировать', onClick: () => duplicateQuote(quote) },
