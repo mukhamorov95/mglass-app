@@ -20,6 +20,7 @@ import { writeFailure } from '@/lib/rlsWrite'
 import { saveOrderNotes, type OrderNotesSaved } from '@/lib/b2b/orderNotesClient'
 import LaunchPanel from '@/components/b2b/LaunchPanel'
 import { copyOrShow } from '@/lib/b2b/copyOrShow'
+import { matchScore } from '@/lib/search/translitMatch'
 import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/productionMessage'
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import RowMenu, { type MenuItem } from '@/components/RowMenu'
@@ -704,7 +705,9 @@ export default function B2BQuotesPage() {
         x.client_name.toLowerCase().includes(q) ||
         (x.custom_number ?? '').toLowerCase().includes(q) ||
         (x.client_order_number ?? '').toLowerCase().includes(q) ||
-        String(x.id).includes(q)
+        String(x.id).includes(q) ||
+        // Клиент и контакт из чата — в обоих алфавитах (О8): «шо» → Shower Glass.
+        (/\p{L}/u.test(q) && matchScore(q, [x.client_name, readQuoteLead(parseNotes(x.notes)).contact]) > 0)
       )
     }
     return list

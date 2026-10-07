@@ -544,7 +544,8 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   useEffect(() => {
     if (loading) return
     const orderIdParam  = searchParams.get('orderId')
-    const clientIdParam = searchParams.get('client')
+    // «КП →» из CRM и «Расчёт →» из заявок шлют ?clientId=, карточка клиента — ?client=: читаем оба.
+    const clientIdParam = searchParams.get('client') ?? searchParams.get('clientId')
 
     if (orderIdParam) {
       // Load an existing order into the calculator

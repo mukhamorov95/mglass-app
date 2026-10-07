@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { presetPeriod, NO_SOURCE, NO_CARD, type PresetId, type Summary, type MonthRow, type RankRow, type SourceRow } from '@/lib/b2b/clientReport'
 import { sourceLabel } from '@/lib/types'
 import { mskDayKey } from '@/lib/time'
+import { searchByName } from '@/lib/search/translitMatch'
 
 type GroupOpt = { key: string; label: string; ownRetail: boolean; merged: number }
 type OrderRow = {
@@ -131,11 +132,8 @@ export default function ReportClient({ initial }: {
     return () => document.removeEventListener('mousedown', close)
   }, [])
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const list = data?.groups ?? []
-    return (q ? list.filter(x => x.label.toLowerCase().includes(q)) : list).slice(0, 40)
-  }, [query, data])
+  // В обоих алфавитах (О8): «шо» → Shower Glass, «гласс» → M GLASS; лучшее совпадение выше.
+  const matches = useMemo(() => searchByName(data?.groups ?? [], query, x => [x.label], 40), [query, data])
 
   const pick = (key: string | null) => { setCardId(null); setG(key); setQuery(''); setOpen(false) }
   const applyPreset = (id: PresetId) => { const p = presetPeriod(id, today); setFrom(p.from); setTo(p.to) }

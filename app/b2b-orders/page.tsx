@@ -17,6 +17,8 @@ import { remainderStatus } from '@/lib/b2b/orderPayments'
 import { maxFormattedNumber, nextOrderNumber } from '@/lib/b2b/orderNumber'
 import { payStatusFromPayments, type OrderPayStatus } from '@/lib/b2b/orderPayStatus'
 import { writeFailure } from '@/lib/rlsWrite'
+import { matchScore } from '@/lib/search/translitMatch'
+import ClientPicker from '@/components/ClientPicker'
 import { updCardState, type UpdStatus } from '@/lib/b2b/updStatus'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import { DAY_PRESETS, clientKeyer, clientOptions, dayPresetRange, summarizeOrders } from '@/lib/b2b/ordersFilter'
@@ -362,7 +364,9 @@ function matchesSearch(o: Order, raw: string): boolean {
     (o.custom_number ?? '').toLowerCase().includes(q) ||
     (o.client_order_number ?? '').toLowerCase().includes(q) ||
     getOrderNum(o.parsedNotes).toLowerCase().includes(q) ||
-    (qn !== '' && String(o.id).includes(qn))
+    (qn !== '' && String(o.id).includes(qn)) ||
+    // Клиент — в обоих алфавитах (О8): «шо» находит Shower Glass, «гласс» — M GLASS.
+    (/\p{L}/u.test(q) && matchScore(q, [o.client_name]) > 0)
   )
 }
 
@@ -975,6 +979,8 @@ export default function B2BOrdersPage() {
     (!dateTo || launchedDay(o) <= dateTo),
   ), [orders, search, clientKey, clientKeyOf, dateFrom, dateTo])
   const clientOpts = useMemo(() => clientOptions(orders, clientKeyOf), [orders, clientKeyOf])
+  // ClientPicker работает с числовым id — номер строки в clientOpts (+1, чтобы 0 не путался с «все»).
+  const clientPickerOpts = useMemo(() => clientOpts.map((c, i) => ({ id: i + 1, label: `${c.label} · ${c.count}` })), [clientOpts])
   const pickedClient = clientOpts.find(c => c.key === clientKey) ?? null
 
   const filteredOrdersBase = useMemo(() => {
@@ -2222,11 +2228,15 @@ export default function B2BOrdersPage() {
               className="w-full pl-8 pr-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg outline-none focus:border-[#111110] text-[#111110] placeholder:text-[#b4b4ae]"
             />
           </div>
-          <select value={clientKey} onChange={e => setClientKey(e.target.value)} aria-label="Покупатель"
-            className={`max-w-[240px] border rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110] ${clientKey ? 'border-[#111110] text-[#111110] font-medium' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
-            <option value="">Все покупатели</option>
-            {clientOpts.map(c => <option key={c.key} value={c.key}>{c.label} · {c.count}</option>)}
-          </select>
+          {/* Покупатель вводом в обоих алфавитах (О8), а не прокруткой списка из сотни имён. */}
+          <div className="w-[240px]" aria-label="Покупатель">
+            <ClientPicker
+              options={clientPickerOpts}
+              value={clientKey ? (clientOpts.findIndex(c => c.key === clientKey) + 1) || null : null}
+              onChange={id => setClientKey(id ? clientOpts[id - 1]?.key ?? '' : '')}
+              noneLabel="Все покупатели"
+              placeholder="Покупатель: «шо», «гласс»…" />
+          </div>
           <div className="flex items-center gap-1.5 text-[12px] text-[#8a8a85]">
             <span>с</span>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
