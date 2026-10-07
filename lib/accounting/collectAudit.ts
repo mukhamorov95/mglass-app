@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { audit, type AuditInput, type Finding } from './audit'
 import { readPaged, type Paged } from '@/lib/money/paged'
 import { loadPostedPaymentIds, loadPaymentSkips } from './postedPayments'
+import { unpostedFrom } from './queue'
 import { attachInvoicePayments, asInvoiceRows } from '@/lib/money/invoicePayments'
 
 // Сбор данных для проверки Б14. Отдельно от чистого ядра (lib/accounting/audit.ts),
@@ -10,7 +11,7 @@ import { attachInvoicePayments, asInvoiceRows } from '@/lib/money/invoicePayment
 
 export async function collectAudit(svc: SupabaseClient, today: string): Promise<Finding[]> {
   const yearAgo = new Date(Date.parse(today + 'T00:00:00Z') - 400 * 86_400_000).toISOString().slice(0, 10)
-  const halfYear = new Date(Date.parse(today + 'T00:00:00Z') - 180 * 86_400_000).toISOString().slice(0, 10)
+  const halfYear = unpostedFrom(today)
 
   // Всё постранично и с ошибкой наружу: таблицы растут, а молча обрезанный или
   // упавший источник давал бы «расхождений нет» там, где они есть.

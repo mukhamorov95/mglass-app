@@ -4,6 +4,13 @@ import type { UpdWaiting } from './updWaiting'
 // «Ждут действия» бухгалтера: срез очередей и счётчики вкладок. Источник, который не
 // загрузился, — это ошибка словами, а не 0: ноль читается как «делать нечего».
 
+// Окно «к проведению» — одно на карточку, вкладку и проверку: иначе карточка говорит 146,
+// а вкладка за месяц показывает 10, и остальное не найти.
+export const UNPOSTED_DAYS = 180
+export function unpostedFrom(today: string): string {
+  return new Date(Date.parse(today + 'T00:00:00Z') - UNPOSTED_DAYS * 86_400_000).toISOString().slice(0, 10)
+}
+
 export type Src<T> = { ok: true; value: T } | { ok: false; error: string }
 
 export async function settle<T>(f: () => Promise<T>): Promise<Src<T>> {

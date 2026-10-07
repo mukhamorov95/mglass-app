@@ -26,19 +26,22 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url)
   const from = url.searchParams.get('from') ?? ''
+  // Без to — до сегодня и дальше, как в проверке «Оплаты не проведены в ОДДС».
   const to = url.searchParams.get('to') ?? ''
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
-    return NextResponse.json({ error: 'Нужен период from/to' }, { status: 400 })
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || (to && !/^\d{4}-\d{2}-\d{2}$/.test(to))) {
+    return NextResponse.json({ error: 'Нужен период from (и, если нужно, to)' }, { status: 400 })
   }
 
   const svc = createServiceClient()
   let pays: Row[], done: Set<number>, skipped: Map<number, string | null>
   try {
     [pays, done, skipped] = await Promise.all([
-      readPaged(() => svc.from('payments')
-        .select('id,amount,paid_at,kind,method,note,b2b_order_id,order_id,crm_sale_id')
-        .is('voided_at', null).gte('paid_at', from).lte('paid_at', to)
-        .order('paid_at', { ascending: false }).order('id')),
+      readPaged(() => {
+        const q = svc.from('payments')
+          .select('id,amount,paid_at,kind,method,note,b2b_order_id,order_id,crm_sale_id')
+          .is('voided_at', null).gte('paid_at', from)
+        return (to ? q.lte('paid_at', to) : q).order('paid_at', { ascending: false }).order('id')
+      }),
       loadPostedPaymentIds(svc),
       loadPaymentSkips(svc),
     ])

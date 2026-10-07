@@ -60,7 +60,6 @@ export default function AccountingPage() {
   const [queueErr, setQueueErr] = useState<string | null>(null)
   const [queueLoading, setQueueLoading] = useState(true)
   const [queueTick, setQueueTick] = useState(0)
-  const [unposted, setUnposted] = useState(0)
   const [locked, setLocked] = useState(false)
   const [log, setLog] = useState<{ id: number; entry_id: number; action: string; entry_date: string; actor: string | null; at: string; amount: number }[]>([])
   const [myRole, setMyRole] = useState('')
@@ -77,8 +76,6 @@ export default function AccountingPage() {
   const [dataTick, setDataTick] = useState(0)
   const [periodErr, setPeriodErr] = useState<string | null>(null)
   const [periodTick, setPeriodTick] = useState(0)
-  const [unpostedErr, setUnpostedErr] = useState<string | null>(null)
-  const [unpostedTick, setUnpostedTick] = useState(0)
   const [fundForm, setFundForm] = useState<{ name: string; cls: 'variable' | 'fixed' | 'fund' } | null>(null)
   const [fundSaving, setFundSaving] = useState(false)
 
@@ -114,7 +111,6 @@ export default function AccountingPage() {
 
   const reloadData = () => setDataTick(t => t + 1)
   const reloadPeriod = () => setPeriodTick(t => t + 1)
-  const reloadUnposted = () => setUnpostedTick(t => t + 1)
 
   // Фонды и операции месяца — постранично и с ошибкой на экране: молча пустой
   // справочник выглядел как «операций нет», а ОДДС показывал нули.
@@ -173,20 +169,6 @@ export default function AccountingPage() {
     reloadPeriod()
   }
 
-  useEffect(() => {
-    if (!month) return
-    let alive = true
-    const [y, m] = month.split('-').map(Number)
-    const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    loadJson<{ items: { skipped: boolean }[] }>(`/api/accounting/unposted?from=${month}-01&to=${to}`).then(res => {
-      if (!alive) return
-      if (res.error !== null) { setUnpostedErr(res.error); return }
-      setUnposted(res.data.items.filter(i => !i.skipped).length)
-      setUnpostedErr(null)
-    })
-    return () => { alive = false }
-  }, [month, unpostedTick])
-
   const isFin = ['accountant', 'cfo', 'admin', 'ceo'].includes(myRole)
   const isBuyer = myRole === 'buyer'
 
@@ -210,7 +192,7 @@ export default function AccountingPage() {
     if (k === 'bank') return counts ? counts.bank : failAll
     if (k === 'audit') return counts ? counts.audit : failAll
     if (k === 'docs') return counts ? counts.invoices : failAll
-    if (k === 'unposted') return unpostedErr ? { error: unpostedErr } : unposted
+    if (k === 'unposted') return counts ? counts.unposted : failAll
     return undefined
   }
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
@@ -609,10 +591,10 @@ export default function AccountingPage() {
 
         {tab === 'unposted' && !isBuyer && (
           <UnpostedTab unit={unit} funds={funds} subfunds={subfunds} month={month}
-            onPosted={() => { reloadData(); reloadUnposted(); reloadQueue() }} />
+            onPosted={() => { reloadData(); reloadQueue() }} />
         )}
         {tab === 'bank' && !isBuyer && (
-          <BankTab unit={unit} funds={funds} subfunds={subfunds} onPosted={() => { reloadData(); reloadUnposted(); reloadQueue() }} />
+          <BankTab unit={unit} funds={funds} subfunds={subfunds} onPosted={() => { reloadData(); reloadQueue() }} />
         )}
         {tab === 'payroll' && !isBuyer && (
           <PayrollTab unit={unit} month={month} onChanged={reloadData} />
