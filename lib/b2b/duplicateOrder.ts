@@ -25,13 +25,17 @@ export type DuplicableOrder = {
 export async function duplicateOrder(
   sb: SupabaseClient,
   order: DuplicableOrder,
-  opts: { managerName?: string | null } = {},
+  opts: { managerName?: string | null; repeatedFrom?: number } = {},
 ): Promise<{ data: Record<string, unknown> | null; error: string | null }> {
   const { data: { user } } = await sb.auth.getUser()
-  const notes = JSON.stringify(notesForCopy(parseNotes(order.notes), {
+  const copy = notesForCopy(parseNotes(order.notes), {
     at: new Date().toISOString(),
     managerName: opts.managerName ?? null,
-  }))
+  })
+  // «Повторить» из списка заказов — тот же черновик, но с пометкой источника: по ней
+  // считается, пользуются ли повтором (/api/admin/adoption).
+  if (opts.repeatedFrom != null) copy.repeated_from = opts.repeatedFrom
+  const notes = JSON.stringify(copy)
   const { data, error } = await sb.from('b2b_orders').insert({
     client_id: order.client_id, client_name: order.client_name,
     discount_percent: order.discount_percent, margin_percent: order.margin_percent,

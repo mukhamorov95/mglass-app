@@ -7,10 +7,11 @@ import { confirmDialog, promptDialog } from '@/lib/dialog'
 import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
-import { type DetailStageKey, type DetailStageState, type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
+import { type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
 import { materialLabelShort } from '@/lib/materialLabel'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/productionMessage'
+import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
@@ -116,11 +117,12 @@ type MatReqGroup = {
   supplierMaterialName: string | null
 }
 
-const PROGRESS_STAGES = STAGES.slice(0, 10) as readonly { key: StageKey; label: string }[]
+// Отметки, которые с 30.06 никто не ставит (их писала только эта карточка; цех отмечает
+// в своём приложении). Показываем, только если уже стоят на заказе, — чтобы их можно было снять.
+const LEGACY_STAGES: readonly StageKey[] = ['invoice_sent', 'added_to_group', 'printed', 'material_ordered']
 
-function calcProgress(stages: Partial<Record<StageKey, string | null>>): number {
-  const done = PROGRESS_STAGES.filter(s => !!stages?.[s.key]).length
-  return Math.round(done / PROGRESS_STAGES.length * 100)
+function visibleStages(stages: Partial<Record<StageKey, string | null>> | undefined) {
+  return STAGES.filter(s => !LEGACY_STAGES.includes(s.key) || !!stages?.[s.key])
 }
 
 type DeadlineControl = {
@@ -140,11 +142,6 @@ type BulkAction = {
   created_at: string
   created_by: string
 }
-
-const DC_REASONS = [
-  'Материал', 'Закалка', 'Фацет / триплекс', 'Производство',
-  'Упаковка', 'Ожидание клиента', 'Логистика', 'Другое',
-] as const
 
 type NotesData = {
   status?: string
@@ -172,10 +169,12 @@ type Order = {
   custom_number: string | null
   client_order_number: string | null
   discount_percent: number
+  margin_percent: number
   items: unknown[]
   total_area: number
   total_weight: number
   total_cost_net: number
+  total_cost_vat?: number | null
   total_sale_inc_vat: number
   total_after_discount: number
   notes: string | null
@@ -410,6 +409,14 @@ function getProductionProgress(order: Order) {
   return { stages, problemCount, hasAnyMark, progressPct }
 }
 
+// Последний пройденный этап — вместо процента в строке. Процента честно не посчитать:
+// отметки заказа неполные (4 из 10 не ставят с 30.06), по деталям цех отмечает не всё —
+// упакованные заказы показывали 30–50 % в обоих вариантах (замер 07.10).
+function lastStageLabel(stages: Partial<Record<StageKey, string | null>> | undefined): string | null {
+  for (let i = STAGES.length - 1; i >= 0; i--) if (stages?.[STAGES[i].key]) return STAGES[i].label
+  return null
+}
+
 // ── Production board ──────────────────────────────────────────────────────────
 // Counts active (non-shipped, non-quote) orders by production state.
 // Uses calcOrderProgress — single source of truth. No new API calls.
@@ -582,7 +589,6 @@ export default function B2BOrdersPage() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set())
   const [showMaterialReq, setShowMaterialReq]   = useState(false)
   const [creatingPurchaseOrder, setCreatingPurchaseOrder] = useState(false)
-  const [dcEdit, setDcEdit]   = useState<Record<number, Partial<DeadlineControl>>>({})
   const [dcSaving, setDcSaving] = useState<number | null>(null)
   const [productionDayMode, setProductionDayMode] = useState(false)
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
@@ -680,34 +686,14 @@ export default function B2BOrdersPage() {
     try {
       const sb = createClient()
       const { data: { user } } = await sb.auth.getUser()
-      let authorName: string | null = null
+      let managerName: string | null = null
       if (user?.id) {
         const { data: prof } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
-        authorName = (prof?.name as string | null) ?? user.email ?? null
+        managerName = (prof?.name as string | null) ?? user.email ?? null
       }
-      const notes = JSON.stringify({
-        status: 'quote',
-        quote_date: new Date().toISOString(),
-        manager_name: authorName ?? undefined,
-        repeated_from: order.id,
-        production_days: order.parsedNotes?.production_days ?? undefined,
-      })
-      const { data, error } = await sb.from('b2b_orders').insert({
-        client_id: order.client_id,
-        client_name: order.client_name,
-        discount_percent: order.discount_percent,
-        items: order.items,
-        total_area: order.total_area,
-        total_weight: order.total_weight,
-        total_cost_net: order.total_cost_net ?? 0,
-        total_sale_inc_vat: order.total_sale_inc_vat,
-        total_after_discount: order.total_after_discount,
-        notes,
-        created_by: user?.id ?? null,
-        created_by_name: authorName,
-      }).select('id').single()
+      const { data, error } = await duplicateOrder(sb, order, { managerName, repeatedFrom: order.id })
       if (error || !data) {
-        toast.error('Не удалось повторить заказ')
+        toast.error('Не удалось повторить заказ', error ? { detail: error } : undefined)
         return
       }
       toast.success(`Создан просчёт #${data.id} — открываю просчёты`)
@@ -918,7 +904,6 @@ export default function B2BOrdersPage() {
     }
   }
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadOrders().catch(() => setLoading(false)) }, [])
 
   const isFiltered = search.trim() !== '' || clientKey !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null
@@ -1178,34 +1163,6 @@ export default function B2BOrdersPage() {
     }
   }
 
-  async function saveDeadlineControl(orderId: number) {
-    const order = orders.find(o => o.id === orderId)
-    if (!order) return
-    setDcSaving(orderId)
-    const draft = dcEdit[orderId] ?? {}
-    const merged: DeadlineControl = {
-      ...(order.parsedNotes.deadline_control ?? {}),
-      ...draft,
-      updated_at: new Date().toISOString(),
-    }
-    const newParsed: NotesData = { ...order.parsedNotes, deadline_control: merged }
-    // Тем же точечным роутом: deadline_control — верхнеуровневый ключ notes,
-    // писать ради него весь блоб значит снова ловить гонку с отметками этапов.
-    const res = await fetch(`/api/b2b-orders/${orderId}/stages`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patch: { deadline_control: merged } }),
-    })
-    const error = res.ok ? null : new Error('deadline_control write failed')
-    setDcSaving(null)
-    if (error) {
-      toast.error('Ошибка сохранения контроля срока')
-    } else {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
-      setDcEdit(prev => { const next = { ...prev }; delete next[orderId]; return next })
-      toast.success('Контроль срока сохранён')
-    }
-  }
-
   async function quickPatchDc(orderId: number, patch: Partial<DeadlineControl>) {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
@@ -1293,7 +1250,8 @@ export default function B2BOrdersPage() {
   function toggleOrderSelection(orderId: number) {
     setSelectedOrderIds(prev => {
       const next = new Set(prev)
-      next.has(orderId) ? next.delete(orderId) : next.add(orderId)
+      if (next.has(orderId)) next.delete(orderId)
+      else next.add(orderId)
       return next
     })
   }
@@ -1600,8 +1558,9 @@ export default function B2BOrdersPage() {
     const items = order.items as Record<string, unknown>[]
     const pn = order.parsedNotes
     const quoteDate = fmtDate(order.created_at)
-    const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : null
-    const deadline = getDeadline(pn.launched_at, pn.production_days)
+    const launchIso = effectiveLaunchDate(order)
+    const launchedDate = launchIso ? fmtDate(launchIso) : null
+    const deadline = pn.deadline_date ? new Date(pn.deadline_date) : getDeadline(launchIso ?? undefined, pn.production_days)
     const deadlineStr = deadline ? deadline.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' }) : null
     const daysLeft = deadline && nowTs ? Math.ceil((deadline.getTime() - nowTs) / 86400000) : null
     const isShipped = !!pn.stages?.shipped
@@ -1625,6 +1584,90 @@ export default function B2BOrdersPage() {
       cuttingResultsMap,
     )
 
+    const hasClaim = !!(pn as unknown as { claim?: unknown }).claim
+    const hasDelivery = !!(pn as unknown as { delivery?: unknown }).delivery
+    const claimEl = (() => {
+      const claim = (order.parsedNotes as unknown as { claim?: { status?: string; reason?: string; comment?: string | null; cost?: number; fault?: string; opened_by?: string | null } }).claim
+      const open = claimOpenId === order.id
+      const FAULT: Record<string, string> = { production: 'производство', manager: 'менеджер', supplier: 'поставщик', client: 'клиент', unknown: 'не определена' }
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap text-[11px]">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Рекламация</span>
+            {claim ? (
+              <span className={`px-2 py-0.5 rounded-full font-semibold ${claim.status === 'open' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                {claim.status === 'open' ? 'открыта' : 'закрыта'} · {claim.reason}
+                {(claim.cost ?? 0) > 0 && ` · переделка ${Number(claim.cost).toLocaleString('ru-RU')} ₽`}
+                {claim.fault && claim.fault !== 'unknown' && ` · вина: ${FAULT[claim.fault]}`}
+              </span>
+            ) : (
+              <span className="text-[#9a9a95]">нет</span>
+            )}
+            <button onClick={() => { setClaimOpenId(open ? null : order.id); setClaimReason(claim?.reason ?? 'бой'); setClaimFault(claim?.fault ?? 'unknown'); setClaimComment(claim?.comment ?? ''); setClaimCost(String(claim?.cost ?? '')) }}
+              className="px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">
+              {claim ? 'Изменить' : '+ Зафиксировать'}
+            </button>
+          </div>
+          {open && (
+            <div className="flex items-end gap-2 flex-wrap bg-white border border-[#e4e4e0] rounded-xl px-3 py-2">
+              <select value={claimReason} onChange={e => setClaimReason(e.target.value)}
+                className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110]">
+                {['бой', 'размер', 'обработка', 'закалка', 'комплектность', 'сроки', 'другое'].map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <select value={claimFault} onChange={e => setClaimFault(e.target.value)}
+                className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110]">
+                <option value="unknown">вина не определена</option>
+                <option value="production">производство</option>
+                <option value="manager">менеджер</option>
+                <option value="supplier">поставщик</option>
+                <option value="client">клиент</option>
+              </select>
+              <input value={claimComment} onChange={e => setClaimComment(e.target.value)} placeholder="что случилось"
+                className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110] flex-1 min-w-[180px]" />
+              <input value={claimCost} onChange={e => setClaimCost(e.target.value)} placeholder="переделка, ₽" inputMode="numeric"
+                className="w-28 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] font-mono text-right bg-white outline-none focus:border-[#111110]" />
+              <button onClick={() => saveClaim(order.id, 'open')} disabled={claimSaving}
+                className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">Сохранить</button>
+              <button onClick={() => saveClaim(order.id, 'close')} disabled={claimSaving}
+                className="text-[11px] font-medium px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40">Закрыть</button>
+            </div>
+          )}
+        </div>
+      )
+    })()
+    const deliveryEl = (() => {
+      const d = (order.parsedNotes as unknown as { delivery?: { method?: string; address?: string | null; comment?: string | null; status?: string; date?: string; by?: string } }).delivery
+      const busy = deliverySaving === order.id
+      const STATUS_LABEL: Record<string, string> = { packed: 'Собрана', in_transit: 'В пути', delivered: 'Вручена' }
+      return (
+        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Отгрузка</span>
+          <button onClick={() => saveDelivery(order.id, { method: 'pickup' })} disabled={busy}
+            className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.method === 'pickup' ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+            Самовывоз
+          </button>
+          <input
+            value={deliveryAddr[order.id] ?? d?.address ?? ''}
+            onChange={e => setDeliveryAddr(p => ({ ...p, [order.id]: e.target.value }))}
+            placeholder="адрес доставки"
+            className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110] w-56" />
+          <button onClick={() => saveDelivery(order.id, { method: 'delivery', address: deliveryAddr[order.id] ?? d?.address ?? '' })} disabled={busy}
+            className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.method === 'delivery' ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+            Доставка
+          </button>
+          <span className="text-[#c4c4be]">·</span>
+          {(['packed', 'in_transit', 'delivered'] as const).map(st => (
+            <button key={st} onClick={() => saveDelivery(order.id, { status: st })} disabled={busy}
+              title={st === 'delivered' ? 'Проставит дату отгрузки заказа' : undefined}
+              className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.status === st ? 'bg-emerald-600 text-white border-emerald-600' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+              {STATUS_LABEL[st]}
+            </button>
+          ))}
+          {d?.by && <span className="text-[10px] text-[#9a9a95]">указал: {d.by}</span>}
+        </div>
+      )
+    })()
+
     return (
       <div className="border-t border-[#f0f0ec] px-4 py-3 space-y-3 bg-[#fafaf9]">
 
@@ -1646,12 +1689,16 @@ export default function B2BOrdersPage() {
           {/* А7: УПД — тот же документ, что в кабинете партнёра */}
           <Link href={`/b2b-quotes/${order.id}/upd`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📑 УПД</Link>
-          {/* А4: одна карточка сделки */}
-          <Link href={`/b2b-deal/${order.id}`}
-            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#111110] bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">🗂 Карточка сделки</Link>
           {/* А16: упаковочный лист на отгрузку */}
           <Link href={`/b2b-orders/${order.id}/packing`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📦 Упаковочный лист</Link>
+          <a href={`/b2b-orders/${order.id}/production-sheet`} target="_blank" rel="noopener noreferrer"
+            title="Лист для цеха с QR-кодом заказа"
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">🖨 Лист цеха</a>
+          <span className="w-px h-4 bg-[#e4e4e0]" aria-hidden />
+          {/* А4: одна карточка сделки */}
+          <Link href={`/b2b-deal/${order.id}`}
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">🗂 Карточка сделки</Link>
           {/* А3: повторить заказ — те же позиции новым просчётом */}
           <button onClick={() => repeatOrder(order)} disabled={repeating === order.id}
             title="Создать новый просчёт с этими же позициями"
@@ -1701,57 +1748,6 @@ export default function B2BOrdersPage() {
           )
         })()}
 
-        {/* А17: рекламация */}
-        {(() => {
-          const claim = (order.parsedNotes as unknown as { claim?: { status?: string; reason?: string; comment?: string | null; cost?: number; fault?: string; opened_by?: string | null } }).claim
-          const open = claimOpenId === order.id
-          const FAULT: Record<string, string> = { production: 'производство', manager: 'менеджер', supplier: 'поставщик', client: 'клиент', unknown: 'не определена' }
-          return (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 flex-wrap text-[11px]">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Рекламация</span>
-                {claim ? (
-                  <span className={`px-2 py-0.5 rounded-full font-semibold ${claim.status === 'open' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
-                    {claim.status === 'open' ? 'открыта' : 'закрыта'} · {claim.reason}
-                    {(claim.cost ?? 0) > 0 && ` · переделка ${Number(claim.cost).toLocaleString('ru-RU')} ₽`}
-                    {claim.fault && claim.fault !== 'unknown' && ` · вина: ${FAULT[claim.fault]}`}
-                  </span>
-                ) : (
-                  <span className="text-[#9a9a95]">нет</span>
-                )}
-                <button onClick={() => { setClaimOpenId(open ? null : order.id); setClaimReason(claim?.reason ?? 'бой'); setClaimFault(claim?.fault ?? 'unknown'); setClaimComment(claim?.comment ?? ''); setClaimCost(String(claim?.cost ?? '')) }}
-                  className="px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">
-                  {claim ? 'Изменить' : '+ Зафиксировать'}
-                </button>
-              </div>
-              {open && (
-                <div className="flex items-end gap-2 flex-wrap bg-white border border-[#e4e4e0] rounded-xl px-3 py-2">
-                  <select value={claimReason} onChange={e => setClaimReason(e.target.value)}
-                    className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110]">
-                    {['бой', 'размер', 'обработка', 'закалка', 'комплектность', 'сроки', 'другое'].map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                  <select value={claimFault} onChange={e => setClaimFault(e.target.value)}
-                    className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110]">
-                    <option value="unknown">вина не определена</option>
-                    <option value="production">производство</option>
-                    <option value="manager">менеджер</option>
-                    <option value="supplier">поставщик</option>
-                    <option value="client">клиент</option>
-                  </select>
-                  <input value={claimComment} onChange={e => setClaimComment(e.target.value)} placeholder="что случилось"
-                    className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110] flex-1 min-w-[180px]" />
-                  <input value={claimCost} onChange={e => setClaimCost(e.target.value)} placeholder="переделка, ₽" inputMode="numeric"
-                    className="w-28 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] font-mono text-right bg-white outline-none focus:border-[#111110]" />
-                  <button onClick={() => saveClaim(order.id, 'open')} disabled={claimSaving}
-                    className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">Сохранить</button>
-                  <button onClick={() => saveClaim(order.id, 'close')} disabled={claimSaving}
-                    className="text-[11px] font-medium px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40">Закрыть</button>
-                </div>
-              )}
-            </div>
-          )
-        })()}
-
         {/* A23: остаток по заказу — из payments. Молчит, если платежей нет вовсе. */}
         {(() => {
           const rem = orderRemainder(order)
@@ -1776,108 +1772,14 @@ export default function B2BOrdersPage() {
           )
         })()}
 
-        {/* А16: способ получения и статус отгрузки */}
-        {(() => {
-          const d = (order.parsedNotes as unknown as { delivery?: { method?: string; address?: string | null; comment?: string | null; status?: string; date?: string; by?: string } }).delivery
-          const busy = deliverySaving === order.id
-          const STATUS_LABEL: Record<string, string> = { packed: 'Собрана', in_transit: 'В пути', delivered: 'Вручена' }
-          return (
-            <div className="flex items-center gap-2 flex-wrap text-[11px]">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Отгрузка</span>
-              <button onClick={() => saveDelivery(order.id, { method: 'pickup' })} disabled={busy}
-                className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.method === 'pickup' ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
-                Самовывоз
-              </button>
-              <input
-                value={deliveryAddr[order.id] ?? d?.address ?? ''}
-                onChange={e => setDeliveryAddr(p => ({ ...p, [order.id]: e.target.value }))}
-                placeholder="адрес доставки"
-                className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110] w-56" />
-              <button onClick={() => saveDelivery(order.id, { method: 'delivery', address: deliveryAddr[order.id] ?? d?.address ?? '' })} disabled={busy}
-                className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.method === 'delivery' ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
-                Доставка
-              </button>
-              <span className="text-[#c4c4be]">·</span>
-              {(['packed', 'in_transit', 'delivered'] as const).map(st => (
-                <button key={st} onClick={() => saveDelivery(order.id, { status: st })} disabled={busy}
-                  title={st === 'delivered' ? 'Проставит дату отгрузки заказа' : undefined}
-                  className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.status === st ? 'bg-emerald-600 text-white border-emerald-600' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
-                  {STATUS_LABEL[st]}
-                </button>
-              ))}
-              {d?.by && <span className="text-[10px] text-[#9a9a95]">указал: {d.by}</span>}
-            </div>
-          )
-        })()}
-
-        {/* Номера заказа */}
-        {editNumId === order.id ? (
-          <div className="flex items-end gap-2 flex-wrap">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Наш номер</p>
-              <input
-                autoFocus
-                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
-                value={editCustomNum}
-                onChange={e => setEditCustomNum(e.target.value)}
-                placeholder="МГ-001"
-                onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
-              />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">№ клиента</p>
-              <input
-                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
-                value={editClientNum}
-                onChange={e => setEditClientNum(e.target.value)}
-                placeholder="необязательно"
-                onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
-              />
-            </div>
-            <button
-              onClick={() => saveNum(order.id)}
-              disabled={savingNum}
-              className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
-              {savingNum ? '...' : 'Сохранить'}
-            </button>
-            <button onClick={() => setEditNumId(null)} className="px-3 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#111110] transition-colors">
-              Отмена
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 flex-wrap">
-            {order.custom_number && (
-              isOwner ? (
-                <Link href={`/cfo/order-economics/${order.id}`} title="Открыть экономику заказа (себестоимость, расход, маржа)"
-                  className="text-[13px] font-bold font-mono text-[#111110] underline decoration-dotted underline-offset-2 hover:text-blue-600">
-                  {order.custom_number} ₽
-                </Link>
-              ) : (
-                <span className="text-[13px] font-bold font-mono text-[#111110]">{order.custom_number}</span>
-              )
-            )}
-            {order.client_order_number && (
-              <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">кл. {order.client_order_number}</span>
-            )}
-            <button
-              onClick={() => startEditNum(order)}
-              className="text-[11px] text-[#9a9a95] hover:text-[#111110] underline underline-offset-2 transition-colors">
-              {order.custom_number ? 'Изменить номера' : '+ Добавить номер заказа'}
-            </button>
-            <button
-              onClick={() => generateNumber(order.id)}
-              disabled={generatingNum === order.id}
-              className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40 transition-colors">
-              {generatingNum === order.id ? '...' : '⚡ Сгенерировать номер'}
-            </button>
-          </div>
-        )}
+        {hasClaim && claimEl}
+        {hasDelivery && deliveryEl}
 
         {/* Этапы производства */}
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Этапы производства</p>
           <div className="flex flex-wrap gap-1">
-            {STAGES.map(stage => {
+            {visibleStages(pn.stages).map(stage => {
               const doneDate = pn.stages?.[stage.key]
               const done = !!doneDate
               return (
@@ -1902,54 +1804,10 @@ export default function B2BOrdersPage() {
           </div>
         </div>
 
-        {/* Статус материала */}
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Материал</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            {(() => {
-              const status = (pn.material_status ?? 'not_checked') as MaterialStatus
-              // Fallback: неизвестное значение не должно ронять карточку (краш 004-1)
-              const meta = MATERIAL_STATUS_META[status] ?? MATERIAL_STATUS_META.not_checked
-              return (
-                <>
-                  <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border whitespace-nowrap ${meta.badge}`}>
-                    {meta.label}
-                  </span>
-                  <select
-                    value={status}
-                    onChange={e => updateMaterialStatus(order.id, e.target.value as MaterialStatus)}
-                    className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1 text-[#111110] outline-none focus:border-[#111110] bg-white cursor-pointer">
-                    {(Object.entries(MATERIAL_STATUS_META) as [MaterialStatus, { label: string; badge: string }][]).map(([val, m]) => (
-                      <option key={val} value={val}>{m.label}</option>
-                    ))}
-                  </select>
-                </>
-              )
-            })()}
-          </div>
-          {pn.material_status_updated_at && (
-            <p className="text-[10px] text-[#b0b0aa] mt-1">
-              Обновлено: {new Date(pn.material_status_updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-            </p>
-          )}
-        </div>
-
-        {/* Быстрые действия */}
-        <div className="flex gap-2">
-          <a
-            href={`/b2b-orders/${order.id}/production-sheet`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] hover:bg-[#f8f8f7] transition-colors"
-          >
-            🖨 Лист
-          </a>
-        </div>
-
         {/* Прогресс по деталям */}
         {(() => {
           const prog = getProductionProgress(order)
-          const pctColor = prog.progressPct === 100
+          const pctColor = pn.stages?.packaged || prog.progressPct === 100
             ? 'text-emerald-600'
             : prog.progressPct >= 50
             ? 'text-blue-600'
@@ -1963,7 +1821,7 @@ export default function B2BOrdersPage() {
                   Производство
                 </p>
                 <span className={`text-[11px] font-bold ${pctColor}`}>
-                  {!prog.hasAnyMark ? 'не начато' : `${prog.progressPct}%`}
+                  {pn.stages?.packaged ? 'заказ упакован' : !prog.hasAnyMark ? 'по деталям не отмечено' : `${prog.progressPct}% по деталям`}
                 </span>
               </div>
               {!prog.hasAnyMark ? (
@@ -2008,9 +1866,9 @@ export default function B2BOrdersPage() {
               <span className="font-medium text-emerald-700">{launchedDate}</span>
             </div>
           )}
-          {deadlineStr && pn.production_days && (
+          {deadlineStr && (
             <div>
-              <span className="text-[#9a9a95]">Срок ({pn.production_days} дн.): </span>
+              <span className="text-[#9a9a95]">{pn.deadline_date ? 'Срок сдачи' : `Срок (${pn.production_days} дн.)`}: </span>
               <span className={`font-semibold ${daysLeft !== null && daysLeft < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
                 {deadlineStr}
                 {daysLeft !== null && !isShipped && (
@@ -2072,62 +1930,170 @@ export default function B2BOrdersPage() {
           </div>
         </div>
 
-        {/* ПРОИЗВОДСТВЕННАЯ СВОДКА — свёрнута по умолчанию (решение владельца 14.07) */}
-        <details className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden group">
-          <summary className="px-3 py-1.5 bg-[#f8f8f7] border-b border-[#e4e4e0] cursor-pointer list-none flex items-center gap-1.5">
-            <span className="text-[10px] text-[#9a9a95] group-open:rotate-90 transition-transform">▸</span>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Производственная сводка</span>
+        {/* Редкое — свёрнуто (замер 07.10: номера правят разово, материал и отметки закупки — последний раз 30.06,
+            рекламацию и логистику не заполняли ни разу). Записи на заказе не прячутся: см. claimEl/deliveryEl выше. */}
+        <details className="group/more">
+          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden select-none inline-flex items-center gap-1 text-[11px] text-[#6b6b66] hover:text-[#111110]">
+            <span className="text-[9px] transition-transform group-open/more:rotate-90">▶</span>
+            Ещё: номера, материал, сводка{!hasClaim ? ', рекламация' : ''}{!hasDelivery ? ', отгрузка' : ''}
           </summary>
-          <div className="px-3 py-2 space-y-1.5 text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-[#9a9a95]">Площадь</span>
-              <span className="font-semibold text-[#111110]">{(order.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[#9a9a95]">Вес</span>
-              <span className="font-semibold text-[#111110]">{(order.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг</span>
-            </div>
-            {summary.rows.length > 0 && summary.totalSheets > 0 && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-[#9a9a95]">Листы</span>
-                  <span className="font-semibold text-[#111110]">{summary.totalSheets} шт</span>
+          <div className="mt-2 space-y-3 pl-3 border-l-2 border-[#ecece8]">
+            {/* Номера заказа */}
+            {editNumId === order.id ? (
+              <div className="flex items-end gap-2 flex-wrap">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Наш номер</p>
+                  <input
+                    autoFocus
+                    className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
+                    value={editCustomNum}
+                    onChange={e => setEditCustomNum(e.target.value)}
+                    placeholder="МГ-001"
+                    onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[#9a9a95]">Стоимость листов</span>
-                  <span className="font-mono font-semibold text-[#111110]">{fmt(summary.totalSheetCost)}</span>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">№ клиента</p>
+                  <input
+                    className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
+                    value={editClientNum}
+                    onChange={e => setEditClientNum(e.target.value)}
+                    placeholder="необязательно"
+                    onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
+                  />
                 </div>
-                {summary.totalTemperingCost > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-[#9a9a95]">Закалка</span>
-                    <span className="font-mono font-semibold text-amber-700">{fmt(summary.totalTemperingCost)}</span>
-                  </div>
+                <button
+                  onClick={() => saveNum(order.id)}
+                  disabled={savingNum}
+                  className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  {savingNum ? '...' : 'Сохранить'}
+                </button>
+                <button onClick={() => setEditNumId(null)} className="px-3 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#111110] transition-colors">
+                  Отмена
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                {order.custom_number && (
+                  isOwner ? (
+                    <Link href={`/cfo/order-economics/${order.id}`} title="Открыть экономику заказа (себестоимость, расход, маржа)"
+                      className="text-[13px] font-bold font-mono text-[#111110] underline decoration-dotted underline-offset-2 hover:text-blue-600">
+                      {order.custom_number} <span className="text-[10px] font-sans opacity-50">↗ экономика</span>
+                    </Link>
+                  ) : (
+                    <span className="text-[13px] font-bold font-mono text-[#111110]">{order.custom_number}</span>
+                  )
                 )}
-                <div className="flex justify-between border-t border-[#f0f0ec] pt-1.5">
-                  <span className="text-[#6b6b66] font-medium">Себестоимость материала</span>
-                  <span className="font-mono font-semibold text-[#111110]">{fmt(summary.grandTotal)}</span>
-                </div>
-              </>
+                {order.client_order_number && (
+                  <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">кл. {order.client_order_number}</span>
+                )}
+                <button
+                  onClick={() => startEditNum(order)}
+                  className="text-[11px] text-[#9a9a95] hover:text-[#111110] underline underline-offset-2 transition-colors">
+                  {order.custom_number ? 'Изменить номера' : '+ Добавить номер заказа'}
+                </button>
+                <button
+                  onClick={() => generateNumber(order.id)}
+                  disabled={generatingNum === order.id}
+                  className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40 transition-colors">
+                  {generatingNum === order.id ? '...' : '⚡ Сгенерировать номер'}
+                </button>
+              </div>
             )}
-            <div className="flex justify-between border-t border-[#e4e4e0] pt-1.5">
-              <span className="font-semibold text-[#111110]">Итого заказ</span>
-              <span className="font-mono font-bold text-[#111110]">{fmt(finalPrice)}</span>
+
+            {/* Статус материала */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Материал</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {(() => {
+                  const status = (pn.material_status ?? 'not_checked') as MaterialStatus
+                  // Fallback: неизвестное значение не должно ронять карточку (краш 004-1)
+                  const meta = MATERIAL_STATUS_META[status] ?? MATERIAL_STATUS_META.not_checked
+                  return (
+                    <>
+                      <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border whitespace-nowrap ${meta.badge}`}>
+                        {meta.label}
+                      </span>
+                      <select
+                        value={status}
+                        onChange={e => updateMaterialStatus(order.id, e.target.value as MaterialStatus)}
+                        className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1 text-[#111110] outline-none focus:border-[#111110] bg-white cursor-pointer">
+                        {(Object.entries(MATERIAL_STATUS_META) as [MaterialStatus, { label: string; badge: string }][]).map(([val, m]) => (
+                          <option key={val} value={val}>{m.label}</option>
+                        ))}
+                      </select>
+                    </>
+                  )
+                })()}
+              </div>
+              {pn.material_status_updated_at && (
+                <p className="text-[10px] text-[#b0b0aa] mt-1">
+                  Обновлено: {new Date(pn.material_status_updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
             </div>
-          </div>
-          {/* Материалы (разбивка) */}
-          {summary.rows.length > 0 && summary.totalSheets > 0 && (
-            <div className="border-t border-[#f0f0ec] px-3 py-2 space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Материалы</p>
-              {summary.rows.map(row => (
-                <div key={row.matKey} className="flex items-center justify-between text-[11px]">
-                  <span className="text-[#111110] font-medium">{row.matLabel}</span>
-                  <span className="text-[#6b6b66] font-mono text-[10px]">
-                    {row.sheetsNeeded} л. · {row.totalAreaNet.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²
-                  </span>
+
+            {/* ПРОИЗВОДСТВЕННАЯ СВОДКА — свёрнута по умолчанию (решение владельца 14.07) */}
+            <details className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden group">
+              <summary className="px-3 py-1.5 bg-[#f8f8f7] border-b border-[#e4e4e0] cursor-pointer list-none flex items-center gap-1.5">
+                <span className="text-[10px] text-[#9a9a95] group-open:rotate-90 transition-transform">▸</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Производственная сводка</span>
+              </summary>
+              <div className="px-3 py-2 space-y-1.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-[#9a9a95]">Площадь</span>
+                  <span className="font-semibold text-[#111110]">{(order.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="flex justify-between">
+                  <span className="text-[#9a9a95]">Вес</span>
+                  <span className="font-semibold text-[#111110]">{(order.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг</span>
+                </div>
+                {summary.rows.length > 0 && summary.totalSheets > 0 && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-[#9a9a95]">Листы</span>
+                      <span className="font-semibold text-[#111110]">{summary.totalSheets} шт</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#9a9a95]">Стоимость листов</span>
+                      <span className="font-mono font-semibold text-[#111110]">{fmt(summary.totalSheetCost)}</span>
+                    </div>
+                    {summary.totalTemperingCost > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-[#9a9a95]">Закалка</span>
+                        <span className="font-mono font-semibold text-amber-700">{fmt(summary.totalTemperingCost)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-[#f0f0ec] pt-1.5">
+                      <span className="text-[#6b6b66] font-medium">Себестоимость материала</span>
+                      <span className="font-mono font-semibold text-[#111110]">{fmt(summary.grandTotal)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between border-t border-[#e4e4e0] pt-1.5">
+                  <span className="font-semibold text-[#111110]">Итого заказ</span>
+                  <span className="font-mono font-bold text-[#111110]">{fmt(finalPrice)}</span>
+                </div>
+              </div>
+              {/* Материалы (разбивка) */}
+              {summary.rows.length > 0 && summary.totalSheets > 0 && (
+                <div className="border-t border-[#f0f0ec] px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Материалы</p>
+                  {summary.rows.map(row => (
+                    <div key={row.matKey} className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#111110] font-medium">{row.matLabel}</span>
+                      <span className="text-[#6b6b66] font-mono text-[10px]">
+                        {row.sheetsNeeded} л. · {row.totalAreaNet.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </details>
+
+            {!hasClaim && claimEl}
+            {!hasDelivery && deliveryEl}
+          </div>
         </details>
 
         {userNotes && (
@@ -2398,7 +2364,6 @@ export default function B2BOrdersPage() {
                 const pn = order.parsedNotes
                 const isOpen = expanded === order.id
                 const finalPrice = getFinalPrice(order)
-                const progress = calcProgress(pn.stages ?? {})
                 const ds = getDeadlineStatus(order)
                 const payStatus = getOrderPayStatus(order)
                 const dc = pn.deadline_control
@@ -2452,10 +2417,8 @@ export default function B2BOrdersPage() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {msgRowButton(order)}
-                        {!pn.stages?.shipped && progress > 0 && (
-                          <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
-                            {progress}%
-                          </span>
+                        {!pn.stages?.shipped && lastStageLabel(pn.stages) && (
+                          <span className="text-[10px] text-[#9a9a95]">{lastStageLabel(pn.stages)}</span>
                         )}
                         <span className="text-[12px] font-semibold font-mono text-[#111110]">{fmt(finalPrice)}</span>
                         <svg className={`w-3 h-3 text-[#c4c4be] flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2554,7 +2517,6 @@ export default function B2BOrdersPage() {
                 const pn = order.parsedNotes
                 const isShipped = !!pn.stages?.shipped
                 const finalPrice = getFinalPrice(order)
-                const progress = calcProgress(pn.stages ?? {})
                 const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : fmtDate(order.created_at)
                 const ds = getDeadlineStatus(order)
                 const payStatus = getOrderPayStatus(order)
@@ -2579,7 +2541,7 @@ export default function B2BOrdersPage() {
                               <Link href={`/cfo/order-economics/${order.id}`} onClick={e => e.stopPropagation()}
                                 title="Экономика заказа: себестоимость, расход, маржа"
                                 className="text-[13px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-px rounded font-mono flex-shrink-0 hover:bg-blue-50 hover:text-blue-700 transition-colors">
-                                {order.custom_number?.trim() || `00${order.id}`} ₽
+                                {order.custom_number?.trim() || `00${order.id}`}<span className="ml-1 text-[10px] font-sans opacity-40">↗</span>
                               </Link>
                             ) : (
                               <span className="text-[13px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-px rounded font-mono flex-shrink-0">
@@ -2614,11 +2576,6 @@ export default function B2BOrdersPage() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {msgRowButton(order)}
-                        {!isShipped && progress > 0 && (
-                          <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
-                            {progress}%
-                          </span>
-                        )}
                         {(() => {
                           // A23: компактный признак долга в свёрнутой строке — молчит без платежей
                           const rem = orderRemainder(order)
@@ -2647,7 +2604,7 @@ export default function B2BOrdersPage() {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {STAGES.map(stage => {
+                      {visibleStages(pn.stages).map(stage => {
                         const doneDate = pn.stages?.[stage.key]
                         const done = !!doneDate
                         return (
@@ -2744,7 +2701,6 @@ export default function B2BOrdersPage() {
                         const payStatus = getOrderPayStatus(order)
                         const finalPrice = getFinalPrice(order)
                         const lastDoneIdx = STAGES.map((s, i) => pn.stages?.[s.key] ? i : -1).reduce((max, i) => Math.max(max, i), -1)
-                        const progress = calcProgress(pn.stages ?? {})
 
                         return (
                           <div key={order.id} className={`border-l-4 ${isShipped ? 'border-l-emerald-500' : 'border-l-red-400'}`}>
@@ -2767,7 +2723,7 @@ export default function B2BOrdersPage() {
                                       <Link href={`/cfo/order-economics/${order.id}`} onClick={e => e.stopPropagation()}
                                         title="Экономика заказа: себестоимость, расход, маржа"
                                         className="text-[15px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded flex-shrink-0 hover:bg-blue-50 hover:text-blue-700 transition-colors">
-                                        {order.custom_number?.trim() || `00${order.id}`} ₽
+                                        {order.custom_number?.trim() || `00${order.id}`}<span className="ml-1 text-[10px] font-sans opacity-40">↗</span>
                                       </Link>
                                     ) : (
                                       <span className="text-[15px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded flex-shrink-0">
@@ -2810,11 +2766,6 @@ export default function B2BOrdersPage() {
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 {msgRowButton(order)}
-                                {!isShipped && progress > 0 && (
-                                  <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
-                                    {progress}%
-                                  </span>
-                                )}
                                 <div className="text-right">
                                   <p className="text-[13px] font-semibold text-[#111110]">{fmt(finalPrice)}</p>
                                   {(order.discount_percent ?? 0) > 0 && (
