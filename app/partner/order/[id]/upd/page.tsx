@@ -3,33 +3,19 @@
 import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
 import { renderDocCanvas } from '@/lib/pdfCapture'
-import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import UpdDocument from '@/components/UpdDocument'
-import type { UpdRegistered } from '@/lib/b2b/updRegistry'
-import type { InvoiceOrder, InvoiceRequisites } from '@/components/InvoiceDocument'
+import { issuedUpdView, type UpdIssued } from '@/lib/b2b/updView'
 
-// A11: УПД в кабинете партнёра для отгруженного заказа. Данные — тот же
-// /api/partner/order/[id]/invoice-data (гейт can_self_invoice + запущен). Реквизиты
-// покупателя из своих юрлиц (read-only). Скачивание PDF (альбомная A4).
+// A11: УПД в кабинете партнёра. Данные — /api/partner/order/[id]/invoice-data (гейт
+// can_self_invoice + запущен). С этапа 7 docs/b2b/ORDER_PANEL_ROUTE.md партнёр видит только
+// выданный УПД — копию, закреплённую при выдаче; черновик из заказа сюда не попадает: его
+// номер не совпал бы с настоящим документом.
 
-const EMPTY: InvoiceRequisites = { full_name: '', inn: '', kpp: '', ogrn: '', legal_address: '', bank_account: '', bank_name: '', bik: '', corr_account: '', supply_contract_no: '', supply_contract_date: '' }
-function toReq(src: Record<string, unknown> | null | undefined): InvoiceRequisites {
-  const s = (k: string) => (src?.[k] as string | null | undefined) ?? ''
-  return {
-    full_name: s('full_name') || s('name'), inn: s('inn'), kpp: s('kpp'), ogrn: s('ogrn'), legal_address: s('legal_address'),
-    bank_account: s('bank_account'), bank_name: s('bank_name'), bik: s('bik'), corr_account: s('corr_account'),
-    supply_contract_no: s('supply_contract_no'), supply_contract_date: s('supply_contract_date'),
-  }
-}
-
-type Resp = { order: InvoiceOrder & { client_name?: string }; client: Record<string, unknown> | null; entities: B2BLegalEntity[]; updRegistered?: UpdRegistered | null }
+type Resp = { order: { id: number; custom_number: string | null }; updIssued?: UpdIssued | null }
 
 export default function PartnerUpdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [data, setData] = useState<Resp | null>(null)
-  const [req, setReq] = useState<InvoiceRequisites>(EMPTY)
-  const [entityId, setEntityId] = useState<number | null>(null)
-  const [buyerName, setBuyerName] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const docRef = useRef<HTMLDivElement>(null)
@@ -37,23 +23,15 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     fetch(`/api/partner/order/${id}/invoice-data`).then(async r => {
       if (!r.ok) { const d = await r.json().catch(() => ({})); setError(d.error || 'Документ недоступен'); setLoading(false); return }
-      const d = await r.json() as Resp
-      setData(d)
-      setBuyerName(d.order.client_name || (d.client?.name as string) || 'Клиент')
-      const def = d.entities.find(e => e.is_default) ?? d.entities[0] ?? null
-      if (def) { setEntityId(def.id); setReq(toReq(def as unknown as Record<string, unknown>)) }
-      else if (d.client) setReq(toReq(d.client))
+      setData(await r.json() as Resp)
       setLoading(false)
     }).catch(() => { setError('Сеть недоступна'); setLoading(false) })
   }, [id])
 
-  function selectEntity(val: string) {
-    const e = data?.entities.find(x => x.id === Number(val))
-    if (e) { setEntityId(e.id); setReq(toReq(e as unknown as Record<string, unknown>)) }
-  }
+  const issued = data?.updIssued ?? null
 
   async function downloadPdf() {
-    if (!docRef.current || !data) return
+    if (!docRef.current || !issued) return
     try {
       const jspdf = await import('jspdf')
       const canvas = await renderDocCanvas(docRef.current)
@@ -65,17 +43,17 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
       pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
       left -= ph
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
-      pdf.save(`УПД-${data.order.custom_number?.trim() || String(data.order.id).padStart(5, '0')}.pdf`)
+      pdf.save(`УПД-${issued.number}-${issued.year}.pdf`)
     } catch {
       alert('Не удалось сформировать PDF. Используйте «Печать» → Сохранить как PDF.')
     }
   }
 
   if (loading) return <div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div>
-  if (error || !data) return (
+  if (error || !data || !issued) return (
     <div className="wrap"><div className="note">
-      <div className="t">{error === 'Счёт выставляет менеджер' ? 'Документ выставляет менеджер' : 'Документ недоступен'}</div>
-      <div className="s">{error === 'Счёт выставляет менеджер' ? 'УПД по этому заказу пришлёт ваш менеджер M-Glass.' : (error || 'Попробуйте позже.')}</div>
+      <div className="t">{error === 'Счёт выставляет менеджер' || !error ? 'УПД выдаёт менеджер' : 'Документ недоступен'}</div>
+      <div className="s">{error === 'Счёт выставляет менеджер' || !error ? 'УПД по этому заказу ещё не выдан — менеджер M-Glass выдаёт его при отгрузке, после этого он появится здесь.' : error}</div>
       <Link href={`/partner/order/${id}`} className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← К заказу</Link>
     </div></div>
   )
@@ -85,16 +63,11 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
       <style>{'body{background:#ececea}'}</style>
       <div className="no-print" style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 16px 0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <Link href={`/partner/order/${id}`} className="ghost">‹ К заказу</Link>
-        {data.entities.length > 1 && (
-          <select value={entityId ?? ''} onChange={e => selectEntity(e.target.value)} className="ghost" style={{ padding: '8px 12px' }}>
-            {data.entities.map(e => <option key={e.id} value={e.id}>{entityTitle(e)}{e.is_default ? ' · основное' : ''}</option>)}
-          </select>
-        )}
         <button onClick={() => document.fonts.ready.then(() => window.print())} className="ghost" style={{ marginLeft: 'auto' }}>🖨 Печать</button>
         <button onClick={downloadPdf} className="primary">⬇ Скачать PDF</button>
       </div>
 
-      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} registered={data.updRegistered ?? null} />
+      <UpdDocument ref={docRef} view={issuedUpdView(issued)} />
     </>
   )
 }

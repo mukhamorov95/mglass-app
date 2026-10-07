@@ -3,7 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { documentSafeOrder } from '@/lib/b2b/publicQuote'
-import { loadUpdRegistered } from '@/lib/b2b/updRegistry'
+import { loadUpdIssued } from '@/lib/b2b/updRegistry'
 
 // Данные счёта-спецификации для кабинета партнёра. Строго по своему клиенту.
 // Открывается ТОЛЬКО если владелец включил самообслуживание (b2b_clients.can_self_invoice)
@@ -70,8 +70,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // построению. УПД снова видит shipped_date/launched_at, счёт — quote_date/срок.
   const safeOrder = documentSafeOrder(order as Record<string, unknown>)
 
-  // Номер УПД выдаёт менеджер при печати; партнёр видит тот же номер и дату.
-  const updRegistered = await loadUpdRegistered(svc, oid).catch(() => null)
+  // УПД партнёр видит только выданный — снимок, сохранённый при выдаче: в нём строки и
+  // цены документа, покупатель (его же юрлицо) и наши реквизиты, себестоимости нет.
+  const updIssued = await loadUpdIssued(svc, oid).catch(() => null)
 
-  return NextResponse.json({ order: safeOrder, client: safeClient, entities: ents ?? [], updRegistered })
+  return NextResponse.json({ order: safeOrder, client: safeClient, entities: ents ?? [], updIssued })
 }

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { writeLogForCurrentUser } from '@/lib/activityLog'
 import { loadOrderWithAccess } from '@/lib/b2bOrderAccess'
-import { loadUpdRegistered } from '@/lib/b2b/updRegistry'
 
 // Данные для «Счёт-спецификации»: заказ + юрлица покупателя (b2b_client_legal_entities).
 // Одному клиенту можно завести несколько юрлиц; при счёте выбирается одно.
@@ -40,14 +39,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Для УПД: плательщик из выставленного счёта (не основное юрлицо).
   // Доступ к заказу проверен выше — читаем сервисом только эти поля.
   const svc = createServiceClient()
-  const [inv, updRegistered] = await Promise.all([
-    svc.from('invoices').select('payer_entity_id, created_at').contains('order_ids', [order.id])
-      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    loadUpdRegistered(svc, order.id as number),
-  ])
+  const inv = await svc.from('invoices').select('payer_entity_id, created_at').contains('order_ids', [order.id])
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
   const payerEntityId = (inv.data?.payer_entity_id as number | null | undefined) ?? null
 
-  return NextResponse.json({ order, client, entities, payerEntityId, updRegistered })
+  return NextResponse.json({ order, client, entities, payerEntityId })
 }
 
 const REQUISITE_FIELDS = [

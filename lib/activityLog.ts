@@ -18,6 +18,8 @@ export type LogAction =
   | 'calculation.create'
   | 'calculation.update'
   | 'pdf.download'
+  | 'upd.issue'
+  | 'upd.series_set'
 
 // Автор — только из проверенной сессии: функции, которой можно передать чужой user_id,
 // больше нет. Пишет service-role, потому что у ролей пользователей прав на запись в
