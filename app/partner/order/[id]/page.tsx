@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import DrawingFiles from './DrawingFiles'
+import type { PointStage } from '@/lib/partner/pointPay'
 
 // Карточка заказа кабинета (дизайн из прототипа, .pcab).
 type Item = { material: string; thickness: number; width: number; height: number; quantity: number; tempering: boolean; facet: boolean; triplex: boolean; price: number }
@@ -13,6 +14,7 @@ type Order = {
   paymentStatus?: 'paid' | 'awaiting' | null
   onlinePayEnabled?: boolean
   canInvoice?: boolean
+  point?: PointStage | null
   updIssued?: boolean
   upd?: { number: number; year: number; docDate: string } | null
   drawingApproval?: { status: 'approved' | 'rework'; comment: string | null; at: string | null } | null
@@ -125,6 +127,17 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
           <span className={`pill ${pillCls}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>{statusText}</span>
         </div>
       </div>
+
+      {o.point && (
+        <div className="info" style={{ marginTop: 0, marginBottom: 14 }}>
+          <span>{o.point === 'paid' ? '✓' : '₽'}</span>
+          <span>{o.point === 'check'
+            ? <>Заказ уходит в работу после 100 % оплаты. Менеджер проверяет сумму — как только выставит счёт, он откроется здесь.</>
+            : o.point === 'await_payment'
+              ? <><b>Ждём вашей оплаты.</b> Заказ уйдёт в работу после 100 % оплаты — счёт-спецификация ниже.</>
+              : <>Оплата получена — менеджер запускает заказ в работу.</>}</span>
+        </div>
+      )}
 
       {o.recalcNote && <div className="ord" style={{ boxShadow: 'none' }}><div className="recalc" style={{ marginTop: 0 }}>✎ Пересчитано менеджером: {o.recalcNote}</div></div>}
 

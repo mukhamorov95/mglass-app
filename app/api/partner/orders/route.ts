@@ -6,6 +6,8 @@ import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
 import { readPaged } from '@/lib/partner/readPaged'
 import { invoiceState, type UpdShort } from '@/lib/partner/documents'
 import { loadUpdByOrders } from '@/lib/partner/updByOrders'
+import { loadInvoicedOrders, markedPaid } from '@/lib/partner/orderMoney'
+import { pointStage } from '@/lib/partner/pointPay'
 
 // Кабинет партнёра — «мои заказы» (read-only, строго по своему клиенту).
 // Клиент определяется по b2b_clients.user_id = auth.uid(). Никогда не отдаёт
@@ -24,7 +26,7 @@ export async function GET() {
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
   // Привязанный клиент (первичный владелец ИЛИ участник команды). Нет → «не привязан».
-  const client = await resolvePartnerClient<{ id: number; name: string; can_self_invoice: boolean | null }>(svc, user.id, 'id,name,can_self_invoice')
+  const client = await resolvePartnerClient<{ id: number; name: string; can_self_invoice: boolean | null; is_point: boolean | null }>(svc, user.id, 'id,name,can_self_invoice,is_point')
   if (!client) return NextResponse.json({ linked: false, client: null, orders: [] })
 
   // Все состояния: просчёт → отправлен в работу → в работе → отгружен.
@@ -47,6 +49,14 @@ export async function GET() {
   let updError: string | null = null
   try { upds = await loadUpdByOrders(svc, data.map(o => o.id as number)) }
   catch (e) { updError = e instanceof Error ? e.message : String(e) }
+
+  // Точке счёт нужен до запуска — читаем реестр счетов только для неё.
+  const isPoint = client.is_point === true
+  let invoiced = new Set<number>()
+  if (isPoint) {
+    try { invoiced = await loadInvoicedOrders(svc, data.map(o => o.id as number)) }
+    catch (e) { return NextResponse.json({ error: `Реестр счетов не прочитан: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  }
 
   const orders = data.map((o: Record<string, unknown>) => {
     const pn = parseNotes(o.notes as string | null)
@@ -82,7 +92,8 @@ export async function GET() {
       recalcNote: history.length > 0 ? lastComment : null,
       summary,
       positions: items.length,
-      invoice: invoiceState({ launched: p.launched, canSelfInvoice: !!client.can_self_invoice }),
+      invoice: invoiceState({ launched: p.launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced: invoiced.has(o.id as number) }),
+      point: pointStage({ isPoint, launched: p.launched, submitted: lane === 'submitted', invoiced: invoiced.has(o.id as number), paid: markedPaid(pn) }),
       upd: upds.get(o.id as number) ?? null,
     }
   })

@@ -5,7 +5,9 @@ import { resolvePartnerClient } from '@/lib/partnerClient'
 import { paymentsEnabled } from '@/lib/payments/provider'
 import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
-import { isStageDone, stagesOf } from '@/lib/b2b/stageDone'
+import { loadInvoicedOrders, markedPaid } from '@/lib/partner/orderMoney'
+import { invoiceState } from '@/lib/partner/documents'
+import { pointStage } from '@/lib/partner/pointPay'
 import { loadUpdIssued } from '@/lib/b2b/updRegistry'
 
 // Карточка заказа для кабинета. СТРОГО по своему client_id. Отдаём только
@@ -28,8 +30,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number; name: string; full_name: string | null; inn: string | null; kpp: string | null; ogrn: string | null; legal_address: string | null; bank_account: string | null; bank_name: string | null; bik: string | null; corr_account: string | null; can_self_invoice: boolean | null }>(
-    svc, user.id, 'id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account, can_self_invoice')
+  const client = await resolvePartnerClient<{ id: number; name: string; full_name: string | null; inn: string | null; kpp: string | null; ogrn: string | null; legal_address: string | null; bank_account: string | null; bank_name: string | null; bik: string | null; corr_account: string | null; can_self_invoice: boolean | null; is_point: boolean | null }>(
+    svc, user.id, 'id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account, can_self_invoice, is_point')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
   const { data: o } = await svc.from('b2b_orders')
@@ -75,12 +77,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     ? { method: dl.method as 'pickup' | 'delivery', address: dl.address ?? null, comment: dl.comment ?? null, status: dl.status ?? null }
     : null
 
-  // Статус оплаты для партнёра: paid — оплачен (payment_status или этап invoice_paid);
-  // awaiting — заказ в работе/отгружен, но оплата ещё не отмечена; null — просчёт.
-  const paid = pn.payment_status === 'paid' || isStageDone(stagesOf(pn), 'invoice_paid')
-  const paymentStatus: 'paid' | 'awaiting' | null = paid ? 'paid' : (launched ? 'awaiting' : null)
+  // Точка платит до запуска: счёт ей открыт, как только менеджер его выставил.
+  const isPoint = client.is_point === true
+  let invoiced = false
+  if (isPoint) {
+    try { invoiced = (await loadInvoicedOrders(svc, [oid])).has(oid) }
+    catch (e) { return NextResponse.json({ error: `Реестр счетов не прочитан: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  }
+  const paid = markedPaid(pn)
+  const point = pointStage({ isPoint, launched, submitted: lane === 'submitted', invoiced, paid })
 
-  const canInvoice = !!client.can_self_invoice && launched
+  // paid — оплачен; awaiting — в работе/отгружен (или точка с выставленным счётом), а
+  // оплата не отмечена; null — просчёт.
+  const paymentStatus: 'paid' | 'awaiting' | null = paid ? 'paid' : (launched || point === 'await_payment' ? 'awaiting' : null)
+
+  const canInvoice = invoiceState({ launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced }) === 'open'
   // УПД — только выданный документ (этап 7), и любому партнёру заказа: флаг — для счёта.
   const upd = await loadUpdIssued(svc, oid).catch(e => { console.error('[partner/order] УПД не прочитан:', oid, e instanceof Error ? e.message : e); return null })
 
@@ -105,6 +116,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     paymentStatus,
     onlinePayEnabled: paymentStatus === 'awaiting' && paymentsEnabled(),
     canInvoice,
+    point,
     updIssued: !!upd,
     upd: upd ? { number: upd.number, year: upd.year, docDate: upd.doc_date } : null,
     total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),

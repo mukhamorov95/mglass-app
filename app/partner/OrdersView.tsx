@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { loadJson } from '@/lib/toast'
+import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
 
 // Списки кабинета (дизайн .pcab). Три пункта меню:
 //   view='quotes'  → просчёты (черновики). Разбиты на Недавние + Архив (>2 недель).
@@ -17,6 +18,7 @@ type Order = {
   amount: number; lane: Lane; progressPct: number; stage: string
   shipped: boolean; ready: boolean; deadline: string; recalcNote: string | null
   summary: string; positions: number
+  point?: PointStage | null
 }
 type Resp = { linked: boolean; client: { name: string } | null; orders: Order[] }
 type View = 'quotes' | 'inwork' | 'shipped'
@@ -206,7 +208,8 @@ function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: numbe
       <div className="r1">
         <div>
           <div className="num">{o.number}{o.clientOrderNumber && <span className="yr"> · ваш № {o.clientOrderNumber}</span>}</div>
-          <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
+          <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.point ? '' : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
+          {o.point && <div className="meta" style={{ marginTop: 2, color: o.point === 'await_payment' ? 'var(--amber)' : 'var(--ink-2)', fontWeight: o.point === 'await_payment' ? 600 : 400 }}>{POINT_LINE[o.point]}</div>}
           {o.summary && <div className="meta" style={{ marginTop: 2, color: 'var(--ink-2)' }}>{o.summary}{o.positions ? ` · ${o.positions} поз.` : ''}</div>}
         </div>
         <div className="amt tnum">{fmtMoney(o.amount)}</div>

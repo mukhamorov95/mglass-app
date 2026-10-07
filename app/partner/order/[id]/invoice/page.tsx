@@ -8,7 +8,7 @@ import InvoiceDocument, { type InvoiceOrder, type InvoiceRequisites } from '@/co
 
 // Счёт-спецификация в кабинете партнёра — тот же документ, что и у менеджера
 // (общий компонент InvoiceDocument). Реквизиты покупателя — только чтение (из своих
-// юрлиц). Доступ уже проверен сервером (can_self_invoice + запущен). Скачивание PDF.
+// юрлиц). Доступ проверяет сервер (lib/partner/documents invoiceState). Скачивание PDF.
 
 const EMPTY: InvoiceRequisites = { full_name: '', inn: '', kpp: '', ogrn: '', legal_address: '', bank_account: '', bank_name: '', bik: '', corr_account: '', supply_contract_no: '', supply_contract_date: '' }
 

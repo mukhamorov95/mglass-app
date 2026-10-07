@@ -14,3 +14,16 @@ describe('счёт в «Документах» кабинета', () => {
     expect(INVOICE_HINT.after_launch).not.toMatch(/менеджер/)
   })
 })
+
+describe('счёт точки на рынке (Т6: 100 % до запуска)', () => {
+  it('до выставления счёта — «после проверки суммы», а не «после запуска»', () => {
+    expect(invoiceState({ launched: false, canSelfInvoice: false, isPoint: true, invoiced: false })).toBe('after_check')
+  })
+  it('счёт выставлен — открыт до запуска, даже без самообслуживания', () => {
+    expect(invoiceState({ launched: false, canSelfInvoice: false, isPoint: true, invoiced: true })).toBe('open')
+  })
+  it('не точка с выставленным счётом — правило прежнее', () => {
+    expect(invoiceState({ launched: false, canSelfInvoice: true, isPoint: false, invoiced: true })).toBe('after_launch')
+    expect(invoiceState({ launched: true, canSelfInvoice: false, isPoint: false, invoiced: true })).toBe('manager')
+  })
+})
