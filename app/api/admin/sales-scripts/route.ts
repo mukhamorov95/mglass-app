@@ -10,6 +10,8 @@ function adminClient() {
 }
 
 export async function GET() {
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const { data, error } = await adminClient().from('sales_scripts').select('*').order('category').order('sort_order')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)

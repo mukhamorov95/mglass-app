@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireOwner } from '@/lib/apiAuth'
 
 function svc() {
   return createServiceClient(
@@ -9,6 +10,8 @@ function svc() {
 }
 
 export async function GET() {
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const { data, error } = await svc()
     .from('installer_ratings')
     .select('brigade_id, rating')

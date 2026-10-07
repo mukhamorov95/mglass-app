@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient as adminClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { isOwnerRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 
 const URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -17,8 +18,10 @@ async function getUser() {
   return user
 }
 
-// GET → все модели душевых (открыто, как shower-images GET)
+// GET → все модели душевых; в строке есть hardware_base (себестоимость) — только владельцу.
 export async function GET() {
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const { data } = await admin().from('shower_models').select('*').order('sort_order')
   return NextResponse.json(data ?? [])
 }
