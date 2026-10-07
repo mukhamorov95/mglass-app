@@ -4,7 +4,8 @@ import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { parseStatement, dedupe } from '@/lib/bank/parseStatement'
-import { recordPayment } from '@/lib/payments/recordPayment'
+import { loadOpenInvoices, postBankRow, type BankRow } from '@/lib/accounting/bankPost'
+import { matchInvoice, type OpenInvoice } from '@/lib/accounting/bankMatch'
 
 // Б9: загрузка банковской выписки и разнесение её по фондам.
 // Строка выписки — кандидат, а не операция: ДДС рождается только после
@@ -91,9 +92,10 @@ export async function GET(req: NextRequest) {
   const status = url.searchParams.get('status') ?? 'new'
 
   const svc = createServiceClient()
-  const { data: rows } = await svc.from('bank_statement_rows')
+  const { data: rows, error: rowsErr } = await svc.from('bank_statement_rows')
     .select('*').eq('unit', unit).eq('status', status)
     .order('op_date', { ascending: false }).limit(400)
+  if (rowsErr) return NextResponse.json({ error: `Выписка не прочитана: ${rowsErr.message}` }, { status: 500 })
 
   // Как этого контрагента разносили раньше
   const { data: history } = await svc.from('cashflow_entries')
@@ -107,29 +109,21 @@ export async function GET(req: NextRequest) {
     if (!byCp.has(k)) byCp.set(k, h)
   }
 
-  // Приход ищем среди выставленных счетов: по ИНН плательщика, по сумме и по
-  // номеру счёта в назначении платежа. Шов с backbone: статус B2B-заказа мы не
-  // трогаем, наше дело — счёт и деньги.
-  const { data: invoices } = await svc.from('invoices')
-    .select('id,invoice_no,payer_client_id,payer_name,amount,status,order_ids')
-    .eq('status', 'issued').limit(500)
-  const payerIds = (invoices ?? []).map(i => i.payer_client_id).filter(Boolean) as number[]
-  const { data: clients } = payerIds.length
-    ? await svc.from('b2b_clients').select('id,inn').in('id', payerIds)
-    : { data: [] }
-  const innByClient = new Map((clients ?? []).map(c => [Number(c.id), String(c.inn ?? '')]))
-
-  const matchInvoice = (r: { amount: number; inn: string | null; purpose: string | null }) => {
-    const cands = (invoices ?? []).filter(i => {
-      const sameAmount = Math.abs(Number(i.amount) - Number(r.amount)) < 0.5
-      const sameInn = !!r.inn && innByClient.get(Number(i.payer_client_id)) === r.inn
-      const noInPurpose = !!i.invoice_no && i.invoice_no !== '—'
-        && new RegExp(`(^|\\D)${i.invoice_no.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\D|$)`).test(r.purpose ?? '')
-      // ИНН или номер счёта — сильные признаки; одна лишь сумма — слабый, но с ними складывается
-      return (sameInn && (sameAmount || noInPurpose)) || (noInPurpose && sameAmount) || (noInPurpose && sameInn)
-    })
-    return cands.length === 1 ? cands[0] : null
+  // Приход ищем среди неоплаченных по платежам счетов: ИНН плательщика, номер счёта в
+  // назначении и сумма против ОСТАТКА. Сбой чтения счетов — не пустой подбор, а ошибка словами.
+  let open: OpenInvoice[] = []
+  let invoicesError: string | null = null
+  if (status === 'new') {
+    try { open = await loadOpenInvoices(svc) } catch (e) {
+      invoicesError = e instanceof Error ? e.message : String(e)
+    }
   }
+  // Проведённые строки показывают свой счёт, даже если он уже оплачен
+  const linkedIds = status === 'new' ? [] : [...new Set((rows ?? []).map(r => Number(r.invoice_id)).filter(n => n > 0))]
+  const { data: linked } = linkedIds.length
+    ? await svc.from('invoices').select('id,invoice_no,payer_name,amount,order_ids').in('id', linkedIds)
+    : { data: [] }
+  const linkedBy = new Map((linked ?? []).map(i => [Number(i.id), i]))
 
   // Одобренные заявки — кандидаты на «этот расход уже согласован»
   const { data: reqs } = await svc.from('payment_requests')
@@ -144,14 +138,17 @@ export async function GET(req: NextRequest) {
           Math.abs(Number(q.amount) - Number(r.amount)) < 0.5 &&
           (!q.counterparty || !cp || q.counterparty.trim().toLowerCase().slice(0, 12) === cp.slice(0, 12)))
       : null
-    const invoice = r.direction === 'in' ? matchInvoice(r as { amount: number; inn: string | null; purpose: string | null }) : null
+    const auto = r.direction === 'in' && status === 'new'
+      ? matchInvoice({ amount: Number(r.amount), inn: r.inn ?? null, purpose: r.purpose ?? null }, open)
+      : null
+    const had = linkedBy.get(Number(r.invoice_id))
     return {
       ...r,
-      invoice: invoice ? {
-        id: Number(invoice.id), no: invoice.invoice_no as string,
-        payer: (invoice.payer_name as string) ?? null,
-        amount: Number(invoice.amount), orders: (invoice.order_ids as number[]) ?? [],
-      } : null,
+      invoice: auto
+        ? { ...auto.invoice, partial: auto.partial, rest: auto.rest, over: auto.over }
+        : had
+          ? { id: Number(had.id), no: String(had.invoice_no), payer: (had.payer_name as string | null) ?? null, amount: Number(had.amount), orders: (had.order_ids as number[]) ?? [] }
+          : null,
       suggest: hist
         ? { fund_id: hist.fund_id, subfund_id: hist.subfund_id, account: hist.account, from: 'история' as const }
         : match
@@ -161,7 +158,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json({ items })
+  return NextResponse.json({ items, invoices: open, invoicesError })
 }
 
 export async function PATCH(req: NextRequest) {
@@ -175,69 +172,28 @@ export async function PATCH(req: NextRequest) {
   if (!(id > 0)) return NextResponse.json({ error: 'Нет строки' }, { status: 400 })
 
   const svc = createServiceClient()
-  const { data: row } = await svc.from('bank_statement_rows').select('*').eq('id', id).maybeSingle()
+  const { data: row, error: rowErr } = await svc.from('bank_statement_rows').select('*').eq('id', id).maybeSingle()
+  if (rowErr) return NextResponse.json({ error: `Строка не прочитана: ${rowErr.message}` }, { status: 500 })
   if (!row) return NextResponse.json({ error: 'Строка не найдена' }, { status: 404 })
 
-  if (action === 'skip') {
-    await svc.from('bank_statement_rows').update({ status: 'skipped' }).eq('id', id)
+  if (action === 'skip' || action === 'unskip') {
+    if (row.status === 'posted') return NextResponse.json({ error: 'Строка уже проведена' }, { status: 409 })
+    const { data, error } = await svc.from('bank_statement_rows')
+      .update({ status: action === 'skip' ? 'skipped' : 'new' }).eq('id', id).select('id')
+    if (error || !data?.length) return NextResponse.json({ error: error?.message ?? 'Строка не обновилась' }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
-  if (action === 'unskip') {
-    await svc.from('bank_statement_rows').update({ status: 'new' }).eq('id', id)
-    return NextResponse.json({ ok: true })
-  }
-  if (row.status === 'posted') return NextResponse.json({ error: 'Уже проведена' }, { status: 409 })
 
   const fundId = Number(body.fund_id)
   if (!(fundId > 0)) return NextResponse.json({ error: 'Выберите фонд' }, { status: 400 })
 
-  const { data: entry, error } = await svc.from('cashflow_entries').insert({
-    entry_date: row.op_date, unit: row.unit, kind: row.direction, fund_id: fundId,
-    subfund_id: Number(body.subfund_id) || null, amount: Number(row.amount),
-    account: String(body.account ?? row.account ?? '').trim() || null,
-    counterparty: row.counterparty,
-    comment: (row.purpose as string | null)?.slice(0, 300) ?? null,
-    entered_by: me.id, entered_by_name: me.name,
-  }).select('id').single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  // Приход по счёту: факт денег пишем в ядро payments (единственный источник
-  // правды по деньгам), счёт помечаем оплаченным. Заказ не трогаем — его статус
-  // считает backbone как производную от ядра.
-  const invoiceId = Number(body.invoice_id) || null
-  let paymentId: number | null = null
-  if (invoiceId && row.direction === 'in') {
-    const { data: inv } = await svc.from('invoices').select('id,order_ids,amount').eq('id', invoiceId).maybeSingle()
-    const orders = ((inv?.order_ids as number[]) ?? []).map(Number).filter(n => n > 0)
-    // Платёж всегда якорится на счёт (invoice_id). b2b_order_id ставим только
-    // когда счёт покрывает ровно один заказ — иначе деньги привязались бы к
-    // произвольному из нескольких. Разбивку мульти-заказного счёта по заказам
-    // считает производная backbone (сумма невойднутых платежей по счёту).
-    const p = await recordPayment(svc, {
-      externalKey: `bank:${row.unit}:${row.external_key}`,
-      amount: Number(row.amount), paidAt: String(row.op_date), kind: 'full',
-      source: 'bank_statement_import', method: 'Перевод',
-      invoiceId, b2bOrderId: orders.length === 1 ? orders[0] : null,
-      enteredByName: me.name, note: `Счёт ${invoiceId} из выписки`,
-    }).catch(() => null)
-    paymentId = p?.id ?? null
-    await svc.from('invoices').update({
-      status: 'paid', paid_at: String(row.op_date), updated_at: new Date().toISOString(),
-    }).eq('id', invoiceId)
-  }
-
-  const requestId = Number(body.request_id) || null
-  if (requestId) {
-    // Заявка закрывается фактом платежа из банка — руками её больше не отмечают
-    await svc.from('payment_requests').update({
-      status: 'paid', entry_id: entry.id, status_changed_at: new Date().toISOString(),
-      status_changed_by: me.name, updated_at: new Date().toISOString(),
-    }).eq('id', requestId)
-  }
-
-  await svc.from('bank_statement_rows')
-    .update({ status: 'posted', entry_id: entry.id, request_id: requestId, invoice_id: invoiceId, payment_id: paymentId })
-    .eq('id', id)
-
-  return NextResponse.json({ ok: true, entry_id: entry.id, payment_id: paymentId })
+  const res = await postBankRow(svc, row as BankRow, {
+    fundId,
+    subfundId: Number(body.subfund_id) || null,
+    account: String(body.account ?? '').trim() || null,
+    requestId: Number(body.request_id) || null,
+    invoiceId: Number(body.invoice_id) || null,
+  }, me)
+  if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
+  return NextResponse.json({ ok: true, entry_id: res.entryId, payment_id: res.paymentId, invoice: res.invoice, warnings: res.warnings })
 }

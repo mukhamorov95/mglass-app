@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { audit, type AuditInput, type Finding } from './audit'
-import { readPaged } from '@/lib/money/paged'
+import { readPaged, type Paged } from '@/lib/money/paged'
+import { loadPostedPaymentIds, loadPaymentSkips } from './postedPayments'
 import { attachInvoicePayments, asInvoiceRows } from '@/lib/money/invoicePayments'
 
 // Сбор данных для проверки Б14. Отдельно от чистого ядра (lib/accounting/audit.ts),
@@ -11,46 +12,44 @@ export async function collectAudit(svc: SupabaseClient, today: string): Promise<
   const yearAgo = new Date(Date.parse(today + 'T00:00:00Z') - 400 * 86_400_000).toISOString().slice(0, 10)
   const halfYear = new Date(Date.parse(today + 'T00:00:00Z') - 180 * 86_400_000).toISOString().slice(0, 10)
 
-  const [payments, posted, skips, bank, entries, reqs, invoices, taxes, accruals, paidPayroll, locks, funds, subfunds] =
+  // Всё постранично и с ошибкой наружу: таблицы растут, а молча обрезанный или
+  // упавший источник давал бы «расхождений нет» там, где они есть.
+  const P = (build: () => Paged) => readPaged(build)
+  const [payments, done, bank, entries, reqs, invoices, taxes, accruals, paidPayroll, locks, funds, subfunds] =
     await Promise.all([
-      svc.from('payments').select('id,amount,paid_at').is('voided_at', null).gte('paid_at', halfYear),
-      svc.from('cashflow_entries').select('payment_id').not('payment_id', 'is', null),
-      svc.from('cashflow_payment_skips').select('payment_id'),
-      svc.from('bank_statement_rows').select('amount,op_date').eq('status', 'new'),
-      svc.from('cashflow_entries').select('id,unit,entry_date,fund_id,amount,counterparty,kind').gte('entry_date', halfYear),
-      svc.from('payment_requests').select('amount,status,status_changed_at,counterparty').eq('status', 'approved'),
+      P(() => svc.from('payments').select('id,amount,paid_at').is('voided_at', null).gte('paid_at', halfYear).order('id')),
+      Promise.all([loadPostedPaymentIds(svc), loadPaymentSkips(svc)])
+        .then(([posted, skips]) => new Set([...posted, ...skips.keys()])),
+      P(() => svc.from('bank_statement_rows').select('id,amount,op_date').eq('status', 'new').order('id')),
+      P(() => svc.from('cashflow_entries').select('id,unit,entry_date,fund_id,amount,counterparty,kind').gte('entry_date', halfYear).order('id')),
+      P(() => svc.from('payment_requests').select('id,amount,status,status_changed_at,counterparty').eq('status', 'approved').order('id')),
       // Счета — постранично и с платежами: «не оплачен» считается по payments, не по флажку.
-      readPaged(() => svc.from('invoices').select('id,amount,order_ids,status,issued_at,invoice_no').neq('status', 'cancelled').order('id'))
+      P(() => svc.from('invoices').select('id,amount,order_ids,status,issued_at,invoice_no').neq('status', 'cancelled').order('id'))
         .then(rows => attachInvoicePayments(svc, asInvoiceRows(rows))),
-      svc.from('tax_calendar').select('title,due_date,amount,status').gte('due_date', yearAgo),
-      svc.from('payroll_accruals').select('subfund_id,person_name,month,kind,amount'),
-      svc.from('cashflow_entries').select('subfund_id,amount,entry_date').eq('kind', 'out').gte('entry_date', halfYear),
-      svc.from('cashflow_period_locks').select('unit,month'),
-      svc.from('cashflow_funds').select('id,name,unit'),
-      svc.from('cashflow_subfunds').select('id,fund_id,name'),
+      P(() => svc.from('tax_calendar').select('id,title,due_date,amount,status').gte('due_date', yearAgo).order('id')),
+      P(() => svc.from('payroll_accruals').select('id,subfund_id,person_name,month,kind,amount').order('id')),
+      P(() => svc.from('cashflow_entries').select('id,subfund_id,amount,entry_date').eq('kind', 'out').gte('entry_date', halfYear).order('id')),
+      P(() => svc.from('cashflow_period_locks').select('unit,month').order('unit').order('month')),
+      P(() => svc.from('cashflow_funds').select('id,name,unit').order('id')),
+      P(() => svc.from('cashflow_subfunds').select('id,fund_id,name').order('id')),
     ])
-
-  const done = new Set([
-    ...(posted.data ?? []).map(r => Number(r.payment_id)),
-    ...(skips.data ?? []).map(r => Number(r.payment_id)),
-  ])
 
   // Долг по зарплате за прошлый месяц: начислено (без удержаний) минус выплачено
   const prevMonth = prev(today.slice(0, 7))
-  const payrollFunds = new Set((funds.data ?? [])
+  const payrollFunds = new Set(funds
     .filter(f => /фонд оплаты труда|сдельная зарплата/i.test(String(f.name)))
     .map(f => Number(f.id)))
-  const payrollSubs = new Set((subfunds.data ?? [])
+  const payrollSubs = new Set(subfunds
     .filter(s => payrollFunds.has(Number(s.fund_id))).map(s => Number(s.id)))
   const paidBySub = new Map<number, number>()
-  for (const e of paidPayroll.data ?? []) {
+  for (const e of paidPayroll) {
     const id = Number(e.subfund_id ?? 0)
     if (!payrollSubs.has(id)) continue
     if (String(e.entry_date).slice(0, 7) !== prevMonth) continue
     paidBySub.set(id, (paidBySub.get(id) ?? 0) + Number(e.amount))
   }
   const accruedBySub = new Map<number, { name: string; amount: number }>()
-  for (const a of accruals.data ?? []) {
+  for (const a of accruals) {
     if (a.month !== prevMonth) continue
     if (['НДФЛ', 'взносы'].includes(String(a.kind))) continue
     const id = Number(a.subfund_id ?? 0)
@@ -64,30 +63,30 @@ export async function collectAudit(svc: SupabaseClient, today: string): Promise<
 
   // Месяцы с операциями, но без замка (кроме текущего — его рано закрывать)
   const withEntries = new Set<string>()
-  for (const e of entries.data ?? []) withEntries.add(`${e.unit}|${String(e.entry_date).slice(0, 7)}`)
-  const locked = new Set((locks.data ?? []).map(l => `${l.unit}|${l.month}`))
+  for (const e of entries) withEntries.add(`${e.unit}|${String(e.entry_date).slice(0, 7)}`)
+  const locked = new Set(locks.map(l => `${l.unit}|${l.month}`))
   const openMonths = [...withEntries]
     .filter(k => !locked.has(k) && k.split('|')[1] < today.slice(0, 7))
     .map(k => ({ unit: k.split('|')[0], month: k.split('|')[1] }))
 
   const input: AuditInput = {
     today,
-    unpostedPayments: (payments.data ?? []).filter(p => !done.has(Number(p.id)))
+    unpostedPayments: payments.filter(p => !done.has(Number(p.id)))
       .map(p => ({ amount: Number(p.amount), paid_at: String(p.paid_at) })),
-    bankRowsNew: (bank.data ?? []).map(r => ({ amount: Number(r.amount), op_date: String(r.op_date) })),
-    entries: (entries.data ?? []).map(e => ({
+    bankRowsNew: bank.map(r => ({ amount: Number(r.amount), op_date: String(r.op_date) })),
+    entries: entries.map(e => ({
       id: Number(e.id), unit: String(e.unit), entry_date: String(e.entry_date),
       fund_id: Number(e.fund_id), amount: Number(e.amount),
       counterparty: (e.counterparty as string) ?? null, kind: String(e.kind),
     })),
-    approvedRequests: (reqs.data ?? []).map(r => ({
+    approvedRequests: reqs.map(r => ({
       amount: Number(r.amount), status_changed_at: (r.status_changed_at as string) ?? null,
       counterparty: (r.counterparty as string) ?? null,
     })),
     openInvoices: invoices.filter(i => i.derivedStatus !== 'paid').map(i => ({
       amount: i.remainder, issued_at: String(i.issued_at), no: String(i.invoice_no),
     })),
-    taxes: (taxes.data ?? []).map(t => ({
+    taxes: taxes.map(t => ({
       title: String(t.title), due_date: String(t.due_date),
       amount: t.amount == null ? null : Number(t.amount), status: String(t.status),
     })),
