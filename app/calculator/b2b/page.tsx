@@ -22,6 +22,7 @@ import { isMGlassClient, isMGlassOnlyUser, isAllClientsScope, hasB2BSalesScope, 
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { confirmDialog, promptDialog } from '@/lib/dialog'
+import ClientPicker, { type ClientOption } from '@/components/ClientPicker'
 import { CUSTOMER_KINDS, buildClientQuoteText, leadNotesPatch, noClientName, noClientSaveBlocker, readQuoteLead, type CustomerKind } from '@/lib/b2b/leadQuote'
 import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
@@ -218,6 +219,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   // привязке клиента показать, если его прайс или скидка меняют цену, которую уже назвали.
   const [origQuote, setOrigQuote]       = useState<{ noClient: boolean; total: number } | null>(null)
   const [textCopied, setTextCopied]     = useState(false)
+  const [clientEntities, setClientEntities] = useState<Map<number, string[]>>(new Map())
   const [ourOrderNumber, setOurOrderNumber]       = useState('')
   const [clientOrderNumber, setClientOrderNumber] = useState('')
   const [notes, setNotes]           = useState('')
@@ -399,7 +401,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         setMglassOnly(userMGlassOnly)
 
         const [clsRes, matsRes, svcsRes, ordersRes, matrixRes, psRes, filmsRes, facetRes, surchargeRes, sheetRes, rateRes, finRes] = await Promise.all([
-          sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
+          sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code,crm_source,full_name,inn').eq('active', true).order('name'),
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
           sb.from('b2b_orders').select('client_id,total_after_discount').gte('created_at', '2026-01-01'),
@@ -463,6 +465,15 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         }
         const sorted = visibleClients.slice().sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
         setClients(sorted)
+        // Юрлица — только для поиска клиента («литвин» → СпецМонтаж); без них поиск идёт по названиям.
+        sb.from('b2b_client_legal_entities').select('client_id, full_name, inn').eq('active', true).then(({ data, error }) => {
+          if (error) { console.warn('[b2b-calc] юрлица для поиска клиента не загрузились:', error.message); return }
+          const m = new Map<number, string[]>()
+          for (const e of (data ?? []) as { client_id: number; full_name: string | null; inn: string | null }[]) {
+            m.set(e.client_id, [...(m.get(e.client_id) ?? []), e.full_name ?? '', e.inn ?? ''])
+          }
+          setClientEntities(m)
+        })
         // For mglass_only users, pre-select the M GLASS client so the calculator opens ready.
         if (userMGlassOnly && sorted.length > 0) setClientId(sorted[0].id)
 
@@ -691,6 +702,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   }
 
   const selectedClient   = clients.find(c => c.id === clientId) ?? null
+  const clientOptions: ClientOption[] = useMemo(() => clients.map(c => ({
+    id: c.id,
+    label: `${c.name}${c.discount_percent > 0 ? ` (−${c.discount_percent}%)` : ''}`,
+    extra: [c.full_name, ...(clientEntities.get(c.id) ?? []), c.contact, c.inn, c.phone],
+  })), [clients, clientEntities])
   const lead = useMemo(() => ({ source: leadSource, kind: leadKind, contact: leadContact.trim() || null }), [leadSource, leadKind, leadContact])
   // Скидка из карточки клиента. В mglass-режиме клиент = M GLASS, у него 20% —
   // это НЕ баг и не «забыли обнулить»: M-Glass реально покупает у своего производства
@@ -1700,22 +1716,16 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                   </button>
                 )}
               </div>
-              <select
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
-                  value={clientId ?? ''}
-                  onChange={e => {
-                    const id = e.target.value ? Number(e.target.value) : null
-                    setClientId(id); setSavedOrderId(null)
-                    const src = clients.find(c => c.id === id)?.crm_source
-                    if (src && !leadSource) setLeadSource(src)
-                  }}>
-                  <option value="">{variant === 'mglass' ? '— Выберите клиента —' : '— Без заказчика —'}</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.discount_percent > 0 ? ` (−${c.discount_percent}%)` : ''}
-                  </option>
-                ))}
-              </select>
+<ClientPicker
+                options={clientOptions}
+                value={clientId}
+                noneLabel={variant === 'mglass' ? undefined : '— Без заказчика —'}
+                onChange={id => {
+                  setClientId(id); setSavedOrderId(null)
+                  const src = clients.find(c => c.id === id)?.crm_source
+                  if (src && !leadSource) setLeadSource(src)
+                }}
+              />
             </div>
             )}
 
