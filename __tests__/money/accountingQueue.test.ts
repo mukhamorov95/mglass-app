@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { queueCounts, queueTotal, settle, type QueueSnapshot } from '@/lib/accounting/queue'
+import { queueCounts, queueTotal, settle, unpostedFrom, type QueueSnapshot } from '@/lib/accounting/queue'
 import type { Finding } from '@/lib/accounting/audit'
 
 const F = (code: string, severity: Finding['severity'], count = 1): Finding => ({ code, severity, title: code, detail: '', count })
@@ -38,5 +38,10 @@ describe('«Ждут действия» бухгалтера', () => {
   it('settle ловит исключение источника', async () => {
     expect(await settle(async () => { throw new Error('нет связи') })).toEqual({ ok: false, error: 'нет связи' })
     expect(await settle(async () => 5)).toEqual({ ok: true, value: 5 })
+  })
+
+  it('окно «к проведению» — 180 дней, одно для карточки, вкладки и проверки', () => {
+    expect(unpostedFrom('2026-10-07')).toBe('2026-04-10')
+    expect(unpostedFrom('2026-03-01')).toBe('2025-09-02')
   })
 })

@@ -7,6 +7,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { promptDialog } from '@/lib/dialog'
+import { mskDayKey } from '@/lib/time'
+import { unpostedFrom } from '@/lib/accounting/queue'
 
 type Fund = { id: number; unit: string; fund_class: string; name: string }
 type Subfund = { id: number; fund_id: number; name: string }
@@ -28,6 +30,8 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [showSkipped, setShowSkipped] = useState(false)
+  // По умолчанию — то же окно, что в карточке «К проведению» и в проверке; месяц — по выбору.
+  const [period, setPeriod] = useState<'half' | 'month'>('half')
   const [busy, setBusy] = useState<number | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [draft, setDraft] = useState<Record<number, { fund: number; sub: number; unit: 'ip' | 'ooo' }>>({})
@@ -45,14 +49,15 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
     let alive = true
     const [y, m] = month.split('-').map(Number)
     const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    loadJson<{ items: Item[] }>(`/api/accounting/unposted?from=${month}-01&to=${to}`).then(res => {
+    const qs = period === 'half' ? `from=${unpostedFrom(mskDayKey())}` : `from=${month}-01&to=${to}`
+    loadJson<{ items: Item[] }>(`/api/accounting/unposted?${qs}`).then(res => {
       if (!alive) return
       if (res.error !== null) setErr(res.error)
       else { setItems(res.data.items); setErr(null) }
       setLoading(false)
     })
     return () => { alive = false }
-  }, [month, tick])
+  }, [month, period, tick])
 
   const pick = (it: Item) => {
     const d = draft[it.id]
@@ -95,6 +100,9 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
   }
 
   const visible = items.filter(i => i.skipped === showSkipped)
+  const monthName = month ? new Date(`${month}-15T00:00:00Z`).toLocaleString('ru-RU', { month: 'long', timeZone: 'UTC' }) : ''
+  const periodLabel = period === 'half' ? 'за полгода' : `за ${monthName}`
+  const choose = (p: 'half' | 'month') => { if (p === period) return; setLoading(true); setPeriod(p) }
 
   if (loading) return <p className="text-[13px] text-[#9a9a95] py-6 text-center">Загрузка…</p>
 
@@ -108,9 +116,20 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
       )}
 
       <div className="flex items-center justify-between">
-        <p className="text-[13px] text-[#6b6b66]">
-          Оплаты, которых ещё нет в ОДДС. Проводите — операция появится в фонде и не потребует ручного ввода.
-        </p>
+        <div className="min-w-0">
+          <p className="text-[13px] text-[#6b6b66]">
+            Оплаты, которых ещё нет в ОДДС. Проводите — операция появится в фонде и не потребует ручного ввода.
+          </p>
+          <div className="flex items-center gap-1 mt-1.5 text-[12px]">
+            {([['half', 'за полгода'], ['month', `за ${monthName}`]] as const).map(([k, label]) => (
+              <button key={k} onClick={() => choose(k)}
+                className={`px-2 py-0.5 rounded-md border ${period === k ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
+                {label}
+              </button>
+            ))}
+            {!err && <span className="text-[#9a9a95] ml-1">{visible.length} шт. · {RUB(visible.reduce((s, i) => s + Number(i.amount), 0))}</span>}
+          </div>
+        </div>
         <button onClick={() => setShowSkipped(s => !s)}
           className="text-[12px] text-[#9a9a95] underline flex-shrink-0 ml-3">
           {showSkipped ? '← к непроведённым' : 'пропущенные'}
@@ -119,7 +138,7 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
 
       {!err && visible.length === 0 && (
         <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-8 text-center text-[13px] text-[#9a9a95]">
-          {showSkipped ? 'Пропущенных нет' : 'Всё проведено — новых оплат за месяц нет'}
+          {showSkipped ? `Пропущенных ${periodLabel} нет` : `Всё проведено — новых оплат ${periodLabel} нет`}
         </div>
       )}
 
