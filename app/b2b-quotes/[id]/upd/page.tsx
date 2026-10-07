@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { renderDocCanvas } from '@/lib/pdfCapture'
+import { saveUpdPdf } from '@/lib/b2b/updPdf'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import UpdDocument from '@/components/UpdDocument'
 import type { InvoiceOrder, InvoiceRequisites } from '@/lib/b2b/invoiceMath'
@@ -148,17 +148,7 @@ export default function ManagerUpdPage() {
   async function downloadPdf() {
     if (!docRef.current || !data || !view) return
     try {
-      const jspdf = await import('jspdf')
-      const canvas = await renderDocCanvas(docRef.current)
-      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
-      const pw = 297, ph = 210
-      const imgH = pw * canvas.height / canvas.width
-      let pos = 0, left = imgH
-      const img = canvas.toDataURL('image/jpeg', 0.94)
-      pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
-      left -= ph
-      while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
-      pdf.save(issued ? `УПД-${issued.number}-${issued.year}.pdf` : `УПД-черновик-${view.orderNumber}.pdf`)
+      await saveUpdPdf(docRef.current, issued ? `УПД-${issued.number}-${issued.year}.pdf` : `УПД-черновик-${view.orderNumber}.pdf`)
     } catch {
       toast.error('Не удалось сформировать PDF', {
         detail: 'Лист можно сохранить через «Печать» → Сохранить как PDF.',
