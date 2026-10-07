@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { toast, responseError } from '@/lib/toast'
+import { toast } from '@/lib/toast'
 import { confirmDialog, promptDialog } from '@/lib/dialog'
 import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
@@ -603,7 +603,6 @@ export default function B2BOrdersPage() {
   const [dcSaving, setDcSaving] = useState<number | null>(null)
   const [productionDayMode, setProductionDayMode] = useState(false)
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
-  const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
   // A23: оплачено по заказам — из payments (деньги, не notes). Пусто, пока не загрузилось.
   const [paidByOrderId, setPaidByOrderId] = useState<Record<number, number>>({})
   // Подтверждение отгрузки при неоплаченном остатке (не блок, второй клик).
@@ -1232,64 +1231,6 @@ export default function B2BOrdersPage() {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
       toast.success('Следующий контроль: завтра')
     }
-  }
-
-  async function bulkMarkMonthAsShipped(monthKey: string, ordersToUpdate: Order[]) {
-    setBulkActionLoading(monthKey)
-    const now = new Date().toISOString()
-    const today = now.slice(0, 10)
-    let updatedCount = 0
-
-    for (const order of ordersToUpdate) {
-      if (getDeadlineStatus(order).status !== 'overdue') continue
-
-      const currentNotes = order.parsedNotes
-      const nextNotes: NotesData = {
-        ...currentNotes,
-        stages: {
-          ...(currentNotes.stages || {}),
-          // Дата отгрузки — календарная, как у ручного тумблера. Раньше здесь
-          // писался полный ISO, и два формата в одном поле ломали сравнения дат.
-          packaged: currentNotes.stages?.packaged || today,
-          shipped: today,
-        },
-        bulk_actions: [
-          ...(Array.isArray(currentNotes.bulk_actions) ? currentNotes.bulk_actions : []),
-          {
-            type: 'bulk_mark_shipped' as const,
-            scope: 'production_day_month' as const,
-            month_key: monthKey,
-            order_id: order.id,
-            previous_stages: currentNotes.stages || {},
-            created_at: now,
-            created_by: currentUserId || 'unknown',
-          },
-        ],
-      }
-
-      const r = await fetch(`/api/b2b-orders/${order.id}/stages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stages: { packaged: currentNotes.stages?.packaged || today, shipped: today },
-          patch: { bulk_actions: nextNotes.bulk_actions },
-        }),
-      })
-      const error = r.ok ? null : new Error('bulk stage write failed')
-
-      if (error) {
-        setBulkActionLoading(null)
-        toast.error(`Заказ #${order.id} не отмечен отгруженным`, {
-          detail: `${await responseError(r)}. Успешно обновлено: ${updatedCount} из ${ordersToUpdate.length}; остальные не тронуты — нажмите «Отметить месяц отгруженным» ещё раз.`,
-        })
-        return
-      }
-
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, parsedNotes: nextNotes } : o))
-      updatedCount++
-    }
-
-    setBulkActionLoading(null)
-    toast.success(`Отгружено: ${updatedCount} заказов`)
   }
 
   function toggleOrderSelection(orderId: number) {
@@ -2507,27 +2448,18 @@ export default function B2BOrdersPage() {
                           {sortedMonths.map(monthKey => {
                             const monthOrders = byMonth.get(monthKey)!
                             const monthLabel = formatMonthKey(monthKey)
-                            const isBulkLoading = bulkActionLoading === monthKey
                             return (
                               <div key={monthKey}>
                                 <div className="px-4 py-2 bg-red-50/40 flex items-center gap-2">
                                   <span className="text-[11px] font-semibold text-red-700">{monthLabel}</span>
                                   <span className="text-[11px] text-red-400">— {monthOrders.length} зак.</span>
-                                  <button
-                                    onClick={async () => {
-                                      if (isBulkLoading) return
-                                      const confirmed = await confirmDialog({
-                                        title: `Отметить все просроченные заказы за ${monthLabel} отгруженными?`,
-                                        text: `Будет изменено: ${monthOrders.length} заказов.\nДействие будет записано в историю notes.bulk_actions.`,
-                                        confirmLabel: 'Отметить отгруженными', danger: true,
-                                      })
-                                      if (!confirmed) return
-                                      bulkMarkMonthAsShipped(monthKey, monthOrders)
-                                    }}
-                                    disabled={isBulkLoading}
-                                    className="ml-auto text-[10px] font-medium px-2.5 py-1 rounded-lg border border-red-200 text-red-700 bg-white hover:bg-red-50 transition-colors disabled:opacity-50">
-                                    {isBulkLoading ? 'Обновляем...' : 'Отметить месяц отгруженным'}
-                                  </button>
+                                  {/* Раньше здесь ставилась сегодняшняя дата всему месяцу: у прошлых отгрузок —
+                                      неверная дата, после включения серии — риск второго УПД. Разбор — с датой по заказу. */}
+                                  <Link href="/b2b-today/shipments"
+                                    title="Разбор отгрузок: у каждого заказа своя дата — по умолчанию день упаковки"
+                                    className="ml-auto text-[10px] font-medium px-2.5 py-1 rounded-lg border border-red-200 text-red-700 bg-white hover:bg-red-50 transition-colors">
+                                    Разобрать отгрузки с датами →
+                                  </Link>
                                 </div>
                                 <div className="divide-y divide-[#f8f8f7]">
                                   {monthOrders.map(renderPdRow)}
