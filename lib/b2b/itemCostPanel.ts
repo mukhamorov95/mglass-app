@@ -45,7 +45,7 @@ const GLASS_LINES: { key: keyof CostPanelItem; name: string }[] = [
   { key: 'costTempering', name: 'Закалка' },
   { key: 'costFacet',     name: 'Фацет' },
   { key: 'costEdge',      name: 'Обработка кромки' },
-  { key: 'costTransport', name: 'Доставка' },
+  { key: 'costTransport', name: 'Транспорт на закалку' },
   { key: 'costPackaging', name: 'Упаковка' },
 ]
 
