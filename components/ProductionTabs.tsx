@@ -1,5 +1,6 @@
 'use client'
 
+import { createContext, useContext, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -26,8 +27,29 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/guide',    label: '📘 Регламент',   match: p => p.startsWith('/production-app/guide') },
 ]
 
+// Рабочему цеха с телефона 16 вкладок отодвигали очередь на пол-экрана. Ему — пять
+// основных крупно и «Ещё ▸»; владелец и начальник видят всё, как раньше.
+export const MAIN_FOR_SHOP = ['/production-app', '/production-app/my-queue', '/production-app/orders', '/production-app/shipping', '/production-app/scan']
+
+// Открыта вкладка из «Ещё» — список раскрыт, иначе человек не видит, где он.
+export function shopTabsView(path: string, more: boolean) {
+  const main = MAIN_FOR_SHOP.map(h => TABS.find(t => t.href === h)).filter((t): t is typeof TABS[number] => !!t)
+  const rest = TABS.filter(t => !MAIN_FOR_SHOP.includes(t.href))
+  return { main, rest, open: more || rest.some(t => t.match(path)) }
+}
+
+// Роль приходит из layout цеха (серверный getUserProfile) — без лишнего запроса с каждой страницы.
+const RoleCtx = createContext<string | null>(null)
+export function ProductionRoleProvider({ role, children }: { role: string | null; children: React.ReactNode }) {
+  return <RoleCtx.Provider value={role}>{children}</RoleCtx.Provider>
+}
+
 const pill = (active: boolean) =>
   `text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${active ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`
+
+// Крупнее — под палец: высота ≥ 40 px.
+const bigPill = (active: boolean) =>
+  `text-[14px] font-semibold px-3.5 py-2.5 rounded-xl transition-colors ${active ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#3b3b38] active:bg-[#e4e4e0]'}`
 
 export default function ProductionTabs({ extra }: { extra?: React.ReactNode }) {
   const path = usePathname()
@@ -36,6 +58,28 @@ export default function ProductionTabs({ extra }: { extra?: React.ReactNode }) {
   // навигации цеха (П6): к работе смены они не относятся и жили здесь исторически.
   // Файлы на месте — вернём по адресу, если окажутся кому-то нужны.
   const tabs = TABS
+  const role = useContext(RoleCtx)
+  const [more, setMore] = useState(false)
+
+  if (role === 'production') {
+    const { main, rest, open } = shopTabsView(path, more)
+    return (
+      <div className="mt-3 space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {main.map(t => <Link key={t.href} href={t.href} className={bigPill(t.match(path))}>{t.label}</Link>)}
+          <button type="button" onClick={() => setMore(v => !v)} aria-expanded={open} className={bigPill(false)}>
+            {open ? 'Ещё ▾' : 'Ещё ▸'}
+          </button>
+        </div>
+        {open && (
+          <div className="flex flex-wrap gap-1.5">
+            {rest.map(t => <Link key={t.href} href={t.href} className={pill(t.match(path))}>{t.label}</Link>)}
+          </div>
+        )}
+        {onObzor && extra && <div className="flex flex-wrap items-center gap-1.5">{extra}</div>}
+      </div>
+    )
+  }
 
   return (
     <div className="mt-3 space-y-2">
