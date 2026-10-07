@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { requirePageAccess } from '@/lib/apiAuth'
 import { runAvitoManager, handoffReply, type DialogMsg, type LeadKnown } from '@/lib/ai-tools/avitoManagerRuntime'
 import { createServiceClient } from '@/lib/supabase-service'
 import { loadBotKnowledge } from '@/lib/knowledge/aiKnowledge'
@@ -12,6 +13,9 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Каждый вызов — запрос к модели за наши деньги: только тем, кому открыта песочница.
+  const guard = await requirePageAccess('/crm/bot-test')
+  if (guard instanceof NextResponse) return guard
 
   const { history, known, flags } = await req.json().catch(() => ({})) as { history?: DialogMsg[]; known?: LeadKnown; flags?: LeadFlags }
   if (!Array.isArray(history) || history.length === 0) {

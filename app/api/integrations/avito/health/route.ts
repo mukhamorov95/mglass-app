@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireOwner } from '@/lib/apiAuth'
 
 export const maxDuration = 15
 
@@ -83,6 +84,8 @@ async function getRecentErrors(limit = 5) {
 }
 
 export async function GET() {
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const [dbCheck, amoCheck, wazzupCheck, queueStats, recentErrors] = await Promise.all([
     checkDb(),
     checkAmo(),

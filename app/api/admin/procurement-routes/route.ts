@@ -18,6 +18,9 @@ async function auth() {
 export async function GET(req: NextRequest) {
   const user = await auth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  // Закупочные цены — себестоимость: читать могут те же, кто пишет (раньше — любая сессия, вкл. партнёра).
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
   const { searchParams } = new URL(req.url)
   const routeId = searchParams.get('route_id')
 

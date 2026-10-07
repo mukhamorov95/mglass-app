@@ -18,6 +18,9 @@ async function auth() {
 export async function GET() {
   const user = await auth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  // Закупочные цены — себестоимость: читать могут те же, кто пишет (раньше — любая сессия, вкл. партнёра).
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
   const { data, error } = await service()
     .from('purchase_orders')
     .select('*')
