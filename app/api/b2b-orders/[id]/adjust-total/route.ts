@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { rescaleItemsToTotal } from '@/lib/b2b/adjustTotal'
 import { appendTo, parseOrderNotes } from '@/lib/b2b/orderNotes'
+import { syncInvoicesForOrders } from '@/lib/money/invoiceSync'
 
 // Владелец меняет итоговую сумму уже запущенного B2B-заказа — в ЛЮБУЮ сторону.
 // Изначально разрешалось только вниз (сценарий скидки), но заказ продаётся и дороже
@@ -14,6 +15,7 @@ import { appendTo, parseOrderNotes } from '@/lib/b2b/orderNotes'
 // поглощает последняя позиция, чтобы Σ = новой сумме (КП/счёт бьются копейка-в-копейку).
 // Скидку сворачиваем в цены позиций (discount_percent=0), иначе КП/счёт задвоят её.
 // Если заказ уже оплачен (есть строка crm_sales) — обновляем сумму в реестре продаж.
+// Неоплаченный счёт с этим заказом следует за суммой (lib/money/invoiceSync).
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireOwner()
@@ -80,5 +82,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await svc.from('crm_sales').update({ amount: nt, updated_at: new Date().toISOString() }).eq('b2b_order_id', orderId)
   }
 
-  return NextResponse.json({ ok: true, newTotal: nt, ledgerSynced: !!sale })
+  // Сумма уже изменена — сбой счёта не откатывает её, а говорится словами.
+  let invoices: Awaited<ReturnType<typeof syncInvoicesForOrders>> | null = null
+  let invoiceWarning: string | null = null
+  try { invoices = await syncInvoicesForOrders(svc, [orderId]) } catch (e) {
+    invoiceWarning = `Сумма заказа изменена, счёт — нет: ${e instanceof Error ? e.message : String(e)}`
+  }
+
+  return NextResponse.json({
+    ok: true, newTotal: nt, ledgerSynced: !!sale,
+    invoicesUpdated: invoices?.updated ?? [], invoicesPaid: invoices?.paidSkipped ?? [], invoiceWarning,
+  })
 }

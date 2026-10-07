@@ -6,7 +6,8 @@ import { renderDocCanvas } from '@/lib/pdfCapture'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import InvoiceDocument from '@/components/InvoiceDocument'
 import DocSkeleton from '@/components/DocSkeleton'
-import { toast } from '@/lib/toast'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { promptDialog } from '@/lib/dialog'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type OrderItem = {
@@ -107,12 +108,18 @@ export default function InvoicePage() {
         else if (client) { setReq(toReq(client)) }
         setLoading(false)
       })
+      .catch(() => { setError(NETWORK_ERROR); setLoading(false) })
   }, [id])
 
   async function refreshEntities(selectId?: number | null) {
-    const j = await fetch(`/api/quotes/${id}/invoice-data`).then(x => x.json()).catch(() => null)
+    let r: Response
+    try { r = await fetch(`/api/quotes/${id}/invoice-data`) } catch {
+      toast.error('Список юрлиц не обновился', { detail: NETWORK_ERROR }); return
+    }
+    if (!r.ok) { toast.error('Список юрлиц не обновился', { detail: await responseError(r) }); return }
+    const j = await r.json().catch(() => null) as { entities?: B2BLegalEntity[] } | null
     if (j?.entities) {
-      setEntities(j.entities as B2BLegalEntity[])
+      setEntities(j.entities)
       if (selectId != null) setSelectedEntityId(selectId)
     }
   }
@@ -124,10 +131,11 @@ export default function InvoicePage() {
   const [regMsg, setRegMsg] = useState<string | null>(null)
   const registeredRef = useRef(false)
 
-  async function postInvoice(): Promise<{ ok: boolean; error?: string }> {
-    if (!order) return { ok: false }
+  async function postInvoice(): Promise<{ ok: boolean; error?: string; updated?: boolean }> {
+    if (!order) return { ok: false, error: 'Расчёт не загружен' }
     const amount = order.total_after_discount || order.total_sale_inc_vat || 0
-    const r = await fetch('/api/invoices', {
+    let r: Response
+    try { r = await fetch('/api/invoices', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         invoice_no: order.custom_number?.trim() || String(order.id).padStart(5, '0'),
@@ -138,9 +146,10 @@ export default function InvoicePage() {
         amount,
         vat: Math.round(amount * 22 / 122),
       }),
-    })
-    const j = await r.json().catch(() => ({}))
-    return { ok: r.ok, error: j.error }
+    }) } catch { return { ok: false, error: NETWORK_ERROR } }
+    if (!r.ok) return { ok: false, error: await responseError(r) }
+    const j = await r.json().catch(() => ({})) as { updated?: boolean }
+    return { ok: true, updated: j.updated === true }
   }
 
   // Явная кнопка — с обратной связью. Оставлена как подтверждение, но основной
@@ -151,19 +160,22 @@ export default function InvoicePage() {
     try {
       const res = await postInvoice()
       registeredRef.current = registeredRef.current || res.ok
-      setRegMsg(res.ok ? 'Счёт зарегистрирован — виден в «Счета B2B»' : (res.error || 'Не удалось зарегистрировать'))
+      setRegMsg(res.ok
+        ? (res.updated ? 'Счёт в реестре обновлён: сумма и плательщик — как в заказе' : 'Счёт зарегистрирован — виден в «Счета B2B»')
+        : (res.error || 'Не удалось зарегистрировать'))
     } finally { setRegLoading(false) }
   }
 
-  // Тихая регистрация при печати/скачивании — один раз на загрузку, best-effort:
-  // ошибка реестра не мешает менеджеру печатать документ.
+  // Регистрация при печати/скачивании — один раз на загрузку. Ошибка реестра не
+  // мешает печатать документ, но говорится: иначе счёт молча не попадал в дебиторку.
   async function ensureRegistered() {
     if (registeredRef.current || !order) return
     registeredRef.current = true
-    try {
-      const res = await postInvoice()
-      if (!res.ok) registeredRef.current = false
-    } catch { registeredRef.current = false }
+    const res = await postInvoice()
+    if (!res.ok) {
+      registeredRef.current = false
+      toast.error('Счёт не попал в реестр счетов', { detail: `${res.error ?? 'Неизвестная ошибка'}. Печать не остановлена — повторите кнопкой «📒 В реестр счетов».` })
+    }
   }
 
   // А8: ссылка на оплату для клиента (в буфер обмена). Пока эквайринг не подключён —
@@ -179,23 +191,32 @@ export default function InvoicePage() {
       try {
         await navigator.clipboard.writeText(j.url)
         setPayMsg(`Ссылка на оплату ${Math.round(j.amount).toLocaleString('ru-RU')} ₽ скопирована`)
-      } catch { window.prompt('Ссылка на оплату:', j.url) }
+      } catch {
+        await promptDialog({ title: 'Ссылка на оплату', text: 'Скопировать автоматически не получилось — выделите ссылку и скопируйте.', defaultValue: j.url, confirmLabel: 'Готово' })
+      }
     } finally { setPayLoading(false) }
+  }
+
+  // Сохранить юрлицо к клиенту. Ответ сервера проверяем: раньше отказ был молчаливым,
+  // и менеджер уходил с уверенностью, что реквизиты записаны.
+  async function saveEntity(entity: Requisites, failTitle: string): Promise<boolean> {
+    let r: Response
+    try {
+      r = await fetch(`/api/quotes/${id}/invoice-data`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity: { id: selectedEntityId ?? undefined, ...entity } }),
+      })
+    } catch { toast.error(failTitle, { detail: NETWORK_ERROR }); return false }
+    if (!r.ok) { toast.error(failTitle, { detail: await responseError(r) }); return false }
+    const j = await r.json().catch(() => ({})) as { entity_id?: number }
+    setSaved(true); setTimeout(() => setSaved(false), 1800)
+    await refreshEntities(j.entity_id ?? selectedEntityId)
+    return true
   }
 
   async function save() {
     setSaving(true); setSaved(false)
-    try {
-      const r = await fetch(`/api/quotes/${id}/invoice-data`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity: { id: selectedEntityId ?? undefined, ...req } }),
-      })
-      if (r.ok) {
-        const j = await r.json().catch(() => ({}))
-        setSaved(true); setTimeout(() => setSaved(false), 1800)
-        await refreshEntities(j.entity_id ?? selectedEntityId)
-      }
-    } finally { setSaving(false) }
+    try { await saveEntity(req, 'Юрлицо не сохранено') } finally { setSaving(false) }
   }
 
   // Выбор юрлица покупателя для этого счёта; «new» — добавить новое (не затирая старые).
@@ -223,8 +244,13 @@ export default function InvoicePage() {
       const r = await fetch('/api/ai/parse-customer', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: parseText }),
-      }).then(x => x.json())
-      if (r.customer) applyCustomer(r.customer)
+      })
+      if (!r.ok) { toast.error('Реквизиты не распознаны', { detail: await responseError(r) }); return }
+      const j = await r.json().catch(() => ({})) as { customer?: Record<string, string | undefined> }
+      if (j.customer) applyCustomer(j.customer)
+      else toast.error('Реквизиты не распознаны', { detail: 'В тексте не нашлось ИНН или названия' })
+    } catch {
+      toast.error('Реквизиты не распознаны', { detail: NETWORK_ERROR })
     } finally { setParsing(false) }
   }
 
@@ -256,29 +282,28 @@ export default function InvoicePage() {
           }
         } finally { URL.revokeObjectURL(url) }
       }
-      const r = await fetch('/api/ai/parse-customer', {
+      const pr = await fetch('/api/ai/parse-customer', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      }).then(x => x.json())
-      if (r.customer) {
-        applyCustomer(r.customer)
-        // сразу привязываем к карточке клиента
-        setSaving(true)
-        const c = r.customer as Record<string, string | undefined>
-        const merged = {
-          ...req,
-          full_name: c.name || c.fio || req.full_name,
-          inn: c.inn || req.inn, kpp: c.kpp || req.kpp, ogrn: c.ogrn || req.ogrn,
-          legal_address: c.legal_address || c.address || req.legal_address,
-          bank_account: c.account || req.bank_account, bank_name: c.bank || req.bank_name,
-          bik: c.bik || req.bik, corr_account: c.corr_account || req.corr_account,
-        }
-        const sr = await fetch(`/api/quotes/${id}/invoice-data`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: { id: selectedEntityId ?? undefined, ...merged } }),
-        })
-        setSaving(false)
-        if (sr.ok) { const j = await sr.json().catch(() => ({})); setSaved(true); setTimeout(() => setSaved(false), 2500); await refreshEntities(j.entity_id ?? selectedEntityId) }
+      })
+      if (!pr.ok) { toast.error('Карточка не распознана', { detail: await responseError(pr) }); return }
+      const r = await pr.json().catch(() => ({})) as { customer?: Record<string, string | undefined> }
+      if (!r.customer) { toast.error('Карточка не распознана', { detail: 'В файле не нашлось реквизитов' }); return }
+      applyCustomer(r.customer)
+      // сразу привязываем к карточке клиента
+      const c = r.customer
+      const merged = {
+        ...req,
+        full_name: c.name || c.fio || req.full_name,
+        inn: c.inn || req.inn, kpp: c.kpp || req.kpp, ogrn: c.ogrn || req.ogrn,
+        legal_address: c.legal_address || c.address || req.legal_address,
+        bank_account: c.account || req.bank_account, bank_name: c.bank || req.bank_name,
+        bik: c.bik || req.bik, corr_account: c.corr_account || req.corr_account,
       }
+      setSaving(true)
+      try { await saveEntity(merged, 'Реквизиты распознаны, но не сохранены к клиенту') } finally { setSaving(false) }
+    } catch (e) {
+      toast.error('Карточка не распознана', { detail: e instanceof Error ? e.message : NETWORK_ERROR })
     } finally { setParsing(false) }
   }
 

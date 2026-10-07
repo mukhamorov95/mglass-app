@@ -4,7 +4,9 @@
 // кнопкой — фонд подставляется по прошлой такой же проводке. «Не наши деньги»
 // прячутся в пропущенные (не удаляются, возвращаемы).
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { loadJson, sendOrToast, toast } from '@/lib/toast'
+import { promptDialog } from '@/lib/dialog'
 
 type Fund = { id: number; unit: string; fund_class: string; name: string }
 type Subfund = { id: number; fund_id: number; name: string }
@@ -35,25 +37,22 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
     [funds],
   )
 
-  const load = useCallback(async () => {
+  const [tick, setTick] = useState(0)
+  const reload = () => { setLoading(true); setTick(t => t + 1) }
+
+  useEffect(() => {
     if (!month) return
+    let alive = true
     const [y, m] = month.split('-').map(Number)
-    const from = `${month}-01`
     const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    setLoading(true)
-    try {
-      const r = await fetch(`/api/accounting/unposted?from=${from}&to=${to}`)
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error ?? 'Не загрузилось')
-      setItems(j.items as Item[])
-      setErr(null)
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Не загрузилось')
-    }
-    setLoading(false)
-  }, [month])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load() }, [load])
+    loadJson<{ items: Item[] }>(`/api/accounting/unposted?from=${month}-01&to=${to}`).then(res => {
+      if (!alive) return
+      if (res.error !== null) setErr(res.error)
+      else { setItems(res.data.items); setErr(null) }
+      setLoading(false)
+    })
+    return () => { alive = false }
+  }, [month, tick])
 
   const pick = (it: Item) => {
     const d = draft[it.id]
@@ -70,21 +69,29 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
   const setPick = (id: number, patch: Partial<{ fund: number; sub: number; unit: 'ip' | 'ooo' }>, base: Item) =>
     setDraft(p => ({ ...p, [id]: { ...pick(base), ...patch } }))
 
-  async function send(id: number, body: Record<string, unknown>) {
-    setBusy(id); setErr(null)
-    try {
-      const r = await fetch('/api/accounting/unposted', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment_id: id, ...body }),
-      })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(j.error ?? 'Не получилось')
-      await load()
-      onPosted()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Не получилось')
-    }
+  async function send(id: number, body: Record<string, unknown>, failTitle: string, done?: string) {
+    setBusy(id)
+    const r = await sendOrToast(failTitle, '/api/accounting/unposted', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payment_id: id, ...body }),
+    })
     setBusy(null)
+    if (!r) return
+    if (done) toast.success(done)
+    reload()
+    onPosted()
+  }
+
+  async function skip(it: Item) {
+    const reason = await promptDialog({
+      title: 'Не проводить оплату?',
+      text: `${it.doc.client ?? 'Без клиента'} · ${RUB(it.amount)}. Она уйдёт в «пропущенные» — вернуть можно в любой момент.`,
+      label: 'Почему не проводим',
+      placeholder: 'например: возврат, не наши деньги',
+      confirmLabel: 'Пропустить',
+    })
+    if (reason === null) return
+    send(it.id, { action: 'skip', reason: reason.trim() }, 'Оплата не пропущена', 'Оплата в пропущенных')
   }
 
   const visible = items.filter(i => i.skipped === showSkipped)
@@ -93,7 +100,12 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
 
   return (
     <div className="space-y-3">
-      {err && <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-[13px]">{err}</div>}
+      {err && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-[13px] flex items-center justify-between gap-3">
+          <span>Оплаты не загрузились: {err}</span>
+          <button onClick={reload} className="underline flex-shrink-0">повторить</button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <p className="text-[13px] text-[#6b6b66]">
@@ -105,7 +117,7 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
         </button>
       </div>
 
-      {visible.length === 0 && (
+      {!err && visible.length === 0 && (
         <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-8 text-center text-[13px] text-[#9a9a95]">
           {showSkipped ? 'Пропущенных нет' : 'Всё проведено — новых оплат за месяц нет'}
         </div>
@@ -130,7 +142,7 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
             </div>
 
             {showSkipped ? (
-              <button onClick={() => send(it.id, { action: 'unskip' })} disabled={busy === it.id}
+              <button onClick={() => send(it.id, { action: 'unskip' }, 'Оплата не возвращена')} disabled={busy === it.id}
                 className="mt-3 px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[13px] disabled:opacity-50">
                 вернуть в работу
               </button>
@@ -157,15 +169,11 @@ export function UnpostedTab({ unit, funds, subfunds, month, onPosted }: {
                 <button onClick={() => send(it.id, {
                   action: 'post', unit: d.unit, fund_id: d.fund, subfund_id: d.sub,
                   counterparty: it.doc.client, comment: it.doc.number ? `Заказ ${it.doc.number}` : null,
-                })} disabled={busy === it.id || !d.fund}
+                }, 'Оплата не проведена', 'Оплата проведена в ОДДС')} disabled={busy === it.id || !d.fund}
                   className="px-4 py-1.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold disabled:opacity-40">
                   {busy === it.id ? '…' : 'Провести'}
                 </button>
-                <button onClick={() => {
-                  const reason = prompt('Почему не проводим?')?.trim()
-                  if (reason === undefined) return
-                  send(it.id, { action: 'skip', reason })
-                }} disabled={busy === it.id}
+                <button onClick={() => skip(it)} disabled={busy === it.id}
                   className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[13px] text-[#6b6b66] disabled:opacity-50">
                   пропустить
                 </button>

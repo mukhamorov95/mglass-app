@@ -7,6 +7,7 @@ import { SELLER_B2B } from '@/lib/companyRequisites'
 import { paymentQrStringFor } from '@/lib/paymentQr'
 import { rublesInWords } from '@/lib/numToWords'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Единый счёт на несколько B2B-заказов. Заказы идут на своих заказчиков, но
 // плательщик выбирается один (напр. MR GLASS выставляет счёт за заказы Дмитрия
@@ -129,35 +130,45 @@ export default function BatchInvoicePage() {
   // Счёт становится записью: печать/PDF регистрируют единый счёт в реестре
   // побочным эффектом. API идемпотентен по НАБОРУ заказов, поэтому повторная
   // печать не плодит дубли, а правка номера менеджером не создаёт второй счёт.
+  // Отказ реестра (например, заказ уже в другом неоплаченном счёте) показывается словами.
   const registeredRef = useRef(false)
-  async function postInvoice(): Promise<boolean> {
-    if (!grandTotal || !ids.length) return false
-    const r = await fetch('/api/invoices', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        invoice_no: invNo, payer_client_id: payerEntity?.client_id ?? null, payer_entity_id: payerEntityId,
-        payer_name: payerEntity ? entityTitle(payerEntity) : null,
-        order_ids: ids, amount: grandTotal, vat,
-      }),
-    })
-    const d = await r.json().catch(() => ({}))
-    if (r.ok && d.id) setSavedInvId(d.id as number)
-    return r.ok
+  async function postInvoice(): Promise<{ ok: boolean; error?: string; updated?: boolean }> {
+    if (!grandTotal || !ids.length) return { ok: false, error: 'Нет заказов или суммы' }
+    let r: Response
+    try {
+      r = await fetch('/api/invoices', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoice_no: invNo, payer_client_id: payerEntity?.client_id ?? null, payer_entity_id: payerEntityId,
+          payer_name: payerEntity ? entityTitle(payerEntity) : null,
+          order_ids: ids, amount: grandTotal, vat,
+        }),
+      })
+    } catch { return { ok: false, error: NETWORK_ERROR } }
+    if (!r.ok) return { ok: false, error: await responseError(r) }
+    const d = await r.json().catch(() => ({})) as { id?: number; updated?: boolean }
+    if (d.id) setSavedInvId(d.id)
+    return { ok: true, updated: d.updated === true }
   }
   // Явная кнопка — с обратной связью.
   async function saveInvoice() {
     setSavingInv(true)
     try {
-      const ok = await postInvoice()
-      registeredRef.current = registeredRef.current || ok
+      const res = await postInvoice()
+      registeredRef.current = registeredRef.current || res.ok
+      if (!res.ok) toast.error('Счёт не сохранён в реестре', { detail: res.error })
+      else if (res.updated) toast.success('Счёт в реестре обновлён', { detail: 'Сумма и плательщик — как в заказах сейчас' })
     } finally { setSavingInv(false) }
   }
-  // Тихая регистрация при печати/скачивании — один раз, best-effort.
+  // Регистрация при печати/скачивании — один раз; печать не останавливает, но отказ говорит.
   async function ensureRegistered() {
     if (registeredRef.current || !grandTotal || !ids.length) return
     registeredRef.current = true
-    try { if (!(await postInvoice())) registeredRef.current = false }
-    catch { registeredRef.current = false }
+    const res = await postInvoice()
+    if (!res.ok) {
+      registeredRef.current = false
+      toast.error('Счёт не попал в реестр счетов', { detail: `${res.error ?? 'Неизвестная ошибка'}. Печать не остановлена — повторите кнопкой «💾 Сохранить счёт».` })
+    }
   }
 
   async function savePayerToOrders() {
@@ -168,6 +179,9 @@ export default function BatchInvoicePage() {
         body: JSON.stringify({ ids, payerId: payerEntity?.client_id ?? null }),
       })
       if (r.ok) { setSavedPayer(true); setTimeout(() => setSavedPayer(false), 2000) }
+      else toast.error('Плательщик не сохранён в заказах', { detail: await responseError(r) })
+    } catch {
+      toast.error('Плательщик не сохранён в заказах', { detail: NETWORK_ERROR })
     } finally { setSavingPayer(false) }
   }
 
@@ -186,8 +200,11 @@ export default function BatchInvoicePage() {
       pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
       pdf.save(`Счёт-${invNo || 'единый'}.pdf`)
-    } catch {
-      alert('Не удалось сформировать PDF. Используйте «Печать» → Сохранить как PDF.')
+    } catch (e) {
+      toast.error('Не удалось сформировать PDF', {
+        detail: (e instanceof Error ? e.message : 'неизвестная ошибка') + '. Лист можно сохранить через «Печать» → Сохранить как PDF.',
+        action: { label: 'Печать', onClick: () => window.print() },
+      })
     }
   }
 

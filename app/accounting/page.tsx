@@ -18,6 +18,11 @@ import { PayrollTab } from '@/components/accounting/PayrollTab'
 import { TaxesTab } from '@/components/accounting/TaxesTab'
 import { CounterpartiesTab } from '@/components/accounting/CounterpartiesTab'
 import { AuditTab } from '@/components/accounting/AuditTab'
+import { QueueTab } from '@/components/accounting/QueueTab'
+import { loadJson, sendOrToast, toast } from '@/lib/toast'
+import { confirmDialog, promptDialog } from '@/lib/dialog'
+import { readPaged } from '@/lib/money/paged'
+import { queueCounts, queueTotal, type Count, type QueueSnapshot } from '@/lib/accounting/queue'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -30,6 +35,17 @@ const monthLabel = (ym: string) => {
   const [y, m] = ym.split('-').map(Number)
   return ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'][m - 1] + ' ' + y
 }
+// Счётчик на вкладке: сколько ждёт; источник не загрузился — «!», а не пусто и не 0.
+function TabBadge({ value, tone = 'amber' }: { value: Count | undefined; tone?: 'amber' | 'dark' }) {
+  if (value === undefined || value === null || value === 0) return null
+  if (typeof value === 'object') {
+    return <span title={`Не загрузилось: ${value.error}`} className="ml-1.5 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[11px] font-semibold">!</span>
+  }
+  return (
+    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${tone === 'dark' ? 'bg-[#111110] text-white' : 'bg-amber-100 text-amber-800'}`}>{value}</span>
+  )
+}
+
 const shiftMonth = (ym: string, d: number) => {
   const [y, m] = ym.split('-').map(Number)
   const t = y * 12 + (m - 1) + d
@@ -38,7 +54,12 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'payroll' | 'taxes' | 'partners' | 'docs' | 'audit' | 'requests' | 'committee' | 'notes'>('odds')
+  // Стартовая вкладка — «Ждут действия»: бухгалтер входит в свою очередь, а не в ОДДС.
+  const [tab, setTab] = useState<'queue' | 'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'payroll' | 'taxes' | 'partners' | 'docs' | 'audit' | 'requests' | 'committee' | 'notes'>('queue')
+  const [queue, setQueue] = useState<QueueSnapshot | null>(null)
+  const [queueErr, setQueueErr] = useState<string | null>(null)
+  const [queueLoading, setQueueLoading] = useState(true)
+  const [queueTick, setQueueTick] = useState(0)
   const [unposted, setUnposted] = useState(0)
   const [locked, setLocked] = useState(false)
   const [log, setLog] = useState<{ id: number; entry_id: number; action: string; entry_date: string; actor: string | null; at: string; amount: number }[]>([])
@@ -52,7 +73,14 @@ export default function AccountingPage() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [open, setOpen] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState<string | null>(null)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
+  const [dataTick, setDataTick] = useState(0)
+  const [periodErr, setPeriodErr] = useState<string | null>(null)
+  const [periodTick, setPeriodTick] = useState(0)
+  const [unpostedErr, setUnpostedErr] = useState<string | null>(null)
+  const [unpostedTick, setUnpostedTick] = useState(0)
+  const [fundForm, setFundForm] = useState<{ name: string; cls: 'variable' | 'fixed' | 'fund' } | null>(null)
+  const [fundSaving, setFundSaving] = useState(false)
 
   // форма ввода
   const [fDate, setFDate] = useState('')
@@ -64,8 +92,6 @@ export default function AccountingPage() {
   const [fCp, setFCp] = useState('')
   const [fComment, setFComment] = useState('')
   const [saving, setSaving] = useState(false)
-
-  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2800) }
 
   useEffect(() => {
     const d = new Date()
@@ -86,64 +112,107 @@ export default function AccountingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const load = useCallback(async () => {
+  const reloadData = () => setDataTick(t => t + 1)
+  const reloadPeriod = () => setPeriodTick(t => t + 1)
+  const reloadUnposted = () => setUnpostedTick(t => t + 1)
+
+  // Фонды и операции месяца — постранично и с ошибкой на экране: молча пустой
+  // справочник выглядел как «операций нет», а ОДДС показывал нули.
+  useEffect(() => {
     if (!month) return
+    let alive = true
     const from = `${month}-01`
     const to = `${shiftMonth(month, 1)}-01`
-    const [f, s, a, e] = await Promise.all([
-      sb.from('cashflow_funds').select('*').eq('active', true).order('sort'),
-      sb.from('cashflow_subfunds').select('*').eq('active', true).order('sort'),
-      sb.from('cashflow_accounts').select('*').eq('active', true).order('sort'),
-      sb.from('cashflow_entries').select('*').gte('entry_date', from).lt('entry_date', to).order('id', { ascending: false }),
-    ])
-    setFunds((f.data ?? []) as Fund[])
-    setSubfunds((s.data ?? []) as Subfund[])
-    setAccounts((a.data ?? []) as Account[])
-    setEntries((e.data ?? []) as Entry[])
-    setLoading(false)
-  }, [sb, month])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
+    Promise.all([
+      readPaged(() => sb.from('cashflow_funds').select('*').eq('active', true).order('sort').order('id')),
+      readPaged(() => sb.from('cashflow_subfunds').select('*').eq('active', true).order('sort').order('id')),
+      readPaged(() => sb.from('cashflow_accounts').select('*').eq('active', true).order('sort').order('id')),
+      readPaged(() => sb.from('cashflow_entries').select('*').gte('entry_date', from).lt('entry_date', to).order('id', { ascending: false })),
+    ]).then(([f, s, a, e]) => {
+      if (!alive) return
+      setFunds(f as Fund[])
+      setSubfunds(s as Subfund[])
+      setAccounts(a as Account[])
+      setEntries(e as Entry[])
+      setLoadErr(null)
+      setLoading(false)
+    }).catch((e: unknown) => {
+      if (!alive) return
+      setLoadErr(e instanceof Error ? e.message : String(e))
+      setLoading(false)
+    })
+    return () => { alive = false }
+  }, [sb, month, dataTick])
 
-  const loadPeriod = useCallback(async () => {
+  useEffect(() => {
     if (!month) return
-    const r = await fetch(`/api/accounting/period?unit=${unit}&month=${month}`)
-    if (!r.ok) return
-    const j = await r.json()
-    setLocked(!!j.locked)
-    setLog(j.log ?? [])
-  }, [unit, month])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { loadPeriod().catch(() => {}) }, [loadPeriod])
+    let alive = true
+    loadJson<{ locked: boolean; log: typeof log }>(`/api/accounting/period?unit=${unit}&month=${month}`).then(res => {
+      if (!alive) return
+      if (res.error !== null) { setPeriodErr(res.error); return }
+      setLocked(!!res.data.locked)
+      setLog(res.data.log ?? [])
+      setPeriodErr(null)
+    })
+    return () => { alive = false }
+  }, [unit, month, periodTick])
 
   async function togglePeriod() {
-    const action = locked ? 'unlock' : 'lock'
-    if (!confirm(locked
-      ? 'Открыть месяц заново? Правки снова станут возможны.'
-      : 'Закрыть месяц? После этого операции этого месяца нельзя будет ни добавить, ни изменить.')) return
-    const r = await fetch('/api/accounting/period', {
+    const ok = await confirmDialog(locked
+      ? { title: 'Открыть месяц заново?', text: 'Правки операций этого месяца снова станут возможны.', confirmLabel: 'Открыть месяц' }
+      : { title: 'Закрыть месяц?', text: 'После этого операции месяца нельзя будет ни добавить, ни изменить.', confirmLabel: 'Закрыть месяц', danger: true })
+    if (!ok) return
+    const r = await sendOrToast(locked ? 'Месяц не открыт' : 'Месяц не закрыт', '/api/accounting/period', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ unit, month, action }),
+      body: JSON.stringify({ unit, month, action: locked ? 'unlock' : 'lock' }),
     })
-    const j = await r.json().catch(() => ({}))
-    flash(r.ok ? (j.locked ? 'Месяц закрыт' : 'Месяц открыт') : (j.error ?? 'Не получилось'))
-    await loadPeriod()
+    if (r) {
+      const j = await r.json().catch(() => ({})) as { locked?: boolean }
+      toast.success(j.locked ? 'Месяц закрыт' : 'Месяц открыт')
+    }
+    reloadPeriod()
   }
 
-  const loadUnposted = useCallback(async () => {
+  useEffect(() => {
     if (!month) return
+    let alive = true
     const [y, m] = month.split('-').map(Number)
     const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    const r = await fetch(`/api/accounting/unposted?from=${month}-01&to=${to}`)
-    if (!r.ok) return
-    const j = await r.json()
-    setUnposted((j.items as { skipped: boolean }[]).filter(i => !i.skipped).length)
-  }, [month])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { loadUnposted().catch(() => {}) }, [loadUnposted])
+    loadJson<{ items: { skipped: boolean }[] }>(`/api/accounting/unposted?from=${month}-01&to=${to}`).then(res => {
+      if (!alive) return
+      if (res.error !== null) { setUnpostedErr(res.error); return }
+      setUnposted(res.data.items.filter(i => !i.skipped).length)
+      setUnpostedErr(null)
+    })
+    return () => { alive = false }
+  }, [month, unpostedTick])
 
   const isFin = ['accountant', 'cfo', 'admin', 'ceo'].includes(myRole)
   const isBuyer = myRole === 'buyer'
+
+  // Очередь «ждут действия» и счётчики вкладок — один запрос; закупщику не нужен.
+  useEffect(() => {
+    if (!myRole || isBuyer) return
+    let alive = true
+    loadJson<QueueSnapshot>('/api/accounting/queue').then(res => {
+      if (!alive) return
+      if (res.error !== null) setQueueErr(res.error)
+      else { setQueue(res.data); setQueueErr(null) }
+      setQueueLoading(false)
+    })
+    return () => { alive = false }
+  }, [myRole, isBuyer, queueTick])
+  const reloadQueue = () => { setQueueLoading(true); setQueueTick(n => n + 1) }
+  const counts = queue ? queueCounts(queue) : null
+  const failAll: Count | undefined = queueErr ? { error: queueErr } : undefined
+  const tabCount = (k: string): Count | undefined => {
+    if (k === 'queue') return counts ? queueTotal(counts).total : failAll
+    if (k === 'bank') return counts ? counts.bank : failAll
+    if (k === 'audit') return counts ? counts.audit : failAll
+    if (k === 'docs') return counts ? counts.invoices : failAll
+    if (k === 'unposted') return unpostedErr ? { error: unpostedErr } : unposted
+    return undefined
+  }
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
   const unitEntries = useMemo(() => entries.filter(e => e.unit === unit), [entries, unit])
   const sumFund = useCallback((fundId: number) => unitEntries.filter(e => e.fund_id === fundId).reduce((s, e) => s + Number(e.amount), 0), [unitEntries])
@@ -166,41 +235,54 @@ export default function AccountingPage() {
       setFFund(last.fund_id)
       setFSub(last.subfund_id ?? 0)
       if (last.account) setFAccount(last.account)
-      flash('Фонд подставлен по контрагенту')
+      toast.info('Фонд подставлен по контрагенту')
     }
   }
 
   async function addSubfund(fundId: number) {
-    const name = prompt('Название нового подфонда:')?.trim()
+    const fund = funds.find(f => f.id === fundId)
+    const raw = await promptDialog({
+      title: 'Новый подфонд',
+      text: fund ? `В фонде «${fund.name}»` : undefined,
+      label: 'Название',
+      confirmLabel: 'Добавить',
+    })
+    const name = raw?.trim()
     if (!name) return
     const { error } = await sb.from('cashflow_subfunds').insert({ fund_id: fundId, name, sort: 99 })
-    if (error) { flash('Не добавилось: ' + error.message); return }
-    await load()
+    if (error) { toast.error('Подфонд не добавлен', { detail: error.message }); return }
+    toast.success(`Подфонд «${name}» добавлен`)
+    reloadData()
   }
 
+  // Класс фонда выбирается из списка: раньше вводили «1/2/3» в системном окне, и любая
+  // опечатка молча превращалась в «постоянные».
   async function addFund() {
-    const name = prompt('Название нового фонда:')?.trim()
-    if (!name) return
-    const cls = prompt('Класс: 1 — переменные, 2 — постоянные, 3 — фонды', '2')?.trim()
-    const fund_class = cls === '1' ? 'variable' : cls === '3' ? 'fund' : 'fixed'
-    const { error } = await sb.from('cashflow_funds').insert({ unit, flow: 'out', fund_class, name, sort: 98 })
-    if (error) { flash('Не добавилось: ' + error.message); return }
-    await load()
+    if (!fundForm) return
+    const name = fundForm.name.trim()
+    if (!name) { toast.error('Нужно название фонда'); return }
+    setFundSaving(true)
+    const { error } = await sb.from('cashflow_funds').insert({ unit, flow: 'out', fund_class: fundForm.cls, name, sort: 98 })
+    setFundSaving(false)
+    if (error) { toast.error('Фонд не добавлен', { detail: error.message }); return }
+    toast.success(`Фонд «${name}» добавлен`)
+    setFundForm(null)
+    reloadData()
   }
 
   async function attach(entryId: number, file: File) {
     const body = new FormData()
     body.append('entry_id', String(entryId))
     body.append('file', file)
-    const r = await fetch('/api/accounting/entry-attachment', { method: 'POST', body })
-    const j = await r.json().catch(() => ({}))
-    flash(r.ok ? 'Вложение сохранено ✓' : (j.error ?? 'Не загрузилось'))
-    if (r.ok) await load()
+    const r = await sendOrToast('Вложение не сохранено', '/api/accounting/entry-attachment', { method: 'POST', body })
+    if (!r) return
+    toast.success('Вложение сохранено')
+    reloadData()
   }
 
   async function saveEntry() {
     const amount = Number(fAmount.replace(/\s/g, '').replace(',', '.'))
-    if (!fFund || !(amount > 0)) { flash('Выбери фонд и сумму'); return }
+    if (!fFund || !(amount > 0)) { toast.error('Выберите фонд и сумму больше нуля'); return }
     setSaving(true)
     const { data: { user } } = await sb.auth.getUser()
     let name: string | null = null
@@ -215,11 +297,11 @@ export default function AccountingPage() {
       entered_by: user?.id ?? null, entered_by_name: name,
     })
     setSaving(false)
-    if (error) { flash('Ошибка: ' + error.message); return }
+    if (error) { toast.error('Операция не записана', { detail: error.message }); return }
     localStorage.setItem('acc_unit', unit)
     setFAmount(''); setFCp(''); setFComment(''); setFFund(0); setFSub(0)
-    flash('Операция записана ✓')
-    await load()
+    toast.success('Операция записана')
+    reloadData()
   }
 
   if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
@@ -273,8 +355,6 @@ export default function AccountingPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-16">
-      {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl shadow-lg text-[13px] font-semibold bg-[#111110] text-white">{toast}</div>}
-
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-6 pb-0 sticky top-0 z-40">
         <div className="max-w-[760px] mx-auto">
           <div className="flex items-center justify-between">
@@ -291,15 +371,13 @@ export default function AccountingPage() {
           <div className="flex gap-1 mt-3 -mb-px overflow-x-auto no-scrollbar">
             {(isBuyer
               ? ([['requests', 'Заявки на оплату']] as const)
-              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['bank', 'Выписка'], ['payroll', 'Зарплата'], ['taxes', 'Налоги'], ['partners', 'Контрагенты'], ['docs', 'Документы'], ['audit', '✅ Проверка'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
+              : ([['queue', 'Ждут действия'], ['audit', '✅ Проверка'], ['bank', 'Выписка'], ['unposted', 'К проведению'], ['docs', 'Документы'], ['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['payroll', 'Зарплата'], ['taxes', 'Налоги'], ['partners', 'Контрагенты'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
               <Fragment key={k}>
                 <button onClick={() => setTab(k)}
                   className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
                   {label}
-                  {k === 'unposted' && unposted > 0 && (
-                    <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">{unposted}</span>
-                  )}
+                  <TabBadge value={tabCount(k)} tone={k === 'queue' ? 'dark' : 'amber'} />
                 </button>
                 {/* Реестр УПД — отдельная страница (этап 8 ORDER_PANEL_ROUTE), закупщику закрыт. */}
                 {k === 'docs' && (
@@ -315,7 +393,17 @@ export default function AccountingPage() {
       </div>
 
       <div className="max-w-[760px] mx-auto px-4 pt-4">
-        {tab === 'odds' && (
+        {loadErr && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 text-[13px] flex items-center justify-between gap-3">
+            <span>Фонды и операции месяца не загрузились: {loadErr}. Суммы ОДДС и списки фондов сейчас неполные.</span>
+            <button onClick={() => { setLoading(true); reloadData() }} className="underline flex-shrink-0">повторить</button>
+          </div>
+        )}
+        {tab === 'queue' && !isBuyer && (
+          <QueueTab data={queue} error={queueErr} loading={queueLoading} onGo={setTab} onReload={reloadQueue} />
+        )}
+
+        {tab === 'odds' && !loadErr && (
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -324,14 +412,51 @@ export default function AccountingPage() {
                 <button onClick={() => setMonth(shiftMonth(month, 1))} className="px-2.5 py-1 rounded-md border border-[#e4e4e0] text-[13px]">→</button>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={togglePeriod}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border ${
-                    locked ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
-                  {locked ? '🔒 месяц закрыт' : 'Закрыть месяц'}
-                </button>
-                {!locked && <button onClick={addFund} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-medium">＋ Фонд</button>}
+                {periodErr ? (
+                  <button onClick={reloadPeriod} title={periodErr}
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-red-200 bg-red-50 text-red-700">
+                    статус месяца не загрузился · повторить
+                  </button>
+                ) : (
+                  <button onClick={togglePeriod}
+                    className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border ${
+                      locked ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
+                    {locked ? '🔒 месяц закрыт' : 'Закрыть месяц'}
+                  </button>
+                )}
+                {!locked && !periodErr && (
+                  <button onClick={() => setFundForm(f => f ? null : { name: '', cls: 'fixed' })}
+                    className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-medium">＋ Фонд</button>
+                )}
               </div>
             </div>
+
+            {fundForm && (
+              <div className="mb-3 bg-white rounded-xl border border-[#e4e4e0] p-3 flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[180px]">
+                  <label className="text-[12px] text-[#9a9a95]">Название фонда · {unit === 'ip' ? 'ИП' : 'ООО'}</label>
+                  <input autoFocus value={fundForm.name} onChange={e => setFundForm({ ...fundForm, name: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter') addFund() }}
+                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#111110]" />
+                </div>
+                <div>
+                  <label className="text-[12px] text-[#9a9a95]">Класс</label>
+                  <select value={fundForm.cls} onChange={e => setFundForm({ ...fundForm, cls: e.target.value as 'variable' | 'fixed' | 'fund' })}
+                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] outline-none bg-white">
+                    <option value="variable">{CLASS_LABEL.variable}</option>
+                    <option value="fixed">{CLASS_LABEL.fixed}</option>
+                    <option value="fund">{CLASS_LABEL.fund}</option>
+                  </select>
+                </div>
+                <button onClick={addFund} disabled={fundSaving || !fundForm.name.trim()}
+                  className="px-4 py-2 rounded-lg bg-[#111110] text-white text-[13px] font-semibold disabled:opacity-40">
+                  {fundSaving ? '…' : 'Добавить'}
+                </button>
+                <button onClick={() => setFundForm(null)} className="px-3 py-2 rounded-lg border border-[#e4e4e0] text-[13px] text-[#6b6b66]">
+                  Отмена
+                </button>
+              </div>
+            )}
 
             {unitFunds.filter(f => f.fund_class === 'income').map(fundRow)}
 
@@ -377,7 +502,7 @@ export default function AccountingPage() {
           </div>
         )}
 
-        {tab === 'entry' && (
+        {tab === 'entry' && !loadErr && (
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -484,22 +609,22 @@ export default function AccountingPage() {
 
         {tab === 'unposted' && !isBuyer && (
           <UnpostedTab unit={unit} funds={funds} subfunds={subfunds} month={month}
-            onPosted={() => { load(); loadUnposted() }} />
+            onPosted={() => { reloadData(); reloadUnposted(); reloadQueue() }} />
         )}
         {tab === 'bank' && !isBuyer && (
-          <BankTab unit={unit} funds={funds} subfunds={subfunds} onPosted={() => load()} />
+          <BankTab unit={unit} funds={funds} subfunds={subfunds} onPosted={() => { reloadData(); reloadUnposted(); reloadQueue() }} />
         )}
         {tab === 'payroll' && !isBuyer && (
-          <PayrollTab unit={unit} month={month} onChanged={() => load()} />
+          <PayrollTab unit={unit} month={month} onChanged={reloadData} />
         )}
         {tab === 'taxes' && !isBuyer && (
-          <TaxesTab unit={unit} subfunds={subfunds} today={fDate} onPaid={() => load()} />
+          <TaxesTab unit={unit} subfunds={subfunds} today={fDate} onPaid={reloadData} />
         )}
         {tab === 'partners' && !isBuyer && (
           <CounterpartiesTab unit={unit} from={`${month.slice(0, 4)}-01-01`} />
         )}
         {tab === 'docs' && !isBuyer && <DocumentsTab />}
-        {tab === 'audit' && !isBuyer && <AuditTab today={fDate} />}
+        {tab === 'audit' && !isBuyer && <AuditTab today={fDate} onGo={setTab} />}
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
         {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}

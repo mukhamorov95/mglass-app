@@ -19,7 +19,7 @@ export type AuditInput = {
   bankRowsNew: { amount: number; op_date: string }[]
   entries: { id: number; unit: string; entry_date: string; fund_id: number; amount: number; counterparty: string | null; kind: string }[]
   approvedRequests: { amount: number; status_changed_at: string | null; counterparty: string | null }[]
-  openInvoices: { amount: number; issued_at: string; no: string }[]
+  openInvoices: { amount: number; issued_at: string; no: string }[]   // не оплаченные ПО ПЛАТЕЖАМ; amount — остаток
   taxes: { title: string; due_date: string; amount: number | null; status: string }[]
   payrollDebt: { name: string; debt: number }[]
   openMonths: { unit: string; month: string }[]   // месяцы с операциями, но без замка
@@ -169,10 +169,13 @@ export function audit(input: AuditInput): Finding[] {
   return out.sort((a, b) => rank[a.severity] - rank[b.severity])
 }
 
+// Сводка уходит в HTML-режиме Telegram: «<» или «&» в имени (зарплата, налог) ломали бы её целиком.
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
 // Короткий текст для Telegram: только то, что требует действий сегодня.
 export function digest(findings: Finding[]): string | null {
   const worth = findings.filter(f => f.severity !== 'low')
   if (!worth.length) return null
   return '🧾 Бухгалтерия, проверка:\n\n' + worth.map(f =>
-    `• ${f.title} — ${f.detail}${f.amount ? ` (${RUB(f.amount)})` : ''}`).join('\n')
+    `• ${esc(f.title)} — ${esc(f.detail)}${f.amount ? ` (${RUB(f.amount)})` : ''}`).join('\n')
 }

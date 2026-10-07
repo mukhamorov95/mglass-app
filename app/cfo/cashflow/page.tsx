@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { liveOrders, orderAmount } from '@/lib/liveOrders'
 import { companyFixed } from '@/lib/breakeven'
+import { loadJson } from '@/lib/toast'
+import { expectedPayDay, PAYMENT_TERM_DAYS, type Receivables } from '@/lib/money/receivables'
 
 // ДДС / платёжный календарь: прогноз остатка денег по неделям.
-// Приходы: неоплаченные счета B2B (дебиторка; ожидание = дата счёта + 14 дней,
-// просроченные — на ближайшую неделю) + ручные плановые приходы.
+// Приходы: долг клиентов (lib/money/receivables — та же функция, что /cfo/receivables и /ceo;
+// ожидание = отгрузка или запуск + 14 дней, просроченные — на ближайшие дни) + ручные плановые приходы.
 // Платежи: постоянные расходы из финмодели (1-го числа каждого месяца, Σ юнитов
 // finplan_models) + ручные платежи (planned_payments).
 // Остаток на счёте сегодня вводится вручную и хранится в finplan_models unit='total'.
@@ -34,18 +35,13 @@ const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.get
 const fmtDate = (d: Date) => d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })
 const inputCls = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-blue-700 font-semibold outline-none focus:border-[#111110] min-w-0'
 
-const parseNotes = (raw: unknown): Record<string, unknown> => {
-  if (!raw) return {}
-  if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return {} } }
-  return raw as Record<string, unknown>
-}
-
 export default function CashflowPage() {
   const sb = createClient()
   const [loading, setLoading] = useState(true)
   const [cash, setCash] = useState(0)            // остаток на счёте сегодня
   const [fixedMonthly, setFixedMonthly] = useState(0)
   const [receivables, setReceivables] = useState<Flow[]>([])
+  const [recErr, setRecErr] = useState<string | null>(null)
   const [manual, setManual] = useState<Manual[]>([])
   const [meName, setMeName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -62,21 +58,11 @@ export default function CashflowPage() {
       const { data: p } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
       setMeName(p?.name ?? user.email ?? '')
     }
-    // Дебиторка — только живые заказы и постранично: PostgREST режет ответ на 1000
-    // строках, и счёт мог просто не доехать. Та же методика, что /cfo/receivables и /ceo.
-    type BoRow = { id: number; custom_number: string | null; client_name: string | null; total_sale_inc_vat: number | null; total_after_discount: number | null; notes: unknown }
-    const bo: BoRow[] = []
-    const [{ data: fp }, { data: pp }] = await Promise.all([
+    const [{ data: fp }, { data: pp }, rec] = await Promise.all([
       sb.from('finplan_models').select('unit,data'),
       sb.from('planned_payments').select('*').eq('status', 'planned').order('due_date'),
+      loadJson<Receivables>('/api/accounting/receivables'),
     ])
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await liveOrders(sb, 'id, custom_number, client_name, total_sale_inc_vat, total_after_discount, notes')
-        .order('created_at', { ascending: false }).range(from, from + 999)
-      if (error || !data?.length) break
-      bo.push(...(data as unknown as BoRow[]))
-      if (data.length < 1000) break
-    }
     // остаток на счёте + постоянные из финмодели
     let fixed = 0
     for (const row of fp ?? []) {
@@ -88,21 +74,14 @@ export default function CashflowPage() {
     }
     fixed += companyFixed((fp ?? []) as { unit: string; data: unknown }[]).extra.reduce((s, f) => s + f.amount, 0)
     setFixedMonthly(fixed)
-    // дебиторка → ожидаемые приходы
-    const today = new Date(); today.setHours(0, 0, 0, 0)
+    // долг клиентов → ожидаемые приходы. Не загрузился — говорим, а не прогнозируем без приходов.
     const flows: Flow[] = []
-    for (const o of bo) {
-      const n = parseNotes(o.notes) as { status?: string; payment_status?: string; prepayment_amount?: number; stages?: Record<string, string> }
-      const st = n.stages ?? {}
-      if (!['confirmed', 'agreed', 'sent'].includes(n.status ?? '')) continue
-      if (!st.invoice_sent || st.invoice_paid || n.payment_status === 'paid') continue
-      const total = orderAmount(o)
-      const debt = Math.max(0, total - (Number(n.prepayment_amount) || 0))
-      if (debt <= 0) continue
-      let expect = addDays(new Date(st.invoice_sent), 14)
-      if (expect < today) expect = addDays(today, 3) // просроченный — ждём на этой неделе
-      flows.push({ date: expect, title: `Счёт №${o.custom_number || o.id} · ${o.client_name || 'B2B'}`, amount: debt, kind: 'in', source: 'auto' })
+    if (rec.data) {
+      for (const r of rec.data.rows) {
+        flows.push({ date: new Date(expectedPayDay(r, rec.data.today) + 'T00:00:00'), title: `Заказ ${r.ref} · ${r.client}`, amount: r.debt, kind: 'in', source: 'auto' })
+      }
     }
+    setRecErr(rec.error)
     setReceivables(flows)
     setManual((pp ?? []) as Manual[])
     setLoading(false)
@@ -190,9 +169,15 @@ export default function CashflowPage() {
             <p className="text-[10px] text-[#c4c4be] mt-1">{saving ? 'сохраняю…' : 'сохраняется автоматически'}</p>
           </div>
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a9a95]">Ожидаемые приходы (дебиторка)</p>
-            <p className="text-[18px] font-bold font-mono text-emerald-700 mt-2">{fmt(receivables.reduce((s, f) => s + f.amount, 0))}</p>
-            <p className="text-[10px] text-[#c4c4be] mt-1">{receivables.length} счёт(ов) · срок = дата счёта + 14 дней</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a9a95]">Ожидаемые приходы (долг клиентов)</p>
+            {recErr ? (
+              <p className="text-[12px] text-red-700 mt-2">Долг не загрузился: {recErr} — прогноз ниже без приходов по заказам</p>
+            ) : (
+              <>
+                <p className="text-[18px] font-bold font-mono text-emerald-700 mt-2">{fmt(receivables.reduce((s, f) => s + f.amount, 0))}</p>
+                <p className="text-[10px] text-[#c4c4be] mt-1">{receivables.length} заказ(ов) · срок = отгрузка или запуск + {PAYMENT_TERM_DAYS} дней</p>
+              </>
+            )}
           </div>
           <div className={`rounded-xl p-4 border ${firstGap ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
             <p className={`text-[10px] font-bold uppercase tracking-widest ${firstGap ? 'text-red-700' : 'text-emerald-700'}`}>

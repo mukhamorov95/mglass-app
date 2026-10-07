@@ -3,6 +3,8 @@ import { requireRole } from '@/lib/apiAuth'
 import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { readPaged, readIn, type Row } from '@/lib/money/paged'
+import { loadPostedPaymentIds, loadPaymentSkips } from '@/lib/accounting/postedPayments'
 
 // Б5: мост «оплата → ДДС». Оплаты живут в ядре payments, куда бухгалтеру закрыт
 // доступ по RLS (и правильно: там же маржа продаж). Поэтому отдаём срез через
@@ -30,31 +32,39 @@ export async function GET(req: NextRequest) {
   }
 
   const svc = createServiceClient()
-  const [{ data: pays }, { data: posted }, { data: skips }] = await Promise.all([
-    svc.from('payments')
-      .select('id,amount,paid_at,kind,method,note,b2b_order_id,order_id,crm_sale_id')
-      .is('voided_at', null).gte('paid_at', from).lte('paid_at', to)
-      .order('paid_at', { ascending: false }),
-    svc.from('cashflow_entries').select('payment_id').not('payment_id', 'is', null),
-    svc.from('cashflow_payment_skips').select('payment_id,reason'),
-  ])
-
-  const done = new Set((posted ?? []).map(r => Number(r.payment_id)))
-  const skipped = new Map((skips ?? []).map(r => [Number(r.payment_id), r.reason as string | null]))
-  const rows = (pays ?? []).filter(p => !done.has(Number(p.id)))
+  let pays: Row[], done: Set<number>, skipped: Map<number, string | null>
+  try {
+    [pays, done, skipped] = await Promise.all([
+      readPaged(() => svc.from('payments')
+        .select('id,amount,paid_at,kind,method,note,b2b_order_id,order_id,crm_sale_id')
+        .is('voided_at', null).gte('paid_at', from).lte('paid_at', to)
+        .order('paid_at', { ascending: false }).order('id')),
+      loadPostedPaymentIds(svc),
+      loadPaymentSkips(svc),
+    ])
+  } catch (e) {
+    return NextResponse.json({ error: `Платежи не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
+  const rows = pays.filter(p => !done.has(Number(p.id)))
 
   // Документы платежей — тремя пачками, чтобы не дёргать базу построчно
-  const b2bIds = rows.map(r => r.b2b_order_id).filter(Boolean) as number[]
-  const b2cIds = rows.map(r => r.order_id).filter(Boolean) as string[]
-  const saleIds = rows.map(r => r.crm_sale_id).filter(Boolean) as number[]
-  const [b2b, b2c, sales] = await Promise.all([
-    b2bIds.length ? svc.from('b2b_orders').select('id,client_name,custom_number').in('id', b2bIds) : { data: [] },
-    b2cIds.length ? svc.from('orders').select('id,client_name,number,custom_number').in('id', b2cIds) : { data: [] },
-    saleIds.length ? svc.from('crm_sales').select('id,client,order_no').in('id', saleIds) : { data: [] },
-  ])
-  const b2bMap = new Map((b2b.data ?? []).map(o => [String(o.id), o]))
-  const b2cMap = new Map((b2c.data ?? []).map(o => [String(o.id), o]))
-  const saleMap = new Map((sales.data ?? []).map(o => [String(o.id), o]))
+  const b2bIds = [...new Set(rows.map(r => r.b2b_order_id).filter(Boolean))] as number[]
+  const b2cIds = [...new Set(rows.map(r => r.order_id).filter(Boolean))] as string[]
+  const saleIds = [...new Set(rows.map(r => r.crm_sale_id).filter(Boolean))] as number[]
+  let b2b: Row[], b2c: Row[], sales: Row[]
+  try {
+    [b2b, b2c, sales] = await Promise.all([
+      readIn(b2bIds, part => svc.from('b2b_orders').select('id,client_name,custom_number').in('id', part).order('id')),
+      readIn(b2cIds, part => svc.from('orders').select('id,client_name,number,custom_number').in('id', part).order('id')),
+      readIn(saleIds, part => svc.from('crm_sales').select('id,client,order_no').in('id', part).order('id')),
+    ])
+  } catch (e) {
+    return NextResponse.json({ error: `Документы платежей не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
+  type Doc3 = { client_name?: string | null; custom_number?: string | null; number?: string | null; client?: string | null; order_no?: string | null }
+  const b2bMap = new Map(b2b.map(o => [String(o.id), o as Doc3]))
+  const b2cMap = new Map(b2c.map(o => [String(o.id), o as Doc3]))
+  const saleMap = new Map(sales.map(o => [String(o.id), o as Doc3]))
 
   const items = rows.map(p => {
     let doc: Doc = { kind: 'b2c', number: null, client: null }
@@ -129,7 +139,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'unskip') {
-    await svc.from('cashflow_payment_skips').delete().eq('payment_id', paymentId)
+    const { error } = await svc.from('cashflow_payment_skips').delete().eq('payment_id', paymentId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
 
