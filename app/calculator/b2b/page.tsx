@@ -1069,7 +1069,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     return { added: newItems.length, skipped, holes, cutouts, shaped, warnings }
   }
 
-  // Нижняя кнопка «Чертёж / файл клиента» — многодетальный разбор с полным отчётом.
+  // «🔍 Распознать чертёж → позиции» у приложенного к заказу файла — многодетальный разбор с полным отчётом.
   async function parseDrawing() {
     if (!attachFile) return
     setParsingDrawing(true)
@@ -1917,8 +1917,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
 
               {/* Результаты — видны и при свёрнутом блоке: появляются только после действия. */}
               {flParseNote && <p className="px-3 pb-2 text-[11px] text-emerald-700">{flParseNote}</p>}
-              {fKind === 'material' && (<>
-                {attachFile && (
+              {/* Приложенный файл уходит в просчёт при сохранении при любом типе позиции —
+                  поэтому он виден и убирается при любом; распознать его в стёкла можно только в «Стекло / зеркало». */}
+              {attachFile && (
                   <div className="px-3 pb-2 space-y-1.5">
                     <div className="flex items-center gap-2 px-3 py-1.5 border border-[#e4e4e0] rounded-lg bg-white">
                       <span className="text-[10px] text-[#9a9a95] flex-shrink-0">к заказу:</span>
@@ -1928,15 +1929,19 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                           ? `${(attachFile.size / 1024).toFixed(0)} КБ`
                           : `${(attachFile.size / (1024 * 1024)).toFixed(1)} МБ`}
                       </span>
-                      <button onClick={() => { setAttachFile(null); setDrawingInfo(null) }}
+                      {/* Сброс value: иначе тот же файл, выбранный снова, не даст onChange и молча не приложится. */}
+                      <button onClick={() => { setAttachFile(null); setDrawingInfo(null); if (attachInputRef.current) attachInputRef.current.value = '' }}
                         className="text-[#9a9a95] hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
                     </div>
+                    {fKind === 'material' && (
                     <button onClick={parseDrawing} disabled={parsingDrawing}
                       className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-50 transition-colors">
                       {parsingDrawing ? 'Распознаю чертёж…' : '🔍 Распознать чертёж → позиции'}
                     </button>
+                    )}
                   </div>
-                )}
+              )}
+              {fKind === 'material' && (<>
                 {drawingInfo && (
                   <div className={`mx-3 mb-2 rounded-lg border px-3 py-2 text-[11px] ${drawingInfo.added > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
                     {drawingInfo.added > 0
@@ -2487,7 +2492,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
                   <p className="text-[11px] font-medium text-blue-900 leading-tight" title="Отверстия и вырезы делает один человек — сверловщик">Сверловка</p>
                   <TreatToggle on={fHoles} onChange={setFHoles} label="Отверстия" tone="blue" />
-                  <label className={`flex items-center gap-2 min-h-[44px] lg:min-h-[36px] px-2.5 py-1.5 border rounded-lg ${
+                  <label className={`flex items-center gap-2 min-h-[44px] lg:min-h-[36px] px-2.5 py-1.5 lg:py-0 border rounded-lg ${
                     fCutouts > 0 ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] bg-white'}`}>
                     <input type="number" min="0" value={fCutouts || ''} placeholder="0"
                       onChange={e => setFCutouts(Math.max(0, Number(e.target.value) || 0))}
