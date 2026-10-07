@@ -6,6 +6,7 @@ import { canonicalOrderIds, orderSetKey } from '@/lib/b2b/invoiceRegistry'
 import { readPaged } from '@/lib/money/paged'
 import { attachInvoicePayments, asInvoiceRows } from '@/lib/money/invoicePayments'
 import { syncInvoiceStatus } from '@/lib/money/invoiceManualPayment'
+import { invoiceChanges, loadInvoicesWithOrders, overlapMessage, overlappingOpen } from '@/lib/money/invoiceSync'
 
 // Реестр счетов: список / регистрация счёта / смена статуса оплаты.
 // RLS уже ограничивает финконтуром; здесь дополнительно проставляем автора.
@@ -118,15 +119,58 @@ export async function POST(req: Request) {
   }
 
   const svc = createServiceClient()
+  const writer = a.fin ? a.sb : svc
 
-  // Идемпотентность: этот набор заказов уже зарегистрирован → возвращаем тот же
-  // счёт (тот же id и номер), ничего не создаём и не меняем — документ уже выдан.
-  const existing = await findExisting(svc, order_ids)
-  if (existing) {
-    return NextResponse.json({ ok: true, id: existing.id, invoice_no: existing.invoice_no, existing: true })
+  // Действующие счета с этими заказами — со статусом оплаты по платежам.
+  let related: Awaited<ReturnType<typeof loadInvoicesWithOrders>>
+  try { related = await loadInvoicesWithOrders(svc, order_ids) } catch (e) {
+    return NextResponse.json({ error: `Счета заказов не прочитались: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
 
-  const writer = a.fin ? a.sb : svc
+  // Идемпотентность: этот набор заказов уже зарегистрирован → тот же счёт (id и номер не
+  // прыгают). Но не застывший: пока не оплачен, сумма/НДС/плательщик следуют за заказом.
+  const existing = related.find(inv => orderSetKey(inv.order_ids) === order_ids.join(','))
+  if (existing) {
+    const patch = existing.derivedStatus === 'paid' ? null : invoiceChanges(
+      {
+        amount: Number(existing.amount) || 0, vat: Number(existing.vat) || 0,
+        payer_client_id: (existing.payer_client_id as number | null) ?? null,
+        payer_entity_id: (existing.payer_entity_id as number | null) ?? null,
+        payer_name: (existing.payer_name as string | null) ?? null,
+      },
+      {
+        amount: Number(b.amount), vat: b.vat != null ? Number(b.vat) : undefined,
+        payer_client_id: 'payer_client_id' in b ? (b.payer_client_id ?? null) : undefined,
+        payer_entity_id: 'payer_entity_id' in b ? (b.payer_entity_id ?? null) : undefined,
+        payer_name: b.payer_name,
+      },
+    )
+    if (patch) {
+      const { data: upd, error: upErr } = await writer.from('invoices')
+        .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', existing.id).select('id')
+      if (upErr) return NextResponse.json({ error: `Счёт № ${existing.invoice_no} не обновлён: ${upErr.message}` }, { status: 500 })
+      if (!upd?.length) return NextResponse.json({ error: `Счёт № ${existing.invoice_no} не обновлён — нет прав` }, { status: 403 })
+    }
+    return NextResponse.json({
+      ok: true, id: existing.id, invoice_no: existing.invoice_no, existing: true,
+      updated: !!patch, paid: existing.derivedStatus === 'paid',
+    })
+  }
+
+  // Заказ — не больше чем в одном неоплаченном счёте: иначе долг клиента задваивается.
+  const hits = overlappingOpen(order_ids, related.map(r => ({
+    id: r.id, invoice_no: String(r.invoice_no ?? r.id), order_ids: r.order_ids ?? [], status: r.status, derivedStatus: r.derivedStatus,
+  })))
+  if (hits.length) {
+    const ids = [...new Set(hits.flatMap(h => h.orders))]
+    const { data: refs } = await svc.from('b2b_orders').select('id, custom_number').in('id', ids)
+    const refOf = new Map((refs ?? []).map(o => [Number(o.id), String(o.custom_number ?? '').trim() || `#${o.id}`]))
+    return NextResponse.json({
+      error: overlapMessage(hits, id => refOf.get(id) ?? `#${id}`),
+      conflicts: hits.map(h => ({ invoice_id: h.invoice.id, invoice_no: h.invoice.invoice_no, order_ids: h.orders })),
+    }, { status: 409 })
+  }
+
   const invoiceNo = (b.invoice_no ?? '').trim() || order_ids.map(n => String(n)).join('–')
   const { data, error } = await writer.from('invoices').insert({
     invoice_no: invoiceNo,

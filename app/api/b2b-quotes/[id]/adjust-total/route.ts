@@ -10,6 +10,7 @@ import { loadB2BRates } from '@/lib/b2b/rates'
 import { createServiceClient } from '@/lib/supabase-service'
 import { writeFailure } from '@/lib/rlsWrite'
 import { appendTo, parseOrderNotes, type Notes } from '@/lib/b2b/orderNotes'
+import { syncInvoicesForOrders } from '@/lib/money/invoiceSync'
 
 // Ручная корректировка итоговой суммы ПРОСЧЁТА (до запуска в работу).
 // POST { newTotal } — раскидать сумму по позициям и зафиксировать скидку.
@@ -86,6 +87,16 @@ async function patchNotes(orderId: number, build: (fresh: Notes) => Notes): Prom
   if (error) return { error: error.message }
   const { data: after } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
   return { notes: (after as { notes: string | null } | null)?.notes ?? null }
+}
+
+// Неоплаченный счёт просчёта следует за новой суммой; сбой счёта не откатывает сумму.
+async function syncInvoices(orderId: number) {
+  try {
+    const r = await syncInvoicesForOrders(createServiceClient(), [orderId])
+    return { invoicesUpdated: r.updated, invoicesPaid: r.paidSkipped, invoiceWarning: null as string | null }
+  } catch (e) {
+    return { invoicesUpdated: [], invoicesPaid: [], invoiceWarning: `Сумма изменена, счёт — нет: ${e instanceof Error ? e.message : String(e)}` }
+  }
 }
 
 function updateMeta(userId: string | null, actorName: string | null) {
@@ -168,6 +179,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     needsApproval:   !!approval,
     items:           res.items,
     notes:           saved.notes,
+    ...(await syncInvoices(orderId)),
   })
 }
 
@@ -205,5 +217,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: `Прайс возвращён, пометка корректировки — нет: ${saved.error}. Нажмите ещё раз` }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, newTotal: restored, discountPercent: 0, marginPercent, items, notes: saved.notes })
+  return NextResponse.json({ ok: true, newTotal: restored, discountPercent: 0, marginPercent, items, notes: saved.notes, ...(await syncInvoices(orderId)) })
 }
