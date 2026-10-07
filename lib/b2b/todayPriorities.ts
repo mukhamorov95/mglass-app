@@ -271,7 +271,8 @@ export function unpaidInvoices(invoices: TodayInvoice[], now: number, refs: Read
         days: d, daysLabel: `выставлен ${daysText(d)} назад`,
         owner: i.created_by_name,
         note: partial ? `оплачено ${Math.round(i.paid).toLocaleString('ru-RU')} ₽, остаток` : undefined,
-        action: 'Напомнить об оплате',
+        // Напоминание — кнопкой «📋» рядом; ссылка ведёт туда, где видно заказ и оплаты.
+        action: ids.length === 1 ? 'Карточка сделки' : 'Счета B2B',
         copy: {
           label: PAYMENT_REMINDER_LABEL, ok: 'Напоминание об оплате скопировано', title: 'Текст клиенту: оплата',
           text: paymentReminderText({
