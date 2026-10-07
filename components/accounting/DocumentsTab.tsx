@@ -1,17 +1,19 @@
 'use client'
 
 // Б8: реестр документов. Счета B2B со статусом оплаты ПО ПЛАТЕЖАМ (lib/money/invoiceStatus)
-// и отметкой УПД + договоры розницы. Ответ на вопрос бухгалтера «что выставлено и что
+// и УПД из реестра (номер, дата, ссылка) + договоры розницы. Ответ на вопрос бухгалтера «что выставлено и что
 // закрыто» без похода в /cfo и /b2b-orders.
 
 import { useEffect, useState } from 'react'
-import { loadJson, sendOrToast } from '@/lib/toast'
+import Link from 'next/link'
+import { loadJson } from '@/lib/toast'
 import { INVOICE_STATE_LABEL, type InvoicePayState } from '@/lib/money/invoiceStatus'
 import { askAndPayInvoice, askAndUnpayInvoice } from './invoicePayActions'
+import type { InvoiceUpd } from '@/lib/accounting/invoiceUpd'
 
 type Invoice = {
   id: number; no: string; payer: string | null; amount: number; vat: number
-  status: string; issued_at: string; paid_at: string | null; upd_issued_at: string | null
+  status: string; issued_at: string; paid_at: string | null; upd: InvoiceUpd | null
   paid: number; remainder: number; derived: InvoicePayState
   orders: number[]; author: string | null
 }
@@ -62,11 +64,6 @@ export function DocumentsTab() {
     setBusy(id)
     try { if (await action()) setReload(n => n + 1) } finally { setBusy(null) }
   }
-  const patch = (id: number, body: Record<string, unknown>, failTitle: string) => run(id, async () =>
-    !!(await sendOrToast(failTitle, '/api/accounting/documents', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...body }),
-    })))
 
   if (loading) return <p className="text-[13px] text-[#9a9a95] py-6 text-center">Загрузка…</p>
   if (loadErr) return <p className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-[13px]">Документы не загрузились: {loadErr}</p>
@@ -113,8 +110,8 @@ export function DocumentsTab() {
                     <p className="text-[12px] text-[#9a9a95] mt-0.5">
                       от {DD(i.issued_at)}{st === 'paid' && i.paid_at ? ` · оплачен ${DD(i.paid_at)}` : ''}
                       {i.orders.length ? ` · заказов ${i.orders.length}` : ''}
-                      {i.upd_issued_at ? ` · УПД ${DD(i.upd_issued_at)}` : ''}
                     </p>
+                    {st !== 'cancelled' && <UpdLine upd={i.upd} />}
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-[14px] font-mono font-semibold text-[#111110]">{RUB(i.amount)}</p>
@@ -136,11 +133,6 @@ export function DocumentsTab() {
                       снять ручную оплату
                     </button>
                   )}
-                  <button onClick={() => patch(i.id, { upd: !i.upd_issued_at }, 'Отметка УПД не сохранена')} disabled={busy === i.id}
-                    className={`px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-50 ${
-                      i.upd_issued_at ? 'border border-[#e4e4e0] text-[#6b6b66]' : 'border border-[#111110] text-[#111110]'}`}>
-                    {i.upd_issued_at ? 'снять УПД' : 'УПД выдан'}
-                  </button>
                 </div>
               </div>
             )
@@ -173,5 +165,24 @@ export function DocumentsTab() {
         </div>
       )}
     </div>
+  )
+}
+
+function UpdLine({ upd }: { upd: InvoiceUpd | null }) {
+  if (!upd) return <p className="text-[12px] text-[#9a9a95] mt-0.5">УПД: реестр ещё не включён</p>
+  if (!upd.issued.length && !upd.missing.length) return null
+  return (
+    <p className="text-[12px] mt-0.5 flex flex-wrap gap-x-2">
+      {upd.issued.map(u => (
+        <Link key={u.orderId} href={`/accounting/upd/${u.orderId}`} className="text-emerald-700 underline">
+          УПД № {u.number} от {DD(u.docDate)}
+        </Link>
+      ))}
+      {upd.missing.map(m => (
+        <Link key={m.orderId} href={`/accounting/upd/${m.orderId}`} className="text-amber-800 underline">
+          УПД не выдан{upd.issued.length + upd.missing.length > 1 ? ` · заказ ${m.ref}` : ''}
+        </Link>
+      ))}
+    </p>
   )
 }
