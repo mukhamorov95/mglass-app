@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireOrderAccess } from '@/lib/orders/orderAccess'
 
 export const runtime = 'nodejs'
 
@@ -13,6 +14,8 @@ export async function POST(
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const { id } = await params
+  const denied = await requireOrderAccess(id)
+  if (denied) return denied
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'Нет файла' }, { status: 400 })
@@ -35,9 +38,11 @@ export async function POST(
   const { data: { publicUrl } } = client.storage.from('backups').getPublicUrl(path)
 
   // Append URL to completion_photos array
-  const { data: order } = await client.from('orders').select('completion_photos').eq('id', id).single()
+  const { data: order, error: readErr } = await client.from('orders').select('completion_photos').eq('id', id).single()
+  if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 })
   const existing: string[] = (order as { completion_photos?: string[] } | null)?.completion_photos ?? []
-  await client.from('orders').update({ completion_photos: [...existing, publicUrl] }).eq('id', id)
+  const { error: saveErr } = await client.from('orders').update({ completion_photos: [...existing, publicUrl] }).eq('id', id)
+  if (saveErr) return NextResponse.json({ error: saveErr.message }, { status: 500 })
 
   return NextResponse.json({ url: publicUrl })
 }

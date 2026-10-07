@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireOrderAccess } from '@/lib/orders/orderAccess'
 
 export async function PATCH(
   req: NextRequest,
@@ -11,6 +12,8 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const { id } = await params
+  const denied = await requireOrderAccess(id)
+  if (denied) return denied
   const { delivery_address, delivery_zone_id, delivery_cost } = await req.json()
 
   const client = createServiceClient(
