@@ -4,24 +4,38 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import MoneyPulse from './MoneyPulse'
 
+// Звонки и сообщения — сводка «Команды» за последний рабочий день (снимок дня
+// manager_day_stats), а не живой запрос в amo: одна цифра на всех экранах владельца.
 type ManagerStat = {
   id: number; name: string
-  newLeads: number; callsMade: number; messagesSent: number; cardsMoved: number
+  newLeads: number | null; callsMade: number; messagesSent: number; cardsMoved: number
   activeLeads: number; zone1: number; zone2: number; zone3: number
   staleZone1: number; staleZone2: number; invoiceStale: number
+  workdays: number
 }
 
+type Snapshot = { managers: ManagerStat[]; label?: string; stateDate?: string | null; errors?: string[] }
+
+const dm = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}`
+
 export default function CeoPage() {
-  const [stats, setStats]   = useState<ManagerStat[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState(false)
+  const [snap, setSnap]     = useState<Snapshot | null>(null)
+  const [error, setError]   = useState<string | null>(null)
+  const loading = !snap && !error
+  const stats = snap?.managers ?? []
+  const label = snap?.label ?? ''
 
   useEffect(() => {
-    fetch('/api/commercial/stats?period=today')
-      .then(r => r.json())
-      .then(d => setStats(d.managers ?? []))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+    let alive = true
+    fetch('/api/commercial/stats?period=yesterday')
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `Сервер ответил ${r.status}`)
+        return j as Snapshot
+      })
+      .then(j => { if (alive) setSnap(j) })
+      .catch((e: Error) => { if (alive) setError(e.message) })
+    return () => { alive = false }
   }, [])
 
   const totals = stats.reduce((a, m) => ({
@@ -35,7 +49,7 @@ export default function CeoPage() {
     invoice:  a.invoice  + m.invoiceStale,
   }), { active: 0, zone1: 0, zone2: 0, zone3: 0, calls: 0, messages: 0, stale: 0, invoice: 0 })
 
-  const inactive = stats.filter(m => m.callsMade === 0 && m.messagesSent === 0)
+  const inactive = stats.filter(m => m.workdays > 0 && m.callsMade === 0 && m.messagesSent === 0)
   const sorted   = [...stats].sort((a, b) => b.activeLeads - a.activeLeads)
 
   return (
@@ -64,22 +78,25 @@ export default function CeoPage() {
           </div>
         ) : error ? (
           <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-[13px] text-red-600 mb-5">
-            Не удалось загрузить данные из AmoCRM. Проверьте переменные окружения.
+            Не удалось загрузить сводку команды: {error}
           </div>
         ) : (
           <>
+            {snap?.errors && snap.errors.length > 0 && (
+              <p role="alert" className="text-[12px] text-[#c23a2b] mb-3">Не всё загрузилось: {snap.errors.join(' · ')}</p>
+            )}
             {/* KPI Row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               {[
-                { label: 'Активных сделок', value: totals.active, icon: '📊', sub: `К${totals.zone1} / П${totals.zone2} / Пр${totals.zone3}` },
-                { label: 'Звонков сегодня', value: totals.calls,  icon: '📞', sub: 'вся команда' },
-                { label: 'Сообщений',        value: totals.messages, icon: '💬', sub: 'вся команда' },
+                { label: 'Активных сделок', value: totals.active, icon: '📊', sub: `К${totals.zone1} / П${totals.zone2} / Пр${totals.zone3} · на ${snap?.stateDate ? dm(snap.stateDate) : '—'}` },
+                { label: 'Звонков',          value: totals.calls,  icon: '📞', sub: `вся команда · ${label}` },
+                { label: 'Сообщений',        value: totals.messages, icon: '💬', sub: `вся команда · ${label}` },
                 { label: 'Зависших лидов',  value: totals.stale,  icon: '⚠️', sub: `счетов просроч: ${totals.invoice}`, alert: totals.stale > 5 },
               ].map(k => (
                 <div key={k.label} className={`bg-white border rounded-xl px-4 py-3 ${k.alert ? 'border-red-300' : 'border-[#e4e4e0]'}`}>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{k.icon} {k.label}</p>
                   <p className={`text-[28px] font-bold font-mono leading-none ${k.alert ? 'text-red-500' : 'text-[#111110]'}`}>{k.value}</p>
-                  <p className="text-[10px] text-[#c4c4be] mt-1">{k.sub}</p>
+                  <p className="text-[10px] text-[#9a9a95] mt-1">{k.sub}</p>
                 </div>
               ))}
             </div>
@@ -91,7 +108,7 @@ export default function CeoPage() {
                 <div>
                   <p className="text-[13px] font-semibold text-red-700">Нулевая активность</p>
                   <p className="text-[12px] text-red-600 mt-0.5">
-                    {inactive.map(m => m.name.split(' ')[0]).join(', ')} — ни звонков, ни сообщений за сегодня
+                    {inactive.map(m => m.name.split(' ')[0]).join(', ')} — ни звонков, ни сообщений в рабочий день ({label})
                   </p>
                 </div>
               </div>
@@ -109,8 +126,9 @@ export default function CeoPage() {
 
             {/* Manager table */}
             <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden mb-5">
-              <div className="px-5 py-3 border-b border-[#f0f0ec]">
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Менеджеры — сегодня</span>
+              <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between gap-3 flex-wrap">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Менеджеры — {label}</span>
+                <Link href="/" className="text-[12px] text-blue-600 hover:underline">Команда — любой день и сегодня →</Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[12px]">
@@ -127,7 +145,7 @@ export default function CeoPage() {
                   </thead>
                   <tbody className="divide-y divide-[#f8f8f7]">
                     {sorted.map(m => {
-                      const isInactive = m.callsMade === 0 && m.messagesSent === 0
+                      const isInactive = m.workdays > 0 && m.callsMade === 0 && m.messagesSent === 0
                       const staleTotal = m.staleZone1 + m.staleZone2
                       return (
                         <tr key={m.id} className={`hover:bg-[#fafaf9] transition-colors ${isInactive ? 'bg-red-50/30' : ''}`}>
@@ -135,7 +153,7 @@ export default function CeoPage() {
                             {m.name.split(' ')[0]}
                             {isInactive && <span className="ml-2 text-[9px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">0 активности</span>}
                           </td>
-                          <td className="px-3 py-3 text-center font-mono">{m.newLeads}</td>
+                          <td className="px-3 py-3 text-center font-mono">{m.newLeads ?? '—'}</td>
                           <td className={`px-3 py-3 text-center font-mono font-semibold ${m.callsMade === 0 ? 'text-red-400' : 'text-green-600'}`}>{m.callsMade}</td>
                           <td className={`px-3 py-3 text-center font-mono font-semibold ${m.messagesSent === 0 ? 'text-orange-400' : 'text-green-600'}`}>{m.messagesSent}</td>
                           <td className="px-3 py-3 text-center font-mono">{m.cardsMoved}</td>

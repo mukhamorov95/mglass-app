@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-service'
 import { collectAllMetrics } from '@/lib/salesMonitor'
 import { getDomain } from '@/lib/amocrm'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { mskDayKey } from '@/lib/time'
+import { isSnapshotPeriod, snapshotLabel } from '@/lib/teamActivity'
+import { loadTeamSnapshot } from '@/lib/teamActivityLoad'
 
 export const runtime     = 'nodejs'
 export const maxDuration = 45
@@ -19,19 +22,20 @@ export async function GET(req: Request) {
   }
 
   const { searchParams } = new URL(req.url)
-  const period = searchParams.get('period') ?? 'today' // today | week | month | year
+  const period = searchParams.get('period') ?? 'yesterday'
 
-  // Today: real-time from AmoCRM
+  // «Сейчас» — только состояние воронки и списки зависших сделок: их нет в снимках.
+  // Звонки и сообщения здесь не отдаём — их счёт salesMonitor расходится со снимком
+  // дня, а владелец должен видеть одну цифру (она — на «Команде» и в остальных периодах).
   if (period === 'today') {
     const metrics = await collectAllMetrics()
-    const domain  = getDomain()
-    return NextResponse.json({ period: 'today', domain, managers: metrics.map(m => ({
+    return NextResponse.json({ period: 'today', live: true, domain: getDomain(), managers: metrics.map(m => ({
       id:           m.user.id,
       name:         m.user.name,
-      newLeads:     m.newLeadsToday,
-      callsMade:    m.callsMade,
-      messagesSent: m.messagesSent,
-      cardsMoved:   m.cardsMoved,
+      newLeads:     null,
+      callsMade:    null,
+      messagesSent: null,
+      cardsMoved:   null,
       activeLeads:  m.activeLeads,
       zone1: m.zone1, zone2: m.zone2, zone3: m.zone3,
       staleZone1:       m.staleZone1.length,
@@ -45,83 +49,44 @@ export async function GET(req: Request) {
     })) })
   }
 
-  // Historical: from sales_monitor_daily
-  const svc = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
+  if (!isSnapshotPeriod(period)) return NextResponse.json({ error: `Неизвестный период: ${period}` }, { status: 400 })
 
-  const now = new Date()
-  let fromDate: string
-  if (period === 'week') {
-    const d = new Date(now); d.setDate(d.getDate() - 7)
-    fromDate = d.toISOString().slice(0, 10)
-  } else if (period === 'month') {
-    const d = new Date(now); d.setDate(d.getDate() - 30)
-    fromDate = d.toISOString().slice(0, 10)
-  } else {
-    const d = new Date(now); d.setDate(d.getDate() - 365)
-    fromDate = d.toISOString().slice(0, 10)
-  }
+  const today = mskDayKey(new Date())
+  const snap = await loadTeamSnapshot(createServiceClient(), period, today)
 
-  const { data: rows } = await svc
-    .from('sales_monitor_daily')
-    .select('*')
-    .gte('date', fromDate)
-    .order('date', { ascending: false })
-
-  if (!rows || rows.length === 0) {
-    return NextResponse.json({ period, managers: [], noData: true })
-  }
-
-  // Aggregate by manager
-  const byManager = new Map<number, {
-    id: number; name: string
-    newLeads: number; callsMade: number; messagesSent: number; cardsMoved: number
-    days: number
-  }>()
-
-  for (const row of rows) {
-    const existing = byManager.get(row.amo_user_id)
-    if (existing) {
-      existing.newLeads     += row.new_leads
-      existing.callsMade    += row.calls_made
-      existing.messagesSent += row.messages_sent
-      existing.cardsMoved   += row.cards_moved
-      existing.days++
-    } else {
-      byManager.set(row.amo_user_id, {
-        id:           row.amo_user_id,
-        name:         row.manager_name,
-        newLeads:     row.new_leads,
-        callsMade:    row.calls_made,
-        messagesSent: row.messages_sent,
-        cardsMoved:   row.cards_moved,
-        days:         1,
-      })
-    }
-  }
-
-  // Latest active leads per manager (most recent snapshot)
-  const latestByManager = new Map<number, typeof rows[0]>()
-  for (const row of rows) {
-    if (!latestByManager.has(row.amo_user_id)) latestByManager.set(row.amo_user_id, row)
-  }
-
-  const managers = [...byManager.values()].map(m => {
-    const latest = latestByManager.get(m.id)
-    return {
-      ...m,
-      activeLeads:  latest?.active_leads  ?? 0,
-      zone1:        latest?.zone1         ?? 0,
-      zone2:        latest?.zone2         ?? 0,
-      zone3:        latest?.zone3         ?? 0,
-      staleZone1:   latest?.stale_zone1   ?? 0,
-      staleZone2:   latest?.stale_zone2   ?? 0,
-      staleZone3:   latest?.stale_zone3   ?? 0,
-      invoiceStale: latest?.invoice_stale ?? 0,
-    }
+  return NextResponse.json({
+    period,
+    live: false,
+    domain: getDomain(),
+    from: snap.from,
+    to: snap.to,
+    days: snap.days.length,
+    label: snapshotLabel(snap.days, today),
+    firstSnapshot: snap.firstSnapshot,
+    stateDate: snap.stateDate,
+    errors: snap.errors,
+    noData: snap.days.length === 0,
+    managers: snap.people.map(p => ({
+      id:           p.amoUserId,
+      name:         p.name,
+      newLeads:     p.leads,
+      callsMade:    p.act.out,
+      callsOk:      p.act.ok,
+      callsIn:      p.act.in,
+      callsMissed:  p.act.missed,
+      messagesSent: p.act.msgs,
+      cardsMoved:   p.act.moved,
+      workdays:     p.act.workdays,
+      idle:         p.act.idle,
+      days:         p.act.days,
+      activeLeads:  p.state?.activeLeads  ?? 0,
+      zone1:        p.state?.zone1        ?? 0,
+      zone2:        p.state?.zone2        ?? 0,
+      zone3:        p.state?.zone3        ?? 0,
+      staleZone1:   p.state?.staleZone1   ?? 0,
+      staleZone2:   p.state?.staleZone2   ?? 0,
+      staleZone3:   p.state?.staleZone3   ?? 0,
+      invoiceStale: p.state?.invoiceStale ?? 0,
+    })),
   })
-
-  return NextResponse.json({ period, domain: getDomain(), managers, fromDate })
 }
