@@ -29,12 +29,27 @@ export async function notifyUser(userId: string | null | undefined, text: string
   } catch { return false }
 }
 
+// Адресат — автор заказа, только если он сотрудник. У заказа из кабинета партнёра автор —
+// сам партнёр, а партнёрам и клиентам ничего не отправляем без отдельного «да» владельца.
+export function managerRecipient(
+  order: { created_by?: string | null; source?: string | null } | null,
+  authorRole: string | null | undefined,
+): string | null {
+  if (!order?.created_by || order.source === 'partner') return null
+  if (!authorRole || authorRole === 'partner') return null
+  return order.created_by
+}
+
 // Автор просчёта/заказа — ему и адресуем. Владелец получает свои уведомления кроном.
 export async function notifyOrderManager(orderId: number, text: string, link?: string): Promise<boolean> {
   try {
     const svc = createServiceClient()
-    const { data } = await svc.from('b2b_orders').select('created_by').eq('id', orderId).maybeSingle()
-    const userId = (data as { created_by?: string | null } | null)?.created_by ?? null
+    const { data } = await svc.from('b2b_orders').select('created_by, source').eq('id', orderId).maybeSingle()
+    const order = data as { created_by?: string | null; source?: string | null } | null
+    if (!order?.created_by) return false
+    const { data: author } = await svc.from('users').select('role').eq('id', order.created_by).maybeSingle()
+    const userId = managerRecipient(order, (author as { role?: string | null } | null)?.role)
+    if (!userId) return false
     const base = appUrl()
     const keyboard: InlineKeyboard | undefined = link && base
       ? [[{ text: 'Открыть', url: `${base}${link}` }]]
