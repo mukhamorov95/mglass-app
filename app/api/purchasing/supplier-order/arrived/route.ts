@@ -43,5 +43,5 @@ export async function POST(req: NextRequest) {
   const waiting = orders.filter(o => o.state === 'ordered')
   const skipped = orders.filter(o => o.state !== 'ordered').map(o => ({ id: o.id, number: o.number, state: o.state }))
   const res = await writeSupply(svc, waiting, 'in_stock', { today, userId: user?.id ?? null, fromPurchase: true })
-  return NextResponse.json({ ok: res.failed.length === 0, marked: res.done, failed: res.failed, skipped })
+  return NextResponse.json({ ok: res.failed.length === 0, marked: res.done, failed: res.failed, shopFailed: res.shopFailed, skipped })
 }

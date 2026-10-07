@@ -12,7 +12,7 @@ import { queueEmptyState } from '@/lib/production/queueState'
 import { shouldAutoStart } from '@/lib/production/start'
 import { toast, sendOrToast } from '@/lib/toast'
 import { myStationGroups, canCompleteWholeDetail, type StationGroup, type StationTask } from '@/lib/production/completeMyStage'
-import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
+import { PROD_SINCE, parseNotes, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel, shopMaterial, shopMaterialLabel, type ShopMaterial } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
 import { materialLabelShort } from '@/lib/materialLabel'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
@@ -55,6 +55,9 @@ type OrderLite = { id: number; client_id?: number | null; client_name: string; c
 type BlockerLite = { id: number; status: string; stage_key: string }
 
 const orderNo = (o: OrderLite | undefined, id: number) => o?.custom_number?.trim() || `00${id}`
+const MAT_TONE: Record<ShopMaterial['state'], string> = {
+  needed: 'bg-red-100 text-red-700', ordered: 'bg-blue-100 text-blue-700', arrived: 'bg-emerald-100 text-emerald-700',
+}
 const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' }) }
 const qtyOf = (o: OrderLite | undefined, idx: number) => Math.max(1, o?.items?.[idx]?.quantity ?? 1)
 
@@ -299,14 +302,11 @@ export default function MyQueuePage() {
         [id, [...m].map(([station, n]) => ({ station, n })).sort((a, b) => b.n - a.n)])))
       setWorkLoaded(true)
 
-      // Статус закупки для заказов с пометкой «нет материала» — мастер видит,
-      // когда стекло заказано и когда пришло, не выходя из очереди
-      const marked = [...freshOrders.values()].filter(o => {
-        const n = parseNotes(o.notes)
-        return materialStatus(o.notes) === 'needed' || (Array.isArray(n.material_needed_items) && (n.material_needed_items as number[]).length > 0)
-      }).map(o => o.id)
+      // Заявки цеха на материал — мастер видит, когда стекло заказано и когда пришло,
+      // не выходя из очереди. По всем заказам, а не только с 'needed': закупщик,
+      // отметив «заказан», затирает 'needed', а ожидание цеха остаётся (shopMaterial).
       const reqs = await readIn<{ b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }, number>(
-        marked, (part, from, to) => sb.from('shop_purchase_requests')
+        [...freshOrders.keys()], (part, from, to) => sb.from('shop_purchase_requests')
           .select('id,b2b_order_id,item_index,status,expected_date')
           .in('b2b_order_id', part).order('id', { ascending: true }).range(from, to))
       const m = new Map<string, { status: string; expected: string | null }>()
@@ -459,10 +459,21 @@ export default function MyQueuePage() {
     if (error) throw new Error(error.message)
   }
 
+  // «Пришёл» от цеха закрывает его заявки: иначе закупщик видит их открытыми,
+  // а у резчика плашка висит дальше (shopMaterial держит ожидание на заявке).
+  async function closeShopRequests(orderId: number, itemIndex: number | null) {
+    let q = sb.from('shop_purchase_requests')
+      .update({ status: 'arrived', arrived_at: new Date().toISOString(), arrived_by: me?.name ?? 'Цех' })
+      .eq('b2b_order_id', orderId).in('status', ['need', 'ordered'])
+    q = itemIndex == null ? q.is('item_index', null) : q.eq('item_index', itemIndex)
+    const { error } = await q
+    if (error) toast.error('«Пришёл» записан, но заявка у закупщика осталась открытой', { detail: `${error.message}. Скажите закупщику` })
+  }
+
   // «Нет материала на весь заказ» (повторное нажатие = материал пришёл)
   async function toggleNoMaterialOrder(orderId: number) {
     const o = orders.get(orderId)
-    const turnOn = materialStatus(o?.notes) !== 'needed'
+    const turnOn = shopMaterial(parseNotes(o?.notes).material_status, matReq.get(`${orderId}:all`)) == null
     try {
       await mergeNotes(orderId, n => ({ ...n, material_status: turnOn ? 'needed' : 'ready', material_checked_at: new Date().toISOString(), material_checked_by: me?.name ?? null }))
     } catch (e) {
@@ -472,6 +483,8 @@ export default function MyQueuePage() {
     if (turnOn) {
       const details = (o?.items ?? []).map(it => specLine(it)).filter(Boolean).join('; ')
       await purchaseRequest(`Материал: ${orderNo(o, orderId)} — весь заказ (${o?.client_name ?? ''})`, details || null, orderId, null)
+    } else {
+      await closeShopRequests(orderId, null)
     }
     void load()
   }
@@ -493,6 +506,7 @@ export default function MyQueuePage() {
       return
     }
     if (turnOn) await purchaseRequest(`Материал: ${orderNo(o, orderId)} · поз. ${itemIndex + 1} (${o?.client_name ?? ''})`, specLine(o?.items?.[itemIndex]) || null, orderId, itemIndex)
+    else await closeShopRequests(orderId, itemIndex)
     void load()
   }
 
@@ -1071,8 +1085,12 @@ function OrderCard({ order, orderId, point, tasks, blockers, open, onToggle, isR
   const pn = parseNotes(notes)
   const drawingUrl = (pn.drawing_url as string | undefined) ?? null
   const isImg = drawingUrl ? /\.(png|jpe?g|webp|gif)(\?|$)/i.test(drawingUrl) : false
-  const noMatOrder = materialStatus(notes) === 'needed'
+  const orderMat = shopMaterial(pn.material_status, matReq.get(`${orderId}:all`))
+  const noMatOrder = orderMat != null
   const noMatItems = Array.isArray(pn.material_needed_items) ? (pn.material_needed_items as number[]) : []
+  const itemMat = (idx: number): ShopMaterial | null => noMatItems.includes(idx)
+    ? shopMaterial('needed', matReq.get(`${orderId}:${idx}`) ?? matReq.get(`${orderId}:all`))
+    : orderMat
   // В поиске в карточку попадают и закрытые задачи — их показываем отдельной
   // строкой «уже сделано», а в счётчиках работы они не участвуют.
   const doneTasks = tasks.filter(t => t.status === 'done')
@@ -1111,14 +1129,7 @@ function OrderCard({ order, orderId, point, tasks, blockers, open, onToggle, isR
               {point && <PointBadge />}
               {orderNo(order, orderId)}
               {drawingUrl && <span title="Есть чертёж">📐</span>}
-              {noMatOrder && (() => {
-                const r = matReq.get(`${orderId}:all`)
-                return r?.status === 'arrived'
-                  ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">📦 материал пришёл</span>
-                  : r?.status === 'ordered'
-                  ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">🚚 материал заказан{r.expected ? ` · к ${fmtShort(r.expected)}` : ''}</span>
-                  : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🛒 ждёт материал</span>
-              })()}
+              {orderMat && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${MAT_TONE[orderMat.state]}`}>{shopMaterialLabel(orderMat)}</span>}
               {!noMatOrder && noMatItems.length > 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">🛒 нет мат. на {noMatItems.length} поз.</span>}
             </p>
             <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
@@ -1306,12 +1317,7 @@ function OrderCard({ order, orderId, point, tasks, blockers, open, onToggle, isR
                       })()}
                       <p className={`text-[11px] ${noMat ? 'text-red-700' : 'text-[#6b6b66]'}`}>
                         Поз. {idx + 1}
-                        {noMat && (() => {
-                          const r = matReq.get(`${orderId}:${idx}`) ?? matReq.get(`${orderId}:all`)
-                          return r?.status === 'arrived' ? ' · 📦 материал пришёл'
-                            : r?.status === 'ordered' ? ` · 🚚 материал заказан${r.expected ? ` · к ${fmtShort(r.expected)}` : ''}`
-                            : ' · 🛒 ждёт материал'
-                        })()}
+                        {noMat && (() => { const m = itemMat(idx); return m ? ` · ${shopMaterialLabel(m)}` : '' })()}
                       </p>
                     </div>
                     <button onClick={() => onNoMatItem(orderId, idx)} title={noMatItems.includes(idx) ? 'Материал пришёл' : 'Нет материала на эту деталь'}

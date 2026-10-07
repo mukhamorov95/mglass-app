@@ -80,9 +80,14 @@ export async function GET(req: NextRequest) {
       updatedAt: o.updatedAt, updatedByName: o.updatedBy ? names.get(o.updatedBy) ?? null : null,
       cut: o.cut, pieces: o.pieces, netM2: o.netM2, materials: o.materials,
       po: poOf.get(o.id) ?? null,
+      shopWaiting: o.shopWaiting, shopWaitingSince: o.shopWaitingSince,
     })),
     frontier: frontier(queue),
-    counts: { active: all.filter(o => !o.cut).length, cut: all.filter(o => o.cut).length, toOrder: toOrder.length },
+    counts: {
+      active: all.filter(o => !o.cut).length, cut: all.filter(o => o.cut).length, toOrder: toOrder.length,
+      // Нарезанный заказ цех уже не ждёт, даже если забыл снять отметку.
+      shopWaiting: all.filter(o => !o.cut && o.shopWaiting).length,
+    },
     needs,
     unknown,
     // Что распозналось из названия изделия — угадывание не прячем.

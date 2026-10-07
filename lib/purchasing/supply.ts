@@ -1,4 +1,5 @@
 import type { PieceGroup, MaterialCuttingResult, SheetFormat } from '@/lib/cuttingOptimizer'
+import { MATERIAL_ORDERED as ORDERED } from '@/lib/orderFlags'
 
 // Материал под заказы: три состояния для закупщика поверх уже существующего
 // notes.material_status (9 значений в /b2b-orders + 2 цеховых). Четвёртый флаг
@@ -8,7 +9,6 @@ export type SupplyState = 'not_ordered' | 'ordered' | 'in_stock'
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 
-const ORDERED = new Set(['ordered', 'invoice_received', 'paid', 'shipped'])
 const IN_STOCK = new Set(['received', 'ready'])
 
 export const SUPPLY_LABEL: Record<SupplyState, string> = {
@@ -28,23 +28,40 @@ export function supplyState(materialStatus: unknown): SupplyState {
 // stages.material_ordered (его читает раскрой и прячет заказ из «что кроить на
 // закупку»); «не заказан» снимает флаг — иначе заказ навсегда выпал бы из расчёта.
 // Уже стоящую дату не перезаписываем: она говорит, когда материал заказали.
+// shopWaiting — цех нажал «Нет мат.» и ещё не сказал «пришёл» (lib/orderFlags shopMaterial).
 export function writeFor(
   state: SupplyState,
   current: { materialStatus?: unknown; materialOrdered?: string | null },
   today: string,
-  opts: { fromPurchase?: boolean } = {},
+  opts: { fromPurchase?: boolean; shopWaiting?: boolean } = {},
 ): { materialStatus: string; stages: Record<string, string | null> } {
   if (state === 'not_ordered') {
-    // «Нет (цех)» — тоже «не заказан», но сообщение цеха о нехватке не стираем.
-    const keep = current.materialStatus === 'needed' ? 'needed' : 'need_to_buy'
+    // «Нет (цех)» — тоже «не заказан», но сообщение цеха о нехватке не стираем:
+    // и когда оно ещё стоит, и когда его затёрла отмена «заказан».
+    const keep = current.materialStatus === 'needed' || opts.shopWaiting ? 'needed' : 'need_to_buy'
     return { materialStatus: keep, stages: { material_ordered: null } }
   }
   const status = state === 'ordered'
     // Уже двигающийся по закупке статус (счёт, оплачен, в пути) не откатываем в «заказан».
     ? (ORDERED.has(String(current.materialStatus)) ? String(current.materialStatus) : 'ordered')
     // Пришёл по заказу поставщику — «принят»; отметили, что лежит на складе, — «есть».
-    : (opts.fromPurchase ? 'received' : 'ready')
+    // Цех ждёт — тоже «принят»: «есть» ('ready') ставит сам цех, нажав «Пришёл»,
+    // а до того у резчика горит «материал есть».
+    : (opts.fromPurchase || opts.shopWaiting ? 'received' : 'ready')
   return { materialStatus: status, stages: { material_ordered: current.materialOrdered || today } }
+}
+
+// Заявка цеха идёт за отметкой закупщика, иначе плашка у резчика отстаёт от закупки:
+// «заказан» — need → ordered (с датой, если её назвали), «есть» — need/ordered → arrived,
+// «не заказан» — ordered → need.
+export function shopRequestMove(
+  state: SupplyState, at: string, by: string | null, expected: string | null,
+): { fromStatuses: string[]; patch: Record<string, string | null> } {
+  if (state === 'ordered') {
+    return { fromStatuses: ['need'], patch: { status: 'ordered', ordered_at: at, ordered_by: by, ...(expected ? { expected_date: expected } : {}) } }
+  }
+  if (state === 'in_stock') return { fromStatuses: ['need', 'ordered'], patch: { status: 'arrived', arrived_at: at, arrived_by: by } }
+  return { fromStatuses: ['ordered'], patch: { status: 'need', ordered_at: null, ordered_by: null, expected_date: null } }
 }
 
 // «Граница»: последний по порядку добавления заказ, на который материал заказан
