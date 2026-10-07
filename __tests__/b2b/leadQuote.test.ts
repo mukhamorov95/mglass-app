@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  buildClientQuoteText, clientQuoteTextFromOrder, leadNoteError, leadNotesPatch, noClientName,
+  LEAD_REPLY_TEMPLATES, buildClientQuoteText, clientQuoteTextFromOrder, leadNoteError, leadNotesPatch, noClientName,
   noClientSaveBlocker, quoteLeadChips, readQuoteLead,
 } from '@/lib/b2b/leadQuote'
 import type { InvoiceOrder } from '@/lib/b2b/invoiceMath'
@@ -77,5 +77,21 @@ describe('текст ответа клиенту', () => {
     const t = clientQuoteTextFromOrder(order, JSON.parse(order.notes!))
     expect(t).toContain('Здравствуйте, Дмитрий!')
     expect(t).not.toMatch(/1\s?170|52|маржа|себестоим/i)
+  })
+})
+
+describe('LEAD_REPLY_TEMPLATES — ответы вдогонку к расчёту', () => {
+  it('два шаблона: партнёрство и вопрос об оплате', () => {
+    expect(LEAD_REPLY_TEMPLATES.map(t => t.key)).toEqual(['partner', 'payment'])
+  })
+  it('без приветствия и без внутреннего: себестоимости, маржи, сумм', () => {
+    for (const t of LEAD_REPLY_TEMPLATES) {
+      expect(t.text).not.toMatch(/^Здравствуйте/)
+      expect(t.text).not.toMatch(/себестоим|марж|₽/i)
+    }
+  })
+  it('партнёрство просит назвать цену, оплата — спрашивает форму оплаты', () => {
+    expect(LEAD_REPLY_TEMPLATES[0].text).toMatch(/Назовите цену/)
+    expect(LEAD_REPLY_TEMPLATES[1].text).toMatch(/как вам удобнее оплатить/)
   })
 })
