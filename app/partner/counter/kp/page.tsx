@@ -27,6 +27,7 @@ export default function CounterKpPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const docRef = useRef<HTMLDivElement>(null)
+  const [pdfErr, setPdfErr] = useState<string | null>(null)
 
   useEffect(() => {
     const draft = readDraft()
@@ -48,6 +49,7 @@ export default function CounterKpPage() {
 
   async function downloadPdf() {
     if (!docRef.current) return
+    setPdfErr(null)
     try {
       const jspdf = await import('jspdf')
       const canvas = await renderDocCanvas(docRef.current)
@@ -61,7 +63,7 @@ export default function CounterKpPage() {
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
       pdf.save(`КП-${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch {
-      alert('Не удалось сформировать PDF. Используйте «Печать» → Сохранить как PDF.')
+      setPdfErr('Не удалось сформировать PDF — используйте «Печать» → «Сохранить как PDF».')
     }
   }
 
@@ -106,6 +108,7 @@ export default function CounterKpPage() {
         <div className="fld" style={{ flex: '1 1 200px', minWidth: 0 }}><input value={buyer} onChange={e => setBuyer(e.target.value)} maxLength={80} placeholder="Для кого (необязательно)" autoComplete="off" /></div>
         <button onClick={() => document.fonts.ready.then(() => window.print())} className="ghost">🖨 Печать</button>
         <button onClick={downloadPdf} className="primary">⬇ PDF</button>
+        {pdfErr && <span style={{ flexBasis: '100%', fontSize: 12.5, color: '#b91c1c' }}>{pdfErr}</span>}
       </div>
       <div className="no-print cap" style={{ maxWidth: 820, margin: '6px auto 0', padding: '0 16px' }}>
         Имя покупателя остаётся только на этом листе — мы его не сохраняем. Шапку и наценку ({settings.markupPct.toLocaleString('ru-RU')}%) меняете в <Link href="/partner/profile#counter" style={{ color: 'var(--blue)' }}>профиле</Link>.

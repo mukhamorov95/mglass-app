@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { leadTimeText, isMirrorCategory } from '@/lib/partner/leadTime'
 import { SUPER_CATS, readDraft, type SuperCat } from '@/lib/partner/counter'
-import { loadJson } from '@/lib/toast'
+import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Партнёрский калькулятор (дизайн 1-в-1 из прототипа, .pcab). Форма и НАБОР полей —
 // как у менеджера (/calculator/b2b), данные из реальных справочников
@@ -86,9 +86,12 @@ export default function PartnerNewQuotePage() {
   const [livePrice, setLivePrice] = useState<number | null>(null)   // живая цена текущей позиции
   const [liveBusy, setLiveBusy] = useState(false)
   const [loadErr, setLoadErr] = useState<{ title: string; text: string; orderId: number | null } | null>(null)
+  const [matErr, setMatErr] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/partner/materials').then(r => r.json()).then(d => {
+    fetch('/api/partner/materials').then(async r => {
+      if (!r.ok) { setMatErr(await responseError(r)); return }
+      const d = await r.json()
       if (!d.linked) { setLinked(false); return }
       const mats = (d.materials ?? []) as Material[]
       setMaterials(mats)
@@ -129,7 +132,7 @@ export default function PartnerNewQuotePage() {
           void recompute(r.data.specs, false)
         })
       }
-    }).catch(() => setLinked(false)).finally(() => setLoading(false))
+    }).catch(() => setMatErr(NETWORK_ERROR)).finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -243,14 +246,20 @@ export default function PartnerNewQuotePage() {
     const id = await recompute(list, true)
     if (id) { setSavedId(id); setSubmitted(false) }
   }
+  const [submitErr, setSubmitErr] = useState<string | null>(null)
   async function saveAndSubmit() {
+    setSubmitErr(null)
     const id = await recompute(list, true)
     if (!id) return
     setSavedId(id)
+    // Просчёт уже сохранён: если отправка не прошла, говорим почему и где его найти.
     try {
       const r = await fetch('/api/partner/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: id }) })
-      if (r.ok) setSubmitted(true)
-    } catch { /* просчёт сохранён — отправить можно позже из «Мои просчёты» */ }
+      if (r.ok) { setSubmitted(true); return }
+      setSubmitErr(`Просчёт сохранён, но в работу не отправлен: ${await responseError(r)}. Отправьте его из «Мои просчёты».`)
+    } catch {
+      setSubmitErr(`Просчёт сохранён, но в работу не отправлен: ${NETWORK_ERROR}. Отправьте его из «Мои просчёты».`)
+    }
   }
 
   const top = (
@@ -264,6 +273,12 @@ export default function PartnerNewQuotePage() {
   )
 
   if (loading) return <>{top}<div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div></>
+  if (matErr) return (
+    <>{top}<div className="wrap"><div className="note">
+      <div className="t">Справочник материалов не загрузился</div>
+      <div className="s">{matErr}. Обновите страницу через минуту.</div>
+    </div></div></>
+  )
   if (!linked) return (
     <>{top}<div className="wrap"><div className="note">
       <div className="t">Аккаунт не привязан</div>
@@ -425,6 +440,7 @@ export default function PartnerNewQuotePage() {
               {savedId ? (
                 <div className="note" style={{ padding: 18, background: 'var(--green-bg)', borderColor: 'var(--green-bd)' }}>
                   <div className="t" style={{ color: 'var(--green)' }}>{submitted ? 'Отправлено в работу ✓' : editingId ? 'Просчёт обновлён ✓' : 'Просчёт сохранён ✓'}</div>
+                  {submitErr && <div className="perr">{submitErr}</div>}
                   <div className="s">{submitted ? 'Менеджер подтвердит и запустит производство. Счёт-спецификацию для оплаты пришлёт ваш менеджер M-Glass.' : editingId ? 'Изменения сохранены в вашем просчёте.' : 'Он появился в разделе «Мои просчёты».'}</div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
                     <Link href={`/partner/order/${savedId}/kp`} className="ghost">↓ Скачать КП</Link>

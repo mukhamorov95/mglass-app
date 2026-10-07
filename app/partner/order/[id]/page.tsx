@@ -47,9 +47,16 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
   const [dComment, setDComment] = useState('')
   const [dSaving, setDSaving] = useState(false)
 
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   useEffect(() => {
-    fetch(`/api/partner/order/${id}`).then(r => r.ok ? r.json() : Promise.reject())
-      .then((d: Order) => setO(d)).catch(() => setNotFound(true)).finally(() => setLoading(false))
+    let alive = true
+    fetch(`/api/partner/order/${id}`).then(async r => {
+      if (!alive) return
+      if (r.status === 404) { setNotFound(true); return }
+      if (!r.ok) { setLoadErr(await responseError(r)); return }
+      setO(await r.json() as Order)
+    }).catch(() => { if (alive) setLoadErr(NETWORK_ERROR) }).finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
   }, [id])
 
   const [decideErr, setDecideErr] = useState<string | null>(null)
@@ -72,13 +79,17 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
   }
 
   const [paying, setPaying] = useState(false)
+  const [payErr, setPayErr] = useState<string | null>(null)
   async function payOnline() {
-    setPaying(true)
+    setPaying(true); setPayErr(null)
     try {
       const r = await fetch(`/api/partner/order/${id}/pay`, { method: 'POST' })
-      const d = await r.json()
-      if (r.ok && d.url) { window.location.href = d.url; return }
-      alert(d.error || 'Оплата онлайн недоступна')
+      if (!r.ok) { setPayErr(`Оплата не открылась: ${await responseError(r)}`); return }
+      const d = await r.json().catch(() => null) as { url?: string } | null
+      if (d?.url) { window.location.href = d.url; return }
+      setPayErr('Оплата не открылась: сервер не прислал ссылку на оплату')
+    } catch {
+      setPayErr(`Оплата не открылась: ${NETWORK_ERROR}`)
     } finally { setPaying(false) }
   }
 
@@ -88,22 +99,33 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
     setDComment(o?.delivery?.comment ?? '')
     setDelivOpen(true)
   }
+  const [dErr, setDErr] = useState<string | null>(null)
   async function saveDelivery() {
-    setDSaving(true)
+    setDSaving(true); setDErr(null)
     try {
       const r = await fetch(`/api/partner/order/${id}/delivery`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method: dMethod, address: dAddr, comment: dComment }),
       })
-      const d = await r.json()
-      if (r.ok && d.delivery) {
-        setO(prev => prev ? { ...prev, delivery: { method: d.delivery.method, address: d.delivery.address ?? null, comment: d.delivery.comment ?? null, status: d.delivery.status ?? null } } : prev)
-        setDelivOpen(false)
-      }
+      if (!r.ok) { setDErr(`Не сохранено: ${await responseError(r)}`); return }
+      const d = await r.json().catch(() => null) as { delivery?: { method: 'pickup' | 'delivery'; address?: string | null; comment?: string | null; status?: string | null } } | null
+      if (!d?.delivery) { setDErr('Не сохранено: сервер прислал пустой ответ. Обновите страницу'); return }
+      const dv = d.delivery
+      setO(prev => prev ? { ...prev, delivery: { method: dv.method, address: dv.address ?? null, comment: dv.comment ?? null, status: dv.status ?? null } } : prev)
+      setDelivOpen(false)
+    } catch {
+      setDErr(`Не сохранено: ${NETWORK_ERROR}`)
     } finally { setDSaving(false) }
   }
 
   if (loading) return <div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div>
+  if (loadErr) return (
+    <div className="wrap"><div className="note">
+      <div className="t">Заказ не загрузился</div>
+      <div className="s">{loadErr}. Обновите страницу через минуту.</div>
+      <Link href="/partner/orders" className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← Мои заказы</Link>
+    </div></div>
+  )
   if (notFound || !o) return (
     <div className="wrap"><div className="note">
       <div className="t">Заказ не найден</div>
@@ -270,6 +292,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
                   <button className="primary" style={{ flex: 1 }} disabled={dSaving || (dMethod === 'delivery' && !dAddr.trim())} onClick={saveDelivery}>{dSaving ? 'Сохраняю…' : 'Сохранить'}</button>
                   <button className="ghost" onClick={() => setDelivOpen(false)}>Отмена</button>
                 </div>
+                {dErr && <div className="perr" style={{ marginTop: 0 }}>{dErr}</div>}
               </div>
             )}
           </div>
@@ -285,6 +308,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         {qs === 'draft' && <Link className="ghost" href={`/partner/new?edit=${o.id}`}>✎ Изменить просчёт</Link>}
         <Link className="primary" href={`/partner/new?reorder=${o.id}`}>{qs === 'rejected' ? 'Повторить как новый просчёт' : 'Повторить заказ'}</Link>
       </div>
+      {payErr && <div className="perr">{payErr}</div>}
     </div>
   )
 }

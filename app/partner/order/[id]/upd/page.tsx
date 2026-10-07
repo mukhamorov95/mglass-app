@@ -19,6 +19,7 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const docRef = useRef<HTMLDivElement>(null)
+  const [pdfErr, setPdfErr] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/partner/order/${id}/upd`).then(async r => {
@@ -32,6 +33,7 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
 
   async function downloadPdf() {
     if (!docRef.current || !issued) return
+    setPdfErr(null)
     try {
       const jspdf = await import('jspdf')
       const canvas = await renderDocCanvas(docRef.current)
@@ -45,7 +47,7 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
       pdf.save(`УПД-${issued.number}-${issued.year}.pdf`)
     } catch {
-      alert('Не удалось сформировать PDF. Используйте «Печать» → Сохранить как PDF.')
+      setPdfErr('Не удалось сформировать PDF — используйте «Печать» → «Сохранить как PDF».')
     }
   }
 
@@ -65,6 +67,7 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
         <Link href={`/partner/order/${id}`} className="ghost">‹ К заказу</Link>
         <button onClick={() => document.fonts.ready.then(() => window.print())} className="ghost" style={{ marginLeft: 'auto' }}>🖨 Печать</button>
         <button onClick={downloadPdf} className="primary">⬇ Скачать PDF</button>
+        {pdfErr && <span style={{ flexBasis: '100%', fontSize: 12.5, color: '#b91c1c' }}>{pdfErr}</span>}
       </div>
 
       <UpdDocument ref={docRef} view={issuedUpdView(issued)} />

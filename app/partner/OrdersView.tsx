@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
-import { loadJson } from '@/lib/toast'
+import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
 import { QUOTE_LABEL, canEditQuote, canSubmitQuote, type QuoteState } from '@/lib/partner/quoteState'
 
@@ -75,11 +75,15 @@ export default function OrdersView({ view }: { view: View }) {
     return () => { alive = false }
   }, [])
 
+  const [submitErr, setSubmitErr] = useState<{ id: number; text: string } | null>(null)
   async function submitQuote(id: number) {
-    setSubmittingId(id)
+    setSubmittingId(id); setSubmitErr(null)
     try {
       const r = await fetch('/api/partner/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: id }) })
-      if (r.ok) await load()
+      if (!r.ok) { setSubmitErr({ id, text: `Не отправлено: ${await responseError(r)}` }); return }
+      await load()
+    } catch {
+      setSubmitErr({ id, text: `Не отправлено: ${NETWORK_ERROR}` })
     } finally { setSubmittingId(null) }
   }
 
@@ -105,7 +109,7 @@ export default function OrdersView({ view }: { view: View }) {
   const recent = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) <= ARCHIVE_DAYS) : visible
   const archived = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) > ARCHIVE_DAYS) : []
 
-  const card = (o: Order) => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} />
+  const card = (o: Order) => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} submitErr={submitErr?.id === o.id ? submitErr.text : null} />
   const lanesOf = (list: Order[]) => lanes.map(lane => {
     const l = list.filter(o => o.lane === lane)
     if (l.length === 0) return null
@@ -203,7 +207,7 @@ export default function OrdersView({ view }: { view: View }) {
   )
 }
 
-function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: number) => void; submitting: boolean }) {
+function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit: (id: number) => void; submitting: boolean; submitErr: string | null }) {
   // Черновик → клик открывает на редактирование. Согласованный, обсуждаемый, отклонённый
   // просчёт и заказ → карточка: править их нельзя, форма открылась бы пустой.
   const qs: QuoteState = o.quoteState ?? 'draft'
@@ -245,6 +249,7 @@ function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: numbe
           {submitting ? 'Отправляю…' : 'Отправить в работу'}
         </button>
       )}
+      {submitErr && <div className="perr">{submitErr}</div>}
     </>
   )
   return (
