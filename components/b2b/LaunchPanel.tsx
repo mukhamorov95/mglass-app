@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import { launchOrder } from '@/lib/b2b/launchOrder'
-import type { OrderNotesSaved } from '@/lib/b2b/orderNotesClient'
+import type { LaunchResult } from '@/lib/b2b/launchOrder'
 
 // Панель «Запустить в работу»: дата запуска, срок сдачи, № заказа, чертёж. Одна на
 // «Просчёты» и карточку сделки — раньше запуск жил только в окне списка просчётов.
@@ -12,7 +12,7 @@ export default function LaunchPanel({ orderId, initialNumber, productionDays, qu
   initialNumber: string | null
   productionDays: number | null
   queueCount?: number | null
-  onLaunched: (saved: OrderNotesSaved) => void
+  onLaunched: (res: LaunchResult) => void
   onCancel: () => void
 }) {
   const [workDate, setWorkDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -28,8 +28,8 @@ export default function LaunchPanel({ orderId, initialNumber, productionDays, qu
     if (!workDate || busy) return
     setBusy(true)
     try {
-      const saved = await launchOrder(orderId, { workDate, deadline: deadline || null, customNumber: number, drawing })
-      if (saved) onLaunched(saved)
+      const res = await launchOrder(orderId, { workDate, deadline: deadline || null, customNumber: number, drawing })
+      if (res) onLaunched(res)
     } finally { setBusy(false) }
   }
 

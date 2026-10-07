@@ -2,12 +2,14 @@ import { createClient } from '@/lib/supabase-browser'
 import { saveOrderNotes, type OrderNotesSaved } from '@/lib/b2b/orderNotesClient'
 import { toast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
+export type LaunchResult = { saved: OrderNotesSaved; tasksOk: boolean }
 export type LaunchInput = { workDate: string; deadline: string | null; customNumber: string | null; drawing: File | null }
 
 // Запуск просчёта в работу — одна реализация для «Просчётов» и карточки сделки (этап 3
 // docs/SYSTEM_ORDER_ROUTE.md). Порядок важен: чертёж → дата запуска и номер (сервер собирает
-// notes из свежей записи) → задачи цеху. Ошибка любого шага говорится вслух; null — не запущен.
-export async function launchOrder(orderId: number, input: LaunchInput): Promise<OrderNotesSaved | null> {
+// notes из свежей записи) → задачи цеху. Ошибка любого шага говорится вслух; null — не запущен,
+// tasksOk: false — запущен, но задачи цеху не создались (тост с повтором уже показан).
+export async function launchOrder(orderId: number, input: LaunchInput): Promise<LaunchResult | null> {
   // Чертёж для цеха: тот же bucket/путь, что «Прикрепить чертёж» в заказах —
   // мастер увидит его в «Моих задачах» и в карточке заказа.
   let drawingUrl: string | null = null
@@ -48,5 +50,5 @@ export async function launchOrder(orderId: number, input: LaunchInput): Promise<
       action: { label: 'Создать задачи ещё раз', onClick: () => { void retry() } },
     })
   }
-  return r.data
+  return { saved: r.data, tasksOk: !!launched?.ok }
 }

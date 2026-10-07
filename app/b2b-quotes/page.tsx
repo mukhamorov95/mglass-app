@@ -17,7 +17,8 @@ import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, type B2BRates, type RateR
 import { toast } from '@/lib/toast'
 import { promptDialog } from '@/lib/dialog'
 import { writeFailure } from '@/lib/rlsWrite'
-import { saveOrderNotes, type OrderNotesSaved } from '@/lib/b2b/orderNotesClient'
+import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
+import type { LaunchResult } from '@/lib/b2b/launchOrder'
 import LaunchPanel from '@/components/b2b/LaunchPanel'
 import { copyOrShow } from '@/lib/b2b/copyOrShow'
 import { matchScore } from '@/lib/search/translitMatch'
@@ -421,14 +422,14 @@ export default function B2BQuotesPage() {
 
   // После запуска — следующий шаг сразу в тосте: производственное сообщение в чат цеха
   // (тот же сборщик, что кнопка 📋 в /b2b-orders), из строки с номером, который дал запуск.
-  function onLaunched(id: number, saved: OrderNotesSaved) {
+  function onLaunched(id: number, { saved, tasksOk }: LaunchResult) {
     const q = quotes.find(x => x.id === id)
     setQuotes(prev => prev.map(x => x.id === id ? { ...x, ...(saved.columns as Partial<Quote>), notes: saved.notes } : x))
     setWorkDateId(null)
     if (!q) { showToast('Запущено в работу'); return }
     const msgOrder = { ...q, ...(saved.columns as Partial<Quote>) }
     toast.success('Запущено в работу', {
-      detail: 'Задачи цеху созданы. Отправьте производственное сообщение в рабочий чат.',
+      detail: tasksOk ? 'Задачи цеху созданы. Отправьте производственное сообщение в рабочий чат.' : 'Задачи цеху не создались — повторите из сообщения об ошибке.',
       action: {
         label: '📋 Произв. сообщение',
         onClick: () => {
@@ -1225,7 +1226,7 @@ export default function B2BQuotesPage() {
                   <LaunchPanel orderId={quote.id} initialNumber={quote.custom_number}
                     productionDays={Number(parseNotes(quote.notes).production_days) || null}
                     queueCount={queueCount}
-                    onLaunched={saved => onLaunched(quote.id, saved)}
+                    onLaunched={res => onLaunched(quote.id, res)}
                     onCancel={() => setWorkDateId(null)} />
                 )}
 

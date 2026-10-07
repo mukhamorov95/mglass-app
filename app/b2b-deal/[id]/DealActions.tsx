@@ -67,11 +67,11 @@ export default function DealActions({ dealId, quote, orderTotal, managerName, la
   }
 
   // После запуска — сразу следующий шаг: производственное сообщение в чат цеха.
-  function onLaunched(columns: Record<string, unknown>) {
+  function onLaunched(columns: Record<string, unknown>, tasksOk: boolean) {
     setLaunchOpen(false)
     const msgOrder = { ...quote, ...(columns as Partial<typeof quote>) }
     toast.success('Запущено в работу', {
-      detail: 'Задачи цеху созданы. Отправьте производственное сообщение в рабочий чат.',
+      detail: tasksOk ? 'Задачи цеху созданы. Отправьте производственное сообщение в рабочий чат.' : 'Задачи цеху не создались — повторите из сообщения об ошибке.',
       action: {
         label: '📋 Произв. сообщение',
         onClick: () => { void copyText(buildProductionMessage(msgOrder), { ok: 'Производственное сообщение скопировано', title: 'Скопируйте производственное сообщение', detail: productionMessageSummary(msgOrder) }) },
@@ -121,7 +121,7 @@ export default function DealActions({ dealId, quote, orderTotal, managerName, la
     {launchOpen && !launched && (
       <div className="rounded-xl overflow-hidden border border-[#d0e0ff]">
         <LaunchPanel orderId={dealId} initialNumber={quote.custom_number ?? null} productionDays={productionDays}
-          onLaunched={saved => onLaunched(saved.columns)} onCancel={() => setLaunchOpen(false)} />
+          onLaunched={res => onLaunched(res.saved.columns, res.tasksOk)} onCancel={() => setLaunchOpen(false)} />
       </div>
     )}
     </div>

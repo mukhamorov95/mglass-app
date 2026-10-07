@@ -172,7 +172,7 @@ export default function TodayClient() {
               empty={`За ${SHIP_RECENT_DAYS} дней просроченных отгрузок нет`} allHref="/b2b-today/shipments" />
             <PriorityCard tone="amber" title="Готов, не отгружен" rows={view.ready}
               caption={`Упакован за последние ${SHIP_RECENT_DAYS} дней, отметки «Отгружен» нет. Сообщите клиенту — текст кнопкой «📋»; уехал — отметьте с датой отгрузки.`}
-              empty="Упакованных и не отгруженных нет" allHref="/b2b-today/shipments" />
+              empty={`За ${SHIP_RECENT_DAYS} дней упакованных и не отгруженных нет`} allHref="/b2b-today/shipments" />
             {view.upd.length > 0 && (
               <PriorityCard tone="amber" title="Выдать УПД" rows={view.upd}
                 caption="Отгружен после включения серии, у клиента есть ИНН, УПД не выдан. Дата УПД — день отгрузки." />
