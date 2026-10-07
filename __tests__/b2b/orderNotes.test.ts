@@ -102,7 +102,7 @@ describe('notesForCopy — копия не уносит жизнь исходн�
   })
 
   it('каждый ключ, который пишут чужие патчи, стоит в списке сброса', () => {
-    for (const k of ['public_opened_at', 'drawing_approval', 'ai_review', 'shipped_date', 'docs_printed', 'ship_backfill', 'material_status', 'urgent', 'deadline_date', 'detail_stages']) {
+    for (const k of ['public_opened_at', 'drawing_approval', 'ai_review', 'shipped_date', 'docs_printed', 'ship_backfill', 'material_status', 'urgent', 'deadline_date', 'detail_stages', 'repeated_from']) {
       expect(COPY_DROP_KEYS).toContain(k)
     }
   })

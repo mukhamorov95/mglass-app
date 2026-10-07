@@ -92,6 +92,7 @@ export const COPY_DROP_KEYS: readonly string[] = [
   'delivery', 'claim', 'claim_history', 'ai_review', 'submitted_by_partner_at', 'updated_by_partner_at',
   'urgent', 'ship_backfill', 'shipped_date', 'docs_printed', 'docs_printed_at', 'docs_printed_by',
   'is_template', 'template_name', 'import_month', 'historical', 'month_corrected_from',
+  'repeated_from',
 ]
 
 export function notesForCopy(src: Notes, opts: { at: string; managerName: string | null }): Notes {
