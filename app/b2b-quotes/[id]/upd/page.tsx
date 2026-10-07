@@ -1,21 +1,23 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import UpdDocument from '@/components/UpdDocument'
-import type { InvoiceOrder, InvoiceRequisites } from '@/components/InvoiceDocument'
+import type { InvoiceOrder, InvoiceRequisites } from '@/lib/b2b/invoiceMath'
 import DocSkeleton from '@/components/DocSkeleton'
-import { toast } from '@/lib/toast'
+import { toast, loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { confirmDialog } from '@/lib/dialog'
 import { updDocDate } from '@/lib/b2b/updLines'
-import type { UpdRegistered } from '@/lib/b2b/updRegistry'
+import { buildUpdBody, draftUpdView, issuedUpdView, moscowDate, nextUpdNumber, updDateError, updIssueBlockers, type UpdIssued } from '@/lib/b2b/updView'
+import type { UpdSeriesState } from '@/lib/b2b/updRegistry'
 
 // А7 маршрута менеджерского контура: УПД у менеджера — тот же документ, что в кабинете
-// партнёра (components/UpdDocument), но на менеджерских данных /api/quotes/[id]/invoice-data.
-// Реквизиты покупателя редактируются на странице счёта — здесь только выбор юрлица,
-// чтобы два документа не разошлись по источнику правды.
+// партнёра (components/UpdDocument). Этап 7 docs/b2b/ORDER_PANEL_ROUTE.md: пока УПД не выдан,
+// это черновик с водяным знаком; «Выдать» присваивает номер из серии бухгалтера и закрепляет
+// содержимое. Реквизиты покупателя правятся на странице счёта — здесь только выбор юрлица.
 
 const EMPTY: InvoiceRequisites = {
   full_name: '', inn: '', kpp: '', ogrn: '', legal_address: '',
@@ -38,37 +40,54 @@ type Resp = {
   client: Record<string, unknown> | null
   entities: B2BLegalEntity[]
   payerEntityId?: number | null
-  updRegistered?: UpdRegistered | null
 }
+type UpdState = { issued: UpdIssued | null; series: UpdSeriesState[]; pendingSql: boolean; canIssue: boolean }
+
+const money2 = (n: number) => n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
+const fmtDateTime = (s: string) => new Date(s).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 export default function ManagerUpdPage() {
   const params = useParams()
   const id = Number(params.id)
 
   const [data, setData] = useState<Resp | null>(null)
+  const [upd, setUpd] = useState<UpdState | null>(null)
   const [req, setReq] = useState<InvoiceRequisites>(EMPTY)
   const [entityId, setEntityId] = useState<number | null>(null)
   const [buyerName, setBuyerName] = useState('')
+  const [docDate, setDocDate] = useState(moscowDate())
+  const [issuing, setIssuing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const docRef = useRef<HTMLDivElement>(null)
-  const [registered, setRegistered] = useState<UpdRegistered | null>(null)
 
   useEffect(() => {
     if (!id) return
-    fetch(`/api/quotes/${id}/invoice-data`).then(async r => {
-      if (!r.ok) { setError(r.status === 403 ? 'Нет доступа к этому заказу' : 'Заказ не найден'); setLoading(false); return }
-      const d = await r.json() as Resp
+    Promise.all([
+      loadJson<Resp>(`/api/quotes/${id}/invoice-data`),
+      loadJson<UpdState>(`/api/quotes/${id}/upd-issue`),
+    ]).then(([inv, st]) => {
+      if (inv.error || !inv.data) { setError(inv.error ?? 'Заказ не найден'); setLoading(false); return }
+      const d = inv.data
       setData(d)
-      setRegistered(d.updRegistered ?? null)
+      // Без состояния реестра выдать нельзя, но черновик показать можно.
+      setUpd(st.data ?? { issued: null, series: [], pendingSql: true, canIssue: false })
+      if (st.error) toast.error('Не загрузилось состояние УПД', { detail: st.error })
       setBuyerName(d.order.client_name || (d.client?.name as string) || 'Клиент')
       const list = d.entities ?? []
       // Покупатель — тот, кому выставлен счёт; без счёта — основное юрлицо клиента.
       const def = list.find(e => e.id === d.payerEntityId) ?? list.find(e => e.is_default) ?? list[0] ?? null
       if (def) { setEntityId(def.id); setReq(toReq(def as unknown as Record<string, unknown>)) }
       else if (d.client) setReq(toReq(d.client))
+      // Дата по умолчанию — отметка «Отгружен», если она уже была; иначе сегодня.
+      let notes: Record<string, unknown> = {}
+      try { notes = d.order.notes ? JSON.parse(d.order.notes) : {} } catch {}
+      const dd = updDocDate(notes, d.order.created_at)
+      const today = moscowDate()
+      if (dd.source === 'shipped' && moscowDate(dd.date) <= today) setDocDate(moscowDate(dd.date))
       setLoading(false)
-    }).catch(() => { setError('Сеть недоступна'); setLoading(false) })
+    })
   }, [id])
 
   function selectEntity(val: string) {
@@ -76,38 +95,58 @@ export default function ManagerUpdPage() {
     if (e) { setEntityId(e.id); setReq(toReq(e as unknown as Record<string, unknown>)) }
   }
 
-  // Сквозной номер выдаётся при первой печати/PDF и только отгруженному заказу: иначе
-  // в реестре навсегда закрепилась бы дата запуска вместо даты отгрузки.
-  async function ensureNumber(): Promise<UpdRegistered | null> {
-    if (registered || !data) return registered
-    let notes: Record<string, unknown> = {}
-    try { notes = data.order.notes ? JSON.parse(data.order.notes) : {} } catch {}
-    if (updDocDate(notes, data.order.created_at).source !== 'shipped') {
-      toast.info('УПД без сквозного номера', { detail: 'Номер выдаётся после отметки «Отгружен» в заказах — тогда дата документа = дата отгрузки.' })
-      return null
+  const issued = upd?.issued ?? null
+  const view = useMemo(() => {
+    if (issued) return issuedUpdView(issued)
+    if (!data) return null
+    return draftUpdView(data.order, req, buyerName, docDate)
+  }, [issued, data, req, buyerName, docDate])
+
+  const year = Number(docDate.slice(0, 4))
+  const series = upd?.series.find(s => s.year === year) ?? null
+  const nextNumber = series ? nextUpdNumber(series.start_number, series.last_number) : null
+  const dateErr = data ? updDateError(docDate, data.order.created_at, moscowDate()) : null
+  const blockers = view && !issued ? updIssueBlockers(view) : []
+  // Расхождение заказа с выданным УПД: документ не меняется, но человек должен это видеть.
+  const currentTotal = data && issued ? buildUpdBody(data.order, req, buyerName, issued.doc_date).totals.sumIncVat : null
+
+  async function issue() {
+    if (!view || !data || nextNumber == null || issuing) return
+    const late = series?.last_date && docDate < series.last_date
+      ? ` Дата раньше последнего выданного УПД (№ ${series.last_number} от ${fmtDate(series.last_date)}).` : ''
+    const ok = await confirmDialog({
+      title: `Выдать УПД № ${nextNumber} от ${fmtDate(docDate)}?`,
+      text: `Покупатель: ${view.buyer.name}, ИНН ${view.buyer.inn}. Сумма ${money2(view.totals.sumIncVat)} ₽, НДС ${money2(view.totals.vat)} ₽.` +
+        ` Номер, дата, строки и покупатель закрепятся навсегда: правка заказа после выдачи документ не изменит.${late}`,
+      confirmLabel: 'Выдать',
+    })
+    if (!ok) return
+    setIssuing(true)
+    try {
+      const r = await fetch(`/api/quotes/${id}/upd-issue`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_date: docDate, entity_id: entityId }),
+      })
+      if (!r.ok) { toast.error('УПД не выдан', { detail: await responseError(r) }); return }
+      const j = await r.json() as { issued: UpdIssued; already: boolean }
+      setUpd(u => u ? { ...u, issued: j.issued } : u)
+      toast.success(j.already ? `УПД № ${j.issued.number} уже был выдан` : `УПД № ${j.issued.number} выдан`, {
+        detail: 'Номер и содержимое закреплены. Печать и PDF — на этой странице, без водяного знака.',
+      })
+    } catch {
+      toast.error('УПД не выдан', { detail: NETWORK_ERROR })
+    } finally {
+      setIssuing(false)
     }
-    const r = await fetch(`/api/quotes/${id}/upd-number`, { method: 'POST' })
-    const j = await r.json().catch(() => ({})) as { registered?: UpdRegistered | null; pendingSql?: boolean; error?: string }
-    if (!r.ok) { toast.error('Номер УПД не выдан', { detail: j.error ?? `ошибка ${r.status}` }); return null }
-    if (j.pendingSql) { toast.info('УПД с номером заказа', { detail: 'Сквозная нумерация включится после SQL владельца (20261007_upd_registry.sql).' }); return null }
-    if (j.registered) setRegistered(j.registered)
-    return j.registered ?? null
   }
 
-  // Номер должен попасть в документ до снимка/печати — ждём перерисовку.
-  const afterRender = () => new Promise<void>(res => requestAnimationFrame(() => requestAnimationFrame(() => res())))
-
   async function printDoc() {
-    await ensureNumber()
-    await afterRender()
     await document.fonts.ready
     window.print()
   }
 
   async function downloadPdf() {
-    if (!docRef.current || !data) return
-    const reg = await ensureNumber()
-    await afterRender()
+    if (!docRef.current || !data || !view) return
     try {
       const jspdf = await import('jspdf')
       const canvas = await renderDocCanvas(docRef.current)
@@ -119,7 +158,7 @@ export default function ManagerUpdPage() {
       pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
       left -= ph
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
-      pdf.save(`УПД-${reg ? `${reg.number}-${reg.year}` : data.order.custom_number?.trim() || String(data.order.id).padStart(5, '0')}.pdf`)
+      pdf.save(issued ? `УПД-${issued.number}-${issued.year}.pdf` : `УПД-черновик-${view.orderNumber}.pdf`)
     } catch {
       toast.error('Не удалось сформировать PDF', {
         detail: 'Лист можно сохранить через «Печать» → Сохранить как PDF.',
@@ -129,7 +168,7 @@ export default function ManagerUpdPage() {
   }
 
   if (loading) return <DocSkeleton rows={5} />
-  if (error || !data) return (
+  if (error || !data || !view) return (
     <div className="p-8">
       <p className="text-[15px] font-semibold text-[#111110]">Документ недоступен</p>
       <p className="text-[13px] text-[#6b6b66] mt-1">{error}</p>
@@ -137,15 +176,21 @@ export default function ManagerUpdPage() {
     </div>
   )
 
+  const btn = 'text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] bg-white text-[#6b6b66] hover:text-[#111110] hover:border-[#111110] transition-colors'
+  const issueHint = !upd?.canIssue ? null
+    : upd.pendingSql ? 'Выдача УПД включится после SQL владельца (20261007_upd_registry.sql)'
+    : !series ? `Нумерация УПД на ${year} год не включена: первый номер задаёт бухгалтер в «Бухгалтерия → УПД». До этого УПД выписывает программа.`
+    : dateErr ? `Дата УПД: ${dateErr}`
+    : blockers.length ? `Нельзя выдать: ${blockers.join(', ')}`
+    : null
+
   return (
     <>
       <style>{'body{background:#ececea}'}</style>
       <div className="no-print max-w-[1040px] mx-auto px-4 pt-4 flex flex-wrap items-center gap-2">
-        <Link href="/b2b-orders"
-          className="text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] bg-white text-[#6b6b66] hover:text-[#111110] hover:border-[#111110] transition-colors">‹ К заказам</Link>
-        <Link href={`/b2b-quotes/${id}/invoice`}
-          className="text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] bg-white text-[#6b6b66] hover:text-[#111110] hover:border-[#111110] transition-colors">🧾 Счёт</Link>
-        {data.entities.length > 1 && (
+        <Link href="/b2b-orders" className={btn}>‹ К заказам</Link>
+        <Link href={`/b2b-quotes/${id}/invoice`} className={btn}>🧾 Счёт</Link>
+        {!issued && data.entities.length > 1 && (
           <select value={entityId ?? ''} onChange={e => selectEntity(e.target.value)}
             className="text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] bg-white text-[#6b6b66] outline-none">
             {data.entities.map(e => (
@@ -153,18 +198,49 @@ export default function ManagerUpdPage() {
             ))}
           </select>
         )}
-        {!req.inn && (
-          <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
-            Нет ИНН покупателя — заполните реквизиты на странице счёта
-          </span>
+        {!issued && (
+          <label className="text-[12px] text-[#6b6b66] flex items-center gap-1.5">
+            Дата УПД
+            <input type="date" value={docDate} onChange={e => e.target.value && setDocDate(e.target.value)}
+              className="text-[12px] px-2 py-1 rounded-lg border border-[#e4e4e0] bg-white text-[#111110] outline-none" />
+          </label>
         )}
-        <button onClick={printDoc}
-          className="ml-auto text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] bg-white text-[#6b6b66] hover:text-[#111110] hover:border-[#111110] transition-colors">🖨 Печать</button>
-        <button onClick={downloadPdf}
-          className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">⬇ Скачать PDF</button>
+        <button onClick={printDoc} className={`ml-auto ${btn}`}>🖨 Печать</button>
+        <button onClick={downloadPdf} className={btn}>⬇ PDF</button>
+        {!issued && upd?.canIssue && (
+          <button onClick={issue} disabled={!!issueHint || issuing || nextNumber == null}
+            className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            {issuing ? 'Выдаю…' : nextNumber != null && !issueHint ? `Выдать УПД № ${nextNumber}` : 'Выдать УПД'}
+          </button>
+        )}
       </div>
 
-      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} registered={registered} />
+      <div className="no-print max-w-[1040px] mx-auto px-4 mt-3 space-y-2">
+        {issued ? (
+          <div className="px-4 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[12px] text-[#111110]">
+            ✓ УПД № {issued.number} от {fmtDate(issued.doc_date)} выдан{issued.issued_by_name ? ` · ${issued.issued_by_name}` : ''} · {fmtDateTime(issued.issued_at)}.
+            <span className="text-[#6b6b66]"> Печатается из закреплённой копии: покупатель {view.buyer.name}, {money2(view.totals.sumIncVat)} ₽.</span>
+          </div>
+        ) : (
+          <div className="px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-[12px] text-amber-800">
+            Черновик: номер не присвоен, на печати — водяной знак «ЧЕРНОВИК».
+            {issueHint ? ` ${issueHint}` : ' Проверьте дату и покупателя и нажмите «Выдать».'}
+          </div>
+        )}
+        {!issued && !req.inn && (
+          <div className="px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-[12px] text-amber-800">
+            Нет ИНН покупателя — заполните реквизиты на <Link href={`/b2b-quotes/${id}/invoice`} className="underline">странице счёта</Link>.
+          </div>
+        )}
+        {issued && currentTotal != null && Math.abs(currentTotal - issued.snapshot.totals.sumIncVat) >= 0.01 && (
+          <div className="px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-[12px] text-amber-800">
+            Заказ изменён после выдачи: сейчас {money2(currentTotal)} ₽, в УПД {money2(issued.snapshot.totals.sumIncVat)} ₽.
+            Выданный документ не меняется — исправление УПД оформляет бухгалтер.
+          </div>
+        )}
+      </div>
+
+      <UpdDocument ref={docRef} view={view} draft={!issued} />
     </>
   )
 }

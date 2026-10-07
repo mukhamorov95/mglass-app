@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { SELLER_B2B } from '@/lib/companyRequisites'
 import { paymentQrStringFor } from '@/lib/paymentQr'
 import { rublesInWords } from '@/lib/numToWords'
+import { computeInvoiceTotals, itemName, type InvoiceOrder, type InvoiceRequisites } from '@/lib/b2b/invoiceMath'
 
 // Единый рендер «Счёт-спецификации» — один источник правды для документа.
 // Используют менеджерская страница (/b2b-quotes/[id]/invoice) и кабинет партнёра
@@ -12,25 +13,8 @@ import { rublesInWords } from '@/lib/numToWords'
 // поэтому счёт клиента и наш счёт идентичны по построению. Компонент чистый:
 // принимает заказ + реквизиты покупателя, сам считает итоги и QR оплаты.
 
-export type InvoiceOrderItem = {
-  materialName?: string; category?: string; thickness?: number; width?: number; height?: number
-  quantity?: number; saleIncVat?: number; hasTempering?: boolean; hasFacet?: boolean
-  facetTypeMm?: number; shape?: string; comment?: string; services?: { id: number; name: string; cost: number }[]
-  // Договорная цена строки (вкл. НДС, ПОСЛЕ скидки). Если стоит — скидка к ней не применяется.
-  manualTotal?: number | null
-  // Цена из прайса клиента — скидка заказа к ней не применяется (как в b2bCalculator).
-  clientPriced?: boolean
-}
-export type InvoiceOrder = {
-  id: number; custom_number: string | null; discount_percent: number
-  items: InvoiceOrderItem[]; total_sale_inc_vat: number; total_after_discount: number
-  notes: string | null; created_at: string
-}
-export type InvoiceRequisites = {
-  full_name: string; inn: string; kpp: string; ogrn: string; legal_address: string
-  bank_account: string; bank_name: string; bik: string; corr_account: string
-  supply_contract_no: string; supply_contract_date: string
-}
+export type { InvoiceOrderItem, InvoiceOrder, InvoiceRequisites } from '@/lib/b2b/invoiceMath'
+export { itemName, computeInvoiceTotals } from '@/lib/b2b/invoiceMath'
 
 const money2 = (n: number) => (n ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -39,36 +23,6 @@ function parseNotes(notes: string | null): Record<string, unknown> {
   if (!notes) return {}
   try { const p = JSON.parse(notes); if (typeof p === 'object' && p !== null) return p } catch {}
   return {}
-}
-export function itemName(it: InvoiceOrderItem): string {
-  const parts: string[] = [it.materialName || 'Стекло']
-  if (it.thickness) parts.push(`${it.thickness} мм`)
-  if (it.hasTempering) parts.push('закалённое')
-  if (it.hasFacet) parts.push(it.facetTypeMm ? `фацет ${it.facetTypeMm} мм` : 'фацет')
-  const svc = (it.services ?? []).map(s => s.name).filter(Boolean)
-  let base = parts.join(', ')
-  if (it.width && it.height) base += `, ${it.width}×${it.height} мм`
-  if (svc.length) base += `; ${svc.join(', ')}`
-  return base
-}
-
-// Те же итоги, что в менеджерском счёте: разницу округления сажаем в последнюю строку.
-export function computeInvoiceTotals(order: InvoiceOrder) {
-  const items = order.items || []
-  const discount = order.discount_percent || 0
-  const totalBase = order.total_sale_inc_vat || items.reduce((s, i) => s + (i.saleIncVat ?? 0), 0)
-  const totalPay = order.total_after_discount || totalBase
-  const vat = Math.round(totalPay * 22 / 122 * 100) / 100
-  // Договорная цена строки важнее прайса со скидкой — иначе счёт разойдётся
-  // с просчётом там, где менеджер правил цены руками (или корректировал итог).
-  const lineSums = items.map(it => it.manualTotal != null
-    ? Math.round(Number(it.manualTotal) * 100) / 100
-    : Math.round((it.saleIncVat ?? 0) * (1 - (it.clientPriced ? 0 : discount) / 100) * 100) / 100)
-  if (lineSums.length) {
-    const raw = Math.round(lineSums.reduce((a, b) => a + b, 0) * 100) / 100
-    lineSums[lineSums.length - 1] = Math.round((lineSums[lineSums.length - 1] + (totalPay - raw)) * 100) / 100
-  }
-  return { items, discount, totalBase, totalPay, vat, lineSums, discountSum: totalBase - totalPay }
 }
 
 const InvoiceDocument = forwardRef<HTMLDivElement, {

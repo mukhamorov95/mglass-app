@@ -1,14 +1,12 @@
 'use client'
 
 import { forwardRef } from 'react'
-import { SELLER_B2B } from '@/lib/companyRequisites'
-import { itemName, type InvoiceOrder, type InvoiceRequisites } from '@/components/InvoiceDocument'
-import { updDocDate, updLines } from '@/lib/b2b/updLines'
-import type { UpdRegistered } from '@/lib/b2b/updRegistry'
+import type { UpdView } from '@/lib/b2b/updView'
 
 // A11: Универсальный передаточный документ (статус 1). Раскладка — по подписанным УПД
 // компании (№ 455, 463, 519, 532, 08–09.2026; форма в ред. ПП от 23.01.2026 № 26): те же строки,
-// графы, подписи. Строки и итоги — lib/b2b/updLines.ts. Факсимиле не ставим (решение 07.10).
+// графы, подписи. Компонент только рисует: содержимое — lib/b2b/updView.ts (черновик из заказа
+// или снимок выданного УПД). Факсимиле не ставим (решение 07.10).
 
 const money2 = (n: number) => (n ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -17,33 +15,13 @@ function longDate(s: string) {
   const [d, m, y] = fmtDate(s).split('.')
   return `«${d}» ${MONTHS[Number(m) - 1]} ${y} г.`
 }
-function parseNotes(notes: string | null): Record<string, unknown> {
-  if (!notes) return {}
-  try { const p = JSON.parse(notes); if (typeof p === 'object' && p !== null) return p } catch {}
-  return {}
-}
 
-const UpdDocument = forwardRef<HTMLDivElement, {
-  order: InvoiceOrder; requisites: InvoiceRequisites; buyerName: string
-  // Сквозной номер из реестра (этап 5, не включён: серию ведёт бухгалтерская программа).
-  registered?: UpdRegistered | null
-}>(function UpdDocument({ order, requisites: req, buyerName, registered = null }, ref) {
-  const orderNum = order.custom_number?.trim() || String(order.id).padStart(5, '0')
-  const num = registered ? String(registered.number) : orderNum
-  const notes = parseNotes(order.notes)
-  const live = updDocDate(notes, order.created_at)
-  const docDate = registered?.doc_date ?? live.date
-  const source = registered ? 'shipped' : live.source
-  const { lines, totals } = updLines(order, docDate)
-
-  const buyer = req.full_name || buyerName
-  const buyerInnKpp = [req.inn, req.kpp].filter(Boolean).join('/')
-  const sellerInnKpp = `${SELLER_B2B.inn}/${SELLER_B2B.kpp}`
-  const contract = req.supply_contract_no
-    ? `Договор поставки № ${req.supply_contract_no}${req.supply_contract_date ? ` от ${fmtDate(req.supply_contract_date)}` : ''}`
-    // Без рамочного договора бухгалтерия пишет так (УПД № 532: «Договор поставки № 05544 от 25.09.2026»
-    // — номер заказа и дата просчёта/счёта-спецификации).
-    : `Договор поставки № ${orderNum} от ${fmtDate((notes.quote_date as string) || order.created_at)}`
+// draft — водяной знак «ЧЕРНОВИК» печатается тоже: невыданный УПД не должен уйти на подпись.
+const UpdDocument = forwardRef<HTMLDivElement, { view: UpdView; draft?: boolean }>(function UpdDocument({ view, draft = false }, ref) {
+  const { number: num, docDate, seller, buyer: b, contract, lines, totals } = view
+  const buyer = b.name
+  const buyerInnKpp = [b.inn, b.kpp].filter(Boolean).join('/')
+  const sellerInnKpp = `${seller.inn}/${seller.kpp}`
 
   const field = (label: string, value: React.ReactNode, n: string) => (
     <tr>
@@ -73,6 +51,7 @@ const UpdDocument = forwardRef<HTMLDivElement, {
         #upd-document .g { width: 100%; }
         #upd-document .g td, #upd-document .g th { border: 1px solid #333; padding: 2px 3px; font-size: 9px; vertical-align: top; }
         #upd-document .g th { font-weight: 400; text-align: center; vertical-align: middle; }
+        #upd-document .upd-watermark { transform: rotate(-18deg); font-size: 96px; font-weight: 700; letter-spacing: 6px; color: rgba(200, 30, 30, 0.13) !important; white-space: nowrap; }
         @media print {
           body * { visibility: hidden !important; }
           #upd-document, #upd-document * { visibility: visible !important; }
@@ -82,19 +61,12 @@ const UpdDocument = forwardRef<HTMLDivElement, {
         }
       `}</style>
 
-      {registered && registered.doc_date.slice(0, 10) !== live.date.slice(0, 10) && (
-        <div className="no-print max-w-[1100px] mx-auto mt-3 px-4 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[12px] text-[#6b6b66]">
-          УПД № {registered.number} уже выдан с датой {fmtDate(registered.doc_date)} — номер и дата закреплены. По заказу сейчас дата {fmtDate(live.date)}.
-        </div>
-      )}
-      {source !== 'shipped' && (
-        <div className="no-print max-w-[1100px] mx-auto mt-3 px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-[12px] text-amber-800">
-          Заказ не отмечен «Отгружен» — дата УПД взята из даты {source === 'launched' ? 'запуска' : 'просчёта'} ({fmtDate(docDate)}).
-          Отметьте отгрузку в заказах, и дата станет датой отгрузки.
-        </div>
-      )}
-
-      <div ref={ref} id="upd-document" className="max-w-[1100px] mx-auto my-6 bg-white shadow-xl px-6 py-5 text-[10px] leading-snug print:shadow-none print:my-0">
+      <div ref={ref} id="upd-document" className="relative max-w-[1100px] mx-auto my-6 bg-white shadow-xl px-6 py-5 text-[10px] leading-snug print:shadow-none print:my-0">
+        {draft && (
+          <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
+            <span className="upd-watermark">ЧЕРНОВИК · НЕ ВЫДАН</span>
+          </div>
+        )}
         <div className="flex gap-3">
           <div className="w-[120px] shrink-0 border-r border-[#333] pr-2">
             <div className="font-bold leading-tight">Универсальный передаточный документ</div>
@@ -116,17 +88,17 @@ const UpdDocument = forwardRef<HTMLDivElement, {
 
             <div className="grid grid-cols-2 gap-x-6 mt-2">
               <table><tbody>
-                {field('Продавец:', SELLER_B2B.nameFull, '2')}
-                {field('Адрес:', SELLER_B2B.legalAddressFull, '2а')}
+                {field('Продавец:', seller.name, '2')}
+                {field('Адрес:', seller.address, '2а')}
                 {field('ИНН/КПП продавца:', sellerInnKpp, '2б')}
                 {field('Грузоотправитель и его адрес:', 'он же', '3')}
-                {field('Грузополучатель и его адрес:', [buyer, req.legal_address].filter(Boolean).join(' '), '4')}
+                {field('Грузополучатель и его адрес:', [buyer, b.address].filter(Boolean).join(' '), '4')}
                 {field('К платежно-расчетному документу', '№ ______ от ______', '5')}
                 {field('Документ об отгрузке:', `Универсальный передаточный документ, № ${num} от ${fmtDate(docDate)}`, '5а')}
               </tbody></table>
               <table><tbody>
                 {field('Покупатель:', buyer || <span className="text-[#b00]">реквизиты покупателя не заполнены</span>, '6')}
-                {field('Адрес:', req.legal_address || '', '6а')}
+                {field('Адрес:', b.address, '6а')}
                 {field('ИНН/КПП покупателя:', buyerInnKpp, '6б')}
                 {field('Валюта: наименование, код', 'российский рубль, 643', '7')}
                 {field('Идентификатор государственного контракта, договора (соглашения) (при наличии):', '', '8')}
@@ -173,10 +145,10 @@ const UpdDocument = forwardRef<HTMLDivElement, {
               <tr key={i}>
                 <td></td>
                 <td className="text-center">{i + 1}</td>
-                <td>{itemName(order.items[i])}</td>
+                <td>{l.name}</td>
                 <td></td>
-                <td className="text-center">796</td>
-                <td className="text-center">шт</td>
+                <td className="text-center">{l.unitCode}</td>
+                <td className="text-center">{l.unitName}</td>
                 <td className="text-center">{l.qty}</td>
                 <td className="text-right">{money2(l.priceNoVat)}</td>
                 <td className="text-right">{money2(l.sumNoVat)}</td>
@@ -205,7 +177,7 @@ const UpdDocument = forwardRef<HTMLDivElement, {
               <div>Руководитель организации или иное уполномоченное лицо</div>
               <div className="grid grid-cols-2 gap-2 items-end mt-3">
                 <span className="border-b border-[#333]">&nbsp;</span>
-                <span className="border-b border-[#333] text-center">{SELLER_B2B.directorShort}</span>
+                <span className="border-b border-[#333] text-center">{seller.directorShort}</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-[8px] text-[#555] text-center"><span>(подпись)</span><span>(ф.и.о.)</span></div>
             </div>
@@ -237,13 +209,13 @@ const UpdDocument = forwardRef<HTMLDivElement, {
         <div className="grid grid-cols-2 gap-x-8 mt-3">
           <div>
             <div className="font-semibold">Товар (груз) передал / услуги, результаты работ, права сдал</div>
-            {sign(SELLER_B2B.directorTitle, SELLER_B2B.directorShort, '12')}
-            <div className="mt-2">Дата отгрузки, передачи (сдачи) {source === 'shipped' ? longDate(docDate) : '«___» __________ 20__ г.'} [13]</div>
+            {sign(seller.directorTitle, seller.directorShort, '12')}
+            <div className="mt-2">Дата отгрузки, передачи (сдачи) {longDate(docDate)} [13]</div>
             <div className="mt-2">Иные сведения об отгрузке, передаче <span className="inline-block w-48 border-b border-[#999]">&nbsp;</span> [14]</div>
             <div className="mt-2">Ответственный за правильность оформления факта хозяйственной жизни</div>
-            {sign(SELLER_B2B.directorTitle, SELLER_B2B.directorShort, '15')}
+            {sign(seller.directorTitle, seller.directorShort, '15')}
             <div className="mt-2">Наименование экономического субъекта – составителя документа (в т.ч. комиссионера / агента)</div>
-            <div className="border-b border-[#999]">{SELLER_B2B.nameFull}, {sellerInnKpp} <span className="text-[9px]">[16]</span></div>
+            <div className="border-b border-[#999]">{seller.name}, {sellerInnKpp} <span className="text-[9px]">[16]</span></div>
             <div className="mt-3 pl-24">М.П.</div>
           </div>
           <div>

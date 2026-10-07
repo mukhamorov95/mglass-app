@@ -197,6 +197,8 @@ async function checkCrons(sb: SupabaseClient, now: Date): Promise<LiveCheck[]> {
 export const OWNER_SQL: { table: string; column: string; file: string; what: string }[] = [
   { table: 'cron_runs', column: 'job', file: '20261006_cron_runs.sql', what: 'журнал кронов — не видно, прошли ли утренние синки, бэкап и распределение заявок' },
   { table: 'ai_recommendations', column: 'evidence', file: '20261006_ai_recommendations_evidence.sql', what: 'рекомендации AI сохраняются без цифр и источников, сверки после «сделано» нет' },
+  // Безопасно выполнять до решения бухгалтера: без первого номера серии УПД не нумеруются.
+  { table: 'upd_registry', column: 'snapshot', file: '20261007_upd_registry.sql', what: 'УПД из приложения не выдаются — только черновик; первый номер серии потом задаёт бухгалтер' },
 ]
 
 export function ownerSqlVerdict(missing: typeof OWNER_SQL): Verdict {

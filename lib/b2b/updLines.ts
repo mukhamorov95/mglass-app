@@ -4,7 +4,7 @@
 // До 07.10 УПД датировался запуском заказа (304 из 304 за 60 дней), цена за единицу
 // печаталась с НДС, а НДС итога считался от итога, а не складывался из строк.
 
-import { computeInvoiceTotals, type InvoiceOrder } from '@/components/InvoiceDocument'
+import { computeInvoiceTotals, type InvoiceOrder } from '@/lib/b2b/invoiceMath'
 
 export type UpdLine = {
   qty: number

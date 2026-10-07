@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { paymentsEnabled } from '@/lib/payments/provider'
 import { deadlineFor, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { loadUpdIssued } from '@/lib/b2b/updRegistry'
 
 // Карточка заказа для кабинета. СТРОГО по своему client_id. Отдаём только
 // клиентское: позиции (материал/размер/кол-во/цена), стадии производства,
@@ -100,6 +101,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const paid = pn.payment_status === 'paid' || typeof stages.invoice_paid === 'string' || stages.invoice_paid === true
   const paymentStatus: 'paid' | 'awaiting' | null = paid ? 'paid' : (launched ? 'awaiting' : null)
 
+  const canInvoice = !!client.can_self_invoice && launched
+  // Ссылка «УПД» — только на выданный документ (этап 7): черновика в кабинете нет.
+  const updIssued = canInvoice && !!(await loadUpdIssued(svc, oid).catch(() => null))
+
   return NextResponse.json({
     id: o.id,
     number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
@@ -120,7 +125,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     estimateDays: DEFAULT_WORKING_DAYS,
     paymentStatus,
     onlinePayEnabled: paymentStatus === 'awaiting' && paymentsEnabled(),
-    canInvoice: !!client.can_self_invoice && launched,
+    canInvoice,
+    updIssued,
     total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),
     items,
     timeline,
