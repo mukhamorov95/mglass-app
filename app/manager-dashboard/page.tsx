@@ -537,7 +537,7 @@ export default function ManagerDashboardPage() {
                 { href: '/b2b-crm',        icon: '🗂️', label: 'B2B CRM' },
                 { href: '/calculator/b2b', icon: '🧮', label: 'Новый просчёт' },
                 { href: '/b2b-quotes',     icon: '📝', label: 'Просчёты' },
-                { href: '/b2b-pipeline',   icon: '📊', label: 'Воронка продаж' },
+                { href: '/b2b-today',      icon: '📋', label: 'Мой день · B2B' },
                 { href: '/b2b-production', icon: '⚙️', label: 'Производство' },
                 { href: '/b2b-analytics',  icon: '📈', label: 'Аналитика' },
               ].map(l => (
