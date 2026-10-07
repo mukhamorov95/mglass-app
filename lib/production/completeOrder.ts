@@ -72,3 +72,11 @@ export function explainEmptyQueue(opts: {
   if (!opts.workLoaded) return 'unknown'     // не знаем — не выдумываем
   return opts.orderOpen === 0 ? 'order-done' : 'elsewhere'
 }
+
+// «Всё готово» на заказ целиком — только упаковщику и владельцу (решение 28.08). Одна
+// функция для сервера (/api/production/complete-order) и экрана: кнопка, которую сервер
+// отклонит 403, хуже отсутствующей — рабочий жмёт, видит, что заказ «закрылся», и уходит.
+export function canCloseWholeOrder(role: string | null | undefined, stations: string[] | null | undefined): boolean {
+  if (role === 'admin' || role === 'ceo') return true
+  return (stations ?? []).includes('packaging')
+}
