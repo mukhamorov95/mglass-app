@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { leadTimeText, isMirrorCategory } from '@/lib/partner/leadTime'
 import { SUPER_CATS, readDraft, type SuperCat } from '@/lib/partner/counter'
+import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Партнёрский калькулятор (дизайн 1-в-1 из прототипа, .pcab). Форма и НАБОР полей —
 // как у менеджера (/calculator/b2b), данные из реальных справочников
@@ -84,9 +85,13 @@ export default function PartnerNewQuotePage() {
   const [editingId, setEditingId] = useState<number | null>(null)   // редактируем существующий просчёт
   const [livePrice, setLivePrice] = useState<number | null>(null)   // живая цена текущей позиции
   const [liveBusy, setLiveBusy] = useState(false)
+  const [loadErr, setLoadErr] = useState<{ title: string; text: string; orderId: number | null } | null>(null)
+  const [matErr, setMatErr] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/partner/materials').then(r => r.json()).then(d => {
+    fetch('/api/partner/materials').then(async r => {
+      if (!r.ok) { setMatErr(await responseError(r)); return }
+      const d = await r.json()
       if (!d.linked) { setLinked(false); return }
       const mats = (d.materials ?? []) as Material[]
       setMaterials(mats)
@@ -112,19 +117,22 @@ export default function PartnerNewQuotePage() {
         const draft = readDraft()
         if (draft.length) { setList(draft); void recompute(draft, false) }
       } else if (editParam) {
-        fetch(`/api/partner/quote/${editParam}`).then(r => r.ok ? r.json() : Promise.reject())
-          .then((q: { id: number; comment: string; specs: Spec[] }) => {
-            setEditingId(q.id); setComment(q.comment || ''); setList(q.specs)
-            void recompute(q.specs, false)
-          }).catch(() => {})
+        // Править можно только черновик. Отказ показываем словами вместо пустой формы:
+        // иначе «Сохранить» молча создавал новый просчёт-дубль.
+        loadJson<{ id: number; comment: string; specs: Spec[] }>(`/api/partner/quote/${editParam}`).then(r => {
+          if (r.error !== null) { setLoadErr({ title: 'Этот просчёт нельзя изменить', text: r.error, orderId: Number(editParam) || null }); return }
+          const q = r.data
+          setEditingId(q.id); setComment(q.comment || ''); setList(q.specs)
+          void recompute(q.specs, false)
+        })
       } else if (reorderParam) {
-        fetch(`/api/partner/quote/${reorderParam}?reorder=1`).then(r => r.ok ? r.json() : Promise.reject())
-          .then((q: { specs: Spec[] }) => {
-            setList(q.specs)
-            void recompute(q.specs, false)
-          }).catch(() => {})
+        loadJson<{ specs: Spec[] }>(`/api/partner/quote/${reorderParam}?reorder=1`).then(r => {
+          if (r.error !== null) { setLoadErr({ title: 'Позиции заказа не загрузились', text: r.error, orderId: Number(reorderParam) || null }); return }
+          setList(r.data.specs)
+          void recompute(r.data.specs, false)
+        })
       }
-    }).catch(() => setLinked(false)).finally(() => setLoading(false))
+    }).catch(() => setMatErr(NETWORK_ERROR)).finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -238,14 +246,20 @@ export default function PartnerNewQuotePage() {
     const id = await recompute(list, true)
     if (id) { setSavedId(id); setSubmitted(false) }
   }
+  const [submitErr, setSubmitErr] = useState<string | null>(null)
   async function saveAndSubmit() {
+    setSubmitErr(null)
     const id = await recompute(list, true)
     if (!id) return
     setSavedId(id)
+    // Просчёт уже сохранён: если отправка не прошла, говорим почему и где его найти.
     try {
       const r = await fetch('/api/partner/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: id }) })
-      if (r.ok) setSubmitted(true)
-    } catch { /* просчёт сохранён — отправить можно позже из «Мои просчёты» */ }
+      if (r.ok) { setSubmitted(true); return }
+      setSubmitErr(`Просчёт сохранён, но в работу не отправлен: ${await responseError(r)}. Отправьте его из «Мои просчёты».`)
+    } catch {
+      setSubmitErr(`Просчёт сохранён, но в работу не отправлен: ${NETWORK_ERROR}. Отправьте его из «Мои просчёты».`)
+    }
   }
 
   const top = (
@@ -259,11 +273,28 @@ export default function PartnerNewQuotePage() {
   )
 
   if (loading) return <>{top}<div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div></>
+  if (matErr) return (
+    <>{top}<div className="wrap"><div className="note">
+      <div className="t">Справочник материалов не загрузился</div>
+      <div className="s">{matErr}. Обновите страницу через минуту.</div>
+    </div></div></>
+  )
   if (!linked) return (
     <>{top}<div className="wrap"><div className="note">
       <div className="t">Аккаунт не привязан</div>
       <div className="s">Обратитесь к менеджеру M-Glass.</div>
       <Link href="/partner" className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← Табло</Link>
+    </div></div></>
+  )
+
+  if (loadErr) return (
+    <>{top}<div className="wrap"><div className="note">
+      <div className="t">{loadErr.title}</div>
+      <div className="s">{loadErr.text}</div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 14, flexWrap: 'wrap' }}>
+        {loadErr.orderId && <Link href={`/partner/order/${loadErr.orderId}`} className="primary">Открыть карточку</Link>}
+        <Link href="/partner/quotes" className="ghost">Мои просчёты</Link>
+      </div>
     </div></div></>
   )
 
@@ -409,6 +440,7 @@ export default function PartnerNewQuotePage() {
               {savedId ? (
                 <div className="note" style={{ padding: 18, background: 'var(--green-bg)', borderColor: 'var(--green-bd)' }}>
                   <div className="t" style={{ color: 'var(--green)' }}>{submitted ? 'Отправлено в работу ✓' : editingId ? 'Просчёт обновлён ✓' : 'Просчёт сохранён ✓'}</div>
+                  {submitErr && <div className="perr">{submitErr}</div>}
                   <div className="s">{submitted ? 'Менеджер подтвердит и запустит производство. Счёт-спецификацию для оплаты пришлёт ваш менеджер M-Glass.' : editingId ? 'Изменения сохранены в вашем просчёте.' : 'Он появился в разделе «Мои просчёты».'}</div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
                     <Link href={`/partner/order/${savedId}/kp`} className="ghost">↓ Скачать КП</Link>

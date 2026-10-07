@@ -2,31 +2,21 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
-import { deadlineFor } from '@/lib/b2b/deadline'
+import { partnerProgress, partnerDeadline, isLaunched, noteStatus } from '@/lib/partner/orderProgress'
+import { quoteState } from '@/lib/partner/quoteState'
+import { readPaged } from '@/lib/partner/readPaged'
+import { invoiceState, type UpdShort } from '@/lib/partner/documents'
+import { loadUpdByOrders } from '@/lib/partner/updByOrders'
+import { loadInvoicedOrders, loadPaidByOrders, paymentView } from '@/lib/partner/orderMoney'
+import { pointStage } from '@/lib/partner/pointPay'
 
 // Кабинет партнёра — «мои заказы» (read-only, строго по своему клиенту).
 // Клиент определяется по b2b_clients.user_id = auth.uid(). Никогда не отдаёт
 // чужие данные. Если аккаунт не привязан (или колонка ещё не создана) — пусто.
 
-// Лента заказа (order-level флаги notes.stages) → человекочитаемый этап и % готовности.
-const LANE: { key: string; label: string }[] = [
-  { key: 'printed',          label: 'Чертёж' },
-  { key: 'material_ordered', label: 'Материал' },
-  { key: 'cut',              label: 'Резка' },
-  { key: 'edge',             label: 'Полировка' },
-  { key: 'drilled',          label: 'Сверление' },
-  { key: 'tempering',        label: 'Закалка' },
-  { key: 'packed',           label: 'Упаковка' },
-]
-
 function parseNotes(n: string | null): Record<string, unknown> {
   if (!n) return {}
   try { const p = JSON.parse(n); return typeof p === 'object' && p ? p as Record<string, unknown> : {} } catch { return {} }
-}
-// Срок отгрузки считает общий модуль lib/b2b/deadline — та же формула, что видит
-// менеджер при запуске в работу. Раньше здесь жила своя копия, и даты расходились.
-function deadline(pn: Record<string, unknown>, createdAt: string): string {
-  return deadlineFor(pn, createdAt).toISOString()
 }
 
 export async function GET() {
@@ -37,44 +27,55 @@ export async function GET() {
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
   // Привязанный клиент (первичный владелец ИЛИ участник команды). Нет → «не привязан».
-  const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
+  const client = await resolvePartnerClient<{ id: number; name: string; can_self_invoice: boolean | null; is_point: boolean | null }>(svc, user.id, 'id,name,can_self_invoice,is_point')
   if (!client) return NextResponse.json({ linked: false, client: null, orders: [] })
 
   // Все состояния: просчёт → отправлен в работу → в работе → отгружен.
   // Партнёр видит и просчёты, которые мы сделали для него.
-  const { data } = await svc
-    .from('b2b_orders')
-    .select('id,custom_number,client_order_number,created_at,updated_at,launched_at,total_after_discount,total_sale_inc_vat,notes,items')
-    .eq('client_id', client.id)
-    .is('archived_at', null)
-    .order('created_at', { ascending: false })
-    .limit(300)
+  let data: Record<string, unknown>[]
+  try {
+    data = await readPaged<Record<string, unknown>>(() => svc
+      .from('b2b_orders')
+      .select('id,custom_number,client_order_number,created_at,updated_at,launched_at,total_after_discount,total_sale_inc_vat,notes,items')
+      .eq('client_id', client.id)
+      .is('archived_at', null)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false }))
+  } catch (e) {
+    return NextResponse.json({ error: `Заказы не загрузились: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
 
-  const orders = (data ?? []).map((o: Record<string, unknown>) => {
+  // Реестр УПД не прочитался — список всё равно нужен; «Документы» скажут, что статус УПД неизвестен.
+  let upds = new Map<number, UpdShort>()
+  let updError: string | null = null
+  try { upds = await loadUpdByOrders(svc, data.map(o => o.id as number)) }
+  catch (e) { updError = e instanceof Error ? e.message : String(e) }
+
+  // Точке счёт нужен до запуска — читаем реестр счетов только для неё.
+  const isPoint = client.is_point === true
+  let invoiced = new Set<number>()
+  let paidMap = new Map<number, number>()
+  if (isPoint) {
+    try {
+      invoiced = await loadInvoicedOrders(svc, data.map(o => o.id as number))
+      const notLaunched = data.filter(o => !isLaunched({ launched_at: o.launched_at as string | null }, parseNotes(o.notes as string | null))).map(o => o.id as number)
+      paidMap = await loadPaidByOrders(svc, notLaunched)
+    } catch (e) {
+      return NextResponse.json({ error: `Счета и оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+    }
+  }
+
+  const orders = data.map((o: Record<string, unknown>) => {
     const pn = parseNotes(o.notes as string | null)
-    const stages = (pn.stages ?? {}) as Record<string, unknown>
-    const status = (pn.status as string | undefined) || 'quote'
-    const launched = !!(o.launched_at || pn.launched_at)
-    const shipped = stages.shipped === true
-    const packed = stages.packed === true
-    const doneN = LANE.filter(s => stages[s.key] === true).length
-    const frontier = LANE.find(s => stages[s.key] !== true)
-
-    // lane: quote (просчёт) · submitted (отправлен в работу, ждёт нас) · in_work · shipped
-    const lane = shipped ? 'shipped'
-      : launched ? 'in_work'
-      : status === 'pending_approval' ? 'submitted'
-      : 'quote'
-
-    const stage = lane === 'shipped' ? 'Отгружен'
-      : lane === 'submitted' ? 'Отправлен в работу'
-      : lane === 'quote' ? 'Просчёт'
-      : packed ? 'Готов к выдаче'
-      : frontier ? frontier.label : 'В работе'
+    const p = partnerProgress({ launched_at: o.launched_at as string | null }, pn)
+    const lane = p.lane
 
     // Пересчитан ли просчёт нами и почему (для подсветки партнёру).
     const history = Array.isArray(pn.status_history) ? pn.status_history : []
     const lastComment = (pn.status_comment as string | undefined) || null
+    // Комментарий к «Согласовано» / «Отказ» — не пересчёт: он идёт подписью к состоянию.
+    const qs = lane === 'quote' ? quoteState(noteStatus(pn)) : null
+    const stateNote = qs && qs !== 'draft' ? lastComment : null
 
     // Что внутри — материалы + толщины (кратко) и число позиций.
     const items = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
@@ -93,16 +94,24 @@ export async function GET() {
       updatedAt: (o.updated_at as string | null) ?? (o.created_at as string),
       amount: (o.total_after_discount as number | null) ?? (o.total_sale_inc_vat as number | null) ?? 0,
       lane,
-      progressPct: lane === 'in_work' || lane === 'shipped' ? Math.round((doneN / LANE.length) * 100) : 0,
-      stage,
-      shipped,
-      ready: packed && !shipped,
-      deadline: deadline(pn, o.created_at as string),
-      recalcNote: history.length > 0 ? lastComment : null,
+      progressPct: p.progressPct,
+      stage: p.stage,
+      shipped: p.shipped,
+      ready: p.ready,
+      deadline: partnerDeadline({ launched_at: o.launched_at as string | null, created_at: o.created_at as string }, pn).toISOString(),
+      recalcNote: history.length > 0 && !stateNote && (qs === null || qs === 'draft') ? lastComment : null,
+      quoteState: qs,
+      stateNote,
       summary,
       positions: items.length,
+      invoice: invoiceState({ launched: p.launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced: invoiced.has(o.id as number) }),
+      point: pointStage({
+        isPoint, launched: p.launched, submitted: lane === 'submitted', invoiced: invoiced.has(o.id as number),
+        paid: isPoint && paymentView({ total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0), paidFromPayments: paidMap.get(o.id as number) ?? 0, notes: pn, due: true })?.status === 'paid',
+      }),
+      upd: upds.get(o.id as number) ?? null,
     }
   })
 
-  return NextResponse.json({ linked: true, client: { name: client.name }, orders })
+  return NextResponse.json({ linked: true, client: { name: client.name }, orders, updError })
 }

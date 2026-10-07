@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { loadJson } from '@/lib/toast'
+import type { ActivityEvent, WaitingAction } from '@/lib/partner/activity'
 
 // Табло кабинета (перенос дизайна из прототипа). Реальные данные:
-//   /api/partner/stats  → KPI + помесячно
-//   /api/partner/orders → распределение по стадиям + последнее движение
+//   /api/partner/stats    → KPI + помесячно
+//   /api/partner/orders   → распределение по стадиям
+//   /api/partner/activity → последние события по датам отметок, оплат, документов
+//                           и «Ждут вашего действия» (состояние, без рассылок)
 // Никакой себестоимости/маржи — только клиентские суммы.
 
 type Lane = 'quote' | 'submitted' | 'in_work' | 'shipped'
@@ -32,25 +36,33 @@ function ago(iso: string): string {
   return d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-function pill(o: Order): { cls: string; label: string } {
-  if (o.ready) return { cls: 'p-ready', label: 'Готов к выдаче' }
-  if (o.lane === 'shipped') return { cls: 'p-ship', label: 'Отгружен' }
-  if (o.lane === 'in_work') return { cls: 'p-work', label: o.stage }
-  if (o.lane === 'submitted') return { cls: 'p-sub', label: 'Отправлен в работу' }
-  return { cls: 'p-quote', label: 'Просчёт' }
-}
-
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [orders, setOrders] = useState<Order[] | null>(null)
+  const [activity, setActivity] = useState<{ events: ActivityEvent[]; waiting: WaitingAction[] } | null>(null)
+  const [activityErr, setActivityErr] = useState<string | null>(null)
   const [linked, setLinked] = useState<boolean | null>(null)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/partner/stats').then(r => r.json()).then((s: Stats) => {
-      setLinked(s.linked)
-      if (s.linked) setStats(s)
-    }).catch(() => setLinked(false))
-    fetch('/api/partner/orders').then(r => r.json()).then((d: { orders?: Order[] }) => setOrders(d.orders ?? [])).catch(() => setOrders([]))
+    let alive = true
+    Promise.all([
+      loadJson<Stats>('/api/partner/stats'),
+      loadJson<{ orders?: Order[] }>('/api/partner/orders'),
+    ]).then(([s, o]) => {
+      if (!alive) return
+      if (s.error !== null || o.error !== null) { setLoadErr((s.error ?? o.error)!); return }
+      setLinked(s.data.linked)
+      if (s.data.linked) setStats(s.data)
+      setOrders(o.data.orders ?? [])
+    })
+    // Лента и «ждут действия» — отдельно: их сбой не прячет сводку.
+    loadJson<{ events: ActivityEvent[]; waiting: WaitingAction[] }>('/api/partner/activity').then(r => {
+      if (!alive) return
+      if (r.error !== null) setActivityErr(r.error)
+      else setActivity({ events: r.data.events ?? [], waiting: r.data.waiting ?? [] })
+    })
+    return () => { alive = false }
   }, [])
 
   const year = stats?.year ?? new Date().getFullYear()
@@ -69,6 +81,12 @@ export default function Dashboard() {
     <>{top}<div className="wrap"><div className="note">
       <div className="t">Аккаунт ещё не привязан к вашей компании</div>
       <div className="s">Обратитесь к вашему менеджеру M-Glass, чтобы открыть доступ к заказам.</div>
+    </div></div></>
+  )
+  if (loadErr) return (
+    <>{top}<div className="wrap"><div className="note">
+      <div className="t">Сводка не загрузилась</div>
+      <div className="s">{loadErr}. Обновите страницу через минуту.</div>
     </div></div></>
   )
   if (!stats || !orders) return <>{top}<div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div></>
@@ -91,7 +109,6 @@ export default function Dashboard() {
     { nm: `Отгружено за ${year}`, c: orders.filter(o => o.lane === 'shipped' && new Date(o.created_at).getFullYear() === year).length, col: 'var(--border)' },
   ]
   const distMax = Math.max(...dist.map(d => d.c), 1)
-  const recent = orders.slice(0, 4)
 
   const kpis = [
     { k: 'Заказов за год', v: String(stats.ordersCount), d: 'в производстве и отгружено', flat: true },
@@ -117,6 +134,19 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        {activity && activity.waiting.length > 0 && (
+          <div className="card" style={{ marginBottom: 14 }}>
+            <div className="card-h"><h3>Ждут вашего действия</h3><span className="mut">{activity.waiting.length}</span></div>
+            {activity.waiting.slice(0, 8).map((w, i) => (
+              <Link key={`${w.kind}-${w.orderId}`} href={`/partner/order/${w.orderId}`} className={`srow${i === 0 ? ' first' : ''}`} style={{ cursor: 'pointer', textDecoration: 'none' }}>
+                <span className={`pill ${w.kind === 'payment' ? 'p-sub' : w.kind === 'drawing' ? 'p-work' : 'p-quote'}`}>{w.kind === 'payment' ? 'Оплата' : w.kind === 'drawing' ? 'Чертёж' : 'Получение'}</span>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 }}><b>{w.number}</b> · {w.text}</span>
+              </Link>
+            ))}
+            {activity.waiting.length > 8 && <div className="srow"><span className="mut" style={{ fontSize: 12.5 }}>и ещё {activity.waiting.length - 8} — в разделе «Заказы в работе»</span></div>}
+          </div>
+        )}
 
         <div className="split">
           <div className="card">
@@ -170,24 +200,17 @@ export default function Dashboard() {
         )}
 
         <div className="card" style={{ marginTop: 14 }}>
-          <div className="card-h"><h3>Последнее движение</h3><span className="mut">обновляется автоматически</span></div>
-          {recent.length === 0 && <div className="srow first"><span className="mut" style={{ fontSize: 13 }}>Пока нет заказов — создайте первый просчёт.</span></div>}
-          {recent.map((o, i) => {
-            const p = pill(o)
-            const clickable = o.lane !== 'quote'
-            const inner = (
-              <>
-                <span className={`pill ${p.cls}`}>{p.label}</span>
-                <span style={{ fontWeight: 600 }}>{o.lane === 'quote' ? 'Просчёт' : 'Заказ'} {o.number}</span>
-                <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{ago(o.created_at)}</span>
-              </>
-            )
-            return clickable ? (
-              <Link key={o.id} href={`/partner/order/${o.id}`} className={`srow${i === 0 ? ' first' : ''}`} style={{ cursor: 'pointer', textDecoration: 'none' }}>{inner}</Link>
-            ) : (
-              <div key={o.id} className={`srow${i === 0 ? ' first' : ''}`}>{inner}</div>
-            )
-          })}
+          <div className="card-h"><h3>Последние события</h3><span className="mut">отметки цеха, оплаты, документы</span></div>
+          {activityErr && <div className="srow first"><span className="perr" style={{ marginTop: 0 }}>Лента не загрузилась: {activityErr}</span></div>}
+          {!activityErr && !activity && <div className="srow first"><span className="mut" style={{ fontSize: 13 }}>Загрузка…</span></div>}
+          {activity && activity.events.length === 0 && <div className="srow first"><span className="mut" style={{ fontSize: 13 }}>Пока событий нет — они появятся, когда заказ пойдёт в работу.</span></div>}
+          {activity?.events.map((e, i) => (
+            <Link key={`${e.orderId}-${e.at}-${e.text}`} href={`/partner/order/${e.orderId}`} className={`srow${i === 0 ? ' first' : ''}`} style={{ cursor: 'pointer', textDecoration: 'none' }}>
+              <span className={`pill ${e.tone === 'money' ? 'p-ready' : e.tone === 'doc' ? 'p-sub' : e.tone === 'done' ? 'p-work' : 'p-quote'}`}>{e.tone === 'money' ? 'Оплата' : e.tone === 'doc' ? 'Документ' : e.tone === 'done' ? 'Цех' : 'Заказ'}</span>
+              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 }}><b>{e.number}</b> · {e.text}</span>
+              <span className="mut" style={{ marginLeft: 'auto', fontSize: 12, whiteSpace: 'nowrap' }}>{ago(e.at)}</span>
+            </Link>
+          ))}
         </div>
       </div>
     </>

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { partnerProgress } from '@/lib/partner/orderProgress'
+import { readPaged } from '@/lib/partner/readPaged'
 
 // Табло кабинета: сводка по заказам клиента за текущий год. Строго по своему
 // client_id (b2b_clients.user_id = auth.uid()). Только клиентские суммы — никакой
@@ -22,9 +24,14 @@ export async function GET() {
   const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
   if (!client) return NextResponse.json({ linked: false })
 
-  const { data } = await svc.from('b2b_orders')
-    .select('created_at, launched_at, total_after_discount, total_sale_inc_vat, items, notes, archived_at')
-    .eq('client_id', client.id).is('archived_at', null).limit(3000)
+  let data: Record<string, unknown>[]
+  try {
+    data = await readPaged<Record<string, unknown>>(() => svc.from('b2b_orders')
+      .select('id, created_at, launched_at, total_after_discount, total_sale_inc_vat, items, notes')
+      .eq('client_id', client.id).is('archived_at', null).order('id'))
+  } catch (e) {
+    return NextResponse.json({ error: `Сводка не загрузилась: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
 
   const now = new Date()
   const year = now.getFullYear()
@@ -32,13 +39,10 @@ export async function GET() {
   const byMonth = Array(12).fill(0)
   const byMaterial = new Map<string, number>()   // A9: расходы по материалам за год
 
-  for (const o of (data ?? []) as Record<string, unknown>[]) {
+  for (const o of data) {
     const pn = parseNotes(o.notes)
-    const stages = (pn.stages ?? {}) as Record<string, unknown>
-    const launched = !!(o.launched_at || pn.launched_at)
-    const shipped = stages.shipped === true
-    const status = (pn.status as string) || 'quote'
-    const lane = shipped ? 'shipped' : launched ? 'in_work' : status === 'pending_approval' ? 'submitted' : 'quote'
+    const p = partnerProgress({ launched_at: o.launched_at as string | null }, pn)
+    const lane = p.lane
     const amount = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0) || 0
     const created = new Date(o.created_at as string)
 
@@ -65,7 +69,7 @@ export async function GET() {
     }
     if (lane === 'in_work') {
       inWork++
-      if (stages.packed === true) readyToShip++
+      if (p.ready) readyToShip++
     }
   }
 

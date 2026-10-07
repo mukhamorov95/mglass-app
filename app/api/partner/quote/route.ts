@@ -10,6 +10,7 @@ import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial, B2BService } from '@/lib/types'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { previewWriteGuard } from '@/lib/partnerPreview'
+import { canEditQuote, quoteLockReason, quoteState } from '@/lib/partner/quoteState'
 
 // Партнёрский просчёт. КРИТИЧНО: считает СЕРВЕР через ЕДИНЫЙ движок computeQuoteItem —
 // тот же, что у менеджера (/calculator/b2b). Включает авто-надбавки за габариты/
@@ -151,7 +152,8 @@ export async function POST(req: NextRequest) {
     if (exr.launched_at) return NextResponse.json({ error: 'Заказ уже в работе — редактирование недоступно' }, { status: 400 })
     let en: Record<string, unknown> = {}
     try { en = exr.notes ? JSON.parse(exr.notes) : {} } catch {}
-    if (en.status && en.status !== 'quote') return NextResponse.json({ error: 'Просчёт уже отправлен — редактирование недоступно' }, { status: 400 })
+    const qs = quoteState(typeof en.status === 'string' ? en.status : null)
+    if (!canEditQuote(qs)) return NextResponse.json({ error: quoteLockReason(qs) }, { status: 409 })
     const { error: upErr } = await svc.from('b2b_orders').update({
       discount_percent: discount, margin_percent: marginPct, items,
       total_area: totals.totalAreaNet, total_weight: totals.totalWeight,

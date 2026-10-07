@@ -3,11 +3,14 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { documentSafeOrder } from '@/lib/b2b/publicQuote'
-import { loadUpdIssued } from '@/lib/b2b/updRegistry'
+import { invoiceState, INVOICE_REFUSAL } from '@/lib/partner/documents'
+import { loadInvoicedOrders } from '@/lib/partner/orderMoney'
+import { isLaunched } from '@/lib/partner/orderProgress'
 
 // Данные счёта-спецификации для кабинета партнёра. Строго по своему клиенту.
-// Открывается ТОЛЬКО если владелец включил самообслуживание (b2b_clients.can_self_invoice)
-// И заказ уже запущен в производство (цифры финальные). Иначе счёт выставляет менеджер.
+// Открывается, если владелец включил самообслуживание (b2b_clients.can_self_invoice) и
+// заказ уже запущен (цифры финальные), иначе счёт выставляет менеджер. Точке на рынке
+// (is_point) — до запуска, как только менеджер выставил счёт: она платит 100 % вперёд.
 // Числа берём из сохранённого заказа b2b_orders — те же, что в нашем счёте (паритет).
 
 const ENTITY_COLS = 'id,client_id,full_name,inn,kpp,ogrn,legal_address,bank_account,bank_name,bik,corr_account,supply_contract_no,supply_contract_date,is_default,active'
@@ -28,10 +31,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number; name: string; can_self_invoice: boolean | null }>(
-    svc, user.id, 'id,name,full_name,inn,kpp,ogrn,legal_address,bank_account,bank_name,bik,corr_account,supply_contract_no,supply_contract_date,can_self_invoice')
+  const client = await resolvePartnerClient<{ id: number; name: string; can_self_invoice: boolean | null; is_point: boolean | null }>(
+    svc, user.id, 'id,name,full_name,inn,kpp,ogrn,legal_address,bank_account,bank_name,bik,corr_account,supply_contract_no,supply_contract_date,can_self_invoice,is_point')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
-  if (!client.can_self_invoice) return NextResponse.json({ error: 'Счёт выставляет менеджер' }, { status: 403 })
 
   const { data: order } = await svc
     .from('b2b_orders')
@@ -39,10 +41,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .eq('id', oid).maybeSingle()
   if (!order || order.client_id !== client.id) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
-  // Только запущенные в работу заказы (цифры финальные) — не черновики-просчёты.
   const pn = parseNotes(order.notes)
-  const launched = !!(order.launched_at || pn.launched_at)
-  if (!launched) return NextResponse.json({ error: 'Счёт доступен после запуска заказа в работу' }, { status: 409 })
+  const isPoint = client.is_point === true
+  let invoiced = false
+  if (isPoint) {
+    try { invoiced = (await loadInvoicedOrders(svc, [oid])).has(oid) }
+    catch (e) { return NextResponse.json({ error: `Реестр счетов не прочитан: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  }
+  const state = invoiceState({ launched: isLaunched(order, pn), canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced })
+  if (state !== 'open') return NextResponse.json({ error: INVOICE_REFUSAL[state].error }, { status: INVOICE_REFUSAL[state].status })
 
   const c = client as unknown as Record<string, string | null>
   const { data: ents } = await svc
@@ -70,9 +77,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // построению. УПД снова видит shipped_date/launched_at, счёт — quote_date/срок.
   const safeOrder = documentSafeOrder(order as Record<string, unknown>)
 
-  // УПД партнёр видит только выданный — снимок, сохранённый при выдаче: в нём строки и
-  // цены документа, покупатель (его же юрлицо) и наши реквизиты, себестоимости нет.
-  const updIssued = await loadUpdIssued(svc, oid).catch(() => null)
-
-  return NextResponse.json({ order: safeOrder, client: safeClient, entities: ents ?? [], updIssued })
+  // УПД — отдельный путь /api/partner/order/[id]/upd: он открыт любому партнёру заказа.
+  return NextResponse.json({ order: safeOrder, client: safeClient, entities: ents ?? [] })
 }

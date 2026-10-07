@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
+import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
+import { QUOTE_LABEL, canEditQuote, canSubmitQuote, type QuoteState } from '@/lib/partner/quoteState'
 
 // Списки кабинета (дизайн .pcab). Три пункта меню:
 //   view='quotes'  → просчёты (черновики). Разбиты на Недавние + Архив (>2 недель).
@@ -16,6 +19,9 @@ type Order = {
   amount: number; lane: Lane; progressPct: number; stage: string
   shipped: boolean; ready: boolean; deadline: string; recalcNote: string | null
   summary: string; positions: number
+  point?: PointStage | null
+  quoteState?: QuoteState | null
+  stateNote?: string | null
 }
 type Resp = { linked: boolean; client: { name: string } | null; orders: Order[] }
 type View = 'quotes' | 'inwork' | 'shipped'
@@ -50,16 +56,34 @@ export default function OrdersView({ view }: { view: View }) {
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
 
-  function load() {
-    return fetch('/api/partner/orders').then(r => r.json()).then((d: Resp) => setData(d)).catch(() => setData({ linked: false, client: null, orders: [] }))
-  }
-  useEffect(() => { load().finally(() => setLoading(false)) }, [])
+  const [loadErr, setLoadErr] = useState<string | null>(null)
 
+  async function load() {
+    const r = await loadJson<Resp>('/api/partner/orders')
+    if (r.error !== null) { setLoadErr(r.error); return }
+    setLoadErr(null)
+    setData(r.data)
+  }
+  useEffect(() => {
+    let alive = true
+    loadJson<Resp>('/api/partner/orders').then(r => {
+      if (!alive) return
+      if (r.error !== null) setLoadErr(r.error)
+      else setData(r.data)
+      setLoading(false)
+    })
+    return () => { alive = false }
+  }, [])
+
+  const [submitErr, setSubmitErr] = useState<{ id: number; text: string } | null>(null)
   async function submitQuote(id: number) {
-    setSubmittingId(id)
+    setSubmittingId(id); setSubmitErr(null)
     try {
       const r = await fetch('/api/partner/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: id }) })
-      if (r.ok) await load()
+      if (!r.ok) { setSubmitErr({ id, text: `Не отправлено: ${await responseError(r)}` }); return }
+      await load()
+    } catch {
+      setSubmitErr({ id, text: `Не отправлено: ${NETWORK_ERROR}` })
     } finally { setSubmittingId(null) }
   }
 
@@ -85,7 +109,7 @@ export default function OrdersView({ view }: { view: View }) {
   const recent = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) <= ARCHIVE_DAYS) : visible
   const archived = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) > ARCHIVE_DAYS) : []
 
-  const card = (o: Order) => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} />
+  const card = (o: Order) => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} submitErr={submitErr?.id === o.id ? submitErr.text : null} />
   const lanesOf = (list: Order[]) => lanes.map(lane => {
     const l = list.filter(o => o.lane === lane)
     if (l.length === 0) return null
@@ -137,7 +161,14 @@ export default function OrdersView({ view }: { view: View }) {
 
         {loading && <div className="note"><div className="s">Загрузка…</div></div>}
 
-        {!loading && !data?.linked && (
+        {!loading && loadErr && (
+          <div className="note">
+            <div className="t">Заказы не загрузились</div>
+            <div className="s">{loadErr}. Обновите страницу через минуту.</div>
+          </div>
+        )}
+
+        {!loading && !loadErr && data && !data.linked && (
           <div className="note">
             <div className="t">Аккаунт ещё не привязан к вашей компании</div>
             <div className="s">Обратитесь к вашему менеджеру M-Glass, чтобы открыть доступ к заказам.</div>
@@ -176,19 +207,31 @@ export default function OrdersView({ view }: { view: View }) {
   )
 }
 
-function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: number) => void; submitting: boolean }) {
-  // Просчёт → клик открывает на редактирование (состав + правка). Заказ → карточка заказа.
-  const clickable = o.lane !== 'quote'
+function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit: (id: number) => void; submitting: boolean; submitErr: string | null }) {
+  // Черновик → клик открывает на редактирование. Согласованный, обсуждаемый, отклонённый
+  // просчёт и заказ → карточка: править их нельзя, форма открылась бы пустой.
+  const qs: QuoteState = o.quoteState ?? 'draft'
+  const isDraft = o.lane === 'quote' && canEditQuote(qs)
   const body = (
     <>
       <div className="r1">
         <div>
           <div className="num">{o.number}{o.clientOrderNumber && <span className="yr"> · ваш № {o.clientOrderNumber}</span>}</div>
-          <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
+          <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.point ? '' : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
+          {o.point && <div className="meta" style={{ marginTop: 2, color: o.point === 'await_payment' ? 'var(--amber)' : 'var(--ink-2)', fontWeight: o.point === 'await_payment' ? 600 : 400 }}>{POINT_LINE[o.point]}</div>}
           {o.summary && <div className="meta" style={{ marginTop: 2, color: 'var(--ink-2)' }}>{o.summary}{o.positions ? ` · ${o.positions} поз.` : ''}</div>}
         </div>
         <div className="amt tnum">{fmtMoney(o.amount)}</div>
       </div>
+
+      {o.lane === 'quote' && qs !== 'draft' && (
+        <div className="prog">
+          <span className={`pill ${qs === 'rejected' ? 'p-ship' : qs === 'agreed' ? 'p-ready' : 'p-sub'}`}>{QUOTE_LABEL[qs]}</span>
+        </div>
+      )}
+      {o.lane === 'quote' && qs !== 'draft' && o.stateNote && (
+        <div className="meta" style={{ marginTop: 6 }}>{qs === 'rejected' ? 'Причина' : 'Комментарий менеджера'}: {o.stateNote}</div>
+      )}
 
       {(o.lane === 'in_work' || o.lane === 'shipped') && (
         <div className="prog">
@@ -201,16 +244,15 @@ function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: numbe
 
       {o.recalcNote && <div className="recalc">✎ Пересчитано менеджером: {o.recalcNote}</div>}
 
-      {o.lane === 'quote' && (
+      {isDraft && canSubmitQuote(qs) && (
         <button className="send" onClick={e => { e.preventDefault(); onSubmit(o.id) }} disabled={submitting}>
           {submitting ? 'Отправляю…' : 'Отправить в работу'}
         </button>
       )}
+      {submitErr && <div className="perr">{submitErr}</div>}
     </>
   )
-  if (o.lane === 'quote')
-    return <Link href={`/partner/new?edit=${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
-  return clickable
-    ? <Link href={`/partner/order/${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
-    : <div className="ord">{body}</div>
+  return (
+    <Link href={isDraft ? `/partner/new?edit=${o.id}` : `/partner/order/${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
+  )
 }

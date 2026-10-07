@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { canEditQuote, quoteLockReason, quoteState } from '@/lib/partner/quoteState'
 
 // Загрузка просчёта партнёра для РЕДАКТИРОВАНИЯ. Отдаём спецификации позиций
 // (входные параметры калькулятора), реконструированные из items — строго свой
@@ -31,7 +32,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   let notes: Record<string, unknown> = {}
   try { notes = o.notes ? JSON.parse(o.notes) : {} } catch {}
-  if (!isReorder && notes.status && notes.status !== 'quote') return NextResponse.json({ error: 'Просчёт нельзя редактировать' }, { status: 400 })
+  const qs = quoteState(typeof notes.status === 'string' ? notes.status : null)
+  if (!isReorder && !canEditQuote(qs)) return NextResponse.json({ error: quoteLockReason(qs), state: qs }, { status: 409 })
 
   const rawItems = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
   const specs = rawItems.map(it => {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { confirmDialog } from '@/lib/dialog'
 import { DRAWING_KINDS, MAX_FILES_PER_ORDER, PHOTO_JPEG_QUALITY, photoScale, type DrawingKind } from '@/lib/partner/drawingFiles'
 
 // Ч1: партнёр прикладывает к просчёту чертёж конструктора или фото эскиза,
@@ -78,15 +79,18 @@ export default function DrawingFiles({ orderId }: { orderId: string }) {
   }
 
   async function remove(f: F) {
-    if (!window.confirm(`Удалить «${f.name}»?`)) return
+    if (!(await confirmDialog({ title: `Удалить «${f.name}»?`, text: 'Файл пропадёт из просчёта, менеджер его больше не увидит.', confirmLabel: 'Удалить', danger: true }))) return
     setBusy(true)
     setError(null)
     setDone(null)
-    const r = await fetch(`/api/partner/quote/${orderId}/files?file=${f.id}`, { method: 'DELETE' })
-    const d = await r.json().catch(() => ({}))
-    if (r.ok) setFiles(prev => prev.filter(x => x.id !== f.id))
-    else setError(d.error ?? `Файл не удалён (${r.status})`)
-    setBusy(false)
+    try {
+      const r = await fetch(`/api/partner/quote/${orderId}/files?file=${f.id}`, { method: 'DELETE' })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok) setFiles(prev => prev.filter(x => x.id !== f.id))
+      else setError(d.error ?? `Файл не удалён (${r.status})`)
+    } catch {
+      setError('Файл не удалён: сервер не ответил — проверьте связь')
+    } finally { setBusy(false) }
   }
 
   function pick(kind: DrawingKind) {
@@ -131,7 +135,7 @@ export default function DrawingFiles({ orderId }: { orderId: string }) {
 
         {busy && <div className="cap">Загружаю…</div>}
         {done && <div className="info"><span>✓</span><span>{done}</span></div>}
-        {error && <div className="recalc">{error}</div>}
+        {error && <div className="perr">{error}</div>}
       </div>
     </div>
   )

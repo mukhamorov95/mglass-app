@@ -7,6 +7,7 @@ import {
   type CounterSpec, type SuperCat,
 } from '@/lib/partner/counter'
 import { leadTimeText, isMirrorCategory } from '@/lib/partner/leadTime'
+import { confirmDialog } from '@/lib/dialog'
 
 // Прилавок точки на стройрынке: покупатель называет размер — партнёр за минуту
 // показывает ему цену. Крупно — цена покупателю (закупка партнёра × наценка точки).
@@ -155,8 +156,8 @@ export default function PartnerCounterPage() {
     const next = list.filter((_, k) => k !== i)
     setList(next); void reprice(next)
   }
-  function clearAll() {
-    if (!window.confirm('Убрать все позиции и начать с нового покупателя?')) return
+  async function clearAll() {
+    if (!(await confirmDialog({ title: 'Начать с нового покупателя?', text: 'Все позиции с прилавка уберутся.', confirmLabel: 'Очистить', danger: true }))) return
     setList([]); setShowCost(false); void reprice([])
   }
 
@@ -278,7 +279,7 @@ export default function PartnerCounterPage() {
                 <span>📏</span>
                 <span>Размер проверьте вместе с покупателем: деталь режется ровно по тем цифрам, что введены здесь.</span>
               </div>
-              <button className="rm" onClick={clearAll} style={{ marginTop: 10, padding: 0, fontSize: 13 }}>Новый покупатель — очистить</button>
+              <button className="rm" onClick={() => void clearAll()} style={{ marginTop: 10, padding: 0, fontSize: 13 }}>Новый покупатель — очистить</button>
             </div>
           </div>
         )}

@@ -3,6 +3,9 @@
 import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import DrawingFiles from './DrawingFiles'
+import type { PointStage } from '@/lib/partner/pointPay'
+import { QUOTE_LABEL, type QuoteState } from '@/lib/partner/quoteState'
+import { responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Карточка заказа кабинета (дизайн из прототипа, .pcab).
 type Item = { material: string; thickness: number; width: number; height: number; quantity: number; tempering: boolean; facet: boolean; triplex: boolean; price: number }
@@ -10,11 +13,17 @@ type TL = { label: string; state: 'done' | 'now' | 'wait'; date: string | null }
 type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
   lane: string; ready: boolean; progressPct: number; deadline: string | null; estimateDays?: number
-  paymentStatus?: 'paid' | 'awaiting' | null
+  payment?: { status: 'paid' } | { status: 'partial'; paid: number; total: number; remainder: number } | { status: 'awaiting'; total: number } | null
   onlinePayEnabled?: boolean
   canInvoice?: boolean
+  point?: PointStage | null
   updIssued?: boolean
+  upd?: { number: number; year: number; docDate: string } | null
   drawingApproval?: { status: 'approved' | 'rework'; comment: string | null; at: string | null } | null
+  drawingPrev?: { status: 'approved' | 'rework'; at: string | null; updatedAt: string | null } | null
+  launched?: boolean
+  quoteState?: QuoteState | null
+  stateNote?: string | null
   delivery?: { method: 'pickup' | 'delivery'; address: string | null; comment: string | null; status: string | null } | null
   total: number; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
 }
@@ -38,34 +47,49 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
   const [dComment, setDComment] = useState('')
   const [dSaving, setDSaving] = useState(false)
 
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   useEffect(() => {
-    fetch(`/api/partner/order/${id}`).then(r => r.ok ? r.json() : Promise.reject())
-      .then((d: Order) => setO(d)).catch(() => setNotFound(true)).finally(() => setLoading(false))
+    let alive = true
+    fetch(`/api/partner/order/${id}`).then(async r => {
+      if (!alive) return
+      if (r.status === 404) { setNotFound(true); return }
+      if (!r.ok) { setLoadErr(await responseError(r)); return }
+      setO(await r.json() as Order)
+    }).catch(() => { if (alive) setLoadErr(NETWORK_ERROR) }).finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
   }, [id])
 
+  const [decideErr, setDecideErr] = useState<string | null>(null)
   async function decide(decision: 'approve' | 'rework', comment?: string) {
-    setDeciding(true)
+    setDeciding(true); setDecideErr(null)
     try {
       const r = await fetch(`/api/partner/order/${id}/approve-drawing`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision, comment }),
       })
-      const d = await r.json()
-      if (r.ok && d.status) {
-        setO(prev => prev ? { ...prev, drawingApproval: { status: d.status.status, comment: d.status.comment ?? null, at: d.status.at ?? null } } : prev)
-        setReworkOpen(false); setReworkText('')
-      }
+      if (!r.ok) { setDecideErr(`Решение не сохранено: ${await responseError(r)}`); return }
+      const d = await r.json().catch(() => null) as { status?: { status: 'approved' | 'rework'; comment?: string | null; at?: string | null } } | null
+      if (!d?.status) { setDecideErr('Решение не сохранено: сервер прислал пустой ответ. Обновите страницу'); return }
+      const st = d.status
+      setO(prev => prev ? { ...prev, drawingPrev: null, drawingApproval: { status: st.status, comment: st.comment ?? null, at: st.at ?? null } } : prev)
+      setReworkOpen(false); setReworkText('')
+    } catch {
+      setDecideErr(`Решение не сохранено: ${NETWORK_ERROR}`)
     } finally { setDeciding(false) }
   }
 
   const [paying, setPaying] = useState(false)
+  const [payErr, setPayErr] = useState<string | null>(null)
   async function payOnline() {
-    setPaying(true)
+    setPaying(true); setPayErr(null)
     try {
       const r = await fetch(`/api/partner/order/${id}/pay`, { method: 'POST' })
-      const d = await r.json()
-      if (r.ok && d.url) { window.location.href = d.url; return }
-      alert(d.error || 'Оплата онлайн недоступна')
+      if (!r.ok) { setPayErr(`Оплата не открылась: ${await responseError(r)}`); return }
+      const d = await r.json().catch(() => null) as { url?: string } | null
+      if (d?.url) { window.location.href = d.url; return }
+      setPayErr('Оплата не открылась: сервер не прислал ссылку на оплату')
+    } catch {
+      setPayErr(`Оплата не открылась: ${NETWORK_ERROR}`)
     } finally { setPaying(false) }
   }
 
@@ -75,22 +99,33 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
     setDComment(o?.delivery?.comment ?? '')
     setDelivOpen(true)
   }
+  const [dErr, setDErr] = useState<string | null>(null)
   async function saveDelivery() {
-    setDSaving(true)
+    setDSaving(true); setDErr(null)
     try {
       const r = await fetch(`/api/partner/order/${id}/delivery`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method: dMethod, address: dAddr, comment: dComment }),
       })
-      const d = await r.json()
-      if (r.ok && d.delivery) {
-        setO(prev => prev ? { ...prev, delivery: { method: d.delivery.method, address: d.delivery.address ?? null, comment: d.delivery.comment ?? null, status: d.delivery.status ?? null } } : prev)
-        setDelivOpen(false)
-      }
+      if (!r.ok) { setDErr(`Не сохранено: ${await responseError(r)}`); return }
+      const d = await r.json().catch(() => null) as { delivery?: { method: 'pickup' | 'delivery'; address?: string | null; comment?: string | null; status?: string | null } } | null
+      if (!d?.delivery) { setDErr('Не сохранено: сервер прислал пустой ответ. Обновите страницу'); return }
+      const dv = d.delivery
+      setO(prev => prev ? { ...prev, delivery: { method: dv.method, address: dv.address ?? null, comment: dv.comment ?? null, status: dv.status ?? null } } : prev)
+      setDelivOpen(false)
+    } catch {
+      setDErr(`Не сохранено: ${NETWORK_ERROR}`)
     } finally { setDSaving(false) }
   }
 
   if (loading) return <div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div>
+  if (loadErr) return (
+    <div className="wrap"><div className="note">
+      <div className="t">Заказ не загрузился</div>
+      <div className="s">{loadErr}. Обновите страницу через минуту.</div>
+      <Link href="/partner/orders" className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← Мои заказы</Link>
+    </div></div>
+  )
   if (notFound || !o) return (
     <div className="wrap"><div className="note">
       <div className="t">Заказ не найден</div>
@@ -98,8 +133,10 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
     </div></div>
   )
 
-  const pillCls = o.ready ? 'p-ready' : o.lane === 'shipped' ? 'p-ship' : o.lane === 'in_work' ? 'p-work' : 'p-quote'
-  const statusText = o.ready ? 'Готов к выдаче' : LANE_LABEL[o.lane] ?? 'В работе'
+  const qs = o.lane === 'quote' ? (o.quoteState ?? 'draft') : null
+  const pillCls = o.ready ? 'p-ready' : o.lane === 'shipped' ? 'p-ship' : o.lane === 'in_work' ? 'p-work'
+    : qs === 'agreed' ? 'p-ready' : qs === 'negotiation' ? 'p-sub' : qs === 'rejected' ? 'p-ship' : 'p-quote'
+  const statusText = o.ready ? 'Готов к выдаче' : qs && qs !== 'draft' ? QUOTE_LABEL[qs] : LANE_LABEL[o.lane] ?? 'В работе'
 
   return (
     <div className="wrap">
@@ -112,19 +149,31 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
           <div className="cap" style={{ marginTop: 3 }}>Создан {fmtDate(o.created_at)}{o.deadline ? ` · срок отгрузки ${fmtDate(o.deadline)}` : (o.lane === 'submitted' && o.estimateDays ? ` · срок ~${o.estimateDays} раб. дней после запуска` : '')}</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {o.paymentStatus && (
-            <span style={{
-              fontSize: 12.5, padding: '6px 13px', borderRadius: 999, fontWeight: 600,
-              background: o.paymentStatus === 'paid' ? 'rgba(16,185,129,.12)' : 'rgba(245,158,11,.14)',
-              color: o.paymentStatus === 'paid' ? '#0f766e' : '#b45309',
-            }}>
-              {o.paymentStatus === 'paid' ? '✓ Оплачен' : 'Ожидает оплаты'}
+          {o.payment && (
+            <span className={`pill ${o.payment.status === 'paid' ? 'p-ready' : 'p-sub'}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>
+              {o.payment.status === 'paid' ? 'Оплачен'
+                : o.payment.status === 'partial' ? `Оплачено ${fmt(o.payment.paid)} из ${fmt(o.payment.total)}, осталось ${fmt(o.payment.remainder)}`
+                : 'Ожидает оплаты'}
             </span>
           )}
           <span className={`pill ${pillCls}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>{statusText}</span>
         </div>
       </div>
 
+      {o.point && (
+        <div className="info" style={{ marginTop: 0, marginBottom: 14 }}>
+          <span>{o.point === 'paid' ? '✓' : '₽'}</span>
+          <span>{o.point === 'check'
+            ? <>Заказ уходит в работу после 100 % оплаты. Менеджер проверяет сумму — как только выставит счёт, он откроется здесь.</>
+            : o.point === 'await_payment'
+              ? <><b>Ждём вашей оплаты.</b> Заказ уйдёт в работу после 100 % оплаты — счёт-спецификация ниже.</>
+              : <>Оплата получена — менеджер запускает заказ в работу.</>}</span>
+        </div>
+      )}
+
+      {qs && qs !== 'draft' && o.stateNote && (
+        <div className="info" style={{ marginTop: 0, marginBottom: 14 }}><span>✎</span><span>{qs === 'rejected' ? 'Причина отказа' : 'Комментарий менеджера'}: {o.stateNote}</span></div>
+      )}
       {o.recalcNote && <div className="ord" style={{ boxShadow: 'none' }}><div className="recalc" style={{ marginTop: 0 }}>✎ Пересчитано менеджером: {o.recalcNote}</div></div>}
 
       <div className="split" style={{ marginTop: 0 }}>
@@ -160,10 +209,13 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
                 : <div className="draw" style={{ cursor: 'default' }}><div style={{ fontSize: 26 }}>▤</div><div style={{ fontSize: 11.5 }}>чертёж появится после подготовки</div></div>}
 
               {o.drawingUrl && o.drawingApproval?.status === 'approved' && (
-                <div className="info" style={{ marginTop: 10 }}><span>✓</span><span>Вы согласовали чертёж{o.drawingApproval.at ? ` ${fmtDate(o.drawingApproval.at)}` : ''}. Запущено в производство.</span></div>
+                <div className="info" style={{ marginTop: 10 }}><span>✓</span><span>Вы согласовали чертёж{o.drawingApproval.at ? ` ${fmtDate(o.drawingApproval.at)}` : ''}. {o.launched ? 'Заказ в производстве.' : 'Менеджер запустит заказ в работу.'}</span></div>
               )}
               {o.drawingUrl && o.drawingApproval?.status === 'rework' && (
                 <div className="recalc" style={{ marginTop: 10 }}>✎ Отправлено на доработку{o.drawingApproval.comment ? `: ${o.drawingApproval.comment}` : ''}. Менеджер пришлёт обновлённый чертёж.</div>
+              )}
+              {o.drawingUrl && !o.drawingApproval && o.drawingPrev && (
+                <div className="info" style={{ marginTop: 10 }}><span>↻</span><span>Чертёж обновлён{o.drawingPrev.updatedAt ? ` ${fmtDate(o.drawingPrev.updatedAt)}` : ''} — после того как вы {o.drawingPrev.status === 'rework' ? 'отправили его на доработку' : 'его согласовали'}. Посмотрите новый и ответьте ещё раз.</span></div>
               )}
               {o.drawingUrl && !o.drawingApproval && !reworkOpen && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -181,6 +233,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
                   </div>
                 </div>
               )}
+              {decideErr && <div className="perr">{decideErr}</div>}
             </div>
           </div>
           <DrawingFiles orderId={id} />
@@ -194,7 +247,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
             {o.timeline.map((t, i) => (
               <div className={`tl${t.state === 'wait' ? ' pend' : ''}`} key={i}>
                 <span className={`dot ${t.state}`} />
-                <div><div className="ln">{t.label}</div><div className="dt">{t.state === 'now' ? 'сейчас' : t.date ? fmtDate(t.date) : 'ожидается'}</div></div>
+                <div><div className="ln">{t.label}</div><div className="dt">{t.state === 'now' ? 'сейчас' : t.date ? fmtDate(t.date) : t.state === 'done' ? 'пройден' : 'ожидается'}</div></div>
               </div>
             ))}
           </div>
@@ -239,6 +292,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
                   <button className="primary" style={{ flex: 1 }} disabled={dSaving || (dMethod === 'delivery' && !dAddr.trim())} onClick={saveDelivery}>{dSaving ? 'Сохраняю…' : 'Сохранить'}</button>
                   <button className="ghost" onClick={() => setDelivOpen(false)}>Отмена</button>
                 </div>
+                {dErr && <div className="perr" style={{ marginTop: 0 }}>{dErr}</div>}
               </div>
             )}
           </div>
@@ -246,13 +300,15 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
       )}
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-        {o.onlinePayEnabled && <button className="primary" onClick={payOnline} disabled={paying}>{paying ? 'Открываю оплату…' : '💳 Оплатить онлайн'}</button>}
+        {o.onlinePayEnabled && <button className="primary" onClick={payOnline} disabled={paying}>{paying ? 'Открываю оплату…' : o.payment?.status === 'partial' ? `💳 Оплатить остаток ${fmt(o.payment.remainder)}` : '💳 Оплатить онлайн'}</button>}
         <Link className="ghost" href={`/partner/order/${o.id}/kp`}>↓ Скачать КП</Link>
         {o.canInvoice && <Link className="ghost" href={`/partner/order/${o.id}/invoice`}>↓ Счёт-спецификация</Link>}
-        {o.canInvoice && o.updIssued && <Link className="ghost" href={`/partner/order/${o.id}/upd`}>↓ УПД</Link>}
+        {o.upd && <Link className="ghost" href={`/partner/order/${o.id}/upd`}>↓ УПД № {o.upd.number} от {fmtDate(o.upd.docDate)}</Link>}
         {(o.lane === 'in_work' || o.lane === 'shipped') && <Link className="ghost" href={`/partner/claims?order=${o.id}`}>⚠️ Сообщить о проблеме</Link>}
-        <Link className="primary" href={`/partner/new?reorder=${o.id}`}>Повторить заказ</Link>
+        {qs === 'draft' && <Link className="ghost" href={`/partner/new?edit=${o.id}`}>✎ Изменить просчёт</Link>}
+        <Link className="primary" href={`/partner/new?reorder=${o.id}`}>{qs === 'rejected' ? 'Повторить как новый просчёт' : 'Повторить заказ'}</Link>
       </div>
+      {payErr && <div className="perr">{payErr}</div>}
     </div>
   )
 }

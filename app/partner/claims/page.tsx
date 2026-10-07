@@ -108,7 +108,7 @@ export default function PartnerClaimsPage() {
                   <div className="num">{c.kindLabel}{c.orderNumber && <span className="yr"> · заказ {c.orderNumber}</span>}</div>
                   <div className="meta">от {fmtDate(c.created_at)}</div>
                   <div className="meta" style={{ marginTop: 3, color: 'var(--ink-2)' }}>{c.description}</div>
-                  {c.resolution && <div className="meta" style={{ marginTop: 4, color: 'var(--green)' }}>Ответ: {c.resolution}</div>}
+                  {c.resolution && <div className="meta" style={{ marginTop: 4, color: c.status === 'resolved' ? 'var(--green)' : 'var(--ink-2)' }}>Ответ M-Glass{c.resolved_at ? ` от ${fmtDate(c.resolved_at)}` : ''}: {c.resolution}</div>}
                 </div>
                 <span className={`pill ${st.cls}`} style={{ height: 'fit-content' }}>{st.l}</span>
               </div>

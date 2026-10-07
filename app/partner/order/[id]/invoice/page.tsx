@@ -8,7 +8,7 @@ import InvoiceDocument, { type InvoiceOrder, type InvoiceRequisites } from '@/co
 
 // Счёт-спецификация в кабинете партнёра — тот же документ, что и у менеджера
 // (общий компонент InvoiceDocument). Реквизиты покупателя — только чтение (из своих
-// юрлиц). Доступ уже проверен сервером (can_self_invoice + запущен). Скачивание PDF.
+// юрлиц). Доступ проверяет сервер (lib/partner/documents invoiceState). Скачивание PDF.
 
 const EMPTY: InvoiceRequisites = { full_name: '', inn: '', kpp: '', ogrn: '', legal_address: '', bank_account: '', bank_name: '', bik: '', corr_account: '', supply_contract_no: '', supply_contract_date: '' }
 
@@ -32,6 +32,7 @@ export default function PartnerInvoicePage({ params }: { params: Promise<{ id: s
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const docRef = useRef<HTMLDivElement>(null)
+  const [pdfErr, setPdfErr] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/partner/order/${id}/invoice-data`).then(async r => {
@@ -56,6 +57,7 @@ export default function PartnerInvoicePage({ params }: { params: Promise<{ id: s
 
   async function downloadPdf() {
     if (!docRef.current || !data) return
+    setPdfErr(null)
     try {
       const jspdf = await import('jspdf')
       const canvas = await renderDocCanvas(docRef.current)
@@ -69,7 +71,7 @@ export default function PartnerInvoicePage({ params }: { params: Promise<{ id: s
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
       pdf.save(`Счёт-спецификация-${data.order.custom_number?.trim() || String(data.order.id).padStart(5, '0')}.pdf`)
     } catch {
-      alert('Не удалось сформировать PDF. Используйте «Печать» → Сохранить как PDF.')
+      setPdfErr('Не удалось сформировать PDF — используйте «Печать» → «Сохранить как PDF».')
     }
   }
 
@@ -96,6 +98,7 @@ export default function PartnerInvoicePage({ params }: { params: Promise<{ id: s
         )}
         <button onClick={() => document.fonts.ready.then(() => window.print())} className="ghost" style={{ marginLeft: 'auto' }}>🖨 Печать</button>
         <button onClick={downloadPdf} className="primary">⬇ Скачать PDF</button>
+        {pdfErr && <span style={{ flexBasis: '100%', fontSize: 12.5, color: '#b91c1c' }}>{pdfErr}</span>}
       </div>
 
       <InvoiceDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} />

@@ -3,22 +3,19 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { paymentsEnabled } from '@/lib/payments/provider'
-import { deadlineFor, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { partnerProgress, partnerDeadline, noteStatus } from '@/lib/partner/orderProgress'
+import { quoteState } from '@/lib/partner/quoteState'
+import { loadInvoicedOrders, loadPaidByOrders, paymentView } from '@/lib/partner/orderMoney'
+import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { invoiceState } from '@/lib/partner/documents'
+import { pointStage } from '@/lib/partner/pointPay'
+import { decisionOf, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
 import { loadUpdIssued } from '@/lib/b2b/updRegistry'
 
 // Карточка заказа для кабинета. СТРОГО по своему client_id. Отдаём только
 // клиентское: позиции (материал/размер/кол-во/цена), стадии производства,
 // срок, ссылку на чертёж. Никакой себестоимости/маржи.
-
-const LANE: { key: string; label: string }[] = [
-  { key: 'printed', label: 'Чертёж подготовлен' },
-  { key: 'material_ordered', label: 'Материал получен' },
-  { key: 'cut', label: 'Резка' },
-  { key: 'edge', label: 'Полировка кромки' },
-  { key: 'drilled', label: 'Сверление' },
-  { key: 'tempering', label: 'Закалка' },
-  { key: 'packed', label: 'Упаковка' },
-]
 
 function parseNotes(n: unknown): Record<string, unknown> {
   if (!n) return {}
@@ -36,8 +33,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number; name: string; full_name: string | null; inn: string | null; kpp: string | null; ogrn: string | null; legal_address: string | null; bank_account: string | null; bank_name: string | null; bik: string | null; corr_account: string | null; can_self_invoice: boolean | null }>(
-    svc, user.id, 'id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account, can_self_invoice')
+  const client = await resolvePartnerClient<{ id: number; name: string; full_name: string | null; inn: string | null; kpp: string | null; ogrn: string | null; legal_address: string | null; bank_account: string | null; bank_name: string | null; bik: string | null; corr_account: string | null; can_self_invoice: boolean | null; is_point: boolean | null }>(
+    svc, user.id, 'id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account, can_self_invoice, is_point')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
   const { data: o } = await svc.from('b2b_orders')
@@ -46,27 +43,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!o || o.client_id !== client.id) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
   const pn = parseNotes(o.notes)
-  const stages = (pn.stages ?? {}) as Record<string, unknown>
-  const launched = !!(o.launched_at || pn.launched_at)
-  const shipped = stages.shipped === true
-  const packed = stages.packed === true
-  const status = (pn.status as string) || 'quote'
-  const lane = shipped ? 'shipped' : launched ? 'in_work' : status === 'pending_approval' ? 'submitted' : 'quote'
-  const doneN = LANE.filter(s => stages[s.key] === true).length
-
-  // Таймлайн: сделанные этапы (с датой если есть) + текущий/ожидаемые.
-  const frontierIdx = LANE.findIndex(s => stages[s.key] !== true)
-  const timeline = LANE.map((s, i) => ({
-    label: s.label,
-    state: stages[s.key] === true ? 'done' : (i === frontierIdx && launched && !shipped ? 'now' : 'wait'),
-    date: typeof stages[s.key] === 'string' ? (stages[s.key] as string) : null,
-  }))
+  const p = partnerProgress({ launched_at: o.launched_at as string | null }, pn)
+  const { lane, launched } = p
 
   const discount = Number(o.discount_percent) || 0
   const rawItems = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
   const items = rawItems.map(it => {
-    const sale = Number(it.saleIncVat ?? 0)
-    const price = Number(it.manualTotal ?? Math.round(sale * (1 - discount / 100)))
+    // Та же функция итога позиции, что у менеджера: договорная цена, позиция из
+    // индивидуального прайса (clientPriced) — без повторной скидки.
+    const price = Number(effectiveItemTotal(it as unknown as B2BOrderItem, discount)) || 0
     return {
       material: String(it.materialName ?? ''),
       thickness: Number(it.thickness ?? 0),
@@ -83,27 +68,47 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Срок — единый источник lib/b2b/deadline (та же норма, что launch-production).
   // Для запущенных — реальная дата; для незапущенных отдаём null (в кабинете показываем
   // ориентир «~N раб.дней после запуска» через estimateDays, а не фабрикованную дату).
-  const deadline = launched ? deadlineFor(pn, o.created_at as string).toISOString() : null
+  const deadline = launched ? partnerDeadline({ launched_at: o.launched_at as string | null, created_at: o.created_at as string }, pn).toISOString() : null
 
   const history = Array.isArray(pn.status_history) ? pn.status_history : []
-  const drawingUrl = typeof pn.drawing_url === 'string' && pn.drawing_url ? `/api/b2b/drawing/${o.id}` : null
-  const da = pn.drawing_approval as { status?: string; comment?: string | null; at?: string } | undefined
-  const drawingApproval = da && (da.status === 'approved' || da.status === 'rework')
-    ? { status: da.status as 'approved' | 'rework', comment: da.comment ?? null, at: da.at ?? null }
-    : null
+  const qs = lane === 'quote' ? quoteState(noteStatus(pn)) : null
+  const lastComment = (pn.status_comment as string | undefined) || null
+  const stateNote = qs && qs !== 'draft' ? lastComment : null
+  const rawDrawing = typeof pn.drawing_url === 'string' && pn.drawing_url ? pn.drawing_url : null
+  const drawingUrl = rawDrawing ? `/api/b2b/drawing/${o.id}` : null
+  // Решение по чертежу, после которого загрузили новый файл, — уже не про этот чертёж:
+  // кнопки «Согласовать / На доработку» возвращаются, прежнее решение видно подписью.
+  const decision = decisionOf(pn.drawing_approval)
+  const drawingAt = rawDrawing && decision ? await drawingUploadedAt(svc, rawDrawing) : null
+  const stale = isDecisionStale(decision, drawingAt)
+  const drawingApproval = stale ? null : decision
+  const drawingPrev = stale && decision ? { status: decision.status, at: decision.at, updatedAt: drawingAt } : null
   const dl = pn.delivery as { method?: string; address?: string | null; comment?: string | null; status?: string | null } | undefined
   const delivery = dl && (dl.method === 'pickup' || dl.method === 'delivery')
     ? { method: dl.method as 'pickup' | 'delivery', address: dl.address ?? null, comment: dl.comment ?? null, status: dl.status ?? null }
     : null
 
-  // Статус оплаты для партнёра: paid — оплачен (payment_status или этап invoice_paid);
-  // awaiting — заказ в работе/отгружен, но оплата ещё не отмечена; null — просчёт.
-  const paid = pn.payment_status === 'paid' || typeof stages.invoice_paid === 'string' || stages.invoice_paid === true
-  const paymentStatus: 'paid' | 'awaiting' | null = paid ? 'paid' : (launched ? 'awaiting' : null)
+  // Точка платит до запуска: счёт ей открыт, как только менеджер его выставил.
+  const isPoint = client.is_point === true
+  let invoiced = false
+  if (isPoint) {
+    try { invoiced = (await loadInvoicedOrders(svc, [oid])).has(oid) }
+    catch (e) { return NextResponse.json({ error: `Реестр счетов не прочитан: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  }
+  const total = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
+  let paidFromPayments = 0
+  try { paidFromPayments = (await loadPaidByOrders(svc, [oid])).get(oid) ?? 0 }
+  catch (e) { return NextResponse.json({ error: `Оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  const fullyPaid = paymentView({ total, paidFromPayments, notes: pn, due: true })?.status === 'paid'
+  const point = pointStage({ isPoint, launched, submitted: lane === 'submitted', invoiced, paid: fullyPaid })
 
-  const canInvoice = !!client.can_self_invoice && launched
-  // Ссылка «УПД» — только на выданный документ (этап 7): черновика в кабинете нет.
-  const updIssued = canInvoice && !!(await loadUpdIssued(svc, oid).catch(() => null))
+  // Оплата: «Оплачен» / «Оплачено X из Y, осталось Z» / «Ожидает оплаты» — последнее,
+  // когда заказ в работе или точке выставлен счёт; у просчёта — ничего.
+  const payment = paymentView({ total, paidFromPayments, notes: pn, due: launched || point === 'await_payment' })
+
+  const canInvoice = invoiceState({ launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced }) === 'open'
+  // УПД — только выданный документ (этап 7), и любому партнёру заказа: флаг — для счёта.
+  const upd = await loadUpdIssued(svc, oid).catch(e => { console.error('[partner/order] УПД не прочитан:', oid, e instanceof Error ? e.message : e); return null })
 
   return NextResponse.json({
     id: o.id,
@@ -119,20 +124,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
     created_at: o.created_at,
     lane,
-    ready: packed && !shipped,
-    progressPct: (lane === 'in_work' || lane === 'shipped') ? Math.round((doneN / LANE.length) * 100) : 0,
+    ready: p.ready,
+    progressPct: p.progressPct,
     deadline,
     estimateDays: DEFAULT_WORKING_DAYS,
-    paymentStatus,
-    onlinePayEnabled: paymentStatus === 'awaiting' && paymentsEnabled(),
+    payment,
+    onlinePayEnabled: !!payment && payment.status !== 'paid' && paymentsEnabled(),
     canInvoice,
-    updIssued,
-    total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),
+    point,
+    updIssued: !!upd,
+    upd: upd ? { number: upd.number, year: upd.year, docDate: upd.doc_date } : null,
+    total,
     items,
-    timeline,
+    timeline: p.timeline,
     drawingUrl,
     drawingApproval,
+    drawingPrev,
+    launched,
     delivery,
-    recalcNote: history.length > 0 ? ((pn.status_comment as string) || null) : null,
+    recalcNote: history.length > 0 && !stateNote && (qs === null || qs === 'draft') ? lastComment : null,
+    quoteState: qs,
+    stateNote,
   })
 }
