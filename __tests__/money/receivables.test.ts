@@ -22,6 +22,17 @@ describe('долг клиентов — одна функция', () => {
     expect(rec.coverage).toEqual({ orders: 4, withPayment: 3 })
   })
 
+  it('M GLASS — своя розница: не в долге клиентов, остаток отдельно', () => {
+    const rec = computeReceivables(
+      [O({ id: 1 }), O({ id: 2, client_id: 9, client_name: 'M GLASS' }), O({ id: 3, client_id: 9, client_name: 'MGlass ' })],
+      new Map(),
+      { today: TODAY },
+    )
+    expect(rec.rows.map(r => r.id)).toEqual([1])
+    expect(rec.total).toBe(10000)
+    expect(rec.ownRetail).toEqual({ debt: 20000, count: 2 })
+  })
+
   it('незапущенные, запущенные до границы и шаблоны — не в долге', () => {
     const rec = computeReceivables([
       O({ id: 1, launched_at: null }),

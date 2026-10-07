@@ -2,6 +2,7 @@ import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { parseNotes, isShipped, orderRef } from '@/lib/b2b/todayPriorities'
 import { stageDayKey } from '@/lib/production/dayLists'
 import { mskDayKey } from '@/lib/time'
+import { isOwnRetail } from '@/lib/liveOrders'
 
 // Долг клиентов — ОДНА функция для /ceo, /cfo/receivables, прогноза кассы и утренней
 // сводки. Раньше все четыре считали по notes.stages.invoice_sent, который с июня никто
@@ -67,6 +68,8 @@ export type Receivables = {
   // Сколько заказов в окне вообще имеют платёж: без выписки банка часть «долга» —
   // незаведённые оплаты, и экран должен это говорить.
   coverage: { orders: number; withPayment: number }
+  // M GLASS — своя розница, не клиент: её остаток не долг клиентов, показывается отдельно.
+  ownRetail: { debt: number; count: number }
 }
 
 const DAY = 86_400_000
@@ -81,6 +84,7 @@ export function computeReceivables(
   const since = opts.since ?? RECEIVABLES_SINCE
   const rows: DebtRow[] = []
   let inScope = 0, withPayment = 0
+  const own = { debt: 0, count: 0 }
   for (const o of orders) {
     if (!o.launched_at) continue
     const launchDay = mskDayKey(o.launched_at)
@@ -93,6 +97,7 @@ export function computeReceivables(
     if (p > 0) withPayment++
     const debt = Math.round((total - p) * 100) / 100
     if (!(debt > 1)) continue    // копейки раскладки счёта — не долг
+    if (isOwnRetail(o.client_name)) { own.debt = Math.round((own.debt + debt) * 100) / 100; own.count++; continue }
     const shippedDay = isShipped(n) ? stageDayKey((n.stages as Record<string, unknown> | undefined)?.shipped) : null
     const fromDay = shippedDay ?? launchDay
     const days = daysBetween(fromDay, opts.today)
@@ -125,6 +130,7 @@ export function computeReceivables(
       return { key: b.key, label: b.label, sum: Math.round(list.reduce((s, r) => s + r.debt, 0) * 100) / 100, count: list.length }
     }),
     coverage: { orders: inScope, withPayment },
+    ownRetail: own,
   }
 }
 

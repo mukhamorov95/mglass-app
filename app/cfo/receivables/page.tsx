@@ -1,5 +1,6 @@
 'use client'
 
+import { plural } from '@/lib/morning'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
@@ -119,6 +120,11 @@ export default function ReceivablesPage() {
                 Оплаты заведены у {rec.coverage.withPayment} из {rec.coverage.orders} заказов с {DD(rec.since)}. Пока выписка банка не
                 загружается в «Бухгалтерия → Выписка», часть этой суммы — оплаты, которых нет в системе, а не долг.
               </div>
+            )}
+            {rec.ownRetail.count > 0 && (
+              <p className="text-[11px] text-[#9a9a95]">
+                Без своей розницы M GLASS: {rec.ownRetail.count} {plural(rec.ownRetail.count, 'заказ', 'заказа', 'заказов')} на {Math.round(rec.ownRetail.debt).toLocaleString('ru-RU')} ₽ — это не долг клиентов.
+              </p>
             )}
 
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
