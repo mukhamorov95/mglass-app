@@ -6,6 +6,7 @@ import { CRM_ZONES } from '@/lib/crmStages'
 import { botGate } from '@/lib/avito/botGate'
 import { muteIfHumanInThread } from '@/lib/avito/humanInThread'
 import { isBotEnabled } from '@/lib/aiKillSwitch'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 // Одноразовый «догон» после сбоя AI (кончились кредиты 05.08): находит Авито-лиды,
 // где было «Ошибка AI / AI недоступен» и клиент остался без ответа, и отправляет
@@ -29,10 +30,11 @@ type Stuck = { id: number; name: string | null; phone: string | null; chatId: st
 // Собирает список зависших после сбоя лидов (общий код для GET и POST).
 async function collectStuck(service: ReturnType<typeof db>, days: number, cap: number): Promise<Stuck[]> {
   const since = new Date(Date.now() - days * 86_400_000).toISOString()
-  const { data: errEvents } = await service.from('crm_lead_events')
+  // Все системные события окна (за 30 дней их ~700 и растёт), а не первые 1000 PostgREST.
+  const errEvents = await pageAll<{ lead_id: number; text: string }>((from, to) => service.from('crm_lead_events')
     .select('lead_id,text').eq('kind', 'system').gte('created_at', since)
-    .order('id', { ascending: false }).limit(3000)
-  const errLeadIds = [...new Set(((errEvents ?? []) as { lead_id: number; text: string }[])
+    .order('id', { ascending: false }).range(from, to))
+  const errLeadIds = [...new Set(errEvents
     .filter(e => /Ошибка AI|AI недоступен/i.test(e.text)).map(e => e.lead_id))]
 
   const stuck: Stuck[] = []
@@ -70,7 +72,10 @@ export async function GET(req: NextRequest) {
   if (guard instanceof NextResponse) return guard
 
   const days = Math.min(30, Math.max(1, Number(req.nextUrl.searchParams.get('days')) || 3))
-  const stuck = await collectStuck(db(), days, 100)
+  let stuck: Stuck[]
+  try { stuck = await collectStuck(db(), days, 100) } catch (e) {
+    return NextResponse.json({ error: `События лидов: ${(e as Error).message}` }, { status: 500 })
+  }
   return NextResponse.json({
     dryRun: true, days, count: stuck.length,
     hint: 'Отправить: POST этому же URL с телом {"confirm":true}',
@@ -90,7 +95,10 @@ export async function POST(req: NextRequest) {
   // Догон пишет от лица Ивана — выключенный бот не пишет ничего, в том числе так
   if (!(await isBotEnabled(service))) return NextResponse.json({ error: 'Бот Иван выключен (/vladislav) — догон не отправляется' }, { status: 409 })
   const days = Math.min(30, Math.max(1, Number(body.days) || 3))
-  const stuck = await collectStuck(service, days, 100)
+  let stuck: Stuck[]
+  try { stuck = await collectStuck(service, days, 100) } catch (e) {
+    return NextResponse.json({ error: `События лидов: ${(e as Error).message}` }, { status: 500 })
+  }
 
   // id аккаунта нужен как {user_id} для мессенджера; берём с лида, иначе — self.
   let selfId: number | null = null

@@ -6,6 +6,7 @@ import { classifyAvitoDialog } from '@/lib/ai-tools/avitoLeadClassifier'
 import { type DialogMsg } from '@/lib/ai-tools/avitoManagerRuntime'
 import { scoreLead } from '@/lib/avito/scoreLead'
 import { type LeadFlags } from '@/lib/avito/flags'
+import { inChunks, pageAll } from '@/lib/supabase/pageAll'
 
 // Импорт существующих заявок Авито в CRM. GET — превью с классификацией
 // (интересно/отказ), POST — вставка выбранных (кроме отказников) в crm_leads.
@@ -40,8 +41,16 @@ export async function GET(req: NextRequest) {
     const chats  = await avitoListChats(selfId, { limit })
 
     const sb = createServiceClient()
-    const { data: existing } = await sb.from('crm_leads').select('avito_chat_id').not('avito_chat_id', 'is', null)
-    const seen = new Set((existing ?? []).map(r => r.avito_chat_id as string))
+    // Дедуп по всем чатам, а не по первой 1000 PostgREST: иначе уже заведённый лид снова
+    // предлагался бы к импорту. Не прочиталось — не показываем список, где всё «новое».
+    let existing: { avito_chat_id: string }[]
+    try {
+      existing = await pageAll<{ avito_chat_id: string }>((from, to) => sb.from('crm_leads')
+        .select('avito_chat_id').not('avito_chat_id', 'is', null).order('id').range(from, to))
+    } catch (e) {
+      return NextResponse.json({ error: `Лиды CRM: ${(e as Error).message}` }, { status: 500 })
+    }
+    const seen = new Set(existing.map(r => r.avito_chat_id))
 
     const candidates = await pool(chats, 4, async (chat) => {
       const already = seen.has(chat.id)
@@ -93,8 +102,15 @@ export async function POST(req: NextRequest) {
   if (!items.length) return NextResponse.json({ ok: true, inserted: 0 })
 
   const sb = createServiceClient()
-  const { data: existing } = await sb.from('crm_leads').select('avito_chat_id').in('avito_chat_id', items.map(i => i.chat_id))
-  const seen = new Set((existing ?? []).map(r => r.avito_chat_id as string))
+  // Ошибка чтения здесь означала бы «дублей нет» и вставку повторных лидов — поэтому 500.
+  let existing: { avito_chat_id: string }[]
+  try {
+    existing = await inChunks([...new Set(items.map(i => i.chat_id))], 200, part => pageAll<{ avito_chat_id: string }>((from, to) =>
+      sb.from('crm_leads').select('avito_chat_id').in('avito_chat_id', part).order('id').range(from, to)))
+  } catch (e) {
+    return NextResponse.json({ error: `Лиды CRM: ${(e as Error).message}` }, { status: 500 })
+  }
+  const seen = new Set(existing.map(r => r.avito_chat_id))
 
   const toInsert = items.filter(i => !seen.has(i.chat_id)).map(i => {
     const flags = i.flags ?? {}
