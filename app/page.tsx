@@ -1,11 +1,9 @@
 import Link from 'next/link'
 import { mskDayKey } from '@/lib/time'
-import { calcTypeLabel, calcDetail } from '@/lib/calcLabel'
 import { redirect } from 'next/navigation'
 import { getRole, ROLE_HOME } from '@/lib/getRole'
 import MyDay from '@/components/MyDay'
 import { createClient } from '@/lib/supabase-server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { createServiceClient as serviceClient } from '@/lib/supabase-service'
 import { loadMorning, type Morning, type MorningPerson } from '@/lib/morningData'
 import { loadTeam, type Team } from '@/lib/morningTeam'
@@ -16,50 +14,8 @@ import MorningTeam from '@/components/morning/MorningTeam'
 const DAYS = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота']
 const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
 
-function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
-
-  // Зеркало, душевая, лофт, ограждение и скан дизайн-проекта убраны из доступа
-  // 03.09.2026 (решение владельца: «не отображает честную картину»). Оставлять
-  // кнопку на закрытый маршрут нельзя — она ведёт в «нет доступа» и читается
-  // как поломка. Код экранов на месте.
-const CALC_CARDS = [
-  {
-    href: '/calculator/b2b',
-    emoji: '🏢',
-    label: 'B2B',
-    desc: 'Опт, НДС, скидки клиентов',
-    color: 'from-violet-500 to-violet-600',
-    bg: 'bg-violet-50 border-violet-200 hover:border-violet-400',
-  },
-]
-
-const STATUS_COLORS: Record<string, string> = {
-  draft:    'bg-gray-100 text-gray-600',
-  sent:     'bg-blue-100 text-blue-700',
-  thinking: 'bg-amber-100 text-amber-700',
-  approved: 'bg-emerald-100 text-emerald-700',
-  launched: 'bg-purple-100 text-purple-700',
-  rejected: 'bg-red-100 text-red-600',
-}
-const STATUS_LABELS: Record<string, string> = {
-  draft:    'Черновик',
-  sent:     'Отправлено',
-  thinking: 'Думает',
-  approved: 'Согласовано',
-  launched: 'Запущено',
-  rejected: 'Отказ',
-}
-const OWNER_CENTER = [
-  { href: '/sales',                emoji: '📊', label: 'Продажи',        desc: 'Выручка и оплаты по книге' },
-  { href: '/sales/margin',         emoji: '📈', label: 'Маржа',          desc: 'Маржа закрытых заказов' },
-  { href: '/admin/org',            emoji: '🏗️', label: 'Оргструктура',  desc: 'Роли, регламенты, KPI' },
-  { href: '/admin/roadmap',        emoji: '🗺️', label: 'Roadmap',        desc: 'Прогресс внедрения' },
-  { href: '/admin/infrastructure', emoji: '⚙️', label: 'Техцентр',       desc: 'ENV, инфраструктура, боты' },
-  { href: '/sales/managers',       emoji: '🔍', label: 'Менеджеры',      desc: 'Разговоры, замеры, оплаты' },
-  { href: '/admin/users',          emoji: '👥', label: 'Пользователи',   desc: 'Доступы и роли' },
-  { href: '/admin/suppliers',      emoji: '🏭', label: 'Поставщики',     desc: 'Контакты и условия' },
-  { href: '/inventory',            emoji: '📦', label: 'Склад',          desc: 'Остатки и движения' },
-]
+// Старые блоки под «Утром» сняты 08.10: «Выручка (согл.)» из расчётов была третьей
+// цифрой выручки рядом с /cfo и книгой, а плитки Owner Center повторяли меню.
 
 type Search = { m?: string; d?: string; from?: string; to?: string; month?: string; year?: string }
 
@@ -69,14 +25,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
   // менеджерскую панель. manager/admin/ceo не в карте — остаются здесь.
   const home = role ? ROLE_HOME[role] : undefined
   if (home) redirect(home)
-  const isAdmin = role === 'admin'
   const supabase = await createClient()
 
   // Главная рендерится на сервере, а он в UTC: с полуночи до трёх ночи по Москве
   // «сегодня» здесь было вчерашним — и подпись даты, и границы выборок за день.
   const now = new Date()
   const todayStr  = mskDayKey(now)
-  const monthStr  = todayStr.slice(0, 7)
   const mskNow    = new Date(`${todayStr}T12:00:00Z`)   // полдень мск-дня: день недели и число берём из него
   const dateLabel = `${DAYS[mskNow.getUTCDay()]}, ${mskNow.getUTCDate()} ${MONTHS[mskNow.getUTCMonth()]}`
 
@@ -118,38 +72,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
     ? (ownerView ? `Утро — ${person.name}` : `Доброе утро, ${person.name}`)
     : isOwner ? 'Доброе утро' : 'Панель менеджера'
 
-  // Fetch B2C calc stats
-  const { data: calcs, error: calcsErr } = await supabase
-    .from('calculations')
-    .select('id, status, final_price, margin, product_type, client_name, created_at, input_data')
-    .order('created_at', { ascending: false })
-    .limit(200)
-
-  const all = calcs ?? []
-
-  const todayCalcs   = all.filter(c => c.created_at?.slice(0, 10) === todayStr).length
-  const sentCalcs    = all.filter(c => c.status === 'sent' || c.status === 'thinking').length
-  const approvedMonth = all.filter(c =>
-    (c.status === 'approved' || c.status === 'launched') &&
-    c.created_at?.slice(0, 7) === monthStr
-  ).length
-  const revenueMonth = all
-    .filter(c => (c.status === 'approved' || c.status === 'launched') && c.created_at?.slice(0, 7) === monthStr)
-    .reduce((s, c) => s + (c.final_price ?? 0), 0)
-
-  const recent = all.slice(0, 5)
-
-  // Manager name (for admin only to avoid extra queries)
-  let usersMap: Record<string, string> = {}
-  if (isAdmin) {
-    const admin = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    )
-    const { data } = await admin.from('users').select('id,name,email')
-    if (data) usersMap = Object.fromEntries(data.map(u => [u.id, u.name ?? u.email]))
-  }
-
   return (
     <div className="max-w-[960px] mx-auto px-5 py-8 space-y-8">
 
@@ -173,114 +95,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
       {/* Учётка без связи с amo — «Утра» нет, остаются поводы дня */}
       {role === 'manager' && !person && <MyDay />}
       {isOwner && team && <MorningTeam team={team} />}
-
-      {/* ── NEW CALCULATION – hero section ────────────────────────────── */}
-      <section>
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-3">Новый расчёт</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {CALC_CARDS.map(c => (
-            <Link key={c.href} href={c.href}
-              className={`group border-2 rounded-2xl p-4 transition-all hover:shadow-md ${c.bg}`}>
-              <div className="text-2xl mb-2">{c.emoji}</div>
-              <p className="text-[15px] font-bold text-[#111110] mb-0.5">{c.label}</p>
-              <p className="text-[11px] text-[#6b6b66] leading-snug">{c.desc}</p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* ── KPI row ────────────────────────────────────────────────────── */}
-      <section>
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-3">Статистика</p>
-        {/* Сбой запроса не должен выглядеть как «ноль расчётов» — вместо чисел прочерк. */}
-        {calcsErr && (
-          <p role="alert" className="text-[12px] text-[#c23a2b] mb-2">Расчёты не загрузились: {calcsErr.message}. Обновите страницу.</p>
-        )}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Расчётов сегодня', value: todayCalcs,    href: '/calculations', accent: '' },
-            { label: 'Ожидают ответа',   value: sentCalcs,     href: '/calculations', accent: sentCalcs > 0 ? 'text-amber-600' : '' },
-            { label: 'Согласовано в месяце', value: approvedMonth, href: '/calculations', accent: approvedMonth > 0 ? 'text-emerald-600' : '' },
-            { label: 'Выручка (согл.)',   value: revenueMonth > 0 ? fmt(revenueMonth) : '—', href: '/calculations', accent: 'text-emerald-600' },
-          ].map(({ label, value, href, accent }) => (
-            <Link key={label} href={href}
-              className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5 hover:border-[#c4c4be] hover:shadow-sm transition-all">
-              <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wider mb-1.5 leading-tight">{label}</p>
-              <p className={`text-[22px] font-bold tabular-nums leading-none ${calcsErr ? 'text-[#9a9a95]' : accent || 'text-[#111110]'}`}>{calcsErr ? '—' : value}</p>
-              {calcsErr && <p className="text-[10px] text-[#9a9a95] mt-1">не загрузилось</p>}
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Recent calculations ────────────────────────────────────────── */}
-      {recent.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider">Последние расчёты</p>
-            <Link href="/calculations" className="text-[12px] text-blue-600 hover:underline">Все →</Link>
-          </div>
-          <div className="space-y-2">
-            {recent.map(c => {
-              const prodLabel = calcTypeLabel(c.product_type)
-              const st = STATUS_LABELS[c.status] ?? 'Черновик'
-              const stColor = STATUS_COLORS[c.status] ?? STATUS_COLORS.draft
-              const dim = calcDetail(c.product_type, c.input_data as Record<string, unknown> | null)
-              return (
-                <Link key={c.id} href={`/calculations/${c.id}`}
-                  className="flex items-center gap-3 bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 hover:border-[#c4c4be] hover:shadow-sm transition-all">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-semibold text-[#111110]">
-                        {c.client_name ?? prodLabel}
-                      </span>
-                      {c.client_name && (
-                        <span className="text-[11px] text-[#9a9a95]">{prodLabel}</span>
-                      )}
-                      {dim && (
-                        <span className="text-[11px] text-[#9a9a95] max-w-full truncate" title={dim}>{dim}</span>
-                      )}
-                    </div>
-                    <p className="text-[12px] text-[#9a9a95] mt-0.5">
-                      {new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })}
-                      {isAdmin && c.created_at && ' · ' + (usersMap[(c as { created_by?: string }).created_by ?? ''] ?? '')}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-[14px] font-bold tabular-nums text-[#111110]">
-                      {(c.final_price ?? 0).toLocaleString('ru-RU')} ₽
-                    </span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${stColor}`}>{st}</span>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ── OWNER CENTER (admin only) ─────────────────────────────────── */}
-      {isAdmin && (
-        <section>
-          <div className="flex items-center gap-3 mb-3">
-            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider">Owner Center</p>
-            <div className="flex-1 h-px bg-[#e4e4e0]" />
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-            {OWNER_CENTER.map(item => (
-              <Link key={item.href} href={item.href}
-                className="flex items-start gap-3 bg-white border border-[#e4e4e0] rounded-xl p-3.5 hover:border-[#c4c4be] hover:shadow-sm transition-all group">
-                <span className="text-lg leading-none mt-0.5">{item.emoji}</span>
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-[#111110] group-hover:text-blue-600 transition-colors">{item.label}</p>
-                  <p className="text-[11px] text-[#9a9a95] leading-snug">{item.desc}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
     </div>
   )
 }
