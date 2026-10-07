@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import DrawingFiles from './DrawingFiles'
 import type { PointStage } from '@/lib/partner/pointPay'
+import { responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Карточка заказа кабинета (дизайн из прототипа, .pcab).
 type Item = { material: string; thickness: number; width: number; height: number; quantity: number; tempering: boolean; facet: boolean; triplex: boolean; price: number }
@@ -18,6 +19,8 @@ type Order = {
   updIssued?: boolean
   upd?: { number: number; year: number; docDate: string } | null
   drawingApproval?: { status: 'approved' | 'rework'; comment: string | null; at: string | null } | null
+  drawingPrev?: { status: 'approved' | 'rework'; at: string | null; updatedAt: string | null } | null
+  launched?: boolean
   delivery?: { method: 'pickup' | 'delivery'; address: string | null; comment: string | null; status: string | null } | null
   total: number; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
 }
@@ -46,18 +49,22 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
       .then((d: Order) => setO(d)).catch(() => setNotFound(true)).finally(() => setLoading(false))
   }, [id])
 
+  const [decideErr, setDecideErr] = useState<string | null>(null)
   async function decide(decision: 'approve' | 'rework', comment?: string) {
-    setDeciding(true)
+    setDeciding(true); setDecideErr(null)
     try {
       const r = await fetch(`/api/partner/order/${id}/approve-drawing`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision, comment }),
       })
-      const d = await r.json()
-      if (r.ok && d.status) {
-        setO(prev => prev ? { ...prev, drawingApproval: { status: d.status.status, comment: d.status.comment ?? null, at: d.status.at ?? null } } : prev)
-        setReworkOpen(false); setReworkText('')
-      }
+      if (!r.ok) { setDecideErr(`Решение не сохранено: ${await responseError(r)}`); return }
+      const d = await r.json().catch(() => null) as { status?: { status: 'approved' | 'rework'; comment?: string | null; at?: string | null } } | null
+      if (!d?.status) { setDecideErr('Решение не сохранено: сервер прислал пустой ответ. Обновите страницу'); return }
+      const st = d.status
+      setO(prev => prev ? { ...prev, drawingPrev: null, drawingApproval: { status: st.status, comment: st.comment ?? null, at: st.at ?? null } } : prev)
+      setReworkOpen(false); setReworkText('')
+    } catch {
+      setDecideErr(`Решение не сохранено: ${NETWORK_ERROR}`)
     } finally { setDeciding(false) }
   }
 
@@ -174,10 +181,13 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
                 : <div className="draw" style={{ cursor: 'default' }}><div style={{ fontSize: 26 }}>▤</div><div style={{ fontSize: 11.5 }}>чертёж появится после подготовки</div></div>}
 
               {o.drawingUrl && o.drawingApproval?.status === 'approved' && (
-                <div className="info" style={{ marginTop: 10 }}><span>✓</span><span>Вы согласовали чертёж{o.drawingApproval.at ? ` ${fmtDate(o.drawingApproval.at)}` : ''}. Запущено в производство.</span></div>
+                <div className="info" style={{ marginTop: 10 }}><span>✓</span><span>Вы согласовали чертёж{o.drawingApproval.at ? ` ${fmtDate(o.drawingApproval.at)}` : ''}. {o.launched ? 'Заказ в производстве.' : 'Менеджер запустит заказ в работу.'}</span></div>
               )}
               {o.drawingUrl && o.drawingApproval?.status === 'rework' && (
                 <div className="recalc" style={{ marginTop: 10 }}>✎ Отправлено на доработку{o.drawingApproval.comment ? `: ${o.drawingApproval.comment}` : ''}. Менеджер пришлёт обновлённый чертёж.</div>
+              )}
+              {o.drawingUrl && !o.drawingApproval && o.drawingPrev && (
+                <div className="info" style={{ marginTop: 10 }}><span>↻</span><span>Чертёж обновлён{o.drawingPrev.updatedAt ? ` ${fmtDate(o.drawingPrev.updatedAt)}` : ''} — после того как вы {o.drawingPrev.status === 'rework' ? 'отправили его на доработку' : 'его согласовали'}. Посмотрите новый и ответьте ещё раз.</span></div>
               )}
               {o.drawingUrl && !o.drawingApproval && !reworkOpen && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -195,6 +205,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
                   </div>
                 </div>
               )}
+              {decideErr && <div className="perr">{decideErr}</div>}
             </div>
           </div>
           <DrawingFiles orderId={id} />

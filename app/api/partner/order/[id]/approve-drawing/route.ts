@@ -6,6 +6,7 @@ import { pushNotification } from '@/lib/partnerNotify'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { appUrl } from '@/lib/appUrl'
 import { previewWriteGuard } from '@/lib/partnerPreview'
+import { decisionOf, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
 
 // A3: партнёр согласует чертёж (или отправляет на доработку) прямо в кабинете.
 // Строго по своему заказу. Решение кладём в notes.drawing_approval; менеджеру —
@@ -39,6 +40,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let notes: Record<string, unknown> = {}
   try { notes = order.notes ? JSON.parse(order.notes as string) : {} } catch {}
   if (!notes.drawing_url) return NextResponse.json({ error: 'Чертёж ещё не готов' }, { status: 409 })
+  // Решение по этому файлу уже есть — повторно не принимаем; новый файл после решения
+  // (менеджер прислал исправленный чертёж) открывает решение заново.
+  const prev = decisionOf(notes.drawing_approval)
+  if (prev && !isDecisionStale(prev, await drawingUploadedAt(svc, String(notes.drawing_url)))) {
+    return NextResponse.json({ error: prev.status === 'approved' ? 'Чертёж уже согласован' : 'Чертёж уже отправлен на доработку — ждём обновлённый' }, { status: 409 })
+  }
 
   notes.drawing_approval = {
     status: decision === 'approve' ? 'approved' : 'rework',

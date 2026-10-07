@@ -8,6 +8,7 @@ import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
 import { loadInvoicedOrders, markedPaid } from '@/lib/partner/orderMoney'
 import { invoiceState } from '@/lib/partner/documents'
 import { pointStage } from '@/lib/partner/pointPay'
+import { decisionOf, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
 import { loadUpdIssued } from '@/lib/b2b/updRegistry'
 
 // Карточка заказа для кабинета. СТРОГО по своему client_id. Отдаём только
@@ -67,11 +68,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const deadline = launched ? partnerDeadline({ launched_at: o.launched_at as string | null, created_at: o.created_at as string }, pn).toISOString() : null
 
   const history = Array.isArray(pn.status_history) ? pn.status_history : []
-  const drawingUrl = typeof pn.drawing_url === 'string' && pn.drawing_url ? `/api/b2b/drawing/${o.id}` : null
-  const da = pn.drawing_approval as { status?: string; comment?: string | null; at?: string } | undefined
-  const drawingApproval = da && (da.status === 'approved' || da.status === 'rework')
-    ? { status: da.status as 'approved' | 'rework', comment: da.comment ?? null, at: da.at ?? null }
-    : null
+  const rawDrawing = typeof pn.drawing_url === 'string' && pn.drawing_url ? pn.drawing_url : null
+  const drawingUrl = rawDrawing ? `/api/b2b/drawing/${o.id}` : null
+  // Решение по чертежу, после которого загрузили новый файл, — уже не про этот чертёж:
+  // кнопки «Согласовать / На доработку» возвращаются, прежнее решение видно подписью.
+  const decision = decisionOf(pn.drawing_approval)
+  const drawingAt = rawDrawing && decision ? await drawingUploadedAt(svc, rawDrawing) : null
+  const stale = isDecisionStale(decision, drawingAt)
+  const drawingApproval = stale ? null : decision
+  const drawingPrev = stale && decision ? { status: decision.status, at: decision.at, updatedAt: drawingAt } : null
   const dl = pn.delivery as { method?: string; address?: string | null; comment?: string | null; status?: string | null } | undefined
   const delivery = dl && (dl.method === 'pickup' || dl.method === 'delivery')
     ? { method: dl.method as 'pickup' | 'delivery', address: dl.address ?? null, comment: dl.comment ?? null, status: dl.status ?? null }
@@ -124,6 +129,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     timeline: p.timeline,
     drawingUrl,
     drawingApproval,
+    drawingPrev,
+    launched,
     delivery,
     recalcNote: history.length > 0 ? ((pn.status_comment as string) || null) : null,
   })
