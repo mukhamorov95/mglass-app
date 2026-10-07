@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { notifyAdmins } from '@/lib/telegram'
 import { withCronRun } from '@/lib/cronRuns'
+import { pageAll } from '@/lib/supabase/pageAll'
 
 export const maxDuration = 120
 
@@ -26,29 +27,44 @@ async function run(req: NextRequest) {
   const monthOf = (r: { ledger_month: string | null; sale_date: string }) => r.ledger_month ?? r.sale_date.slice(0, 7)
   const curMonth = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' }).slice(0, 7)
 
+  // Обе стороны — целиком, страницами и в одном порядке (по id). Без этого PostgREST отдавал
+  // по 1000 случайных строк из каждой (07.10 в crm_sales уже 1175), и сверка сравнивала
+  // разные куски; молча проглоченная ошибка давала «расхождений нет» на пустых данных.
+  type RawRow = { ledger_month: string | null; sale_date: string; amount: number; department: string | null; voided: boolean }
+  type ViewRow = { ledger_month: string | null; sale_date: string; amount: number; department: string | null }
+  let rawRows: RawRow[], viewRows: ViewRow[]
+  try {
+    [rawRows, viewRows] = await Promise.all([
+      pageAll<RawRow>((from, to) => svc.from('crm_sales')
+        .select('ledger_month, sale_date, amount, department, voided').order('id').range(from, to)),
+      pageAll<ViewRow>((from, to) => svc.from('v_crm_sales_margin')
+        .select('ledger_month, sale_date, amount, department').order('id').range(from, to)),
+    ])
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: `Чтение продаж: ${(e as Error).message}` }, { status: 500 })
+  }
+
   // Сырая таблица (истина): не-voided, dept ≠ b2b, помесячно.
-  const { data: rawRows } = await svc.from('crm_sales')
-    .select('ledger_month, sale_date, amount, department, voided')
   const rawByMonth = new Map<string, number>()
-  for (const r of (rawRows ?? []) as { ledger_month: string | null; sale_date: string; amount: number; department: string | null; voided: boolean }[]) {
+  for (const r of rawRows) {
     if (r.voided || r.department === 'b2b') continue
     const m = monthOf(r)
     rawByMonth.set(m, (rawByMonth.get(m) ?? 0) + Number(r.amount || 0))
   }
 
   // Витрина (что видит владелец).
-  const { data: viewRows } = await svc.from('v_crm_sales_margin')
-    .select('ledger_month, sale_date, amount, department')
   const viewByMonth = new Map<string, number>()
-  for (const r of (viewRows ?? []) as { ledger_month: string | null; sale_date: string; amount: number; department: string | null }[]) {
+  for (const r of viewRows) {
     if (r.department === 'b2b') continue
     const m = monthOf(r)
     viewByMonth.set(m, (viewByMonth.get(m) ?? 0) + Number(r.amount || 0))
   }
 
   // Baseline закрытых месяцев.
-  const { data: baseRows } = await svc.from('sales_reconcile_baseline')
-    .select('ledger_month, expected_total').eq('department', 'mglass')
+  // По строке на закрытый месяц — 1000 хватит на 80 лет.
+  const { data: baseRows, error: baseErr } = await svc.from('sales_reconcile_baseline')
+    .select('ledger_month, expected_total').eq('department', 'mglass').limit(1000)
+  if (baseErr) return NextResponse.json({ ok: false, error: `Базлайн: ${baseErr.message}` }, { status: 500 })
   const baseline = new Map<string, number>()
   for (const b of (baseRows ?? []) as { ledger_month: string; expected_total: number }[]) {
     baseline.set(b.ledger_month, Number(b.expected_total))
