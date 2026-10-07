@@ -5,6 +5,7 @@ import { SELLER_B2B } from '@/lib/companyRequisites'
 import { rublesInWords } from '@/lib/numToWords'
 import { itemName, type InvoiceOrder, type InvoiceRequisites } from '@/components/InvoiceDocument'
 import { updDocDate, updLines } from '@/lib/b2b/updLines'
+import type { UpdRegistered } from '@/lib/b2b/updRegistry'
 
 // A11: Универсальный передаточный документ (УПД, статус 1). Печатная/PDF-форма на данных
 // заказа (те же суммы, что в счёте A1). Формат для ЭДО (XML ФНС) формирует оператор (lib/edo).
@@ -24,9 +25,14 @@ const UpdDocument = forwardRef<HTMLDivElement, {
   // Даты оплат заказа. Оплаты до отгрузки — строка 5 «К платёжно-расчётному документу».
   // Номера платёжки в учёте нет, его вписывают от руки.
   paymentDates?: string[]
-}>(function UpdDocument({ order, requisites: req, buyerName, paymentDates = [] }, ref) {
-  const num = order.custom_number?.trim() || String(order.id).padStart(5, '0')
-  const { date: docDate, source } = updDocDate(parseNotes(order.notes), order.created_at)
+  // Сквозной номер из реестра: с ним номер и дата закреплены (повторная печать — тот же документ).
+  registered?: UpdRegistered | null
+}>(function UpdDocument({ order, requisites: req, buyerName, paymentDates = [], registered = null }, ref) {
+  const orderNum = order.custom_number?.trim() || String(order.id).padStart(5, '0')
+  const num = registered ? String(registered.number) : orderNum
+  const live = updDocDate(parseNotes(order.notes), order.created_at)
+  const docDate = registered?.doc_date ?? live.date
+  const source = registered ? 'shipped' : live.source
   const prepaymentDates = [...new Set(paymentDates.filter(d => d.slice(0, 10) <= docDate.slice(0, 10)))].sort()
   const { lines, totals } = updLines(order, docDate)
   const vatRate = lines[0]?.vatRate ?? 22
@@ -65,6 +71,11 @@ const UpdDocument = forwardRef<HTMLDivElement, {
         }
       `}</style>
 
+      {registered && registered.doc_date.slice(0, 10) !== live.date.slice(0, 10) && (
+        <div className="no-print max-w-[1040px] mx-auto mt-3 px-4 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[12px] text-[#6b6b66]">
+          УПД № {registered.number} уже выдан с датой {fmtDate(registered.doc_date)} — номер и дата закреплены. По заказу сейчас дата {fmtDate(live.date)}.
+        </div>
+      )}
       {source !== 'shipped' && (
         <div className="no-print max-w-[1040px] mx-auto mt-3 px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-[12px] text-amber-800">
           Заказ не отмечен «Отгружен» — дата УПД взята из даты {source === 'launched' ? 'запуска' : 'просчёта'} ({fmtDate(docDate)}).
@@ -181,7 +192,7 @@ const UpdDocument = forwardRef<HTMLDivElement, {
 
         <table className="text-[10px] mt-3">
           <tbody>
-            {row('Основание передачи (сдачи) / получения (приёмки):', contract ?? `Счёт-спецификация № ${num}`, '8')}
+            {row('Основание передачи (сдачи) / получения (приёмки):', contract ?? `Счёт-спецификация № ${orderNum}`, '8')}
             {row('Данные о транспортировке и грузе:', '—', '9')}
           </tbody>
         </table>

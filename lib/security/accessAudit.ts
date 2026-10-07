@@ -38,6 +38,7 @@ export const SENSITIVE_TABLES = new Set([
   'commercial_proposals', 'deals', 'deal_payments', 'payments', 'manager_stats_daily',
   'manager_stats_monthly', 'manager_day_stats', 'manager_month_plans', 'margin_edits', 'coefficients', 'process_cost_inputs', 'production_settings',
   'security_audit_runs',   // сам отчёт прогона — список дыр
+  'upd_registry',          // реестр выданных УПД: номера, даты, кто выдал
   'manager_schedules', 'wazzup_outgoing_messages', 'manager_coaching',
   'b2b_rates',        // закалка, кромка, мин. цены — себестоимость B2B
   'coaching_effect',  // результат человека по дням

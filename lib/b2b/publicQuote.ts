@@ -14,6 +14,7 @@ export type PublicQuoteItem = {
   totalAreaNet?: number
   saleIncVat?: number
   manualTotal?: number | null
+  clientPriced?: boolean
   hasTempering?: boolean
   hasFacet?: boolean
   facetTypeMm?: number | null
@@ -78,6 +79,7 @@ function publicItem(raw: Record<string, unknown>): PublicQuoteItem {
     totalAreaNet: num('totalAreaNet'),
     saleIncVat:   num('saleIncVat'),
     manualTotal:  raw.manualTotal == null ? null : Number(raw.manualTotal),
+    clientPriced: raw.clientPriced === true,
     hasTempering: raw.hasTempering === true,
     hasFacet:     raw.hasFacet === true,
     facetTypeMm:  raw.facetTypeMm == null ? null : Number(raw.facetTypeMm),
@@ -162,6 +164,10 @@ export function documentSafeNotes(rawNotes: unknown): string | null {
   for (const k of DOCUMENT_NOTE_FIELDS) {
     if (parsed[k] != null) out[k] = parsed[k]
   }
+  // Дата УПД у партнёра — та же, что у менеджера (updDocDate): отметка «Отгружен» важнее
+  // shipped_date. Наружу уходит только дата, сами этапы — нет.
+  const shipped = (parsed.stages as Record<string, unknown> | undefined)?.shipped
+  if (typeof shipped === 'string' && shipped) out.shipped_date = shipped
   return Object.keys(out).length ? JSON.stringify(out) : null
 }
 
