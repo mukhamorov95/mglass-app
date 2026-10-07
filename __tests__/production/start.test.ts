@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildStartPatch, pickAutoRelease, pickStartable, RELEASE_TASK_PATCH, type StartCandidate } from '@/lib/production/start'
+import { buildStartPatch, pickAutoRelease, pickStartable, shouldAutoStart, RELEASE_TASK_PATCH, type StartCandidate } from '@/lib/production/start'
 
 const NOW = '2026-08-26T09:00:00.000Z'
 const actor = { id: 'u-1', name: 'Никита' }
@@ -90,5 +90,19 @@ describe('pickAutoRelease — рабочий делает один заказ з
 
   it('снятие автостарта НЕ отменяет прежнее явное «Взял» — assigned_to остаётся', () => {
     expect('assigned_to' in RELEASE_TASK_PATCH).toBe(false)
+  })
+})
+
+describe('автостарт по раскрытию — только в своей очереди и только у рабочего цеха', () => {
+  it('рабочий в своей очереди — да', () => {
+    expect(shouldAutoStart({ viewingOther: false, role: 'production' })).toBe(true)
+  })
+  it('владелец, закупщик, менеджер — нет, даже в своей очереди', () => {
+    for (const role of ['admin', 'ceo', 'buyer', 'manager', null]) {
+      expect(shouldAutoStart({ viewingOther: false, role })).toBe(false)
+    }
+  })
+  it('чужая очередь — нет, даже у рабочего', () => {
+    expect(shouldAutoStart({ viewingOther: true, role: 'production' })).toBe(false)
   })
 })

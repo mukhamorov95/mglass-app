@@ -9,6 +9,7 @@ import { holesFromComment, normalizeHoles, holesLabel } from '@/lib/production/h
 import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
 import { explainEmptyQueue, canCloseWholeOrder } from '@/lib/production/completeOrder'
 import { queueEmptyState } from '@/lib/production/queueState'
+import { shouldAutoStart } from '@/lib/production/start'
 import { toast, sendOrToast } from '@/lib/toast'
 import { myStationGroups, canCompleteWholeDetail, type StationGroup, type StationTask } from '@/lib/production/completeMyStage'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
@@ -539,6 +540,8 @@ export default function MyQueuePage() {
       })
     }
     if (!opening) return
+    // Чужая очередь (начальник выбрал мастера в сводке) или не рабочий цеха — только смотрим.
+    if (!shouldAutoStart({ viewingOther: viewMaster != null, role: myRole })) return
     const ids = tasks.filter(t => t.order_id === orderId && t.status === 'queued' && isReady(t)).map(t => t.id)
     void sendStart(ids, 'open', orderId)
   }
