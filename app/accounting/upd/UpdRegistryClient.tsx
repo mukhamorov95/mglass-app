@@ -39,7 +39,8 @@ function monthBounds(month: string) {
 
 const monthTitle = (month: string) => {
   const [y, m] = month.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  // «октябрь 2026 г.» → «октябрь 2026»: иначе в середине фразы выходит «г..».
+  return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' }).replace(/\s*г\.$/, '')
 }
 
 const card = 'bg-white rounded-2xl border border-[#e4e4e0] p-4 sm:p-5'
