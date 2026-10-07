@@ -3,6 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
+import { toast } from '@/lib/toast'
+import { writeFailure } from '@/lib/rlsWrite'
+import { copyOrShow } from '@/lib/b2b/copyOrShow'
 
 // Развитие B2B — единая доска канала производства: гипотезы, решения, проблемы,
 // чек-лист, обзвон мебельных цехов, воронка канала + брошюра и разбор колл-центра.
@@ -76,17 +79,23 @@ export default function B2BGrowthPage() {
   const [nMetric, setNMetric] = useState('')
   const [nDue, setNDue] = useState('')
 
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const load = useCallback(async () => {
-    const { data } = await createClient().from('b2b_growth_items').select('*').order('kind').order('sort_order').order('created_at')
-    setItems((data ?? []) as Item[])
+    const { data, error } = await createClient().from('b2b_growth_items').select('*').order('kind').order('sort_order').order('created_at')
+    // Сбой — не «пусто»: иначе пустой список выглядел бы как «гипотез нет».
+    if (error) setLoadErr(error.message)
+    else { setItems((data ?? []) as Item[]); setLoadErr(null) }
     setLoading(false)
   }, [])
 
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const { data } = await createClient().from('b2b_growth_items').select('*').order('kind').order('sort_order').order('created_at')
-      if (alive) { setItems((data ?? []) as Item[]); setLoading(false) }
+      const { data, error } = await createClient().from('b2b_growth_items').select('*').order('kind').order('sort_order').order('created_at')
+      if (!alive) return
+      if (error) setLoadErr(error.message)
+      else setItems((data ?? []) as Item[])
+      setLoading(false)
     })()
     return () => { alive = false }
   }, [])
@@ -97,29 +106,38 @@ export default function B2BGrowthPage() {
     if (!nTitle.trim()) return
     const sb = createClient()
     const defaultStatus = STATUS_SETS[kind]?.[0]?.value ?? null
-    await sb.from('b2b_growth_items').insert({
+    const { error } = await sb.from('b2b_growth_items').insert({
       kind, title: nTitle.trim(), detail: nDetail.trim() || null,
       segment: nSegment.trim() || null, contact: nContact.trim() || null,
       owner: nOwner.trim() || null, metric: nMetric.trim() || null, due_date: nDue || null,
       status: defaultStatus, sort_order: 999,
     })
+    // Форма не очищается при ошибке: введённое не теряется.
+    if (error) { toast.error('Не добавлено', { detail: `${error.message}. Текст остался в форме.` }); return }
     setNTitle(''); setNDetail(''); setNSegment(''); setNContact(''); setNOwner(''); setNMetric(''); setNDue(''); setAdding(false)
     load()
   }
 
   async function setStatus(id: number, status: string) {
-    await createClient().from('b2b_growth_items').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
+    const fail = writeFailure(await createClient().from('b2b_growth_items').update({ status, updated_at: new Date().toISOString() }).eq('id', id).select('id'))
+    if (fail) { toast.error('Статус не изменён', { detail: fail }); return }
     setItems(prev => prev.map(i => i.id === id ? { ...i, status } : i))
   }
 
   // Правка «кто проверяет / критерий / срок» прямо на карточке гипотезы.
   async function patchField(id: number, patch: Partial<Pick<Item, 'owner' | 'metric' | 'due_date'>>) {
+    const before = items.find(i => i.id === id)
     setItems(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i))
-    await createClient().from('b2b_growth_items').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
+    const fail = writeFailure(await createClient().from('b2b_growth_items').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select('id'))
+    if (fail) {
+      if (before) setItems(prev => prev.map(i => i.id === id ? before : i))
+      toast.error('Не сохранено', { detail: `${fail}. На экране вернул как было.` })
+    }
   }
 
   async function remove(id: number) {
-    await createClient().from('b2b_growth_items').delete().eq('id', id)
+    const fail = writeFailure(await createClient().from('b2b_growth_items').delete().eq('id', id).select('id'), 'delete')
+    if (fail) { toast.error('Не удалено', { detail: fail }); return }
     setItems(prev => prev.filter(i => i.id !== id))
   }
 
@@ -136,7 +154,8 @@ export default function B2BGrowthPage() {
       }
     }).filter(r => r.title)
     if (!rows.length) return
-    await createClient().from('b2b_growth_items').insert(rows)
+    const { error } = await createClient().from('b2b_growth_items').insert(rows)
+    if (error) { toast.error('Цели не добавлены', { detail: `${error.message}. Список остался в поле.` }); return }
     setBulkText(''); setBulk(false); load()
   }
 
@@ -148,17 +167,18 @@ export default function B2BGrowthPage() {
     setLeadBusy(item.id)
     const sb = createClient()
     const phone = (item.contact ?? '').match(/[+\d][\d\s()-]{6,}/)?.[0]?.trim() ?? null
-    const { data } = await sb.from('crm_leads').insert({
-      source: 'обзвон', name: item.title, phone, city: 'Воронеж',
-      product: 'Производство: нарезка стекла/зеркала под мебель',
-      note: [item.segment, item.detail].filter(Boolean).join(' · ') || null,
-    }).select('id').single()
-    if (data?.id) {
+    try {
+      const { data, error } = await sb.from('crm_leads').insert({
+        source: 'обзвон', name: item.title, phone, city: 'Воронеж',
+        product: 'Производство: нарезка стекла/зеркала под мебель',
+        note: [item.segment, item.detail].filter(Boolean).join(' · ') || null,
+      }).select('id').single()
+      if (error || !data?.id) { toast.error('Лид не создан', { detail: error?.message ?? 'Сервер не вернул id' }); return }
       setLeadDone(prev => ({ ...prev, [item.id]: data.id as number }))
-      await sb.from('b2b_growth_items').update({ status: 'interested', updated_at: new Date().toISOString() }).eq('id', item.id)
+      const fail = writeFailure(await sb.from('b2b_growth_items').update({ status: 'interested', updated_at: new Date().toISOString() }).eq('id', item.id).select('id'))
+      if (fail) { toast.error('Лид создан, но статус цели не изменён', { detail: fail }); return }
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'interested' } : i))
-    }
-    setLeadBusy(null)
+    } finally { setLeadBusy(null) }
   }
 
   return (
@@ -187,6 +207,11 @@ export default function B2BGrowthPage() {
           })}
         </div>
 
+        {loadErr && (
+          <div role="alert" className="text-xs text-[#c23a2b] bg-white border border-[#eec5bf] rounded-lg px-3 py-2">
+            Список не загрузился: {loadErr}. Обновите страницу — это ошибка загрузки, записи не удалены.
+          </div>
+        )}
         {loading ? (
           <div className="text-xs text-[#9a9a95] py-8 text-center">Загрузка…</div>
         ) : tab === 'brochure' ? (
@@ -431,7 +456,7 @@ function PartnersTab() {
           <div className="mt-1.5 flex items-center gap-2 flex-wrap">
             <input readOnly value={created.link} onFocus={e => e.target.select()}
               className="flex-1 min-w-[200px] bg-white border border-emerald-200 rounded px-2 py-1 text-[11px] font-mono text-emerald-900 outline-none" />
-            <button onClick={() => { navigator.clipboard?.writeText(created.link); setCopied(true) }}
+            <button onClick={async () => { if (await copyOrShow(created.link, { ok: 'Ссылка скопирована', title: 'Ссылка для партнёра' })) setCopied(true) }}
               className="text-[11px] px-2.5 py-1 rounded bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50">{copied ? '✓ Скопировано' : 'Скопировать'}</button>
             <a href={`mailto:${created.email}?subject=${encodeURIComponent('Доступ в кабинет M-Glass')}&body=${encodeURIComponent(`Здравствуйте!\n\nВам открыт доступ в личный кабинет M-Glass. Перейдите по ссылке и задайте пароль:\n${created.link}\n\nПосле этого входите на странице /login.`)}`}
               className="text-[11px] px-2.5 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-800">✉️ Отправить на email</a>
@@ -576,7 +601,8 @@ const OUTREACH_MSG = `Здравствуйте! Это M-Glass — своё пр
 function CallCenter() {
   const [copied, setCopied] = useState(false)
   async function copyMsg() {
-    try { await navigator.clipboard.writeText(OUTREACH_MSG); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch {}
+    if (!(await copyOrShow(OUTREACH_MSG, { ok: 'Текст скопирован', title: 'Скопируйте текст' }))) return
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
   return (
     <div className="bg-white rounded-lg border border-[#e4e4e0] p-5 space-y-5 text-sm">
