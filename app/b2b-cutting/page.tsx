@@ -38,9 +38,6 @@ type Item = {
 type Order = {
   id: number
   client_name: string
-  total_after_discount: number
-  total_sale_inc_vat: number
-  discount_percent: number
   items: Item[]
   notes: string | null
   created_at: string
@@ -516,6 +513,9 @@ export default function B2BCuttingPage() {
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
+  // Владелец и закупщик: видят себестоимость листов и ведут закупку в /purchasing.
+  // Раскрой открыт и цеху, а цех денег не видит; пока роль не прочитана — не показываем.
+  const ownerOrBuyer = role === 'admin' || role === 'ceo' || role === 'buyer'
   const [optimizing, setOptimizing] = useState(false)
   const [prevResults, setPrevResults] = useState<MaterialCuttingResult[] | null>(null)
 
@@ -529,7 +529,7 @@ export default function B2BCuttingPage() {
     const sb = createClient()
     const [{ data: ordersData }, { data: matsData }, { data: settingsData }] = await Promise.all([
       sb.from('b2b_orders')
-        .select('id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,items,notes,created_at')
+        .select('id,client_name,items,notes,created_at')
         .order('created_at', { ascending: false })
         .limit(500),
       sb.from('b2b_materials').select('*').eq('active', true).order('name'),
@@ -923,7 +923,7 @@ export default function B2BCuttingPage() {
                   {/* Заказ поставщику живёт в одном месте — «Материал под заказы»: там тот же
                       раскрой, счёт и отметка «заказан» одним действием. Отсюда раньше заводилась
                       вторая запись закупки без статуса заказов (дубль З3, docs/PURCHASING_ROUTE.md). */}
-                  {role === 'admin' || role === 'ceo' || role === 'buyer' ? (
+                  {ownerOrBuyer ? (
                     <Link href="/purchasing"
                       className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap">
                       📦 Заказать в «Материал под заказы» →
@@ -950,7 +950,7 @@ export default function B2BCuttingPage() {
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">КПД</th>
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium whitespace-nowrap" title="На складе / докупить">Склад</th>
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Рисунок</th>
-                    <th className="px-4 py-2.5 text-right text-[#9a9a95] font-medium whitespace-nowrap" title="Ориентировочная себестоимость листов">Ориентир. ₽</th>
+                    {ownerOrBuyer && <th className="px-4 py-2.5 text-right text-[#9a9a95] font-medium whitespace-nowrap" title="Ориентировочная себестоимость листов">Ориентир. ₽</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -981,9 +981,11 @@ export default function B2BCuttingPage() {
                       <td className="px-4 py-3 text-center text-[#9a9a95] text-[11px]">
                         {r.patternDirection === 'along_length' ? '↔ По длине' : r.patternDirection === 'along_width' ? '↕ По ширине' : '—'}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-[#111110] whitespace-nowrap">
-                        {estSheetCost(r) > 0 ? `${estSheetCost(r).toLocaleString('ru-RU')} ₽` : '—'}
-                      </td>
+                      {ownerOrBuyer && (
+                        <td className="px-4 py-3 text-right font-mono text-[#111110] whitespace-nowrap">
+                          {estSheetCost(r) > 0 ? `${estSheetCost(r).toLocaleString('ru-RU')} ₽` : '—'}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -993,7 +995,7 @@ export default function B2BCuttingPage() {
                 <span>Итого листов: <b className="text-[#111110]">{results.reduce((s, r) => s + r.sheetsNeeded, 0)}</b></span>
                 <span>Деталей: <b className="text-[#111110]">{results.reduce((s, r) => s + r.totalPieces, 0)}</b></span>
                 <span>Площадь листов: <b className="text-[#111110]">{(results.reduce((s, r) => s + r.totalSheetArea, 0) / 1_000_000).toFixed(2)} м²</b></span>
-                {(() => { const tot = results.reduce((s, r) => s + estSheetCost(r), 0); return tot > 0 ? <span>Ориентир. себестоимость: <b className="text-[#111110]">{tot.toLocaleString('ru-RU')} ₽</b></span> : null })()}
+                {ownerOrBuyer && (() => { const tot = results.reduce((s, r) => s + estSheetCost(r), 0); return tot > 0 ? <span>Ориентир. себестоимость: <b className="text-[#111110]">{tot.toLocaleString('ru-RU')} ₽</b></span> : null })()}
               </div>
             </div>
 
