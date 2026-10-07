@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering, PROBLEM_REASONS, STAGE_LABELS, getApplicableStages } from '@/lib/productionStages'
 import { andonCode } from '@/lib/productionRouting'
+import { toast as toastError, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -587,6 +588,22 @@ export default function ProductionOrderPage() {
     setToast({ msg: nextUrgent ? '🔥 Заказ отмечен срочным' : 'Срочность снята', ok: true }); setTimeout(() => setToast(null), 2500)
   }
 
+  // Отметка карточки → задачи цеха (/api/b2b-orders/[id]/sync-stages). Отказ — тостом с
+  // причиной: он висит, пока его не закроют, и не теряется за «Сохранено».
+  async function syncToQueue(orderId: number, updates: { item_index: number; stage_key: string; action: 'done' | 'unset' }[]): Promise<boolean> {
+    try {
+      const r = await fetch(`/api/b2b-orders/${orderId}/sync-stages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+      if (r.ok) return true
+      toastError.error('В очередь цеха не дошло', { detail: `${await responseError(r)}. В карточке отметка сохранена — скажите начальнику цеха` })
+    } catch {
+      toastError.error('В очередь цеха не дошло', { detail: `${NETWORK_ERROR}. В карточке отметка сохранена` })
+    }
+    return false
+  }
+
   // ─── Mark stage ───────────────────────────────────────────────────────────
 
   async function markStage(stageKey: DetailStageKey) {
@@ -614,19 +631,19 @@ export default function ProductionOrderPage() {
     setSaving(false)
 
     if (result) {
-      // Обратное зеркало в production_tasks (best-effort): держим новую модель очередей в синхроне.
-      fetch(`/api/b2b-orders/${order.id}/sync-stages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates: effectiveItems.map(idx => ({ item_index: idx, stage_key: stageKey, action: 'done' })) }),
-      }).catch(() => {})
+      // Обратное зеркало в production_tasks: без него отметка видна в карточке, но очередь
+      // цеха её не знает. Ответ проверяем — раньше здесь было «Сохранено» при любом исходе.
+      const synced = await syncToQueue(order.id, effectiveItems.map(idx => ({ item_index: idx, stage_key: stageKey, action: 'done' as const })))
       const count   = effectiveItems.length
       const partial = stageKey === 'tempering' && effectiveItems.length < selectedItems.size
       setSelectedItems(new Set())
       setToast({
-        msg: partial
+        msg: !synced
+          ? 'Сохранено в карточке, в очередь цеха не дошло'
+          : partial
           ? `Закалка: ${count} из ${selectedItems.size} поз.`
           : `Сохранено (${count} ${plural(count, 'позиция', 'позиции', 'позиций')})`,
-        ok: true,
+        ok: synced,
       })
       setTimeout(() => setToast(null), 3000)
     }
@@ -719,11 +736,8 @@ export default function ProductionOrderPage() {
     }
 
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
-    // Обратное зеркало отмены этапа в production_tasks (best-effort).
-    fetch(`/api/b2b-orders/${order.id}/sync-stages`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updates: [{ item_index: itemIndex, stage_key: stageKey, action: 'unset' }] }),
-    }).catch(() => {})
+    // Обратное зеркало отмены этапа в production_tasks.
+    await syncToQueue(order.id, [{ item_index: itemIndex, stage_key: stageKey, action: 'unset' }])
     return updatedNotes
   }
 

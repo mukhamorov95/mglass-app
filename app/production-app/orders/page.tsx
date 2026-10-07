@@ -11,6 +11,7 @@ import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import PointBadge from '@/components/PointBadge'
 import { readPaged, readIn, errorText } from '@/lib/production/paged'
 import { isLiveShopOrder } from '@/lib/production/liveOrder'
+import { toast as errorToast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Единый экран «Заказы»: список по срочности → клик раскрывает заказ (чертёж
 // сверху, детали × этапы кнопками, «Упаковано» = всё готово, «Проблема»).
@@ -118,14 +119,26 @@ export default function OrdersScreen() {
   async function packAll(orderId: number) {
     if (!(me.production_lead || (me.role != null && OWNER.has(me.role)))) { flash('«Упаковано разом» — только ответственный'); return }
     const rest = tasks.filter(t => t.order_id === orderId && t.status !== 'done')
-    for (const t of rest) await fetch(`/api/production-tasks/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'done', force: true }) }).catch(() => {})
-    await reload(); flash('Заказ отмечен готовым')
+    const errors: string[] = []
+    for (const t of rest) {
+      try {
+        const r = await fetch(`/api/production-tasks/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'done', force: true }) })
+        if (!r.ok) errors.push(await responseError(r))
+      } catch { errors.push(NETWORK_ERROR) }
+    }
+    await reload()
+    // «Заказ отмечен готовым» — только если отметились все: иначе экран врал бы.
+    if (errors.length) errorToast.error(`Не отмечено ${errors.length} из ${rest.length}`, { detail: [...new Set(errors)].join('; ') })
+    else flash('Заказ отмечен готовым')
   }
 
   async function submitProblem(orderId: number) {
     const frontier = tasks.filter(t => t.order_id === orderId && t.status !== 'done').sort((a, b) => a.sequence_order - b.sequence_order)[0]
-    if (!frontier) return
-    await fetch(`/api/production-tasks/${frontier.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'problem', reason_code: pReason, comment: pComment || null }) }).catch(() => {})
+    if (!frontier) { flash('Открытых этапов нет — проблему отметить не на чем'); return }
+    const r = await sendOrToast('Проблема не записалась', `/api/production-tasks/${frontier.id}`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'problem', reason_code: pReason, comment: pComment || null }) },
+      'Окно осталось открытым — попробуйте ещё раз')
+    if (!r) return
     setProblemFor(null); setPComment(''); await reload(); flash('Проблема зафиксирована')
   }
 
@@ -138,7 +151,8 @@ export default function OrdersScreen() {
     // Точечный патч, а не перезапись notes целиком: снимок заказа в списке устаревает,
     // и запись блобом стирала бы всё, что за это время положили туда другие контуры —
     // оплату, доставку, отметки этапов.
-    await sb.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { drawing_url: path } })
+    const { error: patchErr } = await sb.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { drawing_url: path } })
+    if (patchErr) { errorToast.error('Чертёж загружен, но к заказу не привязался', { detail: patchErr.message }); return }
     await reload()
   }
 

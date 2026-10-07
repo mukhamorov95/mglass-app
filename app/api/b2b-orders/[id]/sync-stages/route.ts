@@ -3,7 +3,6 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
-import { isCuttingBlocked } from '@/lib/materialGate'
 import { cascadePriorStages, reverseCascade, type CascadedStage } from '@/lib/productionCascade'
 import { actorName, buildSyncDonePatch, UNSET_TASK_PATCH } from '@/lib/production/executor'
 import { consumeCutting, loadCascadedTasks, reverseCutting } from '@/lib/production/consumeBridge'
@@ -43,22 +42,17 @@ export async function POST(
   const actor = { id: user.id, name: actorName((prof as { name: string | null } | null)?.name, user.email) }
   const actor2 = { userId: user.id, name: actor.name ?? undefined }
 
-  // Материал-гейт для резки: если среди updates есть закрытие cutting, проверяем материал (один раз).
-  const cuttingDone = updates.some(u => u?.stage_key === 'cutting' && u.action === 'done')
-  let cuttingBlocked = false
-  if (cuttingDone && body.force !== true) {
-    const { data: pos } = await svc.from('purchase_orders').select('b2b_order_ids,status').overlaps('b2b_order_ids', [orderId])
-    cuttingBlocked = isCuttingBlocked(orderId, (pos ?? []) as { b2b_order_ids: number[] | null; status: string }[])
-  }
+  // Материал резку НЕ блокирует (решение владельца 14.07, как в /api/production-tasks/[id]):
+  // мастер режет сразу, «материала нет» — только подсветка заказа на закупку. Здесь до
+  // 07.10 жил гейт по незакрытой закупке: карточка заказа показывала «Сохранено», а
+  // резка молча не доходила до очереди цеха.
 
-  const blocked: number[] = []
+  const failed: string[] = []
   const cascaded: CascadedStage[] = []
   const reopened: { item_index: number; stages: string[] }[] = []
   for (const u of updates) {
     // 'problem' — псевдоэтап старой модели, в production_tasks реального stage нет: пропускаем.
     if (!u || u.stage_key === 'problem' || typeof u.item_index !== 'number') continue
-    // Резку не закрываем, пока материал не приехал (остальные этапы проходят).
-    if (u.stage_key === 'cutting' && u.action === 'done' && cuttingBlocked) { blocked.push(u.item_index); continue }
 
     const patch: Record<string, unknown> = u.action === 'unset'
       ? { ...UNSET_TASK_PATCH }
@@ -87,7 +81,8 @@ export async function POST(
       .eq('stage_key', u.stage_key)
       .select('id, sequence_order')
 
-    if (!error && data) updated += data.length
+    if (error) { failed.push(`поз. ${u.item_index + 1}: ${error.message}`); continue }
+    updated += data?.length ?? 0
 
     // Снятие отметки трогало только СВОЮ задачу: этапы, закрытые каскадом от неё, оставались
     // закрытыми, и заказ показывал «сделано» там, где отметку уже сняли. Возвращаем их тоже.
@@ -134,9 +129,13 @@ export async function POST(
   // Третье зеркало: закрытые этапы (все позиции) → order-level notes.stages для /b2b-orders/Сводки
   await mirrorOrderStages(svc, orderId)
 
+  // Не записалось хоть что-то — отвечаем ошибкой: карточка заказа покажет, что в очередь
+  // цеха отметка не дошла, а не «Сохранено».
+  if (failed.length) {
+    return NextResponse.json({ error: `В очередь цеха не записалось: ${failed.join('; ')}`, updated, failed }, { status: 500 })
+  }
   return NextResponse.json({
     ok: true, updated, cascaded: cascaded.length,
     reopened: reopened.length ? reopened : undefined,
-    blocked: blocked.length ? blocked : undefined,
   })
 }

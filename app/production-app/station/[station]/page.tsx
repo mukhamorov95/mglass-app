@@ -16,6 +16,7 @@ import { addWorkingDays, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import PointBadge from '@/components/PointBadge'
 import { isLiveShopOrder } from '@/lib/production/liveOrder'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Агрегированный экран станции: задачи этого этапа из ВСЕХ заказов, собранные
 // в партии по «материал + толщина». Для резки — со сводным раскроем (листы).
@@ -181,12 +182,22 @@ export default function StationBatchesPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
+  // Партия — это много отдельных отметок. Считаем, сколько не прошло, и говорим об этом:
+  // раньше любые отказы глотались, а партия после перезагрузки «частично» возвращалась.
   async function markTasks(taskIds: number[]) {
     setBusy(true)
-    await Promise.all(taskIds.map(id =>
-      fetch(`/api/production-tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'done' }) }).catch(() => {})))
+    const results = await Promise.all(taskIds.map(async id => {
+      try {
+        const r = await fetch(`/api/production-tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'done' }) })
+        return r.ok ? null : await responseError(r)
+      } catch { return NETWORK_ERROR }
+    }))
     setBusy(false)
-    load()
+    const errors = results.filter((e): e is string => e != null)
+    if (errors.length) {
+      toast.error(`Не отмечено ${errors.length} из ${taskIds.length}`, { detail: [...new Set(errors)].join('; ') })
+    }
+    void load()
   }
 
   const totalSheets = batches.reduce((s, b) => s + (b.result?.sheetsNeeded ?? 0), 0)
