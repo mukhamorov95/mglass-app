@@ -1,6 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { getRole } from '@/lib/getRole'
+import { createServiceClient } from '@/lib/supabase-service'
 import { calcTypeLabel } from '@/lib/calcLabel'
+import { collectSourceDiagnostics, type SourceDiag } from '@/lib/cfo/sourceDiagnostics'
+import { monthRevenueFact, factMonthStart } from '@/lib/cfo/revenueFact'
 
 const MARGIN_RED    = 25
 const MARGIN_AMBER  = 35
@@ -27,13 +31,23 @@ const PRODUCT_LABEL: Record<string, string> = {
 }
 
 export default async function CfoDashboardPage() {
-  const svc = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
+  const role = await getRole()
+  if (role !== 'admin' && role !== 'ceo' && role !== 'cfo') redirect('/')
+
+  const svc = createServiceClient()
 
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+  let diagnostics: SourceDiag[] = []
+  let factError: string | null = null
+  try {
+    diagnostics = await collectSourceDiagnostics(svc, factMonthStart(now))
+  } catch (e) {
+    factError = e instanceof Error ? e.message : String(e)
+  }
+  const fact = monthRevenueFact(diagnostics)
+  const factCaptured = !factError && fact.missing.length < fact.units.length
 
   const [{ data: allCalcs }, { data: monthCalcs }] = await Promise.all([
     svc
@@ -51,7 +65,6 @@ export default async function CfoDashboardPage() {
   const month = monthCalcs ?? []
 
   const approved = month.filter(c => c.status === 'approved')
-  const revenue  = approved.reduce((s, c) => s + (c.final_price ?? 0), 0)
   const profit   = approved.reduce((s, c) => s + (c.profit ?? 0), 0)
   const avgMargin = approved.length > 0
     ? approved.reduce((s, c) => s + (c.margin ?? 0), 0) / approved.length
@@ -72,9 +85,13 @@ export default async function CfoDashboardPage() {
 
   const recent = all.slice(0, 15)
 
+  const factHint = factError
+    ? `не удалось прочитать: ${factError}`
+    : fact.units.map(u => `${u.unit} ${u.revenue === null ? '— нет данных' : fmtMoney(u.revenue)}`).join(' · ')
+
   const kpiCards = [
-    { label: 'Выручка (месяц, факт)', value: fmtMoney(revenue),        color: 'text-[#111110]', hint: `${approved.length} одобренных` },
-    { label: 'Прибыль (месяц)',        value: fmtMoney(profit),         color: profit > 0 ? 'text-emerald-700' : 'text-red-600', hint: 'после налогов' },
+    { label: 'Выручка (месяц, факт)', value: factCaptured ? fmtMoney(fact.total) : 'нет данных', color: factCaptured ? 'text-[#111110]' : 'text-[#9a9a95]', hint: factHint, href: '/cfo/model' },
+    { label: 'Прибыль в одобренных расчётах', value: fmtMoney(profit), color: profit > 0 ? 'text-emerald-700' : 'text-red-600', hint: 'расчёты, не продажи' },
     { label: 'Средняя маржа',          value: `${avgMargin.toFixed(1)}%`, color: avgMargin >= MARGIN_AMBER ? 'text-emerald-700' : avgMargin >= MARGIN_RED ? 'text-amber-600' : 'text-red-600', hint: 'одобренные расчёты' },
     { label: 'Расчётов за месяц',      value: String(allMonth.length),  color: 'text-[#111110]', hint: `одобрено: ${approved.length}` },
   ]
@@ -101,21 +118,28 @@ export default async function CfoDashboardPage() {
             <Link href="/cfo/margins" className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white transition-colors">
               Маржинальность →
             </Link>
-            <Link href="/admin/cfo" className="px-3 py-1.5 text-xs bg-[#111110] text-white rounded-lg font-medium hover:bg-[#2a2a28] transition-colors">
-              Финмодели / ДДС →
-            </Link>
           </div>
         </div>
 
         {/* KPI Cards */}
         <div className="grid grid-cols-4 gap-3">
-          {kpiCards.map(c => (
-            <div key={c.label} className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-3">
-              <p className="text-[10px] text-[#9a9a95] font-medium">{c.label}</p>
-              <p className={`text-lg font-bold font-mono mt-0.5 leading-tight ${c.color}`}>{c.value}</p>
-              <p className="text-[10px] text-[#c4c4be] mt-0.5">{c.hint}</p>
-            </div>
-          ))}
+          {kpiCards.map(c => {
+            const body = (
+              <>
+                <p className="text-[10px] text-[#9a9a95] font-medium">{c.label}</p>
+                <p className={`text-lg font-bold font-mono mt-0.5 leading-tight ${c.color}`}>{c.value}</p>
+                <p className="text-[10px] text-[#9a9a95] mt-0.5">{c.hint}</p>
+              </>
+            )
+            return c.href ? (
+              <Link key={c.label} href={c.href} title="Источник и разбивка — Финмодель"
+                className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-3 hover:border-[#c4c4be] transition-colors">
+                {body}
+              </Link>
+            ) : (
+              <div key={c.label} className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-3">{body}</div>
+            )
+          })}
         </div>
 
         {/* Alerts */}
@@ -209,7 +233,7 @@ export default async function CfoDashboardPage() {
             {/* Revenue by product */}
             {Object.keys(byProduct).length > 0 && (
               <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Выручка по продуктам</p>
+                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Одобренные расчёты по продуктам</p>
                 <div className="space-y-2">
                   {Object.entries(byProduct)
                     .sort((a, b) => b[1] - a[1])
@@ -233,9 +257,9 @@ export default async function CfoDashboardPage() {
                 { href: '/cfo/order-economics/retail', label: 'Фонды розничного заказа (душевые)' },
                 { href: '/cfo/margins', label: 'Таблица маржинальности' },
                 { href: '/cfo/unit',    label: 'Unit-экономика заказов' },
-                { href: '/admin/cfo',   label: 'Финмодели и ДДС' },
                 { href: '/cfo/sales-ledger', label: 'Продажи и маржа' },
                 { href: '/admin/settings', label: 'Финансовые настройки' },
+                { href: '/admin/cfo?tab=settings', label: 'Настройки CFO: налоговый режим, расходы' },
               ].map(l => (
                 <Link key={l.href} href={l.href}
                   className="flex items-center justify-between py-1 text-xs text-[#6b6b66] hover:text-[#111110] transition-colors group">
