@@ -13,6 +13,7 @@ const CSS = `
   --amber:#b45309; --amber-bg:#fdf6ec; --amber-bd:#f0e0c8;
   --blue:#1d4ed8; --blue-bg:#eef3fd; --blue-bd:#d4e0f7;
   --green:#047857; --green-bg:#eaf6f0; --green-bd:#cbe9db;
+  --danger:#b91c1c;
   --shadow:0 1px 2px rgba(17,17,16,.04),0 8px 24px rgba(17,17,16,.05);
   --radius:16px;
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -29,6 +30,7 @@ const CSS = `
     --amber:#e0a45c; --amber-bg:#2c2519; --amber-bd:#413621;
     --blue:#7aa5f0; --blue-bg:#1a2133; --blue-bd:#2a3757;
     --green:#5fc79a; --green-bg:#152a22; --green-bd:#234034;
+    --danger:#f87171;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
   }
 }
@@ -197,6 +199,15 @@ const CSS = `
 .pcab .doc .dl{margin-left:auto;background:none;border:1px solid var(--border);border-radius:9px;
   padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer;text-decoration:none}
 .pcab .doc .dl:hover{border-color:var(--ink);color:var(--ink)}
+.pcab .doc .dset{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.pcab .doc .dset .dl{margin-left:0}
+.pcab .doc .dno{font-size:12px;color:var(--muted);padding:7px 2px;white-space:nowrap}
+@media (max-width:640px){.pcab .doc{flex-wrap:wrap}.pcab .doc .dset{margin-left:52px;justify-content:flex-start}}
+
+/* Сообщения рядом с действием */
+.pcab .perr{font-size:12px;color:var(--danger);margin-top:8px}
+.pcab .recalc{font-size:11.5px;color:var(--amber);background:var(--amber-bg);
+  border:1px solid var(--amber-bd);border-radius:9px;padding:7px 10px}
 
 /* Guide */
 .pcab .guide-hero{background:linear-gradient(135deg,var(--brand-lt),var(--brand-dk));

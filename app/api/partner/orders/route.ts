@@ -4,6 +4,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
 import { readPaged } from '@/lib/partner/readPaged'
+import { invoiceState, type UpdShort } from '@/lib/partner/documents'
+import { loadUpdByOrders } from '@/lib/partner/updByOrders'
 
 // Кабинет партнёра — «мои заказы» (read-only, строго по своему клиенту).
 // Клиент определяется по b2b_clients.user_id = auth.uid(). Никогда не отдаёт
@@ -22,7 +24,7 @@ export async function GET() {
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
   // Привязанный клиент (первичный владелец ИЛИ участник команды). Нет → «не привязан».
-  const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
+  const client = await resolvePartnerClient<{ id: number; name: string; can_self_invoice: boolean | null }>(svc, user.id, 'id,name,can_self_invoice')
   if (!client) return NextResponse.json({ linked: false, client: null, orders: [] })
 
   // Все состояния: просчёт → отправлен в работу → в работе → отгружен.
@@ -39,6 +41,12 @@ export async function GET() {
   } catch (e) {
     return NextResponse.json({ error: `Заказы не загрузились: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
+
+  // Реестр УПД не прочитался — список всё равно нужен; «Документы» скажут, что статус УПД неизвестен.
+  let upds = new Map<number, UpdShort>()
+  let updError: string | null = null
+  try { upds = await loadUpdByOrders(svc, data.map(o => o.id as number)) }
+  catch (e) { updError = e instanceof Error ? e.message : String(e) }
 
   const orders = data.map((o: Record<string, unknown>) => {
     const pn = parseNotes(o.notes as string | null)
@@ -74,8 +82,10 @@ export async function GET() {
       recalcNote: history.length > 0 ? lastComment : null,
       summary,
       positions: items.length,
+      invoice: invoiceState({ launched: p.launched, canSelfInvoice: !!client.can_self_invoice }),
+      upd: upds.get(o.id as number) ?? null,
     }
   })
 
-  return NextResponse.json({ linked: true, client: { name: client.name }, orders })
+  return NextResponse.json({ linked: true, client: { name: client.name }, orders, updError })
 }
