@@ -44,7 +44,6 @@ const BUYER_ZAKUPKI: NavItem[] = [
 
 const BUYER_LOGISTIKA: NavItem[] = [
   { href: '/admin/route-sheet',        label: 'Доставки клиентам',      icon: '📍', indent: true },
-  { href: '/orders',                   label: 'Заказы MGlass',          icon: '📦', indent: true },
   { href: '/b2b-orders',               label: 'Заказы B2B',             icon: '🏢', indent: true },
 ]
 
@@ -239,12 +238,17 @@ const ADMIN_B2B: NavEntry[] = [
   { href: '/admin/ai-b2b-quote',     label: 'AI B2B Quote',      icon: '⚡' },
 ]
 
-const ADMIN_OPERATIONS: NavItem[] = [
-  { href: '/measure-requests',    label: 'Заявки на замер',  icon: '📐' },
-  { href: '/measure-calendar',    label: 'Календарь замеров', icon: '🗓️' },
-  { href: '/measurer-cabinet',    label: 'Кабинет замерщика', icon: '📏' },
-  { href: '/measurer-earnings',   label: 'Заработок замерщиков', icon: '💰' },
-  { href: '/admin/installations', label: 'Монтажи',          icon: '🔧' },
+// Замеры — четыре экрана при трёх заявках за всё время (08.10): свёрнуты в один
+// пункт. Монтажи — живой экран /installations; /admin/installations на пустых
+// appointments/brigades перенаправляет туда.
+const ADMIN_OPERATIONS: NavEntry[] = [
+  { sectionLabel: 'Замеры', icon: '📐', items: [
+    { href: '/measure-requests',  label: 'Заявки на замер',      icon: '📐' },
+    { href: '/measure-calendar',  label: 'Календарь замеров',    icon: '🗓️' },
+    { href: '/measurer-cabinet',  label: 'Кабинет замерщика',    icon: '📏' },
+    { href: '/measurer-earnings', label: 'Заработок замерщиков', icon: '💰' },
+  ] },
+  { href: '/installations',       label: 'Монтажи',          icon: '🔧' },
   { href: '/inventory',            label: 'Склад',           icon: '🏬' },
   { href: '/admin/route-sheet',    label: 'Маршрутный лист', icon: '🚚' },
   { href: '/admin/brigades',       label: 'Бригады',         icon: '👷' },
@@ -425,7 +429,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/b2b-rates', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-flow', '/admin/b2b-services', '/admin/b2b-surcharges', '/admin/sandblast-cost', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/measurer-earnings', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity', '/commercial/activity'])) open.push('operations')
+    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/measurer-earnings', '/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity', '/commercial/activity'])) open.push('operations', ...activeSections(pathname, ADMIN_OPERATIONS))
   }
   return open
 }
@@ -436,7 +440,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
   if (role === 'buyer') {
     if (inSection(pathname, ['/inventory', '/admin/stock-control'])) open.push('buyer_sklad')
     if (inSection(pathname, ['/purchasing', '/admin/procurement', '/admin/suppliers', '/admin/supplier-catalog', '/admin/visualizer-pricing', '/admin/shower-hardware', '/admin/hardware'])) open.push('buyer_zakupki')
-    if (inSection(pathname, ['/admin/route-sheet', '/orders', '/b2b-orders'])) open.push('buyer_logistika')
+    if (inSection(pathname, ['/admin/route-sheet', '/b2b-orders'])) open.push('buyer_logistika')
     if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')
     if (inSection(pathname, ['/admin/guide'])) open.push('buyer_pomosh')
     if (inSection(pathname, ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-cutting'])) open.push('buyer_b2b_mglass')

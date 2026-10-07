@@ -245,7 +245,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
         {/* Back + breadcrumb */}
         <div className="flex items-center justify-between gap-2 text-[13px] mb-5">
           <div className="flex items-center gap-2">
-            <Link href="/orders" className="text-[#9a9a95] hover:text-[#6b6b66]">← Заказы</Link>
+            <Link href="/calculations" className="text-[#9a9a95] hover:text-[#6b6b66]">← Расчёты</Link>
             <span className="text-[#d4d4d0]">/</span>
             <span className="font-mono font-bold text-[#111110]">{order.number}</span>
           </div>

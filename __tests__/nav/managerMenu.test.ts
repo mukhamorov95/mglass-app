@@ -59,12 +59,13 @@ describe('структура по ТЗ (Н1)', () => {
       expect(all.map(i => i.href)).not.toContain(href)
     }
   })
-  it('ни один пункт не пропал, кроме переданных цеху и старых калькуляторов', () => {
+  it('ни один пункт не пропал, кроме переданных цеху, старых калькуляторов и убранных 08.10', () => {
+    // 08.10 (docs/SYSTEM_ORDER_ROUTE.md, этап 8): «Мой день» → «/», «Заказы» → /b2b-orders.
     const before = [
       '/manager', '/configurator',
-      '/my-day', '/deals', '/calculator/build', '/calculator/quick', '/calculator/b2b-mglass', '/calculations',
+      '/deals', '/calculator/build', '/calculator/quick', '/calculator/b2b-mglass', '/calculations',
       // '/sales/managers' — третий срез продаж (показатели менеджеров), добавлен 17.09
-      '/kp', '/contracts', '/my-earnings', '/clients', '/crm', '/sales', '/sales/managers', '/orders',
+      '/kp', '/contracts', '/my-earnings', '/clients', '/crm', '/sales', '/sales/managers',
       '/measure-requests', '/measure-calendar', '/measurer', '/installations', '/calendar', '/inventory',
       '/b2b-today', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-invoices', '/b2b-crm',
       // Отчёт по клиентам B2B — клиент × период (просьба владельца 30.09)
