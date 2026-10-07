@@ -42,6 +42,8 @@ function fakeDb() {
 vi.mock('@/lib/supabase-server', () => ({ createClient: async () => fakeDb() }))
 vi.mock('@/lib/supabase-service', () => ({ createServiceClient: () => fakeDb() }))
 vi.mock('@/lib/inventory/consumeHook', () => ({ consumeForOrder: async () => ({}) }))
+// Каскад на задачи цеха тянет склад (server-only) — здесь проверяется только запись notes.
+vi.mock('@/lib/production/closeOnOrderMark', () => ({ closeOpenTasksOnOrderMark: async () => ({ closed: 0 }) }))
 
 import { canAccessRoute, isOwnerRole, ROLE_ALLOWED, type Role } from '@/lib/getRole'
 import { SERVER_ONLY_NOTE_KEYS } from '@/lib/b2b/orderNotes'

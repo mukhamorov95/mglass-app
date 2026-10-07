@@ -13,6 +13,7 @@ import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadline
 import LeadSummary from './LeadSummary'
 import { materialLabelShort } from '@/lib/materialLabel'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
+import { isLiveShopOrder } from '@/lib/production/liveOrder'
 import PointBadge from '@/components/PointBadge'
 
 // «Мои задачи»: карточка = ЗАКАЗ (раскрывается на месте — детали с кнопками и
@@ -232,7 +233,7 @@ export default function MyQueuePage() {
 
     const [{ data: orderRows }, { data: doneOrderRows }, { data: blockerRows }, points] = await Promise.all([
       orderIds.length
-        ? sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes').in('id', orderIds).gte('created_at', PROD_SINCE)
+        ? sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes').in('id', orderIds).gte('created_at', PROD_SINCE).is('archived_at', null)
         : Promise.resolve({ data: [] as OrderLite[] }),
       doneOrderIds.length
         ? sb.from('b2b_orders').select('id,items').in('id', doneOrderIds).gte('created_at', PROD_SINCE)
@@ -258,8 +259,9 @@ export default function MyQueuePage() {
       [id, [...m].map(([station, n]) => ({ station, n })).sort((a, b) => b.n - a.n)])))
     setWorkLoaded(true)
 
-    // Производственный контур — только заказы с PROD_SINCE
-    const freshOrders = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
+    // Производственный контур — только заказы с PROD_SINCE, не в архиве и не уехавшие:
+    // задачи отгруженного заказа — не работа, даже если их никто не закрыл.
+    const freshOrders = new Map(((orderRows ?? []) as OrderLite[]).filter(o => isLiveShopOrder(o)).map(o => [o.id, o]))
     setTasks(list.filter(t => freshOrders.has(t.order_id)))
     setOrders(freshOrders)
 

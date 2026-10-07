@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { parseNotes } from '@/lib/b2b/publicQuote'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { consumeForOrder } from '@/lib/inventory/consumeHook'
+import { orderMarkOf, CASCADE_FROM } from '@/lib/production/managerCascade'
+import { closeOpenTasksOnOrderMark } from '@/lib/production/closeOnOrderMark'
 
 // Единственный писатель notes.stages из менеджерского контура.
 //
@@ -96,6 +98,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Атрибуция: реальный менеджер, отметивший упаковку/отгрузку. Без живого актора
+  // (сервис-ключ/крон) — честный системный ярлык, не выдуманный человек.
+  const mark = orderMarkOf(stages)
+  let by: { userId?: string; name?: string } = { name: 'b2b-orders (авто)' }
+  if (mark) {
+    try {
+      const server = await createServerClient()
+      const { data: { user } } = await server.auth.getUser()
+      if (user?.id) {
+        const { data: prof } = await server.from('users').select('name').eq('id', user.id).maybeSingle()
+        by = { userId: user.id, name: (prof?.name as string | null) ?? user.email ?? undefined }
+      }
+    } catch { /* атрибуция не критична — закрытие и списание всё равно выполняем */ }
+  }
+
+  // Упакован/отгружен мимо цеха → открытые задачи цеха по заказу закрываются каскадом
+  // (lib/production/managerCascade.ts). До этого отметка менеджера цех не трогала, и
+  // уехавшие заказы месяцами висели в очередях. Снятие отметки (null) задачи не трогает.
+  let shopClosed = 0
+  let shopError: string | undefined
+  if (mark) {
+    const r = await closeOpenTasksOnOrderMark(svc, orderId, mark, CASCADE_FROM.manager[mark], { id: by.userId, name: by.name })
+    shopClosed = r.closed
+    shopError = r.error
+    if (r.error) console.error(`[stages] shop cascade failed order=${orderId}: ${r.error}`)
+  }
+
   // A25: ручная отметка «упаковано» списывает материал со склада так же, как
   // автосписание при закрытии упаковки в цехе — иначе заказы, упакованные мимо
   // цеха (треть за 60 дней), давали систематический недоучёт расхода → мнимая
@@ -106,18 +135,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   //     поэтому «кто первый» не проверяем.
   // ТОЛЬКО на переходе packaged в дату (установка флага); снятие (null) не списывает.
   if (typeof stages.packaged === 'string' && stages.packaged) {
-    // Атрибуция движения: реальный менеджер, отметивший упаковку. Без живого
-    // актора (сервис-ключ/крон) — честный системный ярлык, не выдуманный человек.
-    let by: { userId?: string; name?: string } = { name: 'b2b-orders (авто)' }
-    try {
-      const server = await createServerClient()
-      const { data: { user } } = await server.auth.getUser()
-      if (user?.id) {
-        const { data: prof } = await server.from('users').select('name').eq('id', user.id).maybeSingle()
-        by = { userId: user.id, name: (prof?.name as string | null) ?? user.email ?? undefined }
-      }
-    } catch { /* атрибуция не критична — списание всё равно выполняем */ }
-
     const consume = await consumeForOrder('b2b_order', String(orderId), by, 'plan')
     if (!consume.ok) {
       console.error(`[stages] consume failed order=${orderId}: ${consume.error}`)
@@ -125,5 +142,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { data: fresh } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
-  return NextResponse.json({ ok: true, notes: parseNotes((fresh?.notes as string | null) ?? null) })
+  return NextResponse.json({
+    ok: true, notes: parseNotes((fresh?.notes as string | null) ?? null),
+    shop_closed: shopClosed, ...(shopError ? { shop_error: shopError } : {}),
+  })
 }

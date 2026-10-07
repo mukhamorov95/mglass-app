@@ -15,6 +15,7 @@ import { PROD_SINCE } from '@/lib/orderFlags'
 import { addWorkingDays, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import PointBadge from '@/components/PointBadge'
+import { isLiveShopOrder } from '@/lib/production/liveOrder'
 
 // Агрегированный экран станции: задачи этого этапа из ВСЕХ заказов, собранные
 // в партии по «материал + толщина». Для резки — со сводным раскроем (листы).
@@ -88,7 +89,7 @@ export default function StationBatchesPage() {
 
     const orderIds = [...new Set(tasks.map(t => t.order_id))]
     const [{ data: orderRows }, { data: matRows }, { data: cfg }, { data: poRows }, points] = await Promise.all([
-      sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes,launched_at').in('id', orderIds).gte('created_at', PROD_SINCE),
+      sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes,launched_at').in('id', orderIds).gte('created_at', PROD_SINCE).is('archived_at', null),
       isCutting ? sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,pattern_direction').eq('active', true) : Promise.resolve({ data: [] as MatRow[] }),
       isCutting ? sb.from('cutting_settings').select('*').eq('id', 1).single() : Promise.resolve({ data: null }),
       // Заявки на материал по этим заказам (для гейта резки по приходу материала)
@@ -109,8 +110,8 @@ export default function StationBatchesPage() {
     }
     const pending = new Set<number>([...hasReq].filter(oid => !arrived.has(oid)))
     setMatPending(pending)
-    const orders = new Map((orderRows ?? []).map((o: OrderRow) => [o.id, o]))
-    // Производственный контур — только заказы с PROD_SINCE
+    // Производственный контур — только заказы с PROD_SINCE, не в архиве и не уехавшие
+    const orders = new Map(((orderRows ?? []) as OrderRow[]).filter(o => isLiveShopOrder(o)).map(o => [o.id, o]))
     tasks = tasks.filter(t => orders.has(t.order_id))
     if (tasks.length === 0) { setBatches([]); setLoading(false); return }
     const matLookup = new Map((matRows ?? []).map((m: MatRow) => [`${m.name}|${m.thickness}`, m]))
