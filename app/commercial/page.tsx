@@ -1,31 +1,39 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { MoneyLeaderboard } from './MoneyLeaderboard'
 
-type Period = 'today' | 'week' | 'month' | 'year'
+// Звонки и сообщения — из снимков дня (manager_day_stats), как на «Команде»;
+// воронка — последний снимок крона 18:00. Сегодняшний неполный день не входит.
+type Period = 'yesterday' | 'week' | 'month' | 'year'
 
 type ManagerStat = {
   id: number; name: string
-  newLeads: number; callsMade: number; messagesSent: number; cardsMoved: number
+  newLeads: number | null; callsMade: number; callsOk: number; messagesSent: number; cardsMoved: number
   activeLeads: number; zone1: number; zone2: number; zone3: number
   staleZone1: number; staleZone2: number; staleZone3: number; invoiceStale: number
-  days?: number
+  workdays: number; idle: number
 }
 
 type StatsData = {
   period: Period
   managers: ManagerStat[]
   noData?: boolean
-  fromDate?: string
+  label?: string
+  firstSnapshot?: string | null
+  stateDate?: string | null
+  errors?: string[]
 }
 
 const PERIOD_LABELS: Record<Period, string> = {
-  today: 'Сегодня',
+  yesterday: 'Последний день',
   week:  'Неделя',
   month: 'Месяц',
   year:  'Год',
 }
+
+const dmy = (day: string) => `${day.slice(8, 10)}.${day.slice(5, 7)}.${day.slice(0, 4)}`
 
 function scoreColor(val: number, good: number, bad: number): string {
   if (val >= good)  return 'text-green-600'
@@ -40,7 +48,8 @@ function Flag({ condition, text }: { condition: boolean; text: string }) {
 
 function ManagerCard({ m, period }: { m: ManagerStat; period: Period }) {
   const firstName = m.name.split(' ')[0]
-  const isToday = period === 'today'
+  const oneDay = period === 'yesterday'
+  const quiet = m.callsMade === 0 && m.messagesSent === 0
 
   return (
     <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
@@ -66,12 +75,12 @@ function ManagerCard({ m, period }: { m: ManagerStat; period: Period }) {
       <div className="grid grid-cols-4 divide-x divide-[#f0f0ec] border-b border-[#f0f0ec]">
         {[
           { label: 'Лидов',  value: m.newLeads,     good: 2, bad: 1 },
-          { label: 'Звонков', value: m.callsMade,   good: 3, bad: 1 },
+          { label: 'Звонков', value: m.callsMade,   good: 3, bad: 1, sub: `дозвон ${m.callsOk}` },
           { label: 'Сообщ',  value: m.messagesSent, good: 5, bad: 2 },
           { label: 'Перем',  value: m.cardsMoved,   good: 3, bad: 1 },
         ].map(k => (
-          <div key={k.label} className="px-3 py-2.5 text-center">
-            <p className={`text-[18px] font-bold font-mono leading-none ${scoreColor(k.value, k.good, k.bad)}`}>{k.value}</p>
+          <div key={k.label} className="px-3 py-2.5 text-center" title={k.sub}>
+            <p className={`text-[18px] font-bold font-mono leading-none ${k.value == null ? 'text-[#c4c4be]' : scoreColor(k.value, k.good, k.bad)}`}>{k.value ?? '—'}</p>
             <p className="text-[9px] text-[#9a9a95] mt-0.5">{k.label}</p>
           </div>
         ))}
@@ -79,15 +88,13 @@ function ManagerCard({ m, period }: { m: ManagerStat; period: Period }) {
 
       {/* Flags */}
       <div className="px-5 py-3 min-h-[44px]">
-        <Flag condition={m.callsMade === 0 && m.messagesSent === 0 && isToday} text="0 активности" />
+        <Flag condition={oneDay && quiet && m.workdays > 0} text="0 активности в рабочий день" />
+        <Flag condition={!oneDay && m.idle > 0} text={`Раб. дней без действий: ${m.idle}`} />
         <Flag condition={m.staleZone1 > 0} text={`Зона 1: ${m.staleZone1} зависших`} />
         <Flag condition={m.invoiceStale > 0} text={`Счёт >5д: ${m.invoiceStale}`} />
         <Flag condition={m.staleZone2 > 0} text={`Зона 2: ${m.staleZone2} >3д`} />
-        {!m.staleZone1 && !m.invoiceStale && !m.staleZone2 && (m.callsMade > 0 || m.messagesSent > 0) && (
+        {!m.staleZone1 && !m.invoiceStale && !m.staleZone2 && !m.idle && !quiet && (
           <span className="text-[10px] text-green-600">✅ Норма</span>
-        )}
-        {!m.staleZone1 && !m.invoiceStale && !m.staleZone2 && m.callsMade === 0 && m.messagesSent === 0 && !isToday && (
-          <span className="text-[10px] text-[#c4c4be]">— нет данных</span>
         )}
       </div>
     </div>
@@ -95,23 +102,28 @@ function ManagerCard({ m, period }: { m: ManagerStat; period: Period }) {
 }
 
 export default function CommercialPage() {
-  const [period, setPeriod]   = useState<Period>('today')
+  const [period, setPeriod]   = useState<Period>('yesterday')
   const [data, setData]       = useState<StatsData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState<string | null>(null)
+  const [loaded, setLoaded]   = useState<Period | null>(null)
+  const loading = loaded !== period
 
-  const load = useCallback((p: Period) => {
-    setLoading(true)
-    fetch(`/api/commercial/stats?period=${p}`)
-      .then(r => r.json())
-      .then(setData)
-      .finally(() => setLoading(false))
-  }, [])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load(period) }, [period, load])
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/commercial/stats?period=${period}`)
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `Сервер ответил ${r.status}`)
+        return j as StatsData
+      })
+      .then(j => { if (alive) { setData(j); setError(null) } })
+      .catch((e: Error) => { if (alive) { setData(null); setError(e.message) } })
+      .finally(() => { if (alive) setLoaded(period) })
+    return () => { alive = false }
+  }, [period])
 
   const totals = data?.managers.reduce((acc, m) => ({
-    newLeads:     acc.newLeads     + m.newLeads,
+    newLeads:     acc.newLeads     + (m.newLeads ?? 0),
     callsMade:    acc.callsMade    + m.callsMade,
     messagesSent: acc.messagesSent + m.messagesSent,
     cardsMoved:   acc.cardsMoved   + m.cardsMoved,
@@ -126,7 +138,9 @@ export default function CommercialPage() {
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <div>
             <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">Коммерческий</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">Аналитика по менеджерам</p>
+            <p className="text-[12px] text-[#9a9a95] mt-0.5">
+              Аналитика по менеджерам · по дням и сегодня — <Link href="/" className="text-blue-600 hover:underline">«Команда»</Link>
+            </p>
           </div>
 
           {/* Period tabs */}
@@ -158,19 +172,25 @@ export default function CommercialPage() {
               <div key={k.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{k.label}</p>
                 <p className="text-[22px] font-bold font-mono text-[#111110] leading-none">{k.value}</p>
-                <p className="text-[10px] text-[#c4c4be] mt-1">вся команда · {PERIOD_LABELS[period].toLowerCase()}</p>
+                <p className="text-[10px] text-[#9a9a95] mt-1">{k.label === 'Активных сделок' ? `воронка на ${data?.stateDate ? dmy(data.stateDate) : '—'}` : `вся команда · ${data?.label ?? ''}`}</p>
               </div>
             ))}
           </div>
         )}
 
+        {!loading && error && (
+          <p role="alert" className="bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 mb-5 text-[13px] text-[#c23a2b]">Не удалось загрузить: {error}</p>
+        )}
+        {!loading && data?.errors && data.errors.length > 0 && (
+          <p role="alert" className="text-[12px] text-[#c23a2b] mb-3">Не всё загрузилось: {data.errors.join(' · ')}</p>
+        )}
+
         {/* No data state */}
         {!loading && data?.noData && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-6 text-center mb-5">
-            <p className="text-[14px] font-semibold text-amber-800 mb-1">Нет исторических данных</p>
+            <p className="text-[14px] font-semibold text-amber-800 mb-1">Снимков дня за этот период нет</p>
             <p className="text-[12px] text-amber-700">
-              Данные за период «{PERIOD_LABELS[period]}» накапливаются автоматически каждый день в 18:00.
-              Переключитесь на «Сегодня» чтобы увидеть данные в реальном времени.
+              Снимок вчерашнего дня пишется каждое утро в 6:30{data.firstSnapshot ? `, первый — за ${dmy(data.firstSnapshot)}` : ''}.
             </p>
           </div>
         )}
@@ -194,9 +214,11 @@ export default function CommercialPage() {
         )}
 
         {/* Footer note */}
-        {!loading && period !== 'today' && data?.fromDate && (
-          <p className="text-[11px] text-[#c4c4be] mt-4 text-center">
-            Данные с {new Date(data.fromDate).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long' })} по сегодня · обновляются ежедневно в 18:00
+        {!loading && data && !data.noData && (
+          <p className="text-[11px] text-[#9a9a95] mt-4 text-center">
+            Звонки и сообщения — снимки дня amo ({data.label}), как на «Команде»; сегодняшний неполный день не входит
+            {data.firstSnapshot ? ` · снимки с ${dmy(data.firstSnapshot)}` : ''}.
+            Воронка и зависшие — на {data.stateDate ? dmy(data.stateDate) : '—'}, крон 18:00.
           </p>
         )}
 

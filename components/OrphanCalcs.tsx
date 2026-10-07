@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { mskDateTime } from '@/lib/time'
 import { orphanTitle, orphanSpec, orphanTotal, productLabel, lyingFor, type OrphanCalc } from '@/lib/b2c/myDay'
@@ -10,6 +10,8 @@ const RUB = (v: number | string | null | undefined) =>
 
 type Counts = { active: number; archived: number }
 
+// Жил на «Моём дне»; с 08.10 /my-day перенаправляет на главную, и блок стоит под «Утром».
+//
 // Расчёты, не привязанные к сделке. Быстрый расчёт разрешает считать без клиента —
 // и такой расчёт исчезал: в воронку не попадал, найти его было негде.
 //
@@ -29,19 +31,20 @@ export function OrphanCalcs() {
   const [msg, setMsg] = useState<string | null>(null)
   const [loadErr, setLoadErr] = useState(false)
 
-  const load = useCallback((v: 'active' | 'archive') => {
-    fetch(`/api/calculations/orphans?view=${v}`)
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/calculations/orphans?view=${view}`)
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
       .then(j => {
+        if (!alive) return
         setItems(Array.isArray(j?.items) ? j.items : [])
         if (j?.counts) setCounts(j.counts)
         setLoadErr(false)
       })
       // Раньше сбой прятал блок целиком — как будто расчётов без клиента нет.
-      .catch(() => { setItems([]); setLoadErr(true) })
-  }, [])
-
-  useEffect(() => { load(view) }, [load, view])
+      .catch(() => { if (alive) { setItems([]); setLoadErr(true) } })
+    return () => { alive = false }
+  }, [view])
 
   function open(o: OrphanCalc) {
     setOpenId(o.id)
@@ -99,7 +102,8 @@ export function OrphanCalcs() {
     </div>
   )
   if (items == null) return null
-  if (counts.active === 0 && counts.archived === 0) return null
+  // На главной пустой блок — шум: нет расчётов без клиента — нет блока.
+  if (view === 'active' && counts.active === 0) return null
 
   const list = items
   const total = orphanTotal(list)

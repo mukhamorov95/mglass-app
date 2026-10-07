@@ -1,10 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { canAccessRoute, isOwnerRole, normalizeRole, type Role, type B2BScope } from './lib/getRole'
 import { classifyDevice } from './lib/deviceClass'
 import { isDeviceAllowed } from './lib/deviceLimits'
 import { normalizeManagerHome } from './lib/managerHome'
-import { routeKey, isTrackablePageRequest } from './lib/routeKey'
 import { OWNER_2FA_COOKIE, isOwner2faEnabled, owner2faSecret, verifyOwner2faCookie } from './lib/owner2faCookie'
 
 const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
@@ -29,7 +28,7 @@ function readScoped(cookieValue: string | undefined, userId: string): string | u
 }
 const ROLE_COOKIES = ['user-role', 'user-b2b-scope', 'user-mgr-ws'] as const
 
-export async function middleware(request: NextRequest, event: NextFetchEvent) {
+export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   // Редирект ОБЯЗАН уносить с собой куки, которые @supabase/ssr записал в
@@ -264,15 +263,6 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       url.pathname = '/access-denied'
       return redirect(url)
     }
-  }
-
-  // Какие экраны открывают (У0). В фоне: запись не должна задерживать переход.
-  if (user && isTrackablePageRequest(pathname, request.method, request.headers)) {
-    const device = classifyDevice(request.headers.get('user-agent'))
-    event.waitUntil(
-      Promise.resolve(supabase.rpc('track_page_view', { p_route: routeKey(pathname), p_device: device }))
-        .then(() => undefined, () => undefined),
-    )
   }
 
   return supabaseResponse

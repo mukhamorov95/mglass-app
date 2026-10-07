@@ -18,24 +18,17 @@ export function routeKey(pathname: string): string {
   return key.length > 120 ? key.slice(0, 120) : key
 }
 
-// Какие запросы считать переходом человека: страницы (не API), не фоновая
-// подгрузка ссылок роутером — иначе каждый пункт меню в поле зрения давал бы «визит».
-export function isTrackablePageRequest(pathname: string, method: string, headers: Headers): boolean {
-  if (method !== 'GET') return false
-  if (pathname.startsWith('/api/') || pathname.startsWith('/_next/')) return false
-  if (headers.get('next-router-prefetch')) return false
-  const purpose = (headers.get('sec-purpose') ?? headers.get('purpose') ?? '').toLowerCase()
-  if (purpose.includes('prefetch')) return false
-  // Переход человека — это либо загрузка страницы целиком (sec-fetch-dest: document),
-  // либо переход внутри приложения (роутер присылает RSC). Всё остальное — фоновый
-  // запрос к адресу страницы: сервис-воркер, свой fetch, предпросмотр ссылки. Раньше
-  // такие запросы попадали в счётчик наравне с переходами, и хвост отчёта нельзя было
-  // отличить от «человек прошёлся по меню» (У12).
-  const dest = (headers.get('sec-fetch-dest') ?? '').toLowerCase()
-  const routerNav = Boolean(headers.get('rsc') ?? headers.get('next-router-state-tree'))
-  // Браузер без Sec-Fetch-* и без заголовков роутера — не наказываем: считаем переходом.
-  if (dest && dest !== 'document' && !routerNav) return false
-  return true
+// Счётчик ведёт браузер (с 08.10): переход внутри приложения, обслуженный из кэша
+// роутера, до сервера не доходит, и middleware его не видел — после #814 счётчик
+// занизил переходы в десятки раз. Тот же путь подряд — повторный рендер, а не переход.
+export function createPageViewDeduper() {
+  let last: string | null = null
+  return (pathname: string | null | undefined): string | null => {
+    if (!pathname || pathname === last) return null
+    last = pathname
+    if (pathname.startsWith('/api/') || pathname.startsWith('/_next/')) return null
+    return routeKey(pathname)
+  }
 }
 
 // Экраны, на которые человека приводит не ссылка, а запрет: высокая строка здесь

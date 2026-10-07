@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 
-type Period = 'today' | 'week' | 'month' | 'year'
+// «Сейчас» — живая воронка и списки зависших сделок из amo (их нет в снимках),
+// без звонков и сообщений. Остальные периоды — снимки дня, как на «Команде».
+type Period = 'today' | 'yesterday' | 'week' | 'month' | 'year'
 
 type StaleInfoItem = {
   id: number
@@ -14,10 +16,10 @@ type StaleInfoItem = {
 type ManagerStat = {
   id: number
   name: string
-  newLeads: number
-  callsMade: number
-  messagesSent: number
-  cardsMoved: number
+  newLeads: number | null
+  callsMade: number | null
+  messagesSent: number | null
+  cardsMoved: number | null
   activeLeads: number
   zone1: number
   zone2: number
@@ -35,10 +37,14 @@ type ManagerStat = {
 
 type StatsData = {
   period: Period
+  live?: boolean
   domain?: string
   managers: ManagerStat[]
   noData?: boolean
-  fromDate?: string
+  label?: string
+  firstSnapshot?: string | null
+  stateDate?: string | null
+  errors?: string[]
 }
 
 type DrawerTab = 'overview' | 'stale1' | 'stale2' | 'stale3' | 'longstale'
@@ -47,6 +53,7 @@ type DrawerTab = 'overview' | 'stale1' | 'stale2' | 'stale3' | 'longstale'
 function normalise(raw: Record<string, unknown>): ManagerStat {
   const n = (key1: string, key2: string): number =>
     Number((raw[key1] ?? raw[key2]) ?? 0)
+  const na = (key: string): number | null => (raw[key] == null ? null : Number(raw[key]))
   const arr = (key: string): StaleInfoItem[] | undefined => {
     const v = raw[key]
     return Array.isArray(v) ? (v as StaleInfoItem[]) : undefined
@@ -54,10 +61,10 @@ function normalise(raw: Record<string, unknown>): ManagerStat {
   return {
     id:           Number(raw.id ?? 0),
     name:         String(raw.name ?? ''),
-    newLeads:     n('newLeads',     'new_leads'),
-    callsMade:    n('callsMade',    'calls_made'),
-    messagesSent: n('messagesSent', 'messages_sent'),
-    cardsMoved:   n('cardsMoved',   'cards_moved'),
+    newLeads:     na('newLeads'),
+    callsMade:    na('callsMade'),
+    messagesSent: na('messagesSent'),
+    cardsMoved:   na('cardsMoved'),
     activeLeads:  n('activeLeads',  'active_leads'),
     zone1:        n('zone1',        'zone1'),
     zone2:        n('zone2',        'zone2'),
@@ -75,7 +82,8 @@ function normalise(raw: Record<string, unknown>): ManagerStat {
 }
 
 const PERIOD_LABELS: Record<Period, string> = {
-  today: 'Сегодня',
+  today: 'Сейчас',
+  yesterday: 'Последний день',
   week:  'Неделя',
   month: 'Месяц',
   year:  'Год',
@@ -91,14 +99,15 @@ const DRAWER_TABS: { id: DrawerTab; label: string }[] = [
 
 function redFlags(m: ManagerStat, period: Period): number {
   let n = 0
-  if (period === 'today' && m.callsMade === 0 && m.messagesSent === 0 && m.activeLeads > 0) n++
+  if (period === 'yesterday' && m.callsMade === 0 && m.messagesSent === 0 && m.activeLeads > 0) n++
   if (m.staleZone1 > 0) n++
   if (m.staleZone2 > 0) n++
   if (m.invoiceStale > 0) n++
   return n
 }
 
-function numColor(val: number, green: number, orange: number): string {
+function numColor(val: number | null, green: number, orange: number): string {
+  if (val == null)   return 'text-[#c4c4be]'
   if (val >= green)  return 'text-green-600 font-semibold'
   if (val >= orange) return 'text-orange-500 font-semibold'
   return val === 0 ? 'text-[#c4c4be]' : 'text-red-500 font-semibold'
@@ -161,7 +170,7 @@ function DrawerStaleList({
       <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
         <p className="text-[13px] font-medium text-[#6b6b66] mb-1">Текущие данные</p>
         <p className="text-[12px] text-[#9a9a95] max-w-[340px]">
-          Детализация сделок доступна только в режиме «Сегодня» (данные в реальном времени из AmoCRM).
+          Список сделок — только в режиме «Сейчас» (живой запрос в AmoCRM, до 45 секунд).
         </p>
       </div>
     )
@@ -210,20 +219,20 @@ function DrawerOverview({ m, period }: { m: ManagerStat; period: Period }) {
   const flags = redFlags(m, period)
   const rows: { label: string; value: React.ReactNode; sub?: string }[] = [
     {
-      label: 'Лиды сегодня',
-      value: <span className={numColor(m.newLeads, 2, 1)}>{m.newLeads}</span>,
+      label: 'Лиды',
+      value: <span className={numColor(m.newLeads, 2, 1)}>{m.newLeads ?? '—'}</span>,
     },
     {
       label: 'Сообщения',
-      value: <span className={numColor(m.messagesSent, 5, 2)}>{m.messagesSent}</span>,
+      value: <span className={numColor(m.messagesSent, 5, 2)}>{m.messagesSent ?? '—'}</span>,
     },
     {
       label: 'Звонки',
-      value: <span className={numColor(m.callsMade, 3, 1)}>{m.callsMade}</span>,
+      value: <span className={numColor(m.callsMade, 3, 1)}>{m.callsMade ?? '—'}</span>,
     },
     {
       label: 'Движения карточек',
-      value: <span className={numColor(m.cardsMoved, 3, 1)}>{m.cardsMoved}</span>,
+      value: <span className={numColor(m.cardsMoved, 3, 1)}>{m.cardsMoved ?? '—'}</span>,
     },
     { label: 'Активных сделок', value: <span className="font-semibold text-[#111110]">{m.activeLeads}</span> },
     { label: 'Квалификация (зона 1)', value: <span className="font-semibold text-blue-600">{m.zone1}</span>, sub: 'новые заявки, проработка, прогрев' },
@@ -283,7 +292,7 @@ function DrawerOverview({ m, period }: { m: ManagerStat; period: Period }) {
         {flags > 0 && (
           <p className="text-[12px] text-red-600 mt-1">
             {[
-              period === 'today' && m.callsMade === 0 && m.messagesSent === 0 && m.activeLeads > 0 && '0 звонков и 0 сообщений',
+              period === 'yesterday' && m.callsMade === 0 && m.messagesSent === 0 && m.activeLeads > 0 && '0 звонков и 0 сообщений',
               m.staleZone1 > 0 && `${m.staleZone1} лидов без касания`,
               m.staleZone2 > 0 && `${m.staleZone2} сделок без движения >3д`,
               m.invoiceStale > 0 && `${m.invoiceStale} счётов без оплаты >5д`,
@@ -467,7 +476,7 @@ function ManagerDrawer({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SalesControlPage() {
-  const [period, setPeriod]               = useState<Period>('today')
+  const [period, setPeriod]               = useState<Period>('yesterday')
   const [data, setData]                   = useState<StatsData | null>(null)
   const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState<string | null>(null)
@@ -479,7 +488,7 @@ export default function SalesControlPage() {
     setError(null)
     fetch(`/api/commercial/stats?period=${p}`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then((raw: { period: Period; domain?: string; managers: Record<string, unknown>[]; noData?: boolean; fromDate?: string }) => {
+      .then((raw: Omit<StatsData, 'managers'> & { managers: Record<string, unknown>[] }) => {
         setData({ ...raw, managers: (raw.managers ?? []).map(normalise) })
         setManagerFilter('all')
       })
@@ -499,10 +508,10 @@ export default function SalesControlPage() {
   const totals = useMemo(() => {
     if (!managers.length) return null
     return managers.reduce((acc, m) => ({
-      newLeads:     acc.newLeads     + m.newLeads,
-      callsMade:    acc.callsMade    + m.callsMade,
-      messagesSent: acc.messagesSent + m.messagesSent,
-      cardsMoved:   acc.cardsMoved   + m.cardsMoved,
+      newLeads:     acc.newLeads     + (m.newLeads ?? 0),
+      callsMade:    acc.callsMade    + (m.callsMade ?? 0),
+      messagesSent: acc.messagesSent + (m.messagesSent ?? 0),
+      cardsMoved:   acc.cardsMoved   + (m.cardsMoved ?? 0),
       activeLeads:  acc.activeLeads  + m.activeLeads,
       staleZone1:   acc.staleZone1   + m.staleZone1,
       staleZone2:   acc.staleZone2   + m.staleZone2,
@@ -511,7 +520,8 @@ export default function SalesControlPage() {
     }), { newLeads: 0, callsMade: 0, messagesSent: 0, cardsMoved: 0, activeLeads: 0, staleZone1: 0, staleZone2: 0, invoiceStale: 0, flags: 0 })
   }, [managers, period])
 
-  const isToday = period === 'today'
+  const live = data?.live === true
+  const act = (v: number | undefined) => (live ? null : v ?? null)
 
   return (
     <div className="min-h-screen bg-[#f8f8f7]">
@@ -562,13 +572,16 @@ export default function SalesControlPage() {
           </div>
         )}
 
+        {!loading && data?.errors && data.errors.length > 0 && (
+          <p role="alert" className="text-[12px] text-[#c23a2b] mb-3">Не всё загрузилось: {data.errors.join(' · ')}</p>
+        )}
+
         {/* No data */}
         {!loading && !error && data?.noData && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-6 text-center mb-5">
-            <p className="text-[14px] font-semibold text-amber-800 mb-1">Нет исторических данных</p>
+            <p className="text-[14px] font-semibold text-amber-800 mb-1">Снимков дня за этот период нет</p>
             <p className="text-[12px] text-amber-700">
-              Данные за «{PERIOD_LABELS[period]}» накапливаются ежедневно в 18:00.
-              Переключитесь на «Сегодня» для данных в реальном времени.
+              Снимок вчерашнего дня пишется каждое утро в 6:30. Списки зависших сделок — в режиме «Сейчас».
             </p>
           </div>
         )}
@@ -577,10 +590,10 @@ export default function SalesControlPage() {
         {(loading || (totals && !data?.noData)) && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
             {[
-              { label: 'Лиды',      value: totals?.newLeads,     good: 4,  orange: 2 },
-              { label: 'Звонки',    value: totals?.callsMade,    good: 8,  orange: 3 },
-              { label: 'Сообщения', value: totals?.messagesSent, good: 15, orange: 5 },
-              { label: 'Движения',  value: totals?.cardsMoved,   good: 8,  orange: 3 },
+              { label: 'Лиды',      value: act(totals?.newLeads),     good: 4,  orange: 2 },
+              { label: 'Звонки',    value: act(totals?.callsMade),    good: 8,  orange: 3 },
+              { label: 'Сообщения', value: act(totals?.messagesSent), good: 15, orange: 5 },
+              { label: 'Движения',  value: act(totals?.cardsMoved),   good: 8,  orange: 3 },
               { label: 'Активных',  value: totals?.activeLeads,  good: 0,  orange: 0 },
               { label: 'Флаги',     value: totals?.flags,        good: -1, orange: -1 },
             ].map(k => (
@@ -596,11 +609,13 @@ export default function SalesControlPage() {
                         ? 'text-[#111110]'
                         : numColor(k.value ?? 0, k.good, k.orange)
                   }`}>
-                    {k.value ?? 0}
+                    {k.value ?? '—'}
                   </p>
                 )}
-                <p className="text-[10px] text-[#c4c4be] mt-1">
-                  {managerFilter === 'all' ? 'вся команда' : 'менеджер'} · {PERIOD_LABELS[period].toLowerCase()}
+                <p className="text-[10px] text-[#9a9a95] mt-1">
+                  {live && k.value == null && k.label !== 'Флаги' && k.label !== 'Активных'
+                    ? 'за день — в «Команде»'
+                    : `${managerFilter === 'all' ? 'вся команда' : 'менеджер'} · ${live ? 'сейчас' : data?.label ?? ''}`}
                 </p>
               </div>
             ))}
@@ -626,7 +641,7 @@ export default function SalesControlPage() {
                   <Th right>Прод&gt;3д</Th>
                   <Th right>Пр-во&gt;3д</Th>
                   <Th right>Счета&gt;5д</Th>
-                  {isToday && <Th right>Флаги</Th>}
+                  <Th right>Флаги</Th>
                 </tr>
               </thead>
               <tbody>
@@ -648,10 +663,10 @@ export default function SalesControlPage() {
                               <span className="ml-1.5 text-[10px] text-[#c4c4be]">{m.days}д</span>
                             )}
                           </Td>
-                          <Td right className={numColor(m.newLeads, 2, 1)}>{m.newLeads}</Td>
-                          <Td right className={numColor(m.messagesSent, 5, 2)}>{m.messagesSent}</Td>
-                          <Td right className={numColor(m.callsMade, 3, 1)}>{m.callsMade}</Td>
-                          <Td right className={numColor(m.cardsMoved, 3, 1)}>{m.cardsMoved}</Td>
+                          <Td right className={numColor(m.newLeads, 2, 1)}>{m.newLeads ?? '—'}</Td>
+                          <Td right className={numColor(m.messagesSent, 5, 2)}>{m.messagesSent ?? '—'}</Td>
+                          <Td right className={numColor(m.callsMade, 3, 1)}>{m.callsMade ?? '—'}</Td>
+                          <Td right className={numColor(m.cardsMoved, 3, 1)}>{m.cardsMoved ?? '—'}</Td>
                           <Td right className="text-[#111110] font-mono">{m.activeLeads}</Td>
                           <Td right className="text-blue-600 font-mono">{m.zone1}</Td>
                           <Td right className="text-orange-500 font-mono">{m.zone2}</Td>
@@ -660,14 +675,12 @@ export default function SalesControlPage() {
                           <Td right><Badge n={m.staleZone2} color="bg-orange-50 text-orange-600" /></Td>
                           <Td right><Badge n={m.staleZone3} color="bg-yellow-50 text-yellow-600" /></Td>
                           <Td right><Badge n={m.invoiceStale} color="bg-red-50 text-red-600" /></Td>
-                          {isToday && (
-                            <Td right>
-                              {flags > 0
-                                ? <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{flags}</span>
-                                : <span className="text-[11px] text-green-600">✓</span>
-                              }
-                            </Td>
-                          )}
+                          <Td right>
+                            {flags > 0
+                              ? <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{flags}</span>
+                              : <span className="text-[11px] text-green-600">✓</span>
+                            }
+                          </Td>
                         </tr>
                       )
                     })
@@ -677,10 +690,10 @@ export default function SalesControlPage() {
                 {!loading && totals && managers.length > 1 && (
                   <tr className="border-t-2 border-[#e4e4e0] bg-[#fafaf9]">
                     <Td><span className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">Итого</span></Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.newLeads}</Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.messagesSent}</Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.callsMade}</Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.cardsMoved}</Td>
+                    <Td right className="font-semibold text-[#111110]">{act(totals.newLeads) ?? '—'}</Td>
+                    <Td right className="font-semibold text-[#111110]">{act(totals.messagesSent) ?? '—'}</Td>
+                    <Td right className="font-semibold text-[#111110]">{act(totals.callsMade) ?? '—'}</Td>
+                    <Td right className="font-semibold text-[#111110]">{act(totals.cardsMoved) ?? '—'}</Td>
                     <Td right className="font-semibold text-[#111110]">{totals.activeLeads}</Td>
                     <Td right className="text-blue-600 font-semibold">{managers.reduce((s, m) => s + m.zone1, 0)}</Td>
                     <Td right className="text-orange-500 font-semibold">{managers.reduce((s, m) => s + m.zone2, 0)}</Td>
@@ -689,14 +702,12 @@ export default function SalesControlPage() {
                     <Td right><Badge n={totals.staleZone2} color="bg-orange-50 text-orange-600" /></Td>
                     <Td right><Badge n={managers.reduce((s, m) => s + m.staleZone3, 0)} color="bg-yellow-50 text-yellow-600" /></Td>
                     <Td right><Badge n={totals.invoiceStale} color="bg-red-50 text-red-600" /></Td>
-                    {isToday && (
-                      <Td right>
-                        {totals.flags > 0
-                          ? <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{totals.flags}</span>
-                          : <span className="text-[11px] text-green-600">✓</span>
-                        }
-                      </Td>
-                    )}
+                    <Td right>
+                      {totals.flags > 0
+                        ? <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{totals.flags}</span>
+                        : <span className="text-[11px] text-green-600">✓</span>
+                      }
+                    </Td>
                   </tr>
                 )}
               </tbody>
@@ -719,14 +730,15 @@ export default function SalesControlPage() {
         )}
 
         {/* Footer */}
-        {!loading && !error && period !== 'today' && data?.fromDate && (
-          <p className="text-[11px] text-[#c4c4be] mt-2 text-center">
-            Данные с {new Date(data.fromDate).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long' })} по сегодня · обновляются ежедневно в 18:00
+        {!loading && !error && data && !live && !data.noData && (
+          <p className="text-[11px] text-[#9a9a95] mt-2 text-center">
+            Звонки и сообщения — снимки дня amo ({data.label}), как на «Команде»; сегодняшний неполный день не входит.
+            Воронка и зависшие — на {data.stateDate ? `${data.stateDate.slice(8, 10)}.${data.stateDate.slice(5, 7)}` : '—'}, крон 18:00.
           </p>
         )}
-        {!loading && !error && period === 'today' && (
-          <p className="text-[11px] text-[#c4c4be] mt-2 text-center">
-            Данные в реальном времени из AmoCRM · {PERIOD_LABELS[period]}
+        {!loading && !error && live && (
+          <p className="text-[11px] text-[#9a9a95] mt-2 text-center">
+            Воронка и зависшие сделки — живой запрос в AmoCRM. Звонки и сообщения за сегодня — на «Команде» (главная, «Обновить»).
           </p>
         )}
 

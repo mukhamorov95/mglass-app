@@ -75,7 +75,6 @@ const ACTIONS: QuickAction[] = [
   { label: 'Новый просчёт B2B', href: '/calculator/b2b' },
   { label: 'Новый расчёт', href: '/calculator/build' },
   { label: 'Мой день · B2B', href: '/b2b-today' },
-  { label: 'Мой день', href: '/my-day' },
   { label: 'B2B Просчёты', href: '/b2b-quotes' },
   { label: 'B2B Заказы', href: '/b2b-orders' },
   { label: 'Сделки', href: '/deals' },

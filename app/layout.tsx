@@ -6,6 +6,7 @@ import { getUserProfile, getSessionUser, DEFAULT_PERMISSIONS } from '@/lib/getRo
 import { Sidebar } from '@/components/Sidebar'
 import CartProvider from '@/components/CartProvider'
 import StorageProxySW from '@/components/StorageProxySW'
+import PageTracker from '@/components/PageTracker'
 import Toaster from '@/components/Toaster'
 import DialogHost from '@/components/DialogHost'
 import CommandPalette from '@/components/CommandPalette'
@@ -66,6 +67,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className="min-h-full bg-[#f8f8f7]">
         {user && <StorageProxySW />}
+        {user && <PageTracker />}
         <OrganizationProvider initialOrgId={orgId} initialRole={orgRole}>
           <CartProvider>
             {user && role !== 'partner' ? (

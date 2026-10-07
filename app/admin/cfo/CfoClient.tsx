@@ -15,6 +15,7 @@ type Props = {
   pricingRows: PricingRow[]
   monthActuals: MonthActuals
   monthLabel: string
+  initialTab?: Tab
 }
 
 // ── Revenue directions ────────────────────────────────────────────────────────
@@ -483,8 +484,8 @@ function TBWidget({ label, target, actual, color }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function CfoClient({ months, initialSettings, pricingRows, monthActuals, monthLabel }: Props) {
-  const [tab, setTab]               = useState<Tab>('finmodel')
+export default function CfoClient({ months, initialSettings, pricingRows, monthActuals, monthLabel, initialTab }: Props) {
+  const [tab, setTab]               = useState<Tab>(initialTab ?? 'finmodel')
   const [s, setS]                   = useState<CfoSettings>(initialSettings)
   const [editSettings, setEditSett] = useState(false)
   const [editPlan, setEditPlan]     = useState(false)

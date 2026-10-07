@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { getRole } from '@/lib/getRole'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import CfoClient from './CfoClient'
 
 export type MonthRevenue = { month: string; revenue: number }
@@ -70,9 +71,10 @@ const PRODUCT_TO_DIR: Record<string, keyof MonthActuals> = {
   loft:             'b2c_loft',
 }
 
-export default async function CfoPage() {
+export default async function CfoPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const role = await getRole()
   if (role !== 'admin' && role !== 'ceo' && role !== 'cfo') redirect('/')
+  const { tab } = await searchParams
 
   const supabase = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -166,12 +168,30 @@ export default async function CfoPage() {
   }
 
   return (
-    <CfoClient
-      months={months}
-      initialSettings={settings}
-      pricingRows={(pricingData ?? []) as PricingRow[]}
-      monthActuals={monthActuals}
-      monthLabel={now.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', month: 'long', year: 'numeric' })}
-    />
+    <>
+      {/* Цифры ниже — из расчётов (с черновиками), а не из продаж: за сентябрь здесь
+          было 0,96 млн при 4,44 млн в книге продаж. Страницу не удаляем: вкладка
+          «Настройки» — единственный редактор cfo_settings (налоговый режим фондов заказа). */}
+      <div className="bg-[#f5f5f3] pt-4">
+        <div className="max-w-[1200px] mx-auto px-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-xs font-semibold text-amber-800">Устарело — смотрите Финмодель</p>
+            <p className="text-[11px] text-amber-700 flex-1 min-w-[240px]">
+              «Факт» на этой странице складывает расчёты калькулятора, включая черновики, а не продажи. Выручка месяца, план и сценарии — в Финмодели, безубыточность — в «Точке безубыточности». Здесь остаётся только вкладка «Настройки»: налоговый режим из неё берут фонды розничного заказа.
+            </p>
+            <Link href="/cfo/model" className="text-xs font-medium text-amber-800 hover:underline">Финмодель →</Link>
+            <Link href="/cfo/breakeven" className="text-xs font-medium text-amber-800 hover:underline">Безубыточность →</Link>
+          </div>
+        </div>
+      </div>
+      <CfoClient
+        initialTab={tab === 'settings' ? 'settings' : undefined}
+        months={months}
+        initialSettings={settings}
+        pricingRows={(pricingData ?? []) as PricingRow[]}
+        monthActuals={monthActuals}
+        monthLabel={now.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', month: 'long', year: 'numeric' })}
+      />
+    </>
   )
 }
