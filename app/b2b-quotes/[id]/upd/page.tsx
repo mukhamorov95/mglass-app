@@ -35,6 +35,8 @@ type Resp = {
   order: InvoiceOrder & { client_name?: string }
   client: Record<string, unknown> | null
   entities: B2BLegalEntity[]
+  payerEntityId?: number | null
+  paymentDates?: string[]
 }
 
 export default function ManagerUpdPage() {
@@ -57,7 +59,8 @@ export default function ManagerUpdPage() {
       setData(d)
       setBuyerName(d.order.client_name || (d.client?.name as string) || 'Клиент')
       const list = d.entities ?? []
-      const def = list.find(e => e.is_default) ?? list[0] ?? null
+      // Покупатель — тот, кому выставлен счёт; без счёта — основное юрлицо клиента.
+      const def = list.find(e => e.id === d.payerEntityId) ?? list.find(e => e.is_default) ?? list[0] ?? null
       if (def) { setEntityId(def.id); setReq(toReq(def as unknown as Record<string, unknown>)) }
       else if (d.client) setReq(toReq(d.client))
       setLoading(false)
@@ -127,7 +130,7 @@ export default function ManagerUpdPage() {
           className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">⬇ Скачать PDF</button>
       </div>
 
-      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} />
+      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} paymentDates={data.paymentDates ?? []} />
     </>
   )
 }

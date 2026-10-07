@@ -3,14 +3,14 @@
 import { forwardRef } from 'react'
 import { SELLER_B2B } from '@/lib/companyRequisites'
 import { rublesInWords } from '@/lib/numToWords'
-import { computeInvoiceTotals, type InvoiceOrder, type InvoiceOrderItem, type InvoiceRequisites } from '@/components/InvoiceDocument'
+import { itemName, type InvoiceOrder, type InvoiceRequisites } from '@/components/InvoiceDocument'
+import { updDocDate, updLines } from '@/lib/b2b/updLines'
 
-// A11: Универсальный передаточный документ (УПД, статус 1). Первая версия — общий
-// каркас на реальных данных заказа (те же суммы, что в счёте A1). Формат для ЭДО
-// (XML ФНС) формирует оператор при выгрузке (lib/edo). Здесь — печатная/PDF-форма.
-// НДС выделяем из суммы с НДС (ставка 22%, как в счёте-спецификации).
+// A11: Универсальный передаточный документ (УПД, статус 1). Печатная/PDF-форма на данных
+// заказа (те же суммы, что в счёте A1). Формат для ЭДО (XML ФНС) формирует оператор (lib/edo).
+// Строки и итоги — lib/b2b/updLines.ts. Решения владельца 07.10: УПД клиенту выдаётся этой
+// формой; факсимиле печати и подписи не ставим — статус 1 это ещё и счёт-фактура.
 
-const VAT_RATE = 22
 const money2 = (n: number) => (n ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
 function parseNotes(notes: string | null): Record<string, unknown> {
@@ -18,41 +18,43 @@ function parseNotes(notes: string | null): Record<string, unknown> {
   try { const p = JSON.parse(notes); if (typeof p === 'object' && p !== null) return p } catch {}
   return {}
 }
-function itemName(it: InvoiceOrderItem): string {
-  const parts: string[] = [it.materialName || 'Стекло']
-  if (it.thickness) parts.push(`${it.thickness} мм`)
-  if (it.hasTempering) parts.push('закалённое')
-  if (it.hasFacet) parts.push(it.facetTypeMm ? `фацет ${it.facetTypeMm} мм` : 'фацет')
-  let base = parts.join(', ')
-  if (it.width && it.height) base += `, ${it.width}×${it.height} мм`
-  return base
-}
-const vatOut = (incVat: number) => Math.round((incVat - incVat / (1 + VAT_RATE / 100)) * 100) / 100
 
 const UpdDocument = forwardRef<HTMLDivElement, {
   order: InvoiceOrder; requisites: InvoiceRequisites; buyerName: string
-}>(function UpdDocument({ order, requisites: req, buyerName }, ref) {
-  const totals = computeInvoiceTotals(order)
+  // Даты оплат заказа. Оплаты до отгрузки — строка 5 «К платёжно-расчётному документу».
+  // Номера платёжки в учёте нет, его вписывают от руки.
+  paymentDates?: string[]
+}>(function UpdDocument({ order, requisites: req, buyerName, paymentDates = [] }, ref) {
   const num = order.custom_number?.trim() || String(order.id).padStart(5, '0')
-  const notes = parseNotes(order.notes)
-  const docDate = (notes.shipped_date as string) || (notes.launched_at as string) || order.created_at
+  const { date: docDate, source } = updDocDate(parseNotes(order.notes), order.created_at)
+  const prepaymentDates = [...new Set(paymentDates.filter(d => d.slice(0, 10) <= docDate.slice(0, 10)))].sort()
+  const { lines, totals } = updLines(order, docDate)
+  const vatRate = lines[0]?.vatRate ?? 22
 
   const buyerLine = [
     req.full_name || buyerName,
     req.inn ? `ИНН ${req.inn}` : '', req.kpp ? `КПП ${req.kpp}` : '',
     req.legal_address ? `адрес: ${req.legal_address}` : '',
   ].filter(Boolean).join(', ')
+  const buyerInnKpp = [req.inn, req.kpp].filter(Boolean).join(' / ')
+  const contract = req.supply_contract_no
+    ? `Договор поставки № ${req.supply_contract_no}${req.supply_contract_date ? ` от ${fmtDate(req.supply_contract_date)}` : ''}`
+    : null
 
-  const totalIncVat = totals.totalPay
-  const totalVat = vatOut(totalIncVat)
-  const totalNoVat = Math.round((totalIncVat - totalVat) * 100) / 100
+  const row = (label: string, value: React.ReactNode, n?: string) => (
+    <tr>
+      <td className="pr-2 font-semibold align-top whitespace-nowrap" style={{ width: 210 }}>{label}</td>
+      <td className="border-b border-[#999] align-top">{value}</td>
+      <td className="pl-2 align-top text-[9px] text-[#555] whitespace-nowrap" style={{ width: 30 }}>{n ? `(${n})` : ''}</td>
+    </tr>
+  )
 
   return (
     <>
       <style>{`
         #upd-document, #upd-document * { font-family: Georgia, 'Times New Roman', serif; color: #111; }
         #upd-document table { border-collapse: collapse; width: 100%; }
-        #upd-document .g td, #upd-document .g th { border: 1px solid #333; padding: 3px 5px; font-size: 10px; }
+        #upd-document .g td, #upd-document .g th { border: 1px solid #333; padding: 3px 4px; font-size: 9.5px; }
         #upd-document .g th { background: #f0f0ee; font-weight: 700; text-align: center; }
         @media print {
           body * { visibility: hidden !important; }
@@ -62,6 +64,13 @@ const UpdDocument = forwardRef<HTMLDivElement, {
           @page { margin: 10mm; size: A4 landscape; }
         }
       `}</style>
+
+      {source !== 'shipped' && (
+        <div className="no-print max-w-[1040px] mx-auto mt-3 px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-[12px] text-amber-800">
+          Заказ не отмечен «Отгружен» — дата УПД взята из даты {source === 'launched' ? 'запуска' : 'просчёта'} ({fmtDate(docDate)}).
+          Отметьте отгрузку в заказах, и дата станет датой отгрузки.
+        </div>
+      )}
 
       <div ref={ref} id="upd-document" className="max-w-[1040px] mx-auto my-6 bg-white shadow-xl px-8 py-6 text-[11px] leading-snug print:shadow-none print:my-0">
         <div className="flex items-start justify-between">
@@ -73,83 +82,134 @@ const UpdDocument = forwardRef<HTMLDivElement, {
         </div>
 
         <h1 className="text-center text-[15px] font-bold mt-2 mb-2">
-          Универсальный передаточный документ № {num} от {fmtDate(docDate)}
+          Универсальный передаточный документ · Счёт-фактура № {num} от {fmtDate(docDate)} <span className="text-[10px] font-normal">(1)</span>
         </h1>
+        <p className="text-center text-[10px] mb-2">Исправление № — от — <span className="text-[9px]">(1а)</span></p>
 
         <table className="text-[10px] mb-2">
           <tbody>
-            <tr><td className="pr-2 font-semibold align-top" style={{ width: 150 }}>Продавец:</td>
-              <td>{SELLER_B2B.nameFull}, ИНН {SELLER_B2B.inn}, КПП {SELLER_B2B.kpp}, {SELLER_B2B.legalAddress}</td></tr>
-            <tr><td className="pr-2 font-semibold align-top">Грузоотправитель:</td><td>он же</td></tr>
-            <tr><td className="pr-2 font-semibold align-top">Покупатель:</td>
-              <td>{buyerLine || <span className="text-[#b00]">реквизиты покупателя не заполнены</span>}</td></tr>
-            <tr><td className="pr-2 font-semibold align-top">Грузополучатель:</td><td>он же</td></tr>
-            {req.supply_contract_no && <tr><td className="pr-2 font-semibold align-top">Основание:</td><td>Договор поставки № {req.supply_contract_no}</td></tr>}
+            {row('Продавец:', SELLER_B2B.nameFull, '2')}
+            {row('Адрес:', SELLER_B2B.legalAddress, '2а')}
+            {row('ИНН/КПП продавца:', `${SELLER_B2B.inn} / ${SELLER_B2B.kpp}`, '2б')}
+            {row('Грузоотправитель и его адрес:', 'он же', '3')}
+            {row('Грузополучатель и его адрес:', buyerLine || '—', '4')}
+            {row('К платёжно-расчётному документу:',
+              prepaymentDates.length ? prepaymentDates.map(d => `№ ______ от ${fmtDate(d)}`).join('; ') : '—', '5')}
+            {row('Документ об отгрузке:', `№ п/п 1–${lines.length} № ${num} от ${fmtDate(docDate)}`, '5а')}
+            {row('Покупатель:', req.full_name || buyerName || <span className="text-[#b00]">реквизиты покупателя не заполнены</span>, '6')}
+            {row('Адрес:', req.legal_address || '—', '6а')}
+            {row('ИНН/КПП покупателя:', buyerInnKpp || '—', '6б')}
+            {row('Валюта: наименование, код:', 'Российский рубль, 643', '7')}
+            {row('Идентификатор государственного контракта, договора (соглашения):', '—', '8')}
           </tbody>
         </table>
 
         <table className="g">
           <thead>
             <tr>
-              <th style={{ width: 24 }}>№</th>
-              <th>Наименование товара (работ, услуг)</th>
-              <th style={{ width: 34 }}>Ед.</th>
-              <th style={{ width: 44 }}>Кол-во</th>
-              <th style={{ width: 70 }}>Цена за ед.</th>
-              <th style={{ width: 82 }}>Стоимость без НДС</th>
-              <th style={{ width: 44 }}>Ставка НДС</th>
-              <th style={{ width: 74 }}>Сумма НДС</th>
-              <th style={{ width: 86 }}>Стоимость с НДС</th>
+              <th rowSpan={2} style={{ width: 22 }}>№ п/п</th>
+              <th rowSpan={2}>Наименование товара (описание выполненных работ, оказанных услуг), имущественного права</th>
+              <th colSpan={2}>Единица измерения</th>
+              <th rowSpan={2} style={{ width: 40 }}>Коли-чество (объём)</th>
+              <th rowSpan={2} style={{ width: 66 }}>Цена (тариф) за единицу измерения без налога</th>
+              <th rowSpan={2} style={{ width: 76 }}>Стоимость товаров без налога — всего</th>
+              <th rowSpan={2} style={{ width: 42 }}>В том числе сумма акциза</th>
+              <th rowSpan={2} style={{ width: 38 }}>Нало-говая ставка</th>
+              <th rowSpan={2} style={{ width: 70 }}>Сумма налога, предъявляемая покупателю</th>
+              <th rowSpan={2} style={{ width: 80 }}>Стоимость товаров с налогом — всего</th>
+              <th colSpan={2}>Страна происхождения</th>
+              <th rowSpan={2} style={{ width: 60 }}>Регистрационный номер декларации / партии</th>
+            </tr>
+            <tr>
+              <th style={{ width: 28 }}>код</th>
+              <th style={{ width: 34 }}>обозна-чение</th>
+              <th style={{ width: 28 }}>код</th>
+              <th style={{ width: 50 }}>наимено-вание</th>
+            </tr>
+            <tr className="text-[8px]">
+              {['А', '1', '2', '2а', '3', '4', '5', '6', '7', '8', '9', '10', '10а', '11'].map(c => <th key={c}>{c}</th>)}
             </tr>
           </thead>
           <tbody>
-            {totals.items.map((it, i) => {
-              const qty = it.quantity || 1
-              const sumIncVat = totals.lineSums[i]
-              const vat = vatOut(sumIncVat)
-              const noVat = Math.round((sumIncVat - vat) * 100) / 100
-              const price = qty ? sumIncVat / qty : sumIncVat
-              return (
-                <tr key={i}>
-                  <td className="text-center">{i + 1}</td>
-                  <td>{itemName(it)}</td>
-                  <td className="text-center">шт.</td>
-                  <td className="text-center">{qty}</td>
-                  <td className="text-right">{money2(price)}</td>
-                  <td className="text-right">{money2(noVat)}</td>
-                  <td className="text-center">{VAT_RATE}%</td>
-                  <td className="text-right">{money2(vat)}</td>
-                  <td className="text-right">{money2(sumIncVat)}</td>
-                </tr>
-              )
-            })}
+            {lines.map((l, i) => (
+              <tr key={i}>
+                <td className="text-center">{i + 1}</td>
+                <td>{itemName(order.items[i])}</td>
+                <td className="text-center">796</td>
+                <td className="text-center">шт</td>
+                <td className="text-center">{l.qty}</td>
+                <td className="text-right">{money2(l.priceNoVat)}</td>
+                <td className="text-right">{money2(l.sumNoVat)}</td>
+                <td className="text-center">без акциза</td>
+                <td className="text-center">{l.vatRate}%</td>
+                <td className="text-right">{money2(l.vat)}</td>
+                <td className="text-right">{money2(l.sumIncVat)}</td>
+                <td className="text-center">—</td>
+                <td className="text-center">—</td>
+                <td className="text-center">—</td>
+              </tr>
+            ))}
             <tr>
-              <td colSpan={5} className="text-right font-bold">Итого:</td>
-              <td className="text-right font-bold">{money2(totalNoVat)}</td>
+              <td colSpan={6} className="text-right font-bold">Всего к оплате:</td>
+              <td className="text-right font-bold">{money2(totals.sumNoVat)}</td>
+              <td className="text-center">×</td>
               <td></td>
-              <td className="text-right font-bold">{money2(totalVat)}</td>
-              <td className="text-right font-bold">{money2(totalIncVat)}</td>
+              <td className="text-right font-bold">{money2(totals.vat)}</td>
+              <td className="text-right font-bold">{money2(totals.sumIncVat)}</td>
+              <td colSpan={3}></td>
             </tr>
           </tbody>
         </table>
 
         <div className="mt-2 text-[10px]">
-          Всего к оплате: <b>{money2(totalIncVat)}</b> руб., в т.ч. НДС ({VAT_RATE}%): {money2(totalVat)} руб.<br />
-          <b>{rublesInWords(totalIncVat)}</b>
+          Всего к оплате: <b>{money2(totals.sumIncVat)}</b> руб., в т.ч. НДС ({vatRate}%): {money2(totals.vat)} руб.<br />
+          <b>{rublesInWords(totals.sumIncVat)}</b>
         </div>
 
-        <div className="grid grid-cols-2 gap-8 mt-6 text-[10px]">
+        <div className="grid grid-cols-2 gap-8 mt-4 text-[10px]">
+          <div>
+            <div>Руководитель организации или иное уполномоченное лицо</div>
+            <div className="flex items-end gap-2 mt-4"><span className="flex-1 border-b border-[#333]" /><span>{SELLER_B2B.director}</span></div>
+            <div className="text-[8px] text-[#555] text-center">(подпись) (ф.и.о.)</div>
+          </div>
+          <div>
+            <div>Главный бухгалтер или иное уполномоченное лицо</div>
+            <div className="flex items-end gap-2 mt-4"><span className="flex-1 border-b border-[#333]" /><span className="w-48 border-b border-[#333]">&nbsp;</span></div>
+            <div className="text-[8px] text-[#555] text-center">(подпись) (ф.и.о.)</div>
+          </div>
+        </div>
+
+        <table className="text-[10px] mt-3">
+          <tbody>
+            {row('Основание передачи (сдачи) / получения (приёмки):', contract ?? `Счёт-спецификация № ${num}`, '8')}
+            {row('Данные о транспортировке и грузе:', '—', '9')}
+          </tbody>
+        </table>
+
+        <div className="grid grid-cols-2 gap-8 mt-4 text-[10px]">
           <div>
             <div className="font-bold mb-1">Товар (груз) передал / услуги, результаты работ сдал</div>
-            <img src="/seal-ooo.png" alt="Подпись и печать" style={{ height: 90, opacity: 0.94 }} />{/* eslint-disable-line @next/next/no-img-element */}
-            <div className="mt-0.5">{SELLER_B2B.director}</div>
-            <div className="mt-2">Дата отгрузки, передачи (сдачи) «___» __________ {new Date(docDate).getFullYear()} г.</div>
+            <div className="flex items-end gap-2 mt-4"><span className="w-32 border-b border-[#333]">&nbsp;</span><span className="flex-1 border-b border-[#333]" /><span>{SELLER_B2B.director}</span></div>
+            <div className="text-[8px] text-[#555] text-center">(должность) (подпись) (ф.и.о.) (10)</div>
+            <div className="mt-2">Дата отгрузки, передачи (сдачи): {source === 'shipped' ? fmtDate(docDate) : '«___» __________ 20__ г.'} (11)</div>
+            <div className="mt-2">Иные сведения об отгрузке, передаче: — (12)</div>
+            <div className="mt-2">Ответственный за правильность оформления факта хозяйственной жизни:</div>
+            <div className="flex items-end gap-2 mt-3"><span className="w-32 border-b border-[#333]">&nbsp;</span><span className="flex-1 border-b border-[#333]" /><span>{SELLER_B2B.director}</span></div>
+            <div className="text-[8px] text-[#555] text-center">(должность) (подпись) (ф.и.о.) (13)</div>
+            <div className="mt-2">Наименование экономического субъекта — составителя документа: {SELLER_B2B.name}, ИНН/КПП {SELLER_B2B.inn}/{SELLER_B2B.kpp} (14)</div>
+            <div className="mt-6">М.П.</div>
           </div>
           <div>
             <div className="font-bold mb-1">Товар (груз) получил / услуги, результаты работ принял</div>
-            <div style={{ height: 90 }} />
-            <div className="border-t border-[#333] pt-0.5">подпись / расшифровка</div>
-            <div className="mt-2">Дата получения (приёмки) «___» __________ 20__ г.</div>
+            <div className="flex items-end gap-2 mt-4"><span className="flex-1 border-b border-[#333]" /><span className="flex-1 border-b border-[#333]" /><span className="flex-1 border-b border-[#333]" /></div>
+            <div className="text-[8px] text-[#555] text-center">(должность) (подпись) (ф.и.о.) (15)</div>
+            <div className="mt-2">Дата получения (приёмки): «___» __________ 20__ г. (16)</div>
+            <div className="mt-2">Иные сведения о получении, приёмке: — (17)</div>
+            <div className="mt-2">Ответственный за правильность оформления факта хозяйственной жизни:</div>
+            <div className="flex items-end gap-2 mt-3"><span className="flex-1 border-b border-[#333]" /><span className="flex-1 border-b border-[#333]" /><span className="flex-1 border-b border-[#333]" /></div>
+            <div className="text-[8px] text-[#555] text-center">(должность) (подпись) (ф.и.о.) (18)</div>
+            <div className="mt-2">Наименование экономического субъекта — составителя документа: {req.full_name || buyerName}{buyerInnKpp ? `, ИНН/КПП ${buyerInnKpp}` : ''} (19)</div>
+            <div className="mt-6">М.П.</div>
           </div>
         </div>
       </div>
