@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import type { B2BMaterial } from '@/lib/types'
 import { materialLabel } from '@/lib/materialLabel'
@@ -514,8 +515,7 @@ export default function B2BCuttingPage() {
   const [expandedMat, setExpandedMat] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
-  const [savingProc, setSavingProc] = useState(false)
-  const [procSaved, setProcSaved] = useState(false)
+  const [role, setRole] = useState<string | null>(null)
   const [optimizing, setOptimizing] = useState(false)
   const [prevResults, setPrevResults] = useState<MaterialCuttingResult[] | null>(null)
 
@@ -553,6 +553,13 @@ export default function B2BCuttingPage() {
       o.items.some(it => (it.width ?? 0) > 0 && (it.height ?? 0) > 0) &&
       o.status !== 'quote'
     )
+
+    // Роль решает, куда вести за закупкой: «Материал под заказы» открыт владельцу и закупщику.
+    const { data: { user } } = await sb.auth.getUser()
+    if (user) {
+      const { data: p } = await sb.from('users').select('role').eq('id', user.id).maybeSingle()
+      setRole((p as { role?: string } | null)?.role ?? null)
+    }
 
     setOrders(parsed)
     setMaterials((matsData ?? []) as B2BMaterial[])
@@ -713,30 +720,6 @@ export default function B2BCuttingPage() {
       </body></html>`
     const w = window.open('', '_blank', 'width=800,height=900')
     if (w) { w.document.write(html); w.document.close() }
-  }
-
-  // Сохранить заявку как запись закупки → попадает в /admin/procurement,
-  // где владелец/закупщик ведёт её по статусам (счёт → оплата → забрали).
-  async function savePurchaseRequest() {
-    if (!results || results.length === 0) return
-    setSavingProc(true)
-    const items = results.map(r => ({
-      name: r.materialLabel,
-      thickness: Number(r.materialKey.split('|')[1]) || 0,
-      sheets: r.sheetsNeeded,
-    }))
-    const order_refs = orders.filter(o => selectedIds.has(o.id)).map(o => `${o.client_name} #${o.id}`)
-    const res = await fetch('/api/admin/purchase-orders', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        supplier_name: '',
-        items, order_refs, b2b_order_ids: Array.from(selectedIds),
-        comment: `Заявка из раскроя ${new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })} — внести № счёта и поставщика`,
-      }),
-    })
-    setSavingProc(false)
-    setProcSaved(res.ok)
-    if (!res.ok) alert('Не удалось сохранить заявку (нужны права закупок).')
   }
 
   // Ориентировочная себестоимость листов по материалу: листы × площадь × cost_price.
@@ -937,10 +920,19 @@ export default function B2BCuttingPage() {
               <div className="px-4 py-3 border-b border-[#f0f0ec] bg-[#fafaf9] flex items-center justify-between gap-2">
                 <h2 className="text-[15px] font-bold text-[#111110]">Список закупки</h2>
                 <div className="flex items-center gap-2">
-                  <button onClick={savePurchaseRequest} disabled={savingProc || procSaved}
-                    className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-50 transition-colors whitespace-nowrap">
-                    {procSaved ? '✓ В закупках' : savingProc ? 'Сохранение…' : 'Сохранить в закупки'}
-                  </button>
+                  {/* Заказ поставщику живёт в одном месте — «Материал под заказы»: там тот же
+                      раскрой, счёт и отметка «заказан» одним действием. Отсюда раньше заводилась
+                      вторая запись закупки без статуса заказов (дубль З3, docs/PURCHASING_ROUTE.md). */}
+                  {role === 'admin' || role === 'ceo' || role === 'buyer' ? (
+                    <Link href="/purchasing"
+                      className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap">
+                      📦 Заказать в «Материал под заказы» →
+                    </Link>
+                  ) : (
+                    <span className="text-[11.5px] text-[#9a9a95] max-w-[260px] leading-tight">
+                      Нет материала — «Нет мат.» в «Мои задачи»: закупщик получит заявку
+                    </span>
+                  )}
                   <button onClick={printSupplierRequest}
                     className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                     🖨 Заявка поставщику
