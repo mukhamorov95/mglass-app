@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { matchScore } from '@/lib/search/translitMatch'
 
 type Invoice = {
   id: number
@@ -57,7 +58,9 @@ export default function InvoicesClient() {
       list = list.filter(i =>
         (i.invoice_no ?? '').toLowerCase().includes(q) ||
         (i.payer_name ?? '').toLowerCase().includes(q) ||
-        i.order_ids.some(o => String(o).includes(q))
+        i.order_ids.some(o => String(o).includes(q)) ||
+        // Плательщик — в обоих алфавитах (О8): «шо» → Shower Glass.
+        (/\p{L}/u.test(q) && matchScore(q, [i.payer_name]) > 0)
       )
     }
     return list

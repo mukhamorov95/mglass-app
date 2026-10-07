@@ -2,6 +2,11 @@ import { finalTotalOf } from './priceOverride'
 import { deadlineFor } from './deadline'
 import { stageDayKey } from '../production/dayLists'
 import { mskDayKey } from '../time'
+import { updCardState, type UpdStatus } from './updStatus'
+import {
+  readyForPickupText, quoteReminderText, paymentReminderText,
+  READY_TEXT_LABEL, QUOTE_REMINDER_LABEL, PAYMENT_REMINDER_LABEL,
+} from './clientTexts'
 
 // «Мой день · B2B» — что сделать сегодня. Маршрут docs/FINMODEL_MANAGER_ROUTE.md, Н2.
 //
@@ -17,8 +22,9 @@ import { mskDayKey } from '../time'
 // отметить было нечем — его отсутствие отметки ничего не говорит.
 export const SHIP_MARKS_SINCE = '2026-09-01'
 export const STALE_QUOTE_MIN_DAYS = 3
-// Просчёт, к которому не прикасались полтора месяца, — уже не «остывает», а остыл.
-export const STALE_QUOTE_MAX_DAYS = 45
+// КП, к которому не прикасались больше месяца, — уже не «остывает», а остыл: напоминание
+// о нём клиенту не поможет (маршрут docs/SYSTEM_ORDER_ROUTE.md, этап 3).
+export const STALE_QUOTE_MAX_DAYS = 30
 export const TOP_LIMIT = 10
 
 const DAY = 86_400_000
@@ -63,7 +69,10 @@ export type PriorityRow = {
   note?: string
   action: string
   actionHref?: string   // куда ведёт кнопка, если не в карточку
+  copy?: RowCopy        // готовый текст клиенту — кнопка «📋» рядом с действием
 }
+
+export type RowCopy = { label: string; text: string; ok: string; title: string }
 
 type Notes = Record<string, unknown>
 
@@ -73,6 +82,8 @@ export function parseNotes(n: string | null): Notes {
 }
 
 export const orderRef = (o: Pick<TodayOrder, 'id' | 'custom_number'>) => o.custom_number?.trim() || `#${o.id}`
+// Для текста клиенту: без своего номера заказ в документах — id с нулями (05066), не «#5066».
+export const clientOrderRef = (o: Pick<TodayOrder, 'id' | 'custom_number'>) => o.custom_number?.trim() || String(o.id).padStart(5, '0')
 const days = (fromMs: number, now: number) => Math.max(0, Math.floor((now - fromMs) / DAY))
 const plural = (n: number) => {
   const d10 = n % 10, d100 = n % 100
@@ -81,6 +92,21 @@ const plural = (n: number) => {
   return 'дней'
 }
 export const daysText = (n: number) => `${n} ${plural(n)}`
+
+// Целые дни между днём YYYY-MM-DD (по Москве) и сегодняшним московским днём.
+function daysSinceDay(day: string, now: number): number {
+  return Math.max(0, Math.round((Date.parse(mskDayKey(now)) - Date.parse(day)) / DAY))
+}
+
+const stagesOf = (n: Notes) => (n.stages as Record<string, unknown> | undefined) ?? {}
+const deliveryOf = (n: Notes) => (n.delivery as { method?: string } | undefined)?.method ?? null
+
+function readyCopy(o: TodayOrder, n: Notes): RowCopy {
+  return {
+    label: READY_TEXT_LABEL, text: readyForPickupText({ ref: clientOrderRef(o), delivery: deliveryOf(n) }),
+    ok: 'Текст «готов к выдаче» скопирован', title: 'Текст клиенту: заказ готов',
+  }
+}
 
 export function isLaunched(o: TodayOrder, n: Notes = parseNotes(o.notes)): boolean {
   return !!o.launched_at || n.status === 'sent' || n.status === 'confirmed'
@@ -110,9 +136,10 @@ export function overdueShipments(orders: TodayOrder[], now: number): PriorityRow
       key: `ship-${o.id}`, client: o.client_name, ref: orderRef(o), href: `/b2b-deal/${o.id}`,
       amount: finalTotalOf(o), days: d, daysLabel: `просрочка ${daysText(d)}`,
       owner: o.created_by_name,
-      note: stageDayKey((n.stages as Record<string, unknown> | undefined)?.packaged) ? 'упакован, не отгружен' : undefined,
+      note: stageDayKey(stagesOf(n).packaged) ? 'упакован, не отгружен' : undefined,
       action: 'Отметить отгрузку',
       actionHref: `/b2b-today/shipments?order=${o.id}`,
+      copy: stageDayKey(stagesOf(n).packaged) ? readyCopy(o, n) : undefined,
     })
   }
   return rows.sort((a, b) => b.days - a.days || b.amount - a.amount)
@@ -130,36 +157,91 @@ export function splitShipments(rows: PriorityRow[]): { recent: PriorityRow[]; ol
   }
 }
 
+// «Готов, не отгружен» (этап 2 маршрута): упакован, отметки «Отгружен» нет. Сверху — свежие,
+// до 14 дней с упаковки; старше почти всегда уехало без отметки — это хвост разбора
+// (решение владельца 30.09), он считается в backfillCandidates. Заказы, уже стоящие
+// в «Просроченных отгрузках», не повторяем.
+export function readyNotShipped(orders: TodayOrder[], now: number, skip: ReadonlySet<string> = new Set()): PriorityRow[] {
+  const rows: PriorityRow[] = []
+  for (const o of orders) {
+    const n = parseNotes(o.notes)
+    if (n.is_template === true || !isLaunched(o, n) || isShipped(n)) continue
+    if (skip.has(`ship-${o.id}`)) continue
+    const day = stageDayKey(stagesOf(n).packaged)
+    if (!day) continue
+    const d = daysSinceDay(day, now)
+    if (d > SHIP_RECENT_DAYS) continue
+    rows.push({
+      key: `ready-${o.id}`, client: o.client_name, ref: orderRef(o), href: `/b2b-deal/${o.id}`,
+      amount: finalTotalOf(o), days: d, daysLabel: d === 0 ? 'упакован сегодня' : `ждёт ${daysText(d)}`,
+      owner: o.created_by_name,
+      action: 'Отметить отгрузку', actionHref: `/b2b-today/shipments?order=${o.id}`,
+      copy: readyCopy(o, n),
+    })
+  }
+  return rows.sort((a, b) => b.days - a.days || b.amount - a.amount)
+}
+
+// «Выдать УПД» (этап 2): отгружен после включения серии, клиенту нужен УПД (есть ИНН), УПД
+// не выдан. Решение «нужен ли» — то же, что у метки в строке /b2b-orders (updCardState).
+// Отгрузки раньше включения серии закрыты программой бухгалтера — их здесь нет, как и
+// в «Ждут УПД» у бухгалтера. Серия не задана — группы нет.
+export function updToIssue(orders: TodayOrder[], upd: UpdStatus | null, now: number): PriorityRow[] {
+  const switchDay = upd?.series.switchDay ?? null
+  if (!upd || !switchDay) return []
+  const rows: PriorityRow[] = []
+  for (const o of orders) {
+    const n = parseNotes(o.notes)
+    if (n.is_template === true || !isLaunched(o, n) || !isShipped(n)) continue
+    const day = stageDayKey(stagesOf(n).shipped)
+    if (!day || day < switchDay) continue
+    if (updCardState(o.id, true, upd).kind !== 'issue') continue
+    const d = daysSinceDay(day, now)
+    rows.push({
+      key: `upd-${o.id}`, client: o.client_name, ref: orderRef(o), href: `/b2b-deal/${o.id}`,
+      amount: finalTotalOf(o), days: d, daysLabel: d === 0 ? 'отгружен сегодня' : `отгружен ${daysText(d)} назад`,
+      owner: o.created_by_name, action: 'Выдать УПД', actionHref: `/b2b-quotes/${o.id}/upd`,
+    })
+  }
+  return rows.sort((a, b) => b.days - a.days || b.amount - a.amount)
+}
+
 export type BackfillRow = {
   id: number
   ref: string
   client: string
   amount: number
   owner: string | null
-  days: number
+  days: number               // сколько ждёт отметки: от упаковки, а у неупакованного — от срока
+  overdueDays: number | null // просрочка срока; null — срок ещё не прошёл
   deadlineDay: string        // YYYY-MM-DD по Москве
   packagedDay: string | null
   defaultDate: string        // что предложить: день упаковки, иначе срок; не позже сегодня
 }
 
-// Кандидаты на разбор — те же заказы, что в «просроченных отгрузках». Дата по умолчанию
-// не «сегодня»: пачка вчерашних отгрузок сегодняшним числом раздула бы «отгружено
-// сегодня» в цеху и дневные списки.
+// Кандидаты на разбор: запущен, не отгружен и либо упакован, либо срок прошёл. Сюда же —
+// заказы со сроком до возврата отметки (01.09): «Отметить месяц отгруженным» в /b2b-orders
+// ставил им сегодняшнюю дату, теперь их закрывают здесь, каждому — своя дата.
+// Дата по умолчанию не «сегодня»: пачка вчерашних отгрузок сегодняшним числом раздула бы
+// «отгружено сегодня» в цеху и дневные списки, а у отгрузки после включения серии УПД
+// получил бы неверную дату.
 export function backfillCandidates(orders: TodayOrder[], now: number): BackfillRow[] {
-  const since = Date.parse(SHIP_MARKS_SINCE)
   const today = mskDayKey(now)
   const rows: BackfillRow[] = []
   for (const o of orders) {
     const n = parseNotes(o.notes)
     if (n.is_template === true || !isLaunched(o, n) || isShipped(n)) continue
     const dl = orderDeadline(o, n).getTime()
-    if (dl < since || dl >= now) continue
-    const packagedDay = stageDayKey((n.stages as Record<string, unknown> | undefined)?.packaged)
+    const packagedDay = stageDayKey(stagesOf(n).packaged)
+    const overdue = dl < now
+    if (!overdue && !packagedDay) continue
     const deadlineDay = mskDayKey(dl)
     const guess = packagedDay ?? deadlineDay
     rows.push({
       id: o.id, ref: orderRef(o), client: o.client_name, amount: finalTotalOf(o), owner: o.created_by_name,
-      days: days(dl, now), deadlineDay, packagedDay, defaultDate: guess > today ? today : guess,
+      days: packagedDay ? daysSinceDay(packagedDay, now) : days(dl, now),
+      overdueDays: overdue ? days(dl, now) : null,
+      deadlineDay, packagedDay, defaultDate: guess > today ? today : guess,
     })
   }
   return rows.sort((a, b) => b.days - a.days || b.amount - a.amount)
@@ -173,7 +255,8 @@ export function backfillDateProblem(date: string, today: string, launchedDay: st
   return null
 }
 
-export function unpaidInvoices(invoices: TodayInvoice[], now: number): PriorityRow[] {
+// refs — номера заказов из уже загруженного списка: клиент знает заказ по номеру, а не по id.
+export function unpaidInvoices(invoices: TodayInvoice[], now: number, refs: ReadonlyMap<number, string> = new Map()): PriorityRow[] {
   return invoices
     .filter(i => i.status !== 'cancelled' && i.derivedStatus !== 'paid')
     .map(i => {
@@ -189,6 +272,13 @@ export function unpaidInvoices(invoices: TodayInvoice[], now: number): PriorityR
         owner: i.created_by_name,
         note: partial ? `оплачено ${Math.round(i.paid).toLocaleString('ru-RU')} ₽, остаток` : undefined,
         action: 'Напомнить об оплате',
+        copy: {
+          label: PAYMENT_REMINDER_LABEL, ok: 'Напоминание об оплате скопировано', title: 'Текст клиенту: оплата',
+          text: paymentReminderText({
+            invoiceNo: i.invoice_no, orderRefs: ids.map(id => refs.get(id) ?? '').filter(Boolean),
+            total: Number(i.amount) || 0, paid: partial ? i.paid : 0,
+          }),
+        },
       }
     })
     .sort((a, b) => b.days - a.days || b.amount - a.amount)
@@ -202,10 +292,15 @@ export function staleQuotes(orders: TodayOrder[], now: number): PriorityRow[] {
     if (String(n.status ?? 'quote') !== 'quote' || n.public_opened_at) continue
     const d = days(Date.parse(o.updated_at ?? o.created_at), now)
     if (d < STALE_QUOTE_MIN_DAYS || d > STALE_QUOTE_MAX_DAYS) continue
+    const amount = finalTotalOf(o)
     rows.push({
       key: `quote-${o.id}`, client: o.client_name, ref: orderRef(o), href: `/b2b-deal/${o.id}`,
-      amount: finalTotalOf(o), days: d, daysLabel: `без движения ${daysText(d)}`,
+      amount, days: d, daysLabel: `без движения ${daysText(d)}`,
       owner: o.created_by_name, action: 'Отправить клиенту',
+      copy: {
+        label: QUOTE_REMINDER_LABEL, ok: 'Напоминание о КП скопировано', title: 'Текст клиенту: напоминание о КП',
+        text: quoteReminderText({ ref: clientOrderRef(o), amount, day: mskDayKey(typeof n.quote_date === 'string' ? n.quote_date : o.created_at) }),
+      },
     })
   }
   // Просчёты — по деньгам: из двадцати остывающих первым звонят по самому крупному.

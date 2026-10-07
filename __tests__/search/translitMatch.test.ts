@@ -46,3 +46,15 @@ describe('поиск клиента в обоих алфавитах', () => {
     expect(soundKey('Ёлка Йошкар')).toBe('elka ioshkar')
   })
 })
+
+describe('поиск клиента в списках B2B (этап 10)', () => {
+  it('подпись с числом заказов не мешает: «шо» находит «ShowerGlass · 34»', () => {
+    expect(matchScore('шо', ['ShowerGlass · 34'])).toBeGreaterThan(0)
+  })
+  it('ИНН и название юрлица из списка клиента — тоже поля поиска', () => {
+    const fields = ['СпецМонтаж', null, '+7 915 585 70 33', null, null, 'ИП Литвинов Сергей', '910203040506']
+    expect(matchScore('литвин', fields)).toBeGreaterThan(0)
+    expect(matchScore('9102030', fields)).toBeGreaterThan(0)
+    expect(matchScore('глас', fields)).toBe(0)
+  })
+})

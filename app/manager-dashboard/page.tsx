@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BCRM, B2BInteraction, clientToCRM, B2B_INTERACTION_TYPES } from '@/lib/types'
 import { liveOrders } from '@/lib/liveOrders'
+import { finalTotalOf } from '@/lib/b2b/priceOverride'
 
 type Quote = {
   id: number
@@ -263,8 +264,8 @@ export default function ManagerDashboardPage() {
       const s = parseNotes(q.notes).status
       return s === 'confirmed' || s === 'agreed'
     })
-    const total = confirmed.reduce((s, q) =>
-      s + (q.discount_percent > 0 ? q.total_after_discount : q.total_sale_inc_vat), 0)
+    // Итог — finalTotalOf, как везде: «скидка > 0 ? после скидки : прайс» теряла корректировку итога.
+    const total = confirmed.reduce((s, q) => s + finalTotalOf(q), 0)
     const conversion = thisMonth.length > 0 ? Math.round(confirmed.length / thisMonth.length * 100) : 0
     const avgMargin = confirmed.length > 0
       ? Math.round(confirmed.reduce((s, q) => s + (q.margin_percent ?? 0), 0) / confirmed.length)
@@ -465,10 +466,10 @@ export default function ManagerDashboardPage() {
             ) : (
               <div className="divide-y divide-[#f8f8f7]">
                 {noReply.slice(0, 10).map(q => {
-                  const total = q.discount_percent > 0 ? q.total_after_discount : q.total_sale_inc_vat
+                  const total = finalTotalOf(q)
                   const manager = parseNotes(q.notes).manager_name as string | null
                   return (
-                    <div key={q.id} onClick={() => router.push('/b2b-quotes')}
+                    <div key={q.id} onClick={() => router.push(`/b2b-deal/${q.id}`)}
                       className="px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-[#fafaf9] transition-colors">
                       <div>
                         <p className="text-[13px] font-medium text-[#111110]">{q.client_name}</p>
@@ -536,7 +537,7 @@ export default function ManagerDashboardPage() {
                 { href: '/b2b-crm',        icon: '🗂️', label: 'B2B CRM' },
                 { href: '/calculator/b2b', icon: '🧮', label: 'Новый просчёт' },
                 { href: '/b2b-quotes',     icon: '📝', label: 'Просчёты' },
-                { href: '/b2b-pipeline',   icon: '📊', label: 'Воронка продаж' },
+                { href: '/b2b-today',      icon: '📋', label: 'Мой день · B2B' },
                 { href: '/b2b-production', icon: '⚙️', label: 'Производство' },
                 { href: '/b2b-analytics',  icon: '📈', label: 'Аналитика' },
               ].map(l => (

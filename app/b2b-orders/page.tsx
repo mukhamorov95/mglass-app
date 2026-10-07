@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { toast, responseError } from '@/lib/toast'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { confirmDialog, promptDialog } from '@/lib/dialog'
 import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
@@ -14,6 +14,11 @@ import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/prod
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
+import { maxFormattedNumber, nextOrderNumber } from '@/lib/b2b/orderNumber'
+import { payStatusFromPayments, type OrderPayStatus } from '@/lib/b2b/orderPayStatus'
+import { writeFailure } from '@/lib/rlsWrite'
+import { matchScore } from '@/lib/search/translitMatch'
+import ClientPicker from '@/components/ClientPicker'
 import { updCardState, type UpdStatus } from '@/lib/b2b/updStatus'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import { DAY_PRESETS, clientKeyer, clientOptions, dayPresetRange, summarizeOrders } from '@/lib/b2b/ordersFilter'
@@ -339,27 +344,13 @@ function formatMonthKey(key: string): string {
   return `${MONTH_NAMES[parseInt(month) - 1]} ${year}`
 }
 
-type OrderPayStatus = 'paid' | 'partial' | 'unpaid' | 'unknown'
-
+// Метка в строке — только то, что подтверждают платежи. Ноль платежей — «оплата не заведена»
+// (A23), а не доказанный долг: красной метки на нём нет, в шапке он идёт в «без платежей».
 const PAY_BADGE: Record<OrderPayStatus, { label: string; cls: string } | null> = {
   paid:    { label: 'Оплачен',    cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
   partial: { label: 'Частично',   cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
-  unpaid:  { label: 'Не опл.',    cls: 'bg-red-50 text-red-600 border border-red-100' },
+  unpaid:  null,
   unknown: null,
-}
-
-function getOrderPayStatus(order: Order): OrderPayStatus {
-  const pn = order.parsedNotes
-  const stages = pn.stages ?? {}
-  // Production stage invoice_paid is the strongest signal
-  if (stages.invoice_paid)              return 'paid'
-  // payment_status carried over from b2b-quotes flow
-  if (pn.payment_status === 'paid')     return 'paid'
-  if (pn.payment_status === 'partial')  return 'partial'
-  if (pn.payment_status === 'unpaid')   return 'unpaid'
-  // invoice sent but not yet paid
-  if (stages.invoice_sent)              return 'unpaid'
-  return 'unknown'
 }
 
 // Поиск по номеру и клиенту. Заказы без custom_number идентифицируются по id (в ленте
@@ -373,7 +364,9 @@ function matchesSearch(o: Order, raw: string): boolean {
     (o.custom_number ?? '').toLowerCase().includes(q) ||
     (o.client_order_number ?? '').toLowerCase().includes(q) ||
     getOrderNum(o.parsedNotes).toLowerCase().includes(q) ||
-    (qn !== '' && String(o.id).includes(qn))
+    (qn !== '' && String(o.id).includes(qn)) ||
+    // Клиент — в обоих алфавитах (О8): «шо» находит Shower Glass, «гласс» — M GLASS.
+    (/\p{L}/u.test(q) && matchScore(q, [o.client_name]) > 0)
   )
 }
 
@@ -603,9 +596,11 @@ export default function B2BOrdersPage() {
   const [dcSaving, setDcSaving] = useState<number | null>(null)
   const [productionDayMode, setProductionDayMode] = useState(false)
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
-  const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
-  // A23: оплачено по заказам — из payments (деньги, не notes). Пусто, пока не загрузилось.
-  const [paidByOrderId, setPaidByOrderId] = useState<Record<number, number>>({})
+  // A23: оплачено по заказам — из payments (деньги, не notes). null — ещё не загрузилось.
+  const [paidByOrderId, setPaidByOrderId] = useState<Record<number, number> | null>(null)
+  const [paidErr, setPaidErr] = useState<string | null>(null)
+  const getOrderPayStatus = (o: Order): OrderPayStatus =>
+    payStatusFromPayments(getFinalPrice(o), paidByOrderId ? (paidByOrderId[o.id] ?? 0) : undefined)
   // Подтверждение отгрузки при неоплаченном остатке (не блок, второй клик).
   const [shipConfirmId, setShipConfirmId] = useState<number | null>(null)
   // Этап 9: УПД у заказов — номер выданного и «Выдать УПД» у отгруженного. Пусто, пока не загрузилось.
@@ -745,17 +740,22 @@ export default function B2BOrdersPage() {
 
   async function saveNum(orderId: number) {
     setSavingNum(true)
-    const sb = createClient()
-    await sb.from('b2b_orders').update({
-      custom_number: editCustomNum.trim() || null,
-      client_order_number: editClientNum.trim() || null,
-    }).eq('id', orderId)
-    setOrders(prev => prev.map(o => o.id === orderId
-      ? { ...o, custom_number: editCustomNum.trim() || null, client_order_number: editClientNum.trim() || null }
-      : o
-    ))
-    setSavingNum(false)
-    setEditNumId(null)
+    try {
+      const sb = createClient()
+      // RLS молча отбирает 0 строк — судим по вернувшимся строкам, а не по отсутствию ошибки.
+      const fail = writeFailure(await sb.from('b2b_orders').update({
+        custom_number: editCustomNum.trim() || null,
+        client_order_number: editClientNum.trim() || null,
+      }).eq('id', orderId).select('id'))
+      if (fail) { toast.error('Номер не сохранён', { detail: `${fail}. Номер остался в поле — нажмите ещё раз.` }); return }
+      setOrders(prev => prev.map(o => o.id === orderId
+        ? { ...o, custom_number: editCustomNum.trim() || null, client_order_number: editClientNum.trim() || null }
+        : o
+      ))
+      setEditNumId(null)
+    } catch {
+      toast.error('Номер не сохранён', { detail: NETWORK_ERROR })
+    } finally { setSavingNum(false) }
   }
 
   // Владелец меняет итог заказа: серверный роут пересчитывает все позиции
@@ -786,32 +786,24 @@ export default function B2BOrdersPage() {
     setGeneratingNum(orderId)
     try {
       const sb = createClient()
-      const { data: allOrders } = await sb
-        .from('b2b_orders')
-        .select('custom_number')
-        .not('custom_number', 'is', null)
-
-      let maxNum = 0
-      let hasFormat = false
-      for (const o of allOrders ?? []) {
-        if (o.custom_number) {
-          const m = (o.custom_number as string).match(/^(\d+)-\d+$/)
-          if (m) {
-            hasFormat = true
-            const n = parseInt(m[1])
-            if (n > maxNum) maxNum = n
-          }
-        }
+      // Все номера, постранично: одним запросом приходила 1000 из ~3700 в случайном порядке,
+      // максимум брался из случайной выборки — и номер повторялся.
+      const numbers: string[] = []
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await sb.from('b2b_orders').select('id, custom_number')
+          .not('custom_number', 'is', null).order('id').range(from, from + 999)
+        if (error) { toast.error('Номер не подобран', { detail: `${error.message}. Попробуйте ещё раз.` }); return }
+        numbers.push(...(data ?? []).map(o => String(o.custom_number)))
+        if (!data || data.length < 1000) break
       }
-
-      if (!hasFormat) {
-        const { count } = await sb
-          .from('b2b_orders')
-          .select('id', { count: 'exact', head: true })
+      let maxNum = maxFormattedNumber(numbers)
+      if (maxNum === null) {
+        const { count, error } = await sb.from('b2b_orders').select('id', { count: 'exact', head: true })
+        if (error) { toast.error('Номер не подобран', { detail: `${error.message}. Попробуйте ещё раз.` }); return }
         maxNum = (count ?? 0) + 999
       }
 
-      const newNum = `${maxNum + 1}-${String(managerCode).padStart(2, '0')}`
+      const newNum = nextOrderNumber(maxNum, managerCode)
       const order = orders.find(o => o.id === orderId)
       if (order) {
         setEditNumId(orderId)
@@ -826,10 +818,11 @@ export default function B2BOrdersPage() {
   async function handleDelete() {
     if (!deletingId) return
     setDeleting(true)
-    await createClient()
+    const fail = writeFailure(await createClient()
       .from('b2b_orders')
       .update({ archived_at: new Date().toISOString() })
-      .eq('id', deletingId)
+      .eq('id', deletingId).select('id'), 'delete')
+    if (fail) { toast.error('Заказ не убран в архив', { detail: fail }); setDeleting(false); return }
     setOrders(prev => prev.filter(o => o.id !== deletingId))
     if (expanded === deletingId) setExpanded(null)
     setDeletingId(null)
@@ -843,6 +836,37 @@ export default function B2BOrdersPage() {
   const [dateTo, setDateTo] = useState('')
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineStatus | 'all'>('all')
   const [boardFilter, setBoardFilter] = useState<ProductionBoardFilter>(null)
+
+  // Пачками по 1000 id: длинный адрес запроса режут прокси, а сервер берёт не больше 2000.
+  async function loadPaid(ids: number[]) {
+    const parts: number[][] = []
+    for (let i = 0; i < ids.length; i += 1000) parts.push(ids.slice(i, i + 1000))
+    try {
+      const res = await Promise.all(parts.map(async part => {
+        const r = await fetch(`/api/b2b-orders/payments?ids=${part.join(',')}`).catch(() => { throw new Error(NETWORK_ERROR) })
+        if (!r.ok) throw new Error(await responseError(r))
+        const j = await r.json() as { paid?: Record<number, number> }
+        return j.paid ?? {}
+      }))
+      setPaidByOrderId(Object.assign({}, ...res))
+      setPaidErr(null)
+    } catch (e) {
+      setPaidErr(e instanceof Error ? e.message : NETWORK_ERROR)
+    }
+  }
+
+  // Оплата одного заказа после отметки — тем же расчётом, что весь список.
+  async function reloadPaid(orderId: number) {
+    const r = await fetch(`/api/b2b-orders/payments?ids=${orderId}`).catch(() => null)
+    if (!r?.ok) { toast.error('Оплата заказа не обновилась на экране', { detail: r ? await responseError(r) : NETWORK_ERROR }); return }
+    const j = await r.json().catch(() => null) as { paid?: Record<number, number> } | null
+    setPaidByOrderId(prev => {
+      const next = { ...(prev ?? {}) }
+      if (j?.paid?.[orderId] != null) next[orderId] = j.paid[orderId]
+      else delete next[orderId]
+      return next
+    })
+  }
 
   async function loadOrders() {
     setLoading(true)
@@ -881,7 +905,9 @@ export default function B2BOrdersPage() {
             .range(from, from + 999)
           if (!canSeeAll) q = q.eq('created_by', uid)
           const { data, error } = await q
-          if (error || !data?.length) break
+          // Сбой страницы — не «заказы кончились»: иначе список молча обрезался бы.
+          if (error) throw new Error(`заказы: ${error.message}`)
+          if (!data?.length) break
           acc.push(...data)
           if (data.length < 1000) break
         }
@@ -917,14 +943,11 @@ export default function B2BOrdersPage() {
       })) as Order[]
       setOrders(parsed)
 
-      // A23: оплата по заказам отдельным лёгким запросом — деньги из payments.
-      // Ошибка не мешает списку: без данных признак просто молчит.
+      // A23: оплата по заказам отдельным лёгким запросом — деньги из payments. Ошибка не
+      // мешает списку, но говорится в шапке: без платежей «оплачено» соврало бы нулём.
       const orderIds = parsed.map(o => o.id)
       if (orderIds.length) {
-        fetch(`/api/b2b-orders/payments?ids=${orderIds.slice(0, 2000).join(',')}`)
-          .then(r => r.ok ? r.json() : null)
-          .then((j: { paid?: Record<number, number> } | null) => { if (j?.paid) setPaidByOrderId(j.paid) })
-          .catch(() => {})
+        void loadPaid(orderIds)
         fetchUpdStatus(orderIds).then(st => { if (st) setUpdStatus(st) })
       }
 
@@ -956,6 +979,8 @@ export default function B2BOrdersPage() {
     (!dateTo || launchedDay(o) <= dateTo),
   ), [orders, search, clientKey, clientKeyOf, dateFrom, dateTo])
   const clientOpts = useMemo(() => clientOptions(orders, clientKeyOf), [orders, clientKeyOf])
+  // ClientPicker работает с числовым id — номер строки в clientOpts (+1, чтобы 0 не путался с «все»).
+  const clientPickerOpts = useMemo(() => clientOpts.map((c, i) => ({ id: i + 1, label: `${c.label} · ${c.count}` })), [clientOpts])
   const pickedClient = clientOpts.find(c => c.key === clientKey) ?? null
 
   const filteredOrdersBase = useMemo(() => {
@@ -1108,7 +1133,7 @@ export default function B2BOrdersPage() {
   // (finalTotalOf уже отдаёт total_after_discount). Долг показываем только при
   // частичной оплате — ноль платежей это «нет данных», а не долг.
   function orderRemainder(order: Order) {
-    return remainderStatus(getFinalPrice(order), paidByOrderId[order.id] ?? 0)
+    return remainderStatus(getFinalPrice(order), paidByOrderId?.[order.id] ?? 0)
   }
 
   async function toggleStage(orderId: number, stageKey: StageKey) {
@@ -1133,9 +1158,14 @@ export default function B2BOrdersPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: willBePaid ? 'paid' : 'unpaid' }),
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) return
+      const d = await r.json().catch(() => ({})) as { notes?: NotesData; error?: string; warnings?: string[] }
+      if (!r.ok) {
+        toast.error(willBePaid ? 'Оплата не отмечена' : 'Оплата не снята', { detail: d.error || await responseError(r) })
+        return
+      }
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: (d.notes ?? o.parsedNotes) as NotesData } : o))
+      if (d.warnings?.length) toast.error('Оплата отмечена с предупреждением', { detail: d.warnings.join('; ') })
+      void reloadPaid(orderId)
       return
     }
     const next = stages[stageKey] ? null : new Date().toISOString().slice(0, 10)
@@ -1150,6 +1180,7 @@ export default function B2BOrdersPage() {
     })
     if (!r.ok) {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: order.parsedNotes } : o))
+      toast.error(next ? 'Отметка не сохранена' : 'Отметка не снята', { detail: `${await responseError(r)}. На экране вернул как было.` })
       return
     }
     const d = await r.json().catch(() => ({}))
@@ -1232,64 +1263,6 @@ export default function B2BOrdersPage() {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
       toast.success('Следующий контроль: завтра')
     }
-  }
-
-  async function bulkMarkMonthAsShipped(monthKey: string, ordersToUpdate: Order[]) {
-    setBulkActionLoading(monthKey)
-    const now = new Date().toISOString()
-    const today = now.slice(0, 10)
-    let updatedCount = 0
-
-    for (const order of ordersToUpdate) {
-      if (getDeadlineStatus(order).status !== 'overdue') continue
-
-      const currentNotes = order.parsedNotes
-      const nextNotes: NotesData = {
-        ...currentNotes,
-        stages: {
-          ...(currentNotes.stages || {}),
-          // Дата отгрузки — календарная, как у ручного тумблера. Раньше здесь
-          // писался полный ISO, и два формата в одном поле ломали сравнения дат.
-          packaged: currentNotes.stages?.packaged || today,
-          shipped: today,
-        },
-        bulk_actions: [
-          ...(Array.isArray(currentNotes.bulk_actions) ? currentNotes.bulk_actions : []),
-          {
-            type: 'bulk_mark_shipped' as const,
-            scope: 'production_day_month' as const,
-            month_key: monthKey,
-            order_id: order.id,
-            previous_stages: currentNotes.stages || {},
-            created_at: now,
-            created_by: currentUserId || 'unknown',
-          },
-        ],
-      }
-
-      const r = await fetch(`/api/b2b-orders/${order.id}/stages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stages: { packaged: currentNotes.stages?.packaged || today, shipped: today },
-          patch: { bulk_actions: nextNotes.bulk_actions },
-        }),
-      })
-      const error = r.ok ? null : new Error('bulk stage write failed')
-
-      if (error) {
-        setBulkActionLoading(null)
-        toast.error(`Заказ #${order.id} не отмечен отгруженным`, {
-          detail: `${await responseError(r)}. Успешно обновлено: ${updatedCount} из ${ordersToUpdate.length}; остальные не тронуты — нажмите «Отметить месяц отгруженным» ещё раз.`,
-        })
-        return
-      }
-
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, parsedNotes: nextNotes } : o))
-      updatedCount++
-    }
-
-    setBulkActionLoading(null)
-    toast.success(`Отгружено: ${updatedCount} заказов`)
   }
 
   function toggleOrderSelection(orderId: number) {
@@ -2255,11 +2228,15 @@ export default function B2BOrdersPage() {
               className="w-full pl-8 pr-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg outline-none focus:border-[#111110] text-[#111110] placeholder:text-[#b4b4ae]"
             />
           </div>
-          <select value={clientKey} onChange={e => setClientKey(e.target.value)} aria-label="Покупатель"
-            className={`max-w-[240px] border rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110] ${clientKey ? 'border-[#111110] text-[#111110] font-medium' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
-            <option value="">Все покупатели</option>
-            {clientOpts.map(c => <option key={c.key} value={c.key}>{c.label} · {c.count}</option>)}
-          </select>
+          {/* Покупатель вводом в обоих алфавитах (О8), а не прокруткой списка из сотни имён. */}
+          <div className="w-[240px]" aria-label="Покупатель">
+            <ClientPicker
+              options={clientPickerOpts}
+              value={clientKey ? (clientOpts.findIndex(c => c.key === clientKey) + 1) || null : null}
+              onChange={id => setClientKey(id ? clientOpts[id - 1]?.key ?? '' : '')}
+              noneLabel="Все покупатели"
+              placeholder="Покупатель: «шо», «гласс»…" />
+          </div>
           <div className="flex items-center gap-1.5 text-[12px] text-[#8a8a85]">
             <span>с</span>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
@@ -2342,9 +2319,17 @@ export default function B2BOrdersPage() {
           <p className="text-[11px] text-[#6b6b66] mt-1">
             в работе {scope.active.count} · {rub(scope.active.sum)} ₽ · отгружено {scope.shipped.count} · {rub(scope.shipped.sum)} ₽
             <span className="text-[#c4c4be]"> | </span>
-            <span className="text-emerald-700">оплачено {scope.paid.count} · {rub(scope.paid.sum)} ₽</span>
-            {scope.partial.count > 0 && <> · <span className="text-amber-700">частично {scope.partial.count} · {rub(scope.partial.sum)} ₽</span></>}
-            {' · '}<span className={scope.unpaid.count ? 'text-red-600' : ''}>не оплачено {scope.unpaid.count} · {rub(scope.unpaid.sum)} ₽</span>
+            {paidErr ? (
+              <span className="text-red-600">оплата не загрузилась: {paidErr}</span>
+            ) : !paidByOrderId ? (
+              <span className="text-[#9a9a95]">оплата загружается…</span>
+            ) : (
+              <span title="По платежам из банка, кассы и отметок «Оплачен» (таблица payments), а не по галочкам в заказе">
+                <span className="text-emerald-700">оплачено {scope.paid.count} · {rub(scope.paid.sum)} ₽</span>
+                {scope.partial.count > 0 && <> · <span className="text-amber-700">частично {scope.partial.count} · {rub(scope.partial.sum)} ₽</span></>}
+                {' · '}<span className={scope.unpaid.count ? 'text-red-600' : ''}>без платежей {scope.unpaid.count} · {rub(scope.unpaid.sum)} ₽</span>
+              </span>
+            )}
           </p>
           {scope.all.count !== filteredOrders.length && (
             <p className="text-[11px] text-[#9a9a95] mt-1">Ниже в списке {filteredOrders.length} из них — по выбранному этапу и сроку.</p>
@@ -2507,27 +2492,18 @@ export default function B2BOrdersPage() {
                           {sortedMonths.map(monthKey => {
                             const monthOrders = byMonth.get(monthKey)!
                             const monthLabel = formatMonthKey(monthKey)
-                            const isBulkLoading = bulkActionLoading === monthKey
                             return (
                               <div key={monthKey}>
                                 <div className="px-4 py-2 bg-red-50/40 flex items-center gap-2">
                                   <span className="text-[11px] font-semibold text-red-700">{monthLabel}</span>
                                   <span className="text-[11px] text-red-400">— {monthOrders.length} зак.</span>
-                                  <button
-                                    onClick={async () => {
-                                      if (isBulkLoading) return
-                                      const confirmed = await confirmDialog({
-                                        title: `Отметить все просроченные заказы за ${monthLabel} отгруженными?`,
-                                        text: `Будет изменено: ${monthOrders.length} заказов.\nДействие будет записано в историю notes.bulk_actions.`,
-                                        confirmLabel: 'Отметить отгруженными', danger: true,
-                                      })
-                                      if (!confirmed) return
-                                      bulkMarkMonthAsShipped(monthKey, monthOrders)
-                                    }}
-                                    disabled={isBulkLoading}
-                                    className="ml-auto text-[10px] font-medium px-2.5 py-1 rounded-lg border border-red-200 text-red-700 bg-white hover:bg-red-50 transition-colors disabled:opacity-50">
-                                    {isBulkLoading ? 'Обновляем...' : 'Отметить месяц отгруженным'}
-                                  </button>
+                                  {/* Раньше здесь ставилась сегодняшняя дата всему месяцу: у прошлых отгрузок —
+                                      неверная дата, после включения серии — риск второго УПД. Разбор — с датой по заказу. */}
+                                  <Link href="/b2b-today/shipments"
+                                    title="Разбор отгрузок: у каждого заказа своя дата — по умолчанию день упаковки"
+                                    className="ml-auto text-[10px] font-medium px-2.5 py-1 rounded-lg border border-red-200 text-red-700 bg-white hover:bg-red-50 transition-colors">
+                                    Разобрать отгрузки с датами →
+                                  </Link>
                                 </div>
                                 <div className="divide-y divide-[#f8f8f7]">
                                   {monthOrders.map(renderPdRow)}

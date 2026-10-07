@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { createScopedClient } from '@/lib/supabase-browser'
+import { confirmDialog } from '@/lib/dialog'
+import { toast } from '@/lib/toast'
+import { writeFailure } from '@/lib/rlsWrite'
 import {
   type B2BLegalEntity, type EntityForm, ENTITY_FIELDS,
   emptyEntityForm, entityToForm, formToRow, entityTitle,
@@ -101,19 +104,27 @@ export default function EntitiesEditor({ clientId, orgId, onChanged }: { clientI
     setBusyId(e.id)
     try {
       const { sb } = createScopedClient(orgId)
-      await sb.from(TABLE).update({ is_default: false }).eq('client_id', clientId).eq('organization_id', orgId)
-      await sb.from(TABLE).update({ is_default: true }).eq('id', e.id).eq('organization_id', orgId)
+      const { error: offErr } = await sb.from(TABLE).update({ is_default: false }).eq('client_id', clientId).eq('organization_id', orgId)
+      if (offErr) { toast.error('Основное юрлицо не изменено', { detail: offErr.message }); return }
+      const fail = writeFailure(await sb.from(TABLE).update({ is_default: true }).eq('id', e.id).eq('organization_id', orgId).select('id'))
+      if (fail) { toast.error('Основное юрлицо не изменено', { detail: fail }); await load(); return }
       await mirrorDefault(entityToForm(e))
       flash('Основное юрлицо изменено'); await load(); onChanged?.()
     } finally { setBusyId(null) }
   }
 
   async function deactivate(e: B2BLegalEntity) {
-    if (!confirm(`Убрать юрлицо «${entityTitle(e)}» из списка? Старые счета не изменятся.`)) return
+    const ok = await confirmDialog({
+      title: `Убрать юрлицо «${entityTitle(e)}» из списка?`,
+      text: 'Старые счета не изменятся: юрлицо просто перестанет предлагаться в новых.',
+      confirmLabel: 'Убрать', danger: true,
+    })
+    if (!ok) return
     setBusyId(e.id)
     try {
       const { sb } = createScopedClient(orgId)
-      await sb.from(TABLE).update({ active: false, is_default: false }).eq('id', e.id).eq('organization_id', orgId)
+      const fail = writeFailure(await sb.from(TABLE).update({ active: false, is_default: false }).eq('id', e.id).eq('organization_id', orgId).select('id'))
+      if (fail) { toast.error('Юрлицо не убрано', { detail: fail }); return }
       // если убрали основное — назначим основным первое из оставшихся
       const rest = list.filter(x => x.id !== e.id)
       if (e.is_default && rest[0]) {

@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createScopedClient } from '@/lib/supabase-browser'
 import { isMGlassClient } from '@/lib/b2bScope'
+import { matchScore } from '@/lib/search/translitMatch'
+import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { useOrganization } from '@/lib/hooks/use-organization'
 import {
   B2BClient, B2BCRM, B2BInteraction, clientToCRM,
@@ -77,6 +79,9 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
   const { orgId } = useOrganization()
   const [clients, setClients] = useState<ClientWithMeta[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
+  // Юрлица клиента — для поиска по их названию и ИНН (у клиента их бывает несколько).
+  const [entitiesByClient, setEntitiesByClient] = useState<Map<number, string[]>>(new Map())
 
   const [search, setSearch] = useState('')
   const [filterSegment, setFilterSegment] = useState('')
@@ -103,31 +108,61 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
 
   async function load() {
     setLoading(true)
+    setLoadErr(null)
     // fromOrg() automatically appends .eq('organization_id', orgId)
     // RLS on the DB enforces the same constraint as a second layer of defense.
     const { fromOrg } = createScopedClient(orgId)
 
-    const [{ data: cls }, { data: orders }, { data: lastInts }] = await Promise.all([
-      fromOrg('b2b_clients', CRM_COLS).order('name'),
-      // 2025 + 2026: сортировка по обороту и счётчики дашборда. Фильтры и цена —
-      // те же, что в /b2b-orders: без просчётов/истории/архива, цена после скидки.
-      fromOrg('b2b_orders', 'client_id,total_after_discount,total_sale_inc_vat,created_at')
-        .gte('created_at', '2025-01-01')
-        .not('notes', 'ilike', '%"status":"quote"%')
-        .not('notes', 'ilike', '%"historical":true%')
-        .is('archived_at', null)
-        .limit(10000),
-      fromOrg('b2b_interactions', 'id,client_id,type,note,outcome,next_action,next_action_date,created_by,created_at')
-        .order('created_at', { ascending: false })
-        .limit(2000),
-    ])
+    // Заказы 2025+2026 — страницами по 1000: .limit(10000) потолок PostgREST не поднимает,
+    // и оборот клиентов считался по первой тысяче строк.
+    async function loadOrders(): Promise<{ client_id: number; total_after_discount: number | null; total_sale_inc_vat: number | null; created_at: string }[]> {
+      const acc: { client_id: number; total_after_discount: number | null; total_sale_inc_vat: number | null; created_at: string }[] = []
+      for (let from = 0; ; from += 1000) {
+        // Фильтры и цена — те же, что в /b2b-orders: без просчётов/истории/архива.
+        const { data, error } = await fromOrg('b2b_orders', 'id,client_id,total_after_discount,total_sale_inc_vat,created_at')
+          .gte('created_at', '2025-01-01')
+          .not('notes', 'ilike', '%"status":"quote"%')
+          .not('notes', 'ilike', '%"historical":true%')
+          .is('archived_at', null)
+          .order('id')
+          .range(from, from + 999)
+        if (error) throw new Error(`заказы: ${error.message}`)
+        acc.push(...(data ?? []))
+        if (!data || data.length < 1000) return acc
+      }
+    }
+
+    let cls: B2BClient[], orders: Awaited<ReturnType<typeof loadOrders>>, lastInts: B2BInteraction[]
+    try {
+      const [c, o, i, e] = await Promise.all([
+        fromOrg('b2b_clients', CRM_COLS).order('name'),
+        loadOrders(),
+        fromOrg('b2b_interactions', 'id,client_id,type,note,outcome,next_action,next_action_date,created_by,created_at')
+          .order('created_at', { ascending: false })
+          .limit(1000),
+        fromOrg('b2b_client_legal_entities', 'client_id,full_name,inn').eq('active', true),
+      ])
+      if (c.error) throw new Error(`клиенты: ${c.error.message}`)
+      if (i.error) throw new Error(`касания: ${i.error.message}`)
+      cls = c.data ?? []; orders = o; lastInts = i.data ?? []
+      // Юрлица — только для поиска: не загрузились — ищем без них, список не ломаем.
+      const ent = new Map<number, string[]>()
+      for (const r of (e.error ? [] : e.data ?? []) as { client_id: number; full_name: string | null; inn: string | null }[]) {
+        ent.set(r.client_id, [...(ent.get(r.client_id) ?? []), r.full_name ?? '', r.inn ?? ''])
+      }
+      setEntitiesByClient(ent)
+    } catch (err) {
+      setLoadErr(err instanceof Error ? err.message : String(err))
+      setLoading(false)
+      return
+    }
 
     const totalByClient = new Map<number, number>()
     const countByClient = new Map<number, number>()
     const count25ByClient = new Map<number, number>()
     const count26ByClient = new Map<number, number>()
-    for (const o of orders ?? []) {
-      const amt = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
+    for (const o of orders) {
+      const amt = finalTotalOf(o)
       totalByClient.set(o.client_id, (totalByClient.get(o.client_id) ?? 0) + amt)
       countByClient.set(o.client_id, (countByClient.get(o.client_id) ?? 0) + 1)
       const y = String(o.created_at ?? '').slice(0, 4)
@@ -137,13 +172,13 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
 
     // Pick the most recent interaction per client (already ordered DESC)
     const lastIntByClient = new Map<number, B2BInteraction>()
-    for (const i of (lastInts ?? []) as B2BInteraction[]) {
+    for (const i of lastInts) {
       if (!lastIntByClient.has(i.client_id)) lastIntByClient.set(i.client_id, i)
     }
 
     // Изоляция менеджера — тот же принцип, что в app/calculator/b2b: свои клиенты,
     // либо все по галке, либо только M GLASS для ограниченного скоупа.
-    const scoped = (cls ?? []).filter((c: B2BClient) =>
+    const scoped = cls.filter((c: B2BClient) =>
       canSeeAll ? true : mglassOnly ? isMGlassClient(c) : c.manager_id === myUserId)
 
     const enriched: ClientWithMeta[] = scoped.map((c: B2BClient) => ({
@@ -204,13 +239,11 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
 
   const filtered = useMemo(() => {
     let list = clients.filter(c => c.active)
-    if (search) {
-      const q = search.toLowerCase()
-      list = list.filter(c =>
-        c.name.toLowerCase().includes(q) ||
-        (c.contact ?? '').toLowerCase().includes(q) ||
-        (c.phone ?? '').includes(q)
-      )
+    if (search.trim()) {
+      // В обоих алфавитах (О8) и по реквизитам: юрлицо, ИНН, юрлица из списка клиента.
+      list = list.filter(c => matchScore(search, [
+        c.name, c.contact, c.phone, c.full_name, c.inn, ...(entitiesByClient.get(c.id) ?? []),
+      ]) > 0)
     }
     if (filterSegment) list = list.filter(c => c.crm.segment === filterSegment)
     if (filterStatus)  list = list.filter(c => c.crm.status === filterStatus)
@@ -227,7 +260,7 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
       if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount
       return a.name.localeCompare(b.name, 'ru')
     })
-  }, [clients, search, filterSegment, filterStatus, filterScore, filterOverdue])
+  }, [clients, search, entitiesByClient, filterSegment, filterStatus, filterScore, filterOverdue])
 
   // Панель приборов: активные, заказы по годам, топ-3 по числу заказов
   const dash = useMemo(() => {
@@ -406,6 +439,10 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
         {/* Список */}
         {loading ? (
           <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+        ) : loadErr ? (
+          <div role="alert" className="py-6 px-4 text-center text-[13px] text-[#c23a2b] bg-white border border-[#eec5bf] rounded-2xl">
+            Клиенты не загрузились: {loadErr}. Обновите страницу.
+          </div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-[13px] text-[#8a8a85]">Нет клиентов по фильтру</div>
         ) : (

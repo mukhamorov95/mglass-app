@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   overdueShipments, unpaidInvoices, staleQuotes, otherBuckets, daysText,
   splitShipments, backfillCandidates, backfillDateProblem, SHIP_RECENT_DAYS,
+  readyNotShipped, updToIssue,
   type TodayOrder, type TodayInvoice,
 } from '@/lib/b2b/todayPriorities'
+import type { UpdStatus } from '@/lib/b2b/updStatus'
 
 const NOW = Date.parse('2026-09-15T12:00:00Z')
 const iso = (s: string) => new Date(s).toISOString()
@@ -81,7 +83,7 @@ describe('счета ждут оплаты — по платежам, а не п
 })
 
 describe('просчёты без движения', () => {
-  it('3–45 дней без изменений, не открыт клиентом, по сумме от большей', () => {
+  it('3–30 дней без изменений, не открыт клиентом, по сумме от большей', () => {
     const rows = staleQuotes([
       order(1, { updated_at: iso('2026-09-10'), total_sale_inc_vat: 50_000 }),
       order(2, { updated_at: iso('2026-09-01'), total_sale_inc_vat: 300_000 }),
@@ -93,6 +95,66 @@ describe('просчёты без движения', () => {
     ], NOW)
     expect(rows.map(r => r.ref)).toEqual(['#2', '#1'])
     expect(rows[0].daysLabel).toBe('без движения 14 дней')
+  })
+  it('31 день — уже не в списке; у строки — текст напоминания с номером и суммой', () => {
+    const rows = staleQuotes([
+      order(1, { updated_at: iso('2026-08-15'), total_sale_inc_vat: 80_000 }),
+      order(2, { updated_at: iso('2026-08-16'), total_sale_inc_vat: 120_500, custom_number: '05601', n: { quote_date: '2026-08-14T09:00:00Z' } }),
+    ], NOW)
+    expect(rows.map(r => r.ref)).toEqual(['05601'])
+    expect(rows[0].copy?.label).toBe('📋 Напомнить о КП')
+    expect(rows[0].copy?.text).toContain('№ 05601 от 14.08.2026')
+    expect(rows[0].copy?.text).toContain(`${(120_500).toLocaleString('ru-RU')} ₽`)
+  })
+})
+
+describe('готов, не отгружен', () => {
+  const packed = (id: number, day: string, extra: Record<string, unknown> = {}) =>
+    order(id, { launched_at: iso('2026-09-01'), n: { deadline_date: '2026-09-30', stages: { packaged: day }, ...extra } })
+
+  it('упакован до 14 дней назад, не отгружен — давние сверху, с днями ожидания', () => {
+    const rows = readyNotShipped([
+      packed(1, '2026-09-14'),
+      packed(2, '2026-09-05T15:00:00+03:00'),
+      packed(3, '2026-08-20'),                                   // старше 14 дней — в хвост разбора
+      order(4, { launched_at: iso('2026-09-01'), n: { stages: { packaged: '2026-09-10', shipped: '2026-09-11' } } }),
+      order(5, { launched_at: iso('2026-09-01'), n: { stages: {} } }),
+    ], NOW)
+    expect(rows.map(r => r.ref)).toEqual(['#2', '#1'])
+    expect(rows[0]).toMatchObject({ daysLabel: 'ждёт 10 дней', actionHref: '/b2b-today/shipments?order=2', href: '/b2b-deal/2' })
+    expect(rows[0].copy?.label).toBe('📋 Текст: готов к выдаче')
+    expect(rows[0].copy?.text).toContain('№ 00002 готов')
+  })
+  it('уже стоит в просроченных отгрузках — второй раз не показываем', () => {
+    expect(readyNotShipped([packed(1, '2026-09-14')], NOW, new Set(['ship-1']))).toEqual([])
+  })
+  it('у просроченного упакованного — тот же текст в строке', () => {
+    const [r] = overdueShipments([order(1, { launched_at: iso('2026-08-20'), n: { deadline_date: '2026-09-10', stages: { packaged: '2026-09-09' } } })], NOW)
+    expect(r.copy?.label).toBe('📋 Текст: готов к выдаче')
+    const [r2] = overdueShipments([order(2, { launched_at: iso('2026-08-20'), n: { deadline_date: '2026-09-10' } })], NOW)
+    expect(r2.copy).toBeUndefined()
+  })
+})
+
+describe('выдать УПД', () => {
+  const shipped = (id: number, day: string) =>
+    order(id, { launched_at: iso('2026-09-01'), n: { stages: { packaged: day, shipped: day } } })
+  const status = (o: Partial<UpdStatus['series']> = {}, eligible = [1, 2, 3], issued: UpdStatus['issued'] = {}): UpdStatus => ({
+    issued, eligible, series: { pendingSql: false, set: true, switchDay: '2026-09-10', ...o },
+  })
+
+  it('отгружен после включения серии, ИНН есть, УПД не выдан — в списке', () => {
+    const rows = updToIssue([shipped(1, '2026-09-12'), shipped(2, '2026-09-08'), shipped(3, '2026-09-11'), shipped(4, '2026-09-12')],
+      status({}, [1, 2, 3], { 3: { number: 533, year: 2026, doc_date: '2026-09-11' } }), NOW)
+    expect(rows.map(r => r.ref)).toEqual(['#1'])
+    expect(rows[0]).toMatchObject({ actionHref: '/b2b-quotes/1/upd', daysLabel: 'отгружен 3 дня назад' })
+  })
+  it('серия не задана, SQL не выполнен или день включения неизвестен — группы нет', () => {
+    const o = [shipped(1, '2026-09-12')]
+    expect(updToIssue(o, status({ set: false, switchDay: null }), NOW)).toEqual([])
+    expect(updToIssue(o, status({ pendingSql: true }), NOW)).toEqual([])
+    expect(updToIssue(o, status({ switchDay: undefined }), NOW)).toEqual([])
+    expect(updToIssue(o, null, NOW)).toEqual([])
   })
 })
 
@@ -146,6 +208,20 @@ describe('разбор старых отгрузок (решение владе�
     const byId = Object.fromEntries(rows.map(r => [r.id, r]))
     expect(byId[1]).toMatchObject({ packagedDay: '2026-09-03', defaultDate: '2026-09-03', deadlineDay: '2026-09-05' })
     expect(byId[2]).toMatchObject({ packagedDay: null, defaultDate: '2026-09-04' })
+  })
+
+  it('упакованный попадает в разбор и до срока; дни — от упаковки', () => {
+    const rows = backfillCandidates([
+      order(1, { launched_at: iso('2026-08-20'), n: { deadline_date: '2026-09-30', stages: { packaged: '2026-08-25' } } }),
+    ], NOW)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ id: 1, days: 21, overdueDays: null, defaultDate: '2026-08-25' })
+  })
+
+  it('срок до 01.09 — тоже в разбор: «Отметить месяц» из заказов теперь ведёт сюда', () => {
+    const rows = backfillCandidates([order(1, { launched_at: iso('2026-07-20'), n: { deadline_date: '2026-08-25' } })], NOW)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ overdueDays: 21, defaultDate: '2026-08-25' })
   })
 
   it('отгруженные, шаблоны и незапущенные в разбор не попадают', () => {

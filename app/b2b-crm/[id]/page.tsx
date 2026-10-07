@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, createScopedClient } from '@/lib/supabase-browser'
 import { useOrganization } from '@/lib/hooks/use-organization'
+import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { copyOrShow } from '@/lib/b2b/copyOrShow'
 import {
   B2BClient, B2BCRM, B2BInteraction, clientToCRM,
   B2B_SEGMENTS, B2B_STATUSES, B2B_SCORES, B2B_INTERACTION_TYPES, B2B_SOURCES, sourceLabel,
@@ -257,9 +259,10 @@ export default function B2BClientCardPage() {
     }
   }
 
-  function copyTemplate(t: OutreachTemplate) {
+  // «Скопировано» — только если буфер принял текст; отказал — окно с текстом.
+  async function copyTemplate(t: OutreachTemplate) {
     const text = t.cta ? `${t.body}\n\n${t.cta}` : t.body
-    navigator.clipboard.writeText(text).catch(() => {})
+    if (!(await copyOrShow(text, { ok: 'Шаблон скопирован', title: 'Скопируйте шаблон' }))) return
     setCopiedId(t.id)
     setTimeout(() => setCopiedId(null), 2000)
   }
@@ -288,7 +291,9 @@ export default function B2BClientCardPage() {
     }
   }
 
-  const yearTotal = orders.reduce((s, o) => s + (o.discount_percent > 0 ? o.total_after_discount : o.total_sale_inc_vat), 0)
+  // Итог заказа — finalTotalOf, как во всей системе: «скидка > 0 ? после скидки : прайс» теряла
+  // корректировку итога («Изменить сумму») у заказов без скидки.
+  const yearTotal = orders.reduce((s, o) => s + finalTotalOf(o), 0)
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
@@ -476,10 +481,10 @@ export default function B2BClientCardPage() {
                 </div>
                 <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                   {orders.map(o => {
-                    const total = o.discount_percent > 0 ? o.total_after_discount : o.total_sale_inc_vat
+                    const total = finalTotalOf(o)
                     return (
                       <div key={o.id} className="flex items-center gap-2 text-[12px] py-1.5 border-b border-[#f8f8f7] last:border-0 group">
-                        <Link href="/b2b-quotes" className="flex-1 flex items-center gap-2 hover:text-blue-600 transition-colors min-w-0">
+                        <Link href={`/b2b-deal/${o.id}`} className="flex-1 flex items-center gap-2 hover:text-blue-600 transition-colors min-w-0">
                           <span className="text-[#9a9a95] shrink-0">{fmtDateShort(o.created_at)}</span>
                           <span className="font-mono font-semibold text-[#111110]">{fmt(total)}</span>
                           {o.margin_percent > 0 && (
@@ -584,8 +589,8 @@ export default function B2BClientCardPage() {
                         <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Шаблон сообщения</p>
                         <div className="flex gap-1.5">
                           <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(aiAnalysis.message_template).catch(() => {})
+                            onClick={async () => {
+                              if (!(await copyOrShow(aiAnalysis.message_template, { ok: 'Шаблон сообщения скопирован', title: 'Скопируйте шаблон сообщения' }))) return
                               setCopiedTemplate(true)
                               setTimeout(() => setCopiedTemplate(false), 2000)
                             }}
@@ -733,9 +738,8 @@ export default function B2BClientCardPage() {
                                 В заметку
                               </button>
                               <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(personalizedPreview.personalized).catch(() => {})
-                                  showToast('Скопировано в буфер обмена')
+                                onClick={async () => {
+                                  await copyOrShow(personalizedPreview.personalized, { ok: 'Скопировано в буфер обмена', title: 'Скопируйте сообщение' })
                                   setPersonalizedPreview(null)
                                 }}
                                 className="text-[11px] font-medium border border-purple-300 text-purple-700 px-3 py-1 rounded-lg hover:bg-purple-100 transition-colors">

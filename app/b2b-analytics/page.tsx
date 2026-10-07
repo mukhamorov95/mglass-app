@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { liveOrders } from '@/lib/liveOrders'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { analyticsDay, isLaunchedRow, managerStats as buildManagerStats } from '@/lib/b2b/analyticsModel'
 
 type Order = {
   id: number
@@ -13,9 +14,11 @@ type Order = {
   total_sale_inc_vat: number
   discount_percent: number
   margin_percent: number | null
-  notes: string | null
   created_at: string
-  manager_name?: string | null  // from notes JSON (no DB column yet)
+  launched_at: string | null
+  created_by_name: string | null
+  day: string          // YYYY-MM-DD по Москве: запуск у заказа, создание у просчёта
+  launched: boolean    // запущен в работу — колонка launched_at (lib/liveOrders.ts)
 }
 
 type ClientRow = {
@@ -31,11 +34,8 @@ const MONTHS_FULL  = ['Январь','Февраль','Март','Апрель',
 const fmt  = (n: number) => n > 0 ? n.toLocaleString('ru-RU') + ' ₽' : '—'
 const fmtK = (n: number) => n >= 1000 ? (n / 1000).toFixed(0) + 'к' : n > 0 ? String(n) : '—'
 
-function parseNotes(notes: string | null): Record<string, unknown> {
-  if (!notes) return {}
-  try { const p = JSON.parse(notes); if (typeof p === 'object' && p !== null) return p } catch {}
-  return {}
-}
+const yearOf = (o: Order) => Number(o.day.slice(0, 4))
+const monthOf = (o: Order) => Number(o.day.slice(5, 7))   // 1–12
 
 function getPrice(o: Order) {
   return finalTotalOf(o)
@@ -48,6 +48,7 @@ export default function B2BAnalyticsPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [allOrders, setAllOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [year, setYear] = useState(new Date().getFullYear())
   const [tab, setTab] = useState<Tab>('clients')
   const [clientsView, setClientsView] = useState<ClientsView>('matrix')
@@ -59,45 +60,46 @@ export default function B2BAnalyticsPage() {
   }, [])
 
   useEffect(() => {
+    let alive = true
     async function load() {
       const sb = createClient()
-      const cols = 'id,client_id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,notes,created_at'
-      // Постранично: PostgREST режет ответ на 1000 строках, .limit(5000) её не поднимал —
-      // экран получал только самые старые 1000 записей (2024-08…2025-05) и за 2026 показывал ноль.
+      const cols = 'id,client_id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,created_at,launched_at,created_by_name'
+      // Постранично по id: PostgREST режет ответ на 1000 строках, а сортировка по неуникальной
+      // created_at давала страницам перекрываться. Сбой страницы — ошибка, а не «данные кончились».
       const acc: Order[] = []
       for (let from = 0; ; from += 1000) {
-        const { data, error } = await liveOrders(sb, cols).order('created_at').range(from, from + 999)
-        if (error || !data?.length) break
+        const { data, error } = await liveOrders(sb, cols).order('id').range(from, from + 999)
+        if (error) throw new Error(error.message)
         acc.push(...(data as unknown as Order[]))
-        if (data.length < 1000) break
+        if (!data || data.length < 1000) break
       }
-      // Extract manager_name from notes JSON (stored there since no DB column yet)
-      const enriched = acc.map((o: Order) => ({
-        ...o,
-        manager_name: (parseNotes(o.notes).manager_name as string | null) ?? null,
-      }))
-      setAllOrders(enriched)
+      if (!alive) return
+      setAllOrders(acc.map(o => ({ ...o, day: analyticsDay(o), launched: isLaunchedRow(o) })))
       setLoading(false)
     }
-    load().catch(() => setLoading(false))
+    load().catch(e => {
+      if (!alive) return
+      setLoadErr(e instanceof Error ? e.message : String(e))
+      setLoading(false)
+    })
+    return () => { alive = false }
   }, [])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrders(allOrders.filter(o => {
-      const y = new Date(o.created_at).getFullYear()
-      return y === year
-    }))
+    setOrders(allOrders.filter(o => yearOf(o) === year))
   }, [allOrders, year])
 
-  const confirmed = useMemo(() => orders.filter(o => parseNotes(o.notes).status !== 'quote'), [orders])
-  const quotes    = useMemo(() => orders.filter(o => parseNotes(o.notes).status === 'quote'),  [orders])
+  // Заказ — запущенный (выручка), просчёт — не запущенный (воронка): отказы и черновики
+  // без статуса в выручку больше не попадают.
+  const confirmed = useMemo(() => orders.filter(o => o.launched), [orders])
+  const quotes    = useMemo(() => orders.filter(o => !o.launched), [orders])
 
   /* ── Вкладка Клиенты ── */
   const { clients, summary } = useMemo(() => {
     const map = new Map<number, ClientRow>()
     for (const o of confirmed) {
-      const month = new Date(o.created_at).getMonth() + 1
+      const month = monthOf(o)
       if (!map.has(o.client_id)) map.set(o.client_id, { client_id: o.client_id, client_name: o.client_name, months: {}, yearTotal: 0, yearOrders: 0 })
       const row = map.get(o.client_id)!
       if (!row.months[month]) row.months[month] = { total: 0, orders: 0 }
@@ -114,15 +116,14 @@ export default function B2BAnalyticsPage() {
 
   /* ── Вкладка Сезонность ── */
   const seasonData = useMemo(() => {
-    const years = [...new Set(allOrders.map(o => new Date(o.created_at).getFullYear()))].sort()
+    const years = [...new Set(allOrders.map(yearOf))].sort()
     const byYear: Record<number, number[]> = {}
     for (const y of years) {
       byYear[y] = Array(12).fill(0)
     }
     for (const o of allOrders) {
-      if (parseNotes(o.notes).status === 'quote') continue
-      const d = new Date(o.created_at)
-      byYear[d.getFullYear()][d.getMonth()] += getPrice(o)
+      if (!o.launched) continue
+      byYear[yearOf(o)][monthOf(o) - 1] += getPrice(o)
     }
     const maxVal = Math.max(...Object.values(byYear).flat())
     return { years, byYear, maxVal }
@@ -130,7 +131,7 @@ export default function B2BAnalyticsPage() {
 
   /* ── LTV клиентов (все годы) ── */
   const ltvData = useMemo(() => {
-    const allConf = allOrders.filter(o => parseNotes(o.notes).status !== 'quote')
+    const allConf = allOrders.filter(o => o.launched)
     const map = new Map<number, {
       client_id: number; client_name: string
       first_order_date: string; last_order_date: string
@@ -138,14 +139,14 @@ export default function B2BAnalyticsPage() {
     }>()
     for (const o of allConf) {
       if (!map.has(o.client_id)) {
-        map.set(o.client_id, { client_id: o.client_id, client_name: o.client_name, first_order_date: o.created_at, last_order_date: o.created_at, total_orders_count: 0, total_revenue: 0 })
+        map.set(o.client_id, { client_id: o.client_id, client_name: o.client_name, first_order_date: o.day, last_order_date: o.day, total_orders_count: 0, total_revenue: 0 })
       }
       const row = map.get(o.client_id)!
       const price = getPrice(o)
       row.total_revenue += price
       row.total_orders_count++
-      if (o.created_at < row.first_order_date) row.first_order_date = o.created_at
-      if (o.created_at > row.last_order_date)  row.last_order_date  = o.created_at
+      if (o.day < row.first_order_date) row.first_order_date = o.day
+      if (o.day > row.last_order_date)  row.last_order_date  = o.day
     }
     const now = nowTs
     return [...map.values()]
@@ -167,10 +168,10 @@ export default function B2BAnalyticsPage() {
 
   /* ── Когортный анализ ── */
   const cohortData = useMemo(() => {
-    const allConf = allOrders.filter(o => parseNotes(o.notes).status !== 'quote')
+    const allConf = allOrders.filter(o => o.launched)
     const firstOrderYm = new Map<number, string>()
     for (const o of allConf) {
-      const ym = o.created_at.slice(0, 7)
+      const ym = o.day.slice(0, 7)
       if (!firstOrderYm.has(o.client_id) || ym < firstOrderYm.get(o.client_id)!) {
         firstOrderYm.set(o.client_id, ym)
       }
@@ -185,7 +186,7 @@ export default function B2BAnalyticsPage() {
       if (!firstYm) continue
       const cohort = cohorts.get(firstYm)!
       const fd = new Date(firstYm + '-01')
-      const od = new Date(o.created_at.slice(0, 7) + '-01')
+      const od = new Date(o.day.slice(0, 7) + '-01')
       const diff = (od.getFullYear() - fd.getFullYear()) * 12 + (od.getMonth() - fd.getMonth())
       if (diff >= 0 && diff <= 11) {
         if (!cohort.months.has(diff)) cohort.months.set(diff, new Set())
@@ -215,14 +216,14 @@ export default function B2BAnalyticsPage() {
 
     // По месяцам
     const monthly: { month: number; quotes: number; orders: number }[] = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, quotes: 0, orders: 0 }))
-    for (const o of quotes)    monthly[new Date(o.created_at).getMonth()].quotes++
-    for (const o of confirmed) monthly[new Date(o.created_at).getMonth()].orders++
+    for (const o of quotes)    monthly[monthOf(o) - 1].quotes++
+    for (const o of confirmed) monthly[monthOf(o) - 1].orders++
 
     return { quotesCount, confirmedCount, conversion, avgQuote, avgOrder, monthly }
   }, [quotes, confirmed])
 
   const currentMonth = new Date().getMonth() + 1
-  const availableYears = useMemo(() => [...new Set(allOrders.map(o => new Date(o.created_at).getFullYear()))].sort((a,b) => b-a), [allOrders])
+  const availableYears = useMemo(() => [...new Set(allOrders.map(yearOf))].sort((a,b) => b-a), [allOrders])
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'clients',    label: 'По клиентам' },
@@ -231,25 +232,9 @@ export default function B2BAnalyticsPage() {
     { key: 'conversion', label: 'Менеджеры' },
   ]
 
-  // Конверсия по менеджерам
-  const managerStats = useMemo(() => {
-    const map = new Map<string, { name: string; kpCount: number; orderCount: number; revenue: number; margins: number[] }>()
-    for (const o of orders) {
-      const name = o.manager_name ?? 'Без менеджера'
-      if (!map.has(name)) map.set(name, { name, kpCount: 0, orderCount: 0, revenue: 0, margins: [] })
-      const row = map.get(name)!
-      row.kpCount++
-      const status = parseNotes(o.notes).status as string
-      if (status === 'confirmed' || status === 'agreed') {
-        row.orderCount++
-        row.revenue += getPrice(o)
-        if (o.margin_percent != null && o.margin_percent > 0) row.margins.push(o.margin_percent)
-      }
-    }
-    return [...map.values()]
-      .map(r => ({ ...r, conversion: r.kpCount > 0 ? Math.round(r.orderCount / r.kpCount * 100) : 0, avgMargin: r.margins.length > 0 ? Math.round(r.margins.reduce((a, b) => a + b) / r.margins.length) : 0 }))
-      .sort((a, b) => b.revenue - a.revenue)
-  }, [orders])
+  // Конверсия по менеджерам — по запуску и колонке created_by_name (lib/b2b/analyticsModel)
+  const managerStats = useMemo(() => buildManagerStats(allOrders, year), [allOrders, year])
+  const managerKp = managerStats.reduce((s, r) => s + r.kpCount, 0)
 
   return (
     <div className="min-h-screen bg-[#f8f8f7]">
@@ -300,6 +285,10 @@ export default function B2BAnalyticsPage() {
 
         {loading ? (
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+        ) : loadErr ? (
+          <div role="alert" className="bg-white border border-[#eec5bf] rounded-xl p-6 text-center text-[13px] text-[#c23a2b]">
+            Заказы не загрузились: {loadErr}. Цифры не показаны, чтобы не врать нулями — обновите страницу.
+          </div>
         ) : (
           <>
             {/* ── По клиентам ── */}
@@ -605,7 +594,7 @@ export default function B2BAnalyticsPage() {
                         </thead>
                         <tbody>
                           {MONTHS_FULL.map((m, mi) => {
-                            const monthOrders = confirmed.filter(o => new Date(o.created_at).getMonth() === mi)
+                            const monthOrders = confirmed.filter(o => monthOf(o) - 1 === mi)
                             const revenue = monthOrders.reduce((s, o) => s + getPrice(o), 0)
                             const avg = monthOrders.length > 0 ? Math.round(revenue / monthOrders.length) : 0
                             const isCurrent = mi + 1 === currentMonth
@@ -640,7 +629,7 @@ export default function B2BAnalyticsPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       {[
                         { label: 'Менеджеров', value: managerStats.length },
-                        { label: 'КП за период', value: orders.length },
+                        { label: 'КП за период', value: managerKp },
                         { label: 'Ср. конверсия', value: managerStats.length > 0 ? Math.round(managerStats.reduce((s, r) => s + r.conversion, 0) / managerStats.length) + '%' : '—' },
                       ].map(c => (
                         <div key={c.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5">
