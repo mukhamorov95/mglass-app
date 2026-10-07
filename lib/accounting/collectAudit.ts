@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { audit, type AuditInput, type Finding } from './audit'
+import { readPaged } from '@/lib/money/paged'
+import { attachInvoicePayments, asInvoiceRows } from '@/lib/money/invoicePayments'
 
 // Сбор данных для проверки Б14. Отдельно от чистого ядра (lib/accounting/audit.ts),
 // чтобы его можно было тестировать без базы. Читает service-role: сводка нужна и
@@ -17,7 +19,9 @@ export async function collectAudit(svc: SupabaseClient, today: string): Promise<
       svc.from('bank_statement_rows').select('amount,op_date').eq('status', 'new'),
       svc.from('cashflow_entries').select('id,unit,entry_date,fund_id,amount,counterparty,kind').gte('entry_date', halfYear),
       svc.from('payment_requests').select('amount,status,status_changed_at,counterparty').eq('status', 'approved'),
-      svc.from('invoices').select('amount,issued_at,invoice_no').eq('status', 'issued'),
+      // Счета — постранично и с платежами: «не оплачен» считается по payments, не по флажку.
+      readPaged(() => svc.from('invoices').select('id,amount,order_ids,status,issued_at,invoice_no').neq('status', 'cancelled').order('id'))
+        .then(rows => attachInvoicePayments(svc, asInvoiceRows(rows))),
       svc.from('tax_calendar').select('title,due_date,amount,status').gte('due_date', yearAgo),
       svc.from('payroll_accruals').select('subfund_id,person_name,month,kind,amount'),
       svc.from('cashflow_entries').select('subfund_id,amount,entry_date').eq('kind', 'out').gte('entry_date', halfYear),
@@ -80,8 +84,8 @@ export async function collectAudit(svc: SupabaseClient, today: string): Promise<
       amount: Number(r.amount), status_changed_at: (r.status_changed_at as string) ?? null,
       counterparty: (r.counterparty as string) ?? null,
     })),
-    openInvoices: (invoices.data ?? []).map(i => ({
-      amount: Number(i.amount), issued_at: String(i.issued_at), no: String(i.invoice_no),
+    openInvoices: invoices.filter(i => i.derivedStatus !== 'paid').map(i => ({
+      amount: i.remainder, issued_at: String(i.issued_at), no: String(i.invoice_no),
     })),
     taxes: (taxes.data ?? []).map(t => ({
       title: String(t.title), due_date: String(t.due_date),

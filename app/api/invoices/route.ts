@@ -3,48 +3,9 @@ import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { isOwnerRole } from '@/lib/getRole'
 import { canonicalOrderIds, orderSetKey } from '@/lib/b2b/invoiceRegistry'
-import { remainderStatus } from '@/lib/b2b/orderPayments'
-
-type InvoiceRow = { id: number; order_ids: number[] | null; amount: number | null; status: string }
-
-// Дебиторка — производная от payments (правило проекта), не от ручного флажка
-// invoices.status. Оплачено по счёту = невойднутые платежи, привязанные к нему
-// напрямую (payments.invoice_id) ИЛИ к его заказам (payments.b2b_order_id из
-// order_ids). По контракту с бухгалтерией одно-заказный счёт якорится через
-// b2b_order_id, мульти-заказный — через invoice_id, поэтому суммы не двоятся.
-// Интерпретацию остатка берём из lib/b2b/orderPayments (A23), вторую не пишем.
-async function attachPayments<T extends InvoiceRow>(
-  svc: ReturnType<typeof createServiceClient>, invoices: T[],
-): Promise<(T & { paid: number; remainder: number; derivedStatus: 'paid' | 'partial' | 'unpaid' })[]> {
-  const invIds = invoices.map(i => i.id)
-  const orderIds = [...new Set(invoices.flatMap(i => i.order_ids ?? []))]
-  const byInvoice = new Map<number, number>()
-  const byOrder = new Map<number, number>()
-  if (invIds.length || orderIds.length) {
-    const { data: pays } = await svc.from('payments')
-      .select('amount, invoice_id, b2b_order_id, voided_at')
-      .is('voided_at', null)
-      .or(`invoice_id.in.(${invIds.join(',') || 0}),b2b_order_id.in.(${orderIds.join(',') || 0})`)
-    for (const p of (pays ?? []) as { amount: number; invoice_id: number | null; b2b_order_id: number | null }[]) {
-      const amt = Number(p.amount) || 0
-      if (p.invoice_id != null) byInvoice.set(p.invoice_id, (byInvoice.get(p.invoice_id) ?? 0) + amt)
-      else if (p.b2b_order_id != null) byOrder.set(p.b2b_order_id, (byOrder.get(p.b2b_order_id) ?? 0) + amt)
-    }
-  }
-  return invoices.map(inv => {
-    const paid = (byInvoice.get(inv.id) ?? 0)
-      + (inv.order_ids ?? []).reduce((s, oid) => s + (byOrder.get(oid) ?? 0), 0)
-    const rem = remainderStatus(Number(inv.amount) || 0, paid)
-    // «Нет платежей» = unpaid (не «долг»): банковский импорт мог ещё не дойти —
-    // ровно как в A23. Оплачено, если платежи покрыли сумму; частично — если
-    // есть платёж, но остаток положительный.
-    const derivedStatus: 'paid' | 'partial' | 'unpaid' =
-      rem.hasPayment && !rem.outstanding ? 'paid'
-      : rem.hasPayment ? 'partial'
-      : 'unpaid'
-    return { ...inv, paid: rem.paid, remainder: rem.remainder, derivedStatus }
-  })
-}
+import { readPaged } from '@/lib/money/paged'
+import { attachInvoicePayments, asInvoiceRows } from '@/lib/money/invoicePayments'
+import { syncInvoiceStatus } from '@/lib/money/invoiceManualPayment'
 
 // Реестр счетов: список / регистрация счёта / смена статуса оплаты.
 // RLS уже ограничивает финконтуром; здесь дополнительно проставляем автора.
@@ -115,21 +76,26 @@ export async function GET() {
 
   const svc = createServiceClient()
 
-  if (a.fin || a.seeAll) {
-    const client = a.fin ? a.sb : svc
-    const { data } = await client.from('invoices').select('*').order('id', { ascending: false }).limit(500)
-    const invoices = await attachPayments(svc, (data ?? []) as InvoiceRow[])
-    return NextResponse.json({ invoices, scope: a.fin ? 'all' : 'all_clients' })
-  }
+  // Дебиторка — производная от payments (lib/money/invoiceStatus), не от флажка
+  // invoices.status. Счета и платежи — постранично: потолок PostgREST 1000 строк.
+  try {
+    if (a.fin || a.seeAll) {
+      const client = a.fin ? a.sb : svc
+      const rows = await readPaged(() => client.from('invoices').select('*').order('id', { ascending: false }))
+      const invoices = await attachInvoicePayments(svc, asInvoiceRows(rows))
+      return NextResponse.json({ invoices, scope: a.fin ? 'all' : 'all_clients' })
+    }
 
-  const clientIds = await managerScope(a.sb, a.user.id)
-  const { data } = await svc.from('invoices')
-    .select('*')
-    .or(`payer_client_id.in.(${clientIds.length ? clientIds.join(',') : '0'}),created_by.eq.${a.user.id}`)
-    .order('id', { ascending: false })
-    .limit(500)
-  const invoices = await attachPayments(svc, (data ?? []) as InvoiceRow[])
-  return NextResponse.json({ invoices, scope: 'mine' })
+    const clientIds = await managerScope(a.sb, a.user.id)
+    const rows = await readPaged(() => svc.from('invoices')
+      .select('*')
+      .or(`payer_client_id.in.(${clientIds.length ? clientIds.join(',') : '0'}),created_by.eq.${a.user.id}`)
+      .order('id', { ascending: false }))
+    const invoices = await attachInvoicePayments(svc, asInvoiceRows(rows))
+    return NextResponse.json({ invoices, scope: 'mine' })
+  } catch (e) {
+    return NextResponse.json({ error: `Счета не загрузились: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
 }
 
 export async function POST(req: Request) {
@@ -187,19 +153,25 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const a = await requireFin()
   if ('error' in a) return a.error
-  const b = await req.json().catch(() => ({})) as { id?: number; status?: string; paid_at?: string | null }
+  const b = await req.json().catch(() => ({})) as { id?: number; status?: string }
   if (!b.id) return NextResponse.json({ error: 'Нет id' }, { status: 400 })
-  if (b.status && !['issued', 'paid', 'cancelled'].includes(b.status)) {
+  // «Оплачен» — это платёж на остаток (POST /api/invoices/[id]/payment), а не флажок:
+  // иначе счёт «оплачен» без денег в payments, и долг на экранах расходится.
+  if (b.status === 'paid') {
+    return NextResponse.json({ error: 'Оплату записывает кнопка «Оплачен» — платежом на остаток' }, { status: 400 })
+  }
+  if (!b.status || !['issued', 'cancelled'].includes(b.status)) {
     return NextResponse.json({ error: 'Плохой статус' }, { status: 400 })
   }
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (b.status) {
-    patch.status = b.status
-    // Оплачен → фиксируем дату; снятие оплаты → чистим.
-    if (b.status === 'paid') patch.paid_at = b.paid_at ?? new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' })
-    else patch.paid_at = null
-  }
-  const { error } = await a.sb.from('invoices').update(patch).eq('id', b.id)
+  const { data, error } = await a.sb.from('invoices')
+    .update({ status: b.status, paid_at: null, updated_at: new Date().toISOString() })
+    .eq('id', b.id).select('id')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data?.length) return NextResponse.json({ error: 'Счёт не изменён — нет прав или его нет' }, { status: 403 })
+  // Вернули из отмены счёт, который уже покрыт платежами, — он оплачен, а не «выставлен».
+  if (b.status === 'issued') {
+    const synced = await syncInvoiceStatus(createServiceClient(), b.id)
+    if (!synced.ok) return NextResponse.json({ error: synced.error }, { status: synced.status })
+  }
   return NextResponse.json({ ok: true })
 }

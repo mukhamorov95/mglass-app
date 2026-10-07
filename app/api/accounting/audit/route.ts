@@ -15,6 +15,10 @@ export async function GET(req: NextRequest) {
   const raw = new URL(req.url).searchParams.get('today') ?? ''
   const today = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : new Date().toISOString().slice(0, 10)
 
-  const findings = await collectAudit(createServiceClient(), today)
-  return NextResponse.json({ today, findings })
+  try {
+    const findings = await collectAudit(createServiceClient(), today)
+    return NextResponse.json({ today, findings })
+  } catch (e) {
+    return NextResponse.json({ error: `Проверка не собралась: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
 }
