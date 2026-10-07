@@ -3,13 +3,14 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { toast, responseError } from '@/lib/toast'
-import { confirmDialog } from '@/lib/dialog'
+import { confirmDialog, promptDialog } from '@/lib/dialog'
 import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { type DetailStageKey, type DetailStageState, type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
-import { materialLabel, materialLabelShort } from '@/lib/materialLabel'
+import { materialLabelShort } from '@/lib/materialLabel'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/productionMessage'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
@@ -540,64 +541,6 @@ function ProductionBoard({
   )
 }
 
-function buildProductionMessage(order: Order): string {
-  const items = order.items as Record<string, unknown>[]
-  const finalPrice = getFinalPrice(order)
-
-  type MatGroup = {
-    label: string
-    hasTemp: boolean
-    lines: { w: number; h: number; qty: number; area: number }[]
-  }
-  const groups = new Map<string, MatGroup>()
-
-  for (const item of items) {
-    const key = `${item.materialName}|${item.thickness}`
-    const qty = Number(item.quantity ?? 0)
-    const w = Number(item.width ?? 0)
-    const h = Number(item.height ?? 0)
-    const area = Number(item.totalAreaNet ?? 0)
-    if (!groups.has(key)) {
-      groups.set(key, {
-        // materialLabel сам подписывает зеркало/рифлёное и не дублирует толщину,
-        // если она уже в названии (изделия производства).
-        label: materialLabel(item as { materialName?: string; category?: string; thickness?: number }),
-        hasTemp: !!item.hasTempering,
-        lines: [],
-      })
-    }
-    const g = groups.get(key)!
-    if (item.hasTempering) g.hasTemp = true
-    g.lines.push({ w, h, qty, area })
-  }
-
-  const msgLines: string[] = []
-  msgLines.push(order.custom_number?.trim() || `00${order.id}`)   // номер заказа: 00XXXX, если своего нет
-  if (order.client_order_number) msgLines.push(`(${order.client_order_number})`)
-  msgLines.push('')
-  msgLines.push(order.client_name)
-
-  const hasAnyTemp = [...groups.values()].some(g => g.hasTemp)
-
-  for (const g of groups.values()) {
-    msgLines.push('')
-    let header = g.label
-    if (g.hasTemp) header += ', закалённое'
-    header += ', упакованное'
-    msgLines.push(header)
-    const totalQty = g.lines.reduce((s, l) => s + l.qty, 0)
-    const totalArea = g.lines.reduce((s, l) => s + l.area, 0)
-    for (const l of g.lines) {
-      msgLines.push(`  ${l.w}×${l.h} мм — ${l.qty} шт`)
-    }
-    msgLines.push(`  Итого: ${totalQty} шт · ${totalArea.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²`)
-  }
-
-  msgLines.push('')
-  msgLines.push(`💰 ${finalPrice.toLocaleString('ru-RU')} ₽`)
-  return msgLines.join('\n')
-}
-
 export default function B2BOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   // Клиенты-точки на рынке: их заказы — с пометкой и первыми в срочных группах и фильтрах.
@@ -628,14 +571,13 @@ export default function B2BOrdersPage() {
   const [canDelete, setCanDelete]     = useState(false)
   const [isOwner, setIsOwner]         = useState(false)   // admin/ceo — видят экономику заказа
   const [generatingNum, setGeneratingNum] = useState<number | null>(null)
-  const [msgOpenId, setMsgOpenId]     = useState<number | null>(null)
   const [nowTs, setNowTs]             = useState(0)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNowTs(Date.now())
   }, [])
-  const [copiedMsg, setCopiedMsg]     = useState(false)
+  const [copiedMsgId, setCopiedMsgId] = useState<number | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set())
   const [showMaterialReq, setShowMaterialReq]   = useState(false)
@@ -700,6 +642,39 @@ export default function B2BOrdersPage() {
   // А3: повтор заказа — новый просчёт с теми же позициями и ценами, которые клиент
   // уже согласовал. Номера, оплаты и следы запуска не тащим: это новый черновик.
   const [repeating, setRepeating] = useState<number | null>(null)
+  // Производственное сообщение — одной кнопкой из строки и из карточки (раньше: раскрыть
+  // заказ, пролистать вниз, раскрыть блок). «Скопировано» — только когда буфер принял текст.
+  async function copyProductionMessage(order: Order, openTelegram = false) {
+    const text = buildProductionMessage(order)
+    let copied = true
+    try { await navigator.clipboard.writeText(text) } catch { copied = false }
+    if (openTelegram) window.open(`https://t.me/share/url?url=${encodeURIComponent('MGlass')}&text=${encodeURIComponent(text)}`, '_blank')
+    if (copied) {
+      setCopiedMsgId(order.id)
+      setTimeout(() => setCopiedMsgId(id => (id === order.id ? null : id)), 2000)
+      toast.success('Производственное сообщение скопировано', { detail: productionMessageSummary(order) })
+    } else if (!openTelegram) {
+      await promptDialog({
+        title: 'Скопируйте производственное сообщение',
+        text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
+        defaultValue: text, multiline: true, confirmLabel: 'Готово',
+      })
+    }
+  }
+
+  function msgRowButton(order: Order) {
+    const done = copiedMsgId === order.id
+    return (
+      <button
+        onClick={e => { e.stopPropagation(); copyProductionMessage(order) }}
+        title="Скопировать производственное сообщение"
+        aria-label="Скопировать производственное сообщение"
+        className={`text-[12px] leading-none px-1.5 py-1 rounded-md border transition-colors ${done ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-[#e4e4e0] bg-white text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]'}`}>
+        {done ? '✓' : '📋'}
+      </button>
+    )
+  }
+
   async function repeatOrder(order: Order) {
     setRepeating(order.id)
     try {
@@ -1635,7 +1610,6 @@ export default function B2BOrdersPage() {
     const userNotes = typeof pn.user_notes === 'string'
       ? pn.user_notes
       : (isPlainNotes ? order.notes : null)
-    const isMsgOpen = msgOpenId === order.id
 
     // Production summary — используем точный раскрой из оптимайзера
     const summary = computeProductionSummary(
@@ -1654,8 +1628,17 @@ export default function B2BOrdersPage() {
     return (
       <div className="border-t border-[#f0f0ec] px-4 py-3 space-y-3 bg-[#fafaf9]">
 
-        {/* Счёт / КП / правка суммы (владелец) */}
+        {/* Сообщение в цех · документы · правка суммы (владелец) */}
         <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => copyProductionMessage(order)}
+            title="Скопировать производственное сообщение для рабочего чата"
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${copiedMsgId === order.id ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-[#111110] bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
+            {copiedMsgId === order.id ? '✓ Скопировано' : '📋 Произв. сообщение'}
+          </button>
+          <button onClick={() => copyProductionMessage(order, true)}
+            title="Открыть Telegram с готовым текстом заказа (текст также копируется)"
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-sky-200 text-sky-700 hover:bg-sky-50 transition-colors">✈ TG</button>
+          <span className="w-px h-4 bg-[#e4e4e0]" aria-hidden />
           <Link href={`/b2b-quotes/${order.id}/invoice`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">🧾 Счёт клиенту</Link>
           <Link href={`/b2b-quotes/${order.id}/kp`} target="_blank"
@@ -2147,47 +2130,6 @@ export default function B2BOrdersPage() {
           )}
         </details>
 
-        {/* ПРОИЗВОДСТВЕННОЕ СООБЩЕНИЕ */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-          <button
-            className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#fafaf9] transition-colors"
-            onClick={() => setMsgOpenId(isMsgOpen ? null : order.id)}>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Производственное сообщение</span>
-            <span className={`text-[#c4c4be] text-[10px] transition-transform ${isMsgOpen ? 'rotate-180' : ''}`}>▼</span>
-          </button>
-          {isMsgOpen && (() => {
-            const msg = buildProductionMessage(order)
-            return (
-              <div className="border-t border-[#f0f0ec] px-3 py-2.5 space-y-2">
-                <pre className="text-[12px] font-mono leading-relaxed whitespace-pre-wrap text-[#111110] bg-[#f8f8f7] rounded-lg px-3 py-2.5 border border-[#e8e8e4] select-all">
-                  {msg}
-                </pre>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard?.writeText(msg)
-                      setCopiedMsg(true)
-                      setTimeout(() => setCopiedMsg(false), 2000)
-                    }}
-                    className="flex-1 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
-                    {copiedMsg ? '✓ Скопировано' : '📋 Копировать'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      const tg = `https://t.me/share/url?url=${encodeURIComponent('MGlass')}&text=${encodeURIComponent(msg)}`
-                      navigator.clipboard?.writeText(msg).catch(() => {})
-                      window.open(tg, '_blank')
-                    }}
-                    title="Открыть Telegram с готовым текстом заказа (текст также скопирован)"
-                    className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-sky-200 text-sky-700 hover:bg-sky-50 transition-colors">
-                    ✈ TG
-                  </button>
-                </div>
-              </div>
-            )
-          })()}
-        </div>
-
         {userNotes && (
           <p className="text-[11px] text-[#6b6b66] italic">{userNotes}</p>
         )}
@@ -2509,6 +2451,7 @@ export default function B2BOrdersPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        {msgRowButton(order)}
                         {!pn.stages?.shipped && progress > 0 && (
                           <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
                             {progress}%
@@ -2670,6 +2613,7 @@ export default function B2BOrdersPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        {msgRowButton(order)}
                         {!isShipped && progress > 0 && (
                           <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
                             {progress}%
@@ -2865,6 +2809,7 @@ export default function B2BOrdersPage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
+                                {msgRowButton(order)}
                                 {!isShipped && progress > 0 && (
                                   <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
                                     {progress}%
