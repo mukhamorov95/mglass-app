@@ -38,7 +38,6 @@ type Resp = {
   client: Record<string, unknown> | null
   entities: B2BLegalEntity[]
   payerEntityId?: number | null
-  paymentDates?: string[]
   updRegistered?: UpdRegistered | null
 }
 
@@ -165,7 +164,7 @@ export default function ManagerUpdPage() {
           className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">⬇ Скачать PDF</button>
       </div>
 
-      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} paymentDates={data.paymentDates ?? []} registered={registered} />
+      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} registered={registered} />
     </>
   )
 }
