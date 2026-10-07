@@ -6,10 +6,10 @@ import { renderDocCanvas } from '@/lib/pdfCapture'
 import UpdDocument from '@/components/UpdDocument'
 import { issuedUpdView, type UpdIssued } from '@/lib/b2b/updView'
 
-// A11: УПД в кабинете партнёра. Данные — /api/partner/order/[id]/invoice-data (гейт
-// can_self_invoice + запущен). С этапа 7 docs/b2b/ORDER_PANEL_ROUTE.md партнёр видит только
-// выданный УПД — копию, закреплённую при выдаче; черновик из заказа сюда не попадает: его
-// номер не совпал бы с настоящим документом.
+// A11: УПД в кабинете партнёра. Данные — /api/partner/order/[id]/upd: любой партнёр своего
+// заказа, флаг самообслуживания нужен только для счёта. С этапа 7 docs/b2b/ORDER_PANEL_ROUTE.md
+// партнёр видит только выданный УПД — копию, закреплённую при выдаче; черновик из заказа сюда
+// не попадает: его номер не совпал бы с настоящим документом.
 
 type Resp = { order: { id: number; custom_number: string | null }; updIssued?: UpdIssued | null }
 
@@ -21,7 +21,7 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
   const docRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetch(`/api/partner/order/${id}/invoice-data`).then(async r => {
+    fetch(`/api/partner/order/${id}/upd`).then(async r => {
       if (!r.ok) { const d = await r.json().catch(() => ({})); setError(d.error || 'Документ недоступен'); setLoading(false); return }
       setData(await r.json() as Resp)
       setLoading(false)
@@ -52,8 +52,8 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
   if (loading) return <div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div>
   if (error || !data || !issued) return (
     <div className="wrap"><div className="note">
-      <div className="t">{error === 'Счёт выставляет менеджер' || !error ? 'УПД выдаёт менеджер' : 'Документ недоступен'}</div>
-      <div className="s">{error === 'Счёт выставляет менеджер' || !error ? 'УПД по этому заказу ещё не выдан — менеджер M-Glass выдаёт его при отгрузке, после этого он появится здесь.' : error}</div>
+      <div className="t">{error ? 'Документ недоступен' : 'УПД ещё не выдан'}</div>
+      <div className="s">{error || 'УПД по этому заказу выдаёт M-Glass при отгрузке — после этого он появится здесь.'}</div>
       <Link href={`/partner/order/${id}`} className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← К заказу</Link>
     </div></div>
   )

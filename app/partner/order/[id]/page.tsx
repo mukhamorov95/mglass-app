@@ -14,6 +14,7 @@ type Order = {
   onlinePayEnabled?: boolean
   canInvoice?: boolean
   updIssued?: boolean
+  upd?: { number: number; year: number; docDate: string } | null
   drawingApproval?: { status: 'approved' | 'rework'; comment: string | null; at: string | null } | null
   delivery?: { method: 'pickup' | 'delivery'; address: string | null; comment: string | null; status: string | null } | null
   total: number; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
@@ -249,7 +250,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         {o.onlinePayEnabled && <button className="primary" onClick={payOnline} disabled={paying}>{paying ? 'Открываю оплату…' : '💳 Оплатить онлайн'}</button>}
         <Link className="ghost" href={`/partner/order/${o.id}/kp`}>↓ Скачать КП</Link>
         {o.canInvoice && <Link className="ghost" href={`/partner/order/${o.id}/invoice`}>↓ Счёт-спецификация</Link>}
-        {o.canInvoice && o.updIssued && <Link className="ghost" href={`/partner/order/${o.id}/upd`}>↓ УПД</Link>}
+        {o.upd && <Link className="ghost" href={`/partner/order/${o.id}/upd`}>↓ УПД № {o.upd.number} от {fmtDate(o.upd.docDate)}</Link>}
         {(o.lane === 'in_work' || o.lane === 'shipped') && <Link className="ghost" href={`/partner/claims?order=${o.id}`}>⚠️ Сообщить о проблеме</Link>}
         <Link className="primary" href={`/partner/new?reorder=${o.id}`}>Повторить заказ</Link>
       </div>

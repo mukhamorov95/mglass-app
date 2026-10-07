@@ -81,8 +81,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const paymentStatus: 'paid' | 'awaiting' | null = paid ? 'paid' : (launched ? 'awaiting' : null)
 
   const canInvoice = !!client.can_self_invoice && launched
-  // Ссылка «УПД» — только на выданный документ (этап 7): черновика в кабинете нет.
-  const updIssued = canInvoice && !!(await loadUpdIssued(svc, oid).catch(() => null))
+  // УПД — только выданный документ (этап 7), и любому партнёру заказа: флаг — для счёта.
+  const upd = await loadUpdIssued(svc, oid).catch(e => { console.error('[partner/order] УПД не прочитан:', oid, e instanceof Error ? e.message : e); return null })
 
   return NextResponse.json({
     id: o.id,
@@ -105,7 +105,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     paymentStatus,
     onlinePayEnabled: paymentStatus === 'awaiting' && paymentsEnabled(),
     canInvoice,
-    updIssued,
+    updIssued: !!upd,
+    upd: upd ? { number: upd.number, year: upd.year, docDate: upd.doc_date } : null,
     total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),
     items,
     timeline: p.timeline,
