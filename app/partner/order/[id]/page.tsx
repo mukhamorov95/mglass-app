@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import DrawingFiles from './DrawingFiles'
 import type { PointStage } from '@/lib/partner/pointPay'
+import { QUOTE_LABEL, type QuoteState } from '@/lib/partner/quoteState'
 import { responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Карточка заказа кабинета (дизайн из прототипа, .pcab).
@@ -21,6 +22,8 @@ type Order = {
   drawingApproval?: { status: 'approved' | 'rework'; comment: string | null; at: string | null } | null
   drawingPrev?: { status: 'approved' | 'rework'; at: string | null; updatedAt: string | null } | null
   launched?: boolean
+  quoteState?: QuoteState | null
+  stateNote?: string | null
   delivery?: { method: 'pickup' | 'delivery'; address: string | null; comment: string | null; status: string | null } | null
   total: number; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
 }
@@ -108,8 +111,10 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
     </div></div>
   )
 
-  const pillCls = o.ready ? 'p-ready' : o.lane === 'shipped' ? 'p-ship' : o.lane === 'in_work' ? 'p-work' : 'p-quote'
-  const statusText = o.ready ? 'Готов к выдаче' : LANE_LABEL[o.lane] ?? 'В работе'
+  const qs = o.lane === 'quote' ? (o.quoteState ?? 'draft') : null
+  const pillCls = o.ready ? 'p-ready' : o.lane === 'shipped' ? 'p-ship' : o.lane === 'in_work' ? 'p-work'
+    : qs === 'agreed' ? 'p-ready' : qs === 'negotiation' ? 'p-sub' : qs === 'rejected' ? 'p-ship' : 'p-quote'
+  const statusText = o.ready ? 'Готов к выдаче' : qs && qs !== 'draft' ? QUOTE_LABEL[qs] : LANE_LABEL[o.lane] ?? 'В работе'
 
   return (
     <div className="wrap">
@@ -144,6 +149,9 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
+      {qs && qs !== 'draft' && o.stateNote && (
+        <div className="info" style={{ marginTop: 0, marginBottom: 14 }}><span>✎</span><span>{qs === 'rejected' ? 'Причина отказа' : 'Комментарий менеджера'}: {o.stateNote}</span></div>
+      )}
       {o.recalcNote && <div className="ord" style={{ boxShadow: 'none' }}><div className="recalc" style={{ marginTop: 0 }}>✎ Пересчитано менеджером: {o.recalcNote}</div></div>}
 
       <div className="split" style={{ marginTop: 0 }}>
@@ -274,7 +282,8 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         {o.canInvoice && <Link className="ghost" href={`/partner/order/${o.id}/invoice`}>↓ Счёт-спецификация</Link>}
         {o.upd && <Link className="ghost" href={`/partner/order/${o.id}/upd`}>↓ УПД № {o.upd.number} от {fmtDate(o.upd.docDate)}</Link>}
         {(o.lane === 'in_work' || o.lane === 'shipped') && <Link className="ghost" href={`/partner/claims?order=${o.id}`}>⚠️ Сообщить о проблеме</Link>}
-        <Link className="primary" href={`/partner/new?reorder=${o.id}`}>Повторить заказ</Link>
+        {qs === 'draft' && <Link className="ghost" href={`/partner/new?edit=${o.id}`}>✎ Изменить просчёт</Link>}
+        <Link className="primary" href={`/partner/new?reorder=${o.id}`}>{qs === 'rejected' ? 'Повторить как новый просчёт' : 'Повторить заказ'}</Link>
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ import { resolvePartnerClient } from '@/lib/partnerClient'
 import { appUrl } from '@/lib/appUrl'
 import { appendTo, parseOrderNotes } from '@/lib/b2b/orderNotes'
 import { previewWriteGuard } from '@/lib/partnerPreview'
+import { canSubmitQuote, quoteLockReason, quoteState } from '@/lib/partner/quoteState'
 
 // Партнёр отправляет свой просчёт в заявку (на проверку менеджеру).
 // Просчёт → status='pending_approval'. Только свой просчёт, только если не запущен.
@@ -37,6 +38,10 @@ export async function POST(req: NextRequest) {
   let notes: Record<string, unknown> = {}
   try { notes = order.notes ? JSON.parse(order.notes as string) : {} } catch {}
   if (notes.status === 'pending_approval') return NextResponse.json({ ok: true, already: true })
+  // В работу отправляется только черновик: согласованный, обсуждаемый и отклонённый
+  // просчёт ведёт менеджер, а отправка перевела бы его обратно «на согласование».
+  const qs = quoteState(typeof notes.status === 'string' ? notes.status : null)
+  if (!canSubmitQuote(qs)) return NextResponse.json({ error: quoteLockReason(qs) }, { status: 409 })
 
   // AI-проверка логики просчёта — best-effort, не роняет отправку. Идёт секунды, поэтому
   // notes после неё читаем заново и пишем только свои ключи: целая запись из чтения до
@@ -57,6 +62,8 @@ export async function POST(req: NextRequest) {
   if (freshErr || !freshRow) return NextResponse.json({ error: 'Просчёт не прочитан — отправьте ещё раз' }, { status: 500 })
   const fresh = parseOrderNotes((freshRow as { notes: unknown }).notes)
   if (fresh.status === 'pending_approval') return NextResponse.json({ ok: true, already: true })
+  const freshState = quoteState(typeof fresh.status === 'string' ? fresh.status : null)
+  if (!canSubmitQuote(freshState)) return NextResponse.json({ error: quoteLockReason(freshState) }, { status: 409 })
   const at = new Date().toISOString()
   const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: quoteId, p_patch: {
     status: 'pending_approval',

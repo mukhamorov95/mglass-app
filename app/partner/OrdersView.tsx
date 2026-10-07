@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { loadJson } from '@/lib/toast'
 import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
+import { QUOTE_LABEL, canEditQuote, canSubmitQuote, type QuoteState } from '@/lib/partner/quoteState'
 
 // Списки кабинета (дизайн .pcab). Три пункта меню:
 //   view='quotes'  → просчёты (черновики). Разбиты на Недавние + Архив (>2 недель).
@@ -19,6 +20,8 @@ type Order = {
   shipped: boolean; ready: boolean; deadline: string; recalcNote: string | null
   summary: string; positions: number
   point?: PointStage | null
+  quoteState?: QuoteState | null
+  stateNote?: string | null
 }
 type Resp = { linked: boolean; client: { name: string } | null; orders: Order[] }
 type View = 'quotes' | 'inwork' | 'shipped'
@@ -201,8 +204,10 @@ export default function OrdersView({ view }: { view: View }) {
 }
 
 function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: number) => void; submitting: boolean }) {
-  // Просчёт → клик открывает на редактирование (состав + правка). Заказ → карточка заказа.
-  const clickable = o.lane !== 'quote'
+  // Черновик → клик открывает на редактирование. Согласованный, обсуждаемый, отклонённый
+  // просчёт и заказ → карточка: править их нельзя, форма открылась бы пустой.
+  const qs: QuoteState = o.quoteState ?? 'draft'
+  const isDraft = o.lane === 'quote' && canEditQuote(qs)
   const body = (
     <>
       <div className="r1">
@@ -215,6 +220,15 @@ function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: numbe
         <div className="amt tnum">{fmtMoney(o.amount)}</div>
       </div>
 
+      {o.lane === 'quote' && qs !== 'draft' && (
+        <div className="prog">
+          <span className={`pill ${qs === 'rejected' ? 'p-ship' : qs === 'agreed' ? 'p-ready' : 'p-sub'}`}>{QUOTE_LABEL[qs]}</span>
+        </div>
+      )}
+      {o.lane === 'quote' && qs !== 'draft' && o.stateNote && (
+        <div className="meta" style={{ marginTop: 6 }}>{qs === 'rejected' ? 'Причина' : 'Комментарий менеджера'}: {o.stateNote}</div>
+      )}
+
       {(o.lane === 'in_work' || o.lane === 'shipped') && (
         <div className="prog">
           <span className="track"><span className="tk" style={{ width: `${o.lane === 'shipped' ? 100 : o.progressPct}%`, background: o.ready ? 'var(--green)' : o.lane === 'shipped' ? 'var(--border)' : 'var(--blue)' }} /></span>
@@ -226,16 +240,14 @@ function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: numbe
 
       {o.recalcNote && <div className="recalc">✎ Пересчитано менеджером: {o.recalcNote}</div>}
 
-      {o.lane === 'quote' && (
+      {isDraft && canSubmitQuote(qs) && (
         <button className="send" onClick={e => { e.preventDefault(); onSubmit(o.id) }} disabled={submitting}>
           {submitting ? 'Отправляю…' : 'Отправить в работу'}
         </button>
       )}
     </>
   )
-  if (o.lane === 'quote')
-    return <Link href={`/partner/new?edit=${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
-  return clickable
-    ? <Link href={`/partner/order/${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
-    : <div className="ord">{body}</div>
+  return (
+    <Link href={isDraft ? `/partner/new?edit=${o.id}` : `/partner/order/${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
+  )
 }

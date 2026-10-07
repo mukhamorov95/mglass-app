@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
-import { partnerProgress, partnerDeadline, isLaunched } from '@/lib/partner/orderProgress'
+import { partnerProgress, partnerDeadline, isLaunched, noteStatus } from '@/lib/partner/orderProgress'
+import { quoteState } from '@/lib/partner/quoteState'
 import { readPaged } from '@/lib/partner/readPaged'
 import { invoiceState, type UpdShort } from '@/lib/partner/documents'
 import { loadUpdByOrders } from '@/lib/partner/updByOrders'
@@ -72,6 +73,9 @@ export async function GET() {
     // Пересчитан ли просчёт нами и почему (для подсветки партнёру).
     const history = Array.isArray(pn.status_history) ? pn.status_history : []
     const lastComment = (pn.status_comment as string | undefined) || null
+    // Комментарий к «Согласовано» / «Отказ» — не пересчёт: он идёт подписью к состоянию.
+    const qs = lane === 'quote' ? quoteState(noteStatus(pn)) : null
+    const stateNote = qs && qs !== 'draft' ? lastComment : null
 
     // Что внутри — материалы + толщины (кратко) и число позиций.
     const items = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
@@ -95,7 +99,9 @@ export async function GET() {
       shipped: p.shipped,
       ready: p.ready,
       deadline: partnerDeadline({ launched_at: o.launched_at as string | null, created_at: o.created_at as string }, pn).toISOString(),
-      recalcNote: history.length > 0 ? lastComment : null,
+      recalcNote: history.length > 0 && !stateNote && (qs === null || qs === 'draft') ? lastComment : null,
+      quoteState: qs,
+      stateNote,
       summary,
       positions: items.length,
       invoice: invoiceState({ launched: p.launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced: invoiced.has(o.id as number) }),

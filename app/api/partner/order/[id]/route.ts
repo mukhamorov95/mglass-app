@@ -4,7 +4,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { paymentsEnabled } from '@/lib/payments/provider'
 import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
-import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
+import { partnerProgress, partnerDeadline, noteStatus } from '@/lib/partner/orderProgress'
+import { quoteState } from '@/lib/partner/quoteState'
 import { loadInvoicedOrders, loadPaidByOrders, paymentView } from '@/lib/partner/orderMoney'
 import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { invoiceState } from '@/lib/partner/documents'
@@ -70,6 +71,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const deadline = launched ? partnerDeadline({ launched_at: o.launched_at as string | null, created_at: o.created_at as string }, pn).toISOString() : null
 
   const history = Array.isArray(pn.status_history) ? pn.status_history : []
+  const qs = lane === 'quote' ? quoteState(noteStatus(pn)) : null
+  const lastComment = (pn.status_comment as string | undefined) || null
+  const stateNote = qs && qs !== 'draft' ? lastComment : null
   const rawDrawing = typeof pn.drawing_url === 'string' && pn.drawing_url ? pn.drawing_url : null
   const drawingUrl = rawDrawing ? `/api/b2b/drawing/${o.id}` : null
   // Решение по чертежу, после которого загрузили новый файл, — уже не про этот чертёж:
@@ -138,6 +142,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     drawingPrev,
     launched,
     delivery,
-    recalcNote: history.length > 0 ? ((pn.status_comment as string) || null) : null,
+    recalcNote: history.length > 0 && !stateNote && (qs === null || qs === 'draft') ? lastComment : null,
+    quoteState: qs,
+    stateNote,
   })
 }
