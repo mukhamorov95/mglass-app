@@ -1,19 +1,13 @@
-// PostgREST отдаёт не больше 1000 строк за запрос, и .limit(3000) этого не меняет —
-// хвост теряется молча. Читаем страницами до короткой.
+import { pageAll, type PageResult } from '@/lib/supabase/pageAll'
 
-export type Paged = { range(from: number, to: number): PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> }
+// Кабинет читает «целиком» через общий lib/supabase/pageAll (потолок PostgREST — 1000
+// строк, .limit(3000) его не поднимает). Здесь — форма вызова для построителей запроса.
 
-export const PAGE = 1000
+export type Paged = { range(from: number, to: number): PromiseLike<PageResult<unknown>> }
 
 // build() обязан сортировать по уникальному ключу, иначе страницы перекрываются.
-export async function readPaged<T>(build: () => Paged, page = PAGE): Promise<T[]> {
-  const rows: T[] = []
-  for (let from = 0; ; from += page) {
-    const { data, error } = await build().range(from, from + page - 1)
-    if (error) throw new Error(error.message)
-    rows.push(...((data ?? []) as T[]))
-    if ((data?.length ?? 0) < page) return rows
-  }
+export function readPaged<T>(build: () => Paged): Promise<T[]> {
+  return pageAll<T>((from, to) => build().range(from, to) as PromiseLike<PageResult<T>>)
 }
 
 export function chunk<T>(arr: readonly T[], size: number): T[][] {
