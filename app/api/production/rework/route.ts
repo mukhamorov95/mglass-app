@@ -7,6 +7,8 @@ import {
   isReworkReason, pickReopen, REOPEN_TASK_PATCH, restartStageFor, type ReworkTask,
 } from '@/lib/production/rework'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
+import { notifyOrderManager } from '@/lib/b2b/notifyManager'
+import { reworkNotice, orderLink } from '@/lib/production/managerNotices'
 
 // П3 — «Переделать»: маршрут детали возвращается назад, брак записывается побочным эффектом.
 // Одно действие рабочего = одна запись в журнале переделок + переоткрытые задачи.
@@ -77,6 +79,18 @@ export async function POST(req: NextRequest) {
     await unmirrorReopenedStages(svc, task.order_id, reopen)
     await mirrorOrderStages(svc, task.order_id)
   }
+
+  // Менеджер узнаёт о браке от цеха, а не от клиента: деталь пошла заново, срок может
+  // сдвинуться. Одно действие рабочего — одна запись в журнале — одно сообщение.
+  // Сбой отправки переделку не отменяет.
+  try {
+    const { data: ord } = await svc.from('b2b_orders').select('custom_number, client_name').eq('id', task.order_id).maybeSingle()
+    const o = ord as { custom_number: string | null; client_name: string | null } | null
+    await notifyOrderManager(task.order_id, reworkNotice(
+      { id: task.order_id, custom_number: o?.custom_number, client_name: o?.client_name },
+      { foundAt: task.stage_key, restartAt: restartStage, reason, comment, itemIndex: task.item_index, by: who },
+    ), orderLink(task.order_id))
+  } catch { /* уведомление — побочный эффект */ }
 
   return NextResponse.json({ ok: true, restartStage, reopened: reopenIds.length })
 }
