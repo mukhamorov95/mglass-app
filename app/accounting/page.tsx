@@ -18,6 +18,9 @@ import { PayrollTab } from '@/components/accounting/PayrollTab'
 import { TaxesTab } from '@/components/accounting/TaxesTab'
 import { CounterpartiesTab } from '@/components/accounting/CounterpartiesTab'
 import { AuditTab } from '@/components/accounting/AuditTab'
+import { QueueTab } from '@/components/accounting/QueueTab'
+import { loadJson } from '@/lib/toast'
+import { queueCounts, queueTotal, type Count, type QueueSnapshot } from '@/lib/accounting/queue'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -30,6 +33,17 @@ const monthLabel = (ym: string) => {
   const [y, m] = ym.split('-').map(Number)
   return ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'][m - 1] + ' ' + y
 }
+// Счётчик на вкладке: сколько ждёт; источник не загрузился — «!», а не пусто и не 0.
+function TabBadge({ value, tone = 'amber' }: { value: Count | undefined; tone?: 'amber' | 'dark' }) {
+  if (value === undefined || value === null || value === 0) return null
+  if (typeof value === 'object') {
+    return <span title={`Не загрузилось: ${value.error}`} className="ml-1.5 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[11px] font-semibold">!</span>
+  }
+  return (
+    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${tone === 'dark' ? 'bg-[#111110] text-white' : 'bg-amber-100 text-amber-800'}`}>{value}</span>
+  )
+}
+
 const shiftMonth = (ym: string, d: number) => {
   const [y, m] = ym.split('-').map(Number)
   const t = y * 12 + (m - 1) + d
@@ -38,7 +52,12 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'payroll' | 'taxes' | 'partners' | 'docs' | 'audit' | 'requests' | 'committee' | 'notes'>('odds')
+  // Стартовая вкладка — «Ждут действия»: бухгалтер входит в свою очередь, а не в ОДДС.
+  const [tab, setTab] = useState<'queue' | 'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'payroll' | 'taxes' | 'partners' | 'docs' | 'audit' | 'requests' | 'committee' | 'notes'>('queue')
+  const [queue, setQueue] = useState<QueueSnapshot | null>(null)
+  const [queueErr, setQueueErr] = useState<string | null>(null)
+  const [queueLoading, setQueueLoading] = useState(true)
+  const [queueTick, setQueueTick] = useState(0)
   const [unposted, setUnposted] = useState(0)
   const [locked, setLocked] = useState(false)
   const [log, setLog] = useState<{ id: number; entry_id: number; action: string; entry_date: string; actor: string | null; at: string; amount: number }[]>([])
@@ -144,6 +163,30 @@ export default function AccountingPage() {
 
   const isFin = ['accountant', 'cfo', 'admin', 'ceo'].includes(myRole)
   const isBuyer = myRole === 'buyer'
+
+  // Очередь «ждут действия» и счётчики вкладок — один запрос; закупщику не нужен.
+  useEffect(() => {
+    if (!myRole || isBuyer) return
+    let alive = true
+    loadJson<QueueSnapshot>('/api/accounting/queue').then(res => {
+      if (!alive) return
+      if (res.error !== null) setQueueErr(res.error)
+      else { setQueue(res.data); setQueueErr(null) }
+      setQueueLoading(false)
+    })
+    return () => { alive = false }
+  }, [myRole, isBuyer, queueTick])
+  const reloadQueue = () => { setQueueLoading(true); setQueueTick(n => n + 1) }
+  const counts = queue ? queueCounts(queue) : null
+  const failAll: Count | undefined = queueErr ? { error: queueErr } : undefined
+  const tabCount = (k: string): Count | undefined => {
+    if (k === 'queue') return counts ? queueTotal(counts).total : failAll
+    if (k === 'bank') return counts ? counts.bank : failAll
+    if (k === 'audit') return counts ? counts.audit : failAll
+    if (k === 'docs') return counts ? counts.invoices : failAll
+    if (k === 'unposted') return unposted
+    return undefined
+  }
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
   const unitEntries = useMemo(() => entries.filter(e => e.unit === unit), [entries, unit])
   const sumFund = useCallback((fundId: number) => unitEntries.filter(e => e.fund_id === fundId).reduce((s, e) => s + Number(e.amount), 0), [unitEntries])
@@ -291,15 +334,13 @@ export default function AccountingPage() {
           <div className="flex gap-1 mt-3 -mb-px overflow-x-auto no-scrollbar">
             {(isBuyer
               ? ([['requests', 'Заявки на оплату']] as const)
-              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['bank', 'Выписка'], ['payroll', 'Зарплата'], ['taxes', 'Налоги'], ['partners', 'Контрагенты'], ['docs', 'Документы'], ['audit', '✅ Проверка'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
+              : ([['queue', 'Ждут действия'], ['audit', '✅ Проверка'], ['bank', 'Выписка'], ['unposted', 'К проведению'], ['docs', 'Документы'], ['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['payroll', 'Зарплата'], ['taxes', 'Налоги'], ['partners', 'Контрагенты'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
               <Fragment key={k}>
                 <button onClick={() => setTab(k)}
                   className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
                   {label}
-                  {k === 'unposted' && unposted > 0 && (
-                    <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">{unposted}</span>
-                  )}
+                  <TabBadge value={tabCount(k)} tone={k === 'queue' ? 'dark' : 'amber'} />
                 </button>
                 {/* Реестр УПД — отдельная страница (этап 8 ORDER_PANEL_ROUTE), закупщику закрыт. */}
                 {k === 'docs' && (
@@ -315,6 +356,10 @@ export default function AccountingPage() {
       </div>
 
       <div className="max-w-[760px] mx-auto px-4 pt-4">
+        {tab === 'queue' && !isBuyer && (
+          <QueueTab data={queue} error={queueErr} loading={queueLoading} onGo={setTab} onReload={reloadQueue} />
+        )}
+
         {tab === 'odds' && (
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -484,10 +529,10 @@ export default function AccountingPage() {
 
         {tab === 'unposted' && !isBuyer && (
           <UnpostedTab unit={unit} funds={funds} subfunds={subfunds} month={month}
-            onPosted={() => { load(); loadUnposted() }} />
+            onPosted={() => { load(); loadUnposted(); reloadQueue() }} />
         )}
         {tab === 'bank' && !isBuyer && (
-          <BankTab unit={unit} funds={funds} subfunds={subfunds} onPosted={() => load()} />
+          <BankTab unit={unit} funds={funds} subfunds={subfunds} onPosted={() => { load(); reloadQueue() }} />
         )}
         {tab === 'payroll' && !isBuyer && (
           <PayrollTab unit={unit} month={month} onChanged={() => load()} />
@@ -499,7 +544,7 @@ export default function AccountingPage() {
           <CounterpartiesTab unit={unit} from={`${month.slice(0, 4)}-01-01`} />
         )}
         {tab === 'docs' && !isBuyer && <DocumentsTab />}
-        {tab === 'audit' && !isBuyer && <AuditTab today={fDate} />}
+        {tab === 'audit' && !isBuyer && <AuditTab today={fDate} onGo={setTab} />}
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
         {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}

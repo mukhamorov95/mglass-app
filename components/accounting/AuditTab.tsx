@@ -3,7 +3,8 @@
 // Б14: проверка. То же, что уходит владельцу утренней сводкой, только целиком —
 // включая мелочи, которые в Telegram не шлём.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { loadJson } from '@/lib/toast'
 
 type Finding = {
   code: string; severity: 'high' | 'normal' | 'low'
@@ -16,32 +17,39 @@ const META: Record<Finding['severity'], { label: string; cls: string; dot: strin
   normal: { label: 'к работе', cls: 'border-amber-200 bg-amber-50',  dot: 'bg-amber-500' },
   low:    { label: 'заметка', cls: 'border-[#e4e4e0] bg-white',      dot: 'bg-[#c9c9c4]' },
 }
-const WHERE: Record<string, string> = {
-  unposted_payments: 'вкладка «К проведению»',
-  bank_rows_stale: 'вкладка «Выписка»',
-  duplicate_entries: 'вкладка «Ввод операций»',
-  requests_hanging: 'вкладка «Комитет»',
-  invoices_unpaid: 'вкладка «Документы»',
-  tax_overdue: 'вкладка «Налоги»',
-  tax_soon: 'вкладка «Налоги»',
-  payroll_debt: 'вкладка «Зарплата»',
-  month_open: 'ОДДС, кнопка «Закрыть месяц»',
+export type AuditGoTab = 'unposted' | 'bank' | 'entry' | 'committee' | 'docs' | 'taxes' | 'payroll' | 'odds'
+
+// Куда идти с находкой — кнопкой, а не подписью «Смотреть: вкладка…».
+const WHERE: Record<string, { tab: AuditGoTab; label: string }> = {
+  unposted_payments: { tab: 'unposted', label: 'Провести' },
+  bank_rows_stale: { tab: 'bank', label: 'Разнести выписку' },
+  duplicate_entries: { tab: 'entry', label: 'Открыть операции' },
+  requests_hanging: { tab: 'committee', label: 'Открыть комитет' },
+  invoices_unpaid: { tab: 'docs', label: 'Открыть счета' },
+  tax_overdue: { tab: 'taxes', label: 'Открыть налоги' },
+  tax_soon: { tab: 'taxes', label: 'Открыть налоги' },
+  payroll_debt: { tab: 'payroll', label: 'Открыть зарплату' },
+  month_open: { tab: 'odds', label: 'Закрыть месяц в ОДДС' },
 }
 
-export function AuditTab({ today }: { today: string }) {
+export function AuditTab({ today, onGo }: { today: string; onGo: (tab: AuditGoTab) => void }) {
   const [findings, setFindings] = useState<Finding[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const r = await fetch(`/api/accounting/audit?today=${today}`)
-    if (r.ok) setFindings((await r.json()).findings as Finding[])
-    setLoading(false)
+  useEffect(() => {
+    let alive = true
+    loadJson<{ findings: Finding[] }>(`/api/accounting/audit?today=${today}`).then(res => {
+      if (!alive) return
+      if (res.error !== null) setError(res.error)
+      else { setFindings(res.data.findings); setError(null) }
+      setLoading(false)
+    })
+    return () => { alive = false }
   }, [today])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load() }, [load])
 
   if (loading) return <p className="text-[13px] text-[#9a9a95] py-6 text-center">Проверяю…</p>
+  if (error) return <p className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-[13px]">Проверка не загрузилась: {error}</p>
 
   if (!findings.length) {
     return (
@@ -71,7 +79,12 @@ export function AuditTab({ today }: { today: string }) {
                   {f.title}
                 </p>
                 <p className="text-[13px] text-[#6b6b66] mt-1">{f.detail}</p>
-                {WHERE[f.code] && <p className="text-[12px] text-[#9a9a95] mt-1">Смотреть: {WHERE[f.code]}</p>}
+                {WHERE[f.code] && (
+                  <button onClick={() => onGo(WHERE[f.code].tab)}
+                    className="mt-2 px-3 py-1 rounded-lg border border-[#111110] text-[12px] font-medium text-[#111110] bg-white">
+                    {WHERE[f.code].label} →
+                  </button>
+                )}
               </div>
               {f.amount ? (
                 <span className="text-[14px] font-mono font-semibold text-[#111110] flex-shrink-0">{RUB(f.amount)}</span>
