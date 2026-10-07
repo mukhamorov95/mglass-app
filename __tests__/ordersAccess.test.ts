@@ -21,6 +21,8 @@ describe('маршруты розничного заказа (/api/orders/[id]/*
     expect(existsSync(join(root, 'app/api/orders/production/route.ts'))).toBe(false)
     expect(read('app/orders/page.tsx')).toContain("redirect('/b2b-orders')")
     expect(read('app/my-day/page.tsx')).toContain("redirect('/')")
+    // Убранная страница не уносит то, что жило только на ней.
+    expect(read('app/page.tsx')).toContain('<OrphanCalcs />')
     expect(read('app/admin/installations/page.tsx')).toContain("redirect('/installations')")
   })
 

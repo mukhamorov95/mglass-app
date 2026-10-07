@@ -3,6 +3,7 @@ import { mskDayKey } from '@/lib/time'
 import { redirect } from 'next/navigation'
 import { getRole, ROLE_HOME } from '@/lib/getRole'
 import MyDay from '@/components/MyDay'
+import { OrphanCalcs } from '@/components/OrphanCalcs'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient as serviceClient } from '@/lib/supabase-service'
 import { loadMorning, type Morning, type MorningPerson } from '@/lib/morningData'
@@ -95,6 +96,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
       {/* Учётка без связи с amo — «Утра» нет, остаются поводы дня */}
       {role === 'manager' && !person && <MyDay />}
       {isOwner && team && <MorningTeam team={team} />}
+      {/* Был на /my-day (менеджер и владелец); страница теперь ведёт сюда. */}
+      {(role === 'manager' || isOwner) && <OrphanCalcs />}
     </div>
   )
 }
