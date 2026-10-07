@@ -9,6 +9,8 @@ import UpdDocument from '@/components/UpdDocument'
 import type { InvoiceOrder, InvoiceRequisites } from '@/components/InvoiceDocument'
 import DocSkeleton from '@/components/DocSkeleton'
 import { toast } from '@/lib/toast'
+import { updDocDate } from '@/lib/b2b/updLines'
+import type { UpdRegistered } from '@/lib/b2b/updRegistry'
 
 // А7 маршрута менеджерского контура: УПД у менеджера — тот же документ, что в кабинете
 // партнёра (components/UpdDocument), но на менеджерских данных /api/quotes/[id]/invoice-data.
@@ -37,6 +39,7 @@ type Resp = {
   entities: B2BLegalEntity[]
   payerEntityId?: number | null
   paymentDates?: string[]
+  updRegistered?: UpdRegistered | null
 }
 
 export default function ManagerUpdPage() {
@@ -50,6 +53,7 @@ export default function ManagerUpdPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const docRef = useRef<HTMLDivElement>(null)
+  const [registered, setRegistered] = useState<UpdRegistered | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -57,6 +61,7 @@ export default function ManagerUpdPage() {
       if (!r.ok) { setError(r.status === 403 ? 'Нет доступа к этому заказу' : 'Заказ не найден'); setLoading(false); return }
       const d = await r.json() as Resp
       setData(d)
+      setRegistered(d.updRegistered ?? null)
       setBuyerName(d.order.client_name || (d.client?.name as string) || 'Клиент')
       const list = d.entities ?? []
       // Покупатель — тот, кому выставлен счёт; без счёта — основное юрлицо клиента.
@@ -72,8 +77,38 @@ export default function ManagerUpdPage() {
     if (e) { setEntityId(e.id); setReq(toReq(e as unknown as Record<string, unknown>)) }
   }
 
+  // Сквозной номер выдаётся при первой печати/PDF и только отгруженному заказу: иначе
+  // в реестре навсегда закрепилась бы дата запуска вместо даты отгрузки.
+  async function ensureNumber(): Promise<UpdRegistered | null> {
+    if (registered || !data) return registered
+    let notes: Record<string, unknown> = {}
+    try { notes = data.order.notes ? JSON.parse(data.order.notes) : {} } catch {}
+    if (updDocDate(notes, data.order.created_at).source !== 'shipped') {
+      toast.info('УПД без сквозного номера', { detail: 'Номер выдаётся после отметки «Отгружен» в заказах — тогда дата документа = дата отгрузки.' })
+      return null
+    }
+    const r = await fetch(`/api/quotes/${id}/upd-number`, { method: 'POST' })
+    const j = await r.json().catch(() => ({})) as { registered?: UpdRegistered | null; pendingSql?: boolean; error?: string }
+    if (!r.ok) { toast.error('Номер УПД не выдан', { detail: j.error ?? `ошибка ${r.status}` }); return null }
+    if (j.pendingSql) { toast.info('УПД с номером заказа', { detail: 'Сквозная нумерация включится после SQL владельца (20261007_upd_registry.sql).' }); return null }
+    if (j.registered) setRegistered(j.registered)
+    return j.registered ?? null
+  }
+
+  // Номер должен попасть в документ до снимка/печати — ждём перерисовку.
+  const afterRender = () => new Promise<void>(res => requestAnimationFrame(() => requestAnimationFrame(() => res())))
+
+  async function printDoc() {
+    await ensureNumber()
+    await afterRender()
+    await document.fonts.ready
+    window.print()
+  }
+
   async function downloadPdf() {
     if (!docRef.current || !data) return
+    const reg = await ensureNumber()
+    await afterRender()
     try {
       const jspdf = await import('jspdf')
       const canvas = await renderDocCanvas(docRef.current)
@@ -85,7 +120,7 @@ export default function ManagerUpdPage() {
       pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
       left -= ph
       while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
-      pdf.save(`УПД-${data.order.custom_number?.trim() || String(data.order.id).padStart(5, '0')}.pdf`)
+      pdf.save(`УПД-${reg ? `${reg.number}-${reg.year}` : data.order.custom_number?.trim() || String(data.order.id).padStart(5, '0')}.pdf`)
     } catch {
       toast.error('Не удалось сформировать PDF', {
         detail: 'Лист можно сохранить через «Печать» → Сохранить как PDF.',
@@ -124,13 +159,13 @@ export default function ManagerUpdPage() {
             Нет ИНН покупателя — заполните реквизиты на странице счёта
           </span>
         )}
-        <button onClick={() => document.fonts.ready.then(() => window.print())}
+        <button onClick={printDoc}
           className="ml-auto text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] bg-white text-[#6b6b66] hover:text-[#111110] hover:border-[#111110] transition-colors">🖨 Печать</button>
         <button onClick={downloadPdf}
           className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">⬇ Скачать PDF</button>
       </div>
 
-      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} paymentDates={data.paymentDates ?? []} />
+      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} paymentDates={data.paymentDates ?? []} registered={registered} />
     </>
   )
 }

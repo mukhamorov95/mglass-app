@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import UpdDocument from '@/components/UpdDocument'
+import type { UpdRegistered } from '@/lib/b2b/updRegistry'
 import type { InvoiceOrder, InvoiceRequisites } from '@/components/InvoiceDocument'
 
 // A11: УПД в кабинете партнёра для отгруженного заказа. Данные — тот же
@@ -21,7 +22,7 @@ function toReq(src: Record<string, unknown> | null | undefined): InvoiceRequisit
   }
 }
 
-type Resp = { order: InvoiceOrder & { client_name?: string }; client: Record<string, unknown> | null; entities: B2BLegalEntity[] }
+type Resp = { order: InvoiceOrder & { client_name?: string }; client: Record<string, unknown> | null; entities: B2BLegalEntity[]; updRegistered?: UpdRegistered | null }
 
 export default function PartnerUpdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -93,7 +94,7 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
         <button onClick={downloadPdf} className="primary">⬇ Скачать PDF</button>
       </div>
 
-      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} />
+      <UpdDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} registered={data.updRegistered ?? null} />
     </>
   )
 }

@@ -107,7 +107,7 @@ describe('ownerSqlVerdict', () => {
     expect(ownerSqlVerdict([]).status).toBe('ok')
     const v = ownerSqlVerdict(OWNER_SQL)
     expect(v.status).toBe('warn')
-    expect(v.detail).toContain('Не выполнен SQL (2)')
+    expect(v.detail).toContain(`Не выполнен SQL (${OWNER_SQL.length})`)
     expect(v.action).toContain('supabase/migrations/20261006_cron_runs.sql')
     expect(v.action).toContain('SQL Editor')
   })
