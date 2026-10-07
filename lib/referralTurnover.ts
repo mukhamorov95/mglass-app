@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { inChunks, pageAll } from '@/lib/supabase/pageAll'
 
 // Партнёрка: авто-оборот по клиентам, привязанным к CRM (b2b_client_id) —
 // помесячные суммы из b2b_orders с 2026 года. Для непривязанных клиентов
@@ -34,19 +35,24 @@ export async function buildAutoTurnover(
   // Те же фильтры, что в /b2b-orders (истина заказов): без просчётов (quote), без
   // импортированной истории (historical), без архива (вытесненные поколения импорта)
   // и ТОЛЬКО запущенные в работу — просчёт заказом не является (владелец 01.09).
-  const { data: orders } = await sb.from('b2b_orders')
+  // Страницами и пачками клиентов: .limit(20000) потолок PostgREST в 1000 строк не поднимал,
+  // а запущенных заказов с 2026 года уже больше (07.10 — ~1200), и оборот партнёра занижался.
+  // Ошибку бросаем: молча нулевой оборот — это неверное вознаграждение.
+  type Ord = { client_id: number; total_after_discount: number | null; total_sale_inc_vat: number | null; created_at: string }
+  const orders = await inChunks(b2bIds, 200, part => pageAll<Ord>((from, to) => sb.from('b2b_orders')
     .select('client_id,total_after_discount,total_sale_inc_vat,created_at,notes')
-    .in('client_id', b2bIds)
+    .in('client_id', part)
     .gte('created_at', '2026-01-01')
     .not('notes', 'ilike', '%"status":"quote"%')
     .not('notes', 'ilike', '%"historical":true%')
     .not('notes', 'is', null)
     .ilike('notes', '%"launched_at"%')
     .is('archived_at', null)
-    .limit(20000)
+    .order('id')
+    .range(from, to)))
 
   const byClientMonth = new Map<number, Map<string, number>>()
-  for (const o of orders ?? []) {
+  for (const o of orders) {
     const amt = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
     if (!amt) continue
     const ym = `${String(o.created_at).slice(0, 7)}-01`

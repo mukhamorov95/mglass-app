@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { bookNames } from '@/lib/sales/bookNames'
+import { pageAllOrError } from '@/lib/supabase/pageAll'
 import { nextMonth as addMonth, prevMonth } from '@/lib/morning'
 import { cashOf, type CashDay, type CashMonth } from '@/lib/earnings/cash'
 
@@ -46,22 +47,29 @@ export async function loadCash(sb: SupabaseClient, opts: { today: string; amoUse
   const names = [...new Set([...bookNames(name), ...bookNames((usr.data?.name as string | undefined) ?? '')])].filter(Boolean)
   const workDays = Array.isArray(sch.data?.work_days) && sch.data.work_days.length ? (sch.data.work_days as number[]) : [1, 2, 3, 4, 5]
 
+  // Заработок — деньги: вся история месяцев и оба месяца по дням читаются страницами в порядке
+  // первичного ключа; .limit(5000) потолок PostgREST в 1000 строк не поднимал. Не прочиталось —
+  // пусто и ошибка на экране, а не «первая тысяча» под видом всего.
   const [monthly, daily] = await Promise.all([
-    sb.from('manager_stats_monthly').select('month, metric, value')
-      .lt('month', month).in('manager', names).in('metric', METRICS).limit(5000),
-    sb.from('manager_stats_daily').select('stat_date, metric, value')
+    pageAllOrError<{ month: string; metric: string; value: number }>((from, to) => sb.from('manager_stats_monthly')
+      .select('month, metric, value')
+      .lt('month', month).in('manager', names).in('metric', METRICS)
+      .order('month').order('manager').order('metric').range(from, to)),
+    pageAllOrError<{ stat_date: string; metric: string; value: number }>((from, to) => sb.from('manager_stats_daily')
+      .select('stat_date, metric, value')
       .gte('stat_date', `${prev}-01`).lt('stat_date', `${addMonth(month)}-01`)
-      .in('manager', names).in('metric', METRICS).limit(5000),
+      .in('manager', names).in('metric', METRICS)
+      .order('stat_date').order('manager').order('metric').range(from, to)),
   ])
   note('книга по месяцам', monthly.error); note('книга по дням', daily.error)
 
   const byMonth = new Map<string, CashMonth>()
   const monthOf = (k: string) => byMonth.get(k) ?? byMonth.set(k, { month: k, prepay: 0, remainder: 0, payments: 0 }).get(k)!
-  for (const f of (monthly.data ?? []) as { month: string; metric: string; value: number }[]) add(monthOf(f.month), f)
+  for (const f of monthly.data) add(monthOf(f.month), f)
 
   const byDay = new Map<string, CashDay>()
   const cur = monthOf(month)
-  for (const f of (daily.data ?? []) as { stat_date: string; metric: string; value: number }[]) {
+  for (const f of daily.data) {
     if (f.stat_date.startsWith(month)) add(cur, f)
     if (f.metric === 'payments') continue
     const d = byDay.get(f.stat_date) ?? byDay.set(f.stat_date, { date: f.stat_date, prepay: 0, remainder: 0 }).get(f.stat_date)!

@@ -4,6 +4,7 @@ import { canMargin, getUserProfile } from '@/lib/getRole'
 import MarginObjectRow from '@/components/sales/MarginObjectRow'
 import { createServiceClient } from '@/lib/supabase-service'
 import { mskDayKey } from '@/lib/time'
+import { inChunks, pageAll } from '@/lib/supabase/pageAll'
 import { plural } from '@/lib/morning'
 import { shiftMonth } from '@/lib/sales/period'
 import { MontageFillAll, MontageFillButton, type FillItem } from '@/components/sales/MontageFill'
@@ -84,13 +85,14 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
   // До первой вкладки «Маржи» сверять не с чем: пустая ячейка там — «книги не было», а не «не внесли».
   const periodObjects = byMonth.flatMap(x => x.objects).filter(o => o.order_no && o.month >= MARGIN_SINCE)
   const nos = [...new Set(periodObjects.map(o => o.order_no!))]
+  type OrderBookRow = { order_no: string; ledger_month: string; installer: number | null; dima: number | null }
   const [orderRowsRes, montageRes] = await Promise.all([
-    Promise.all(Array.from({ length: Math.ceil(nos.length / 150) }, (_, i) =>
-      svc.from('margin_book_rows').select('order_no, ledger_month, installer, dima')
-        .in('order_no', nos.slice(i * 150, i * 150 + 150)).eq('voided', false).range(0, 4999))),
+    inChunks(nos, 150, part => pageAll<OrderBookRow>((from, to) => svc.from('margin_book_rows').select('order_no, ledger_month, installer, dima')
+      .in('order_no', part).eq('voided', false).order('id').range(from, to)))
+      .then(rows => ({ rows, error: null }), (e: Error) => ({ rows: [] as OrderBookRow[], error: e.message })),
     montageBookCached().then(b => ({ b, error: null }), (e: Error) => ({ b: null as MontageBook | null, error: e.message })),
   ])
-  const orderRowsError = orderRowsRes.find(r => r.error)?.error?.message ?? null
+  const orderRowsError = orderRowsRes.error
   const marginOrders = new Map<string, MarginOrder>()
   const add = (k: string, installer: number | null, dima: number | null) => {
     const mo = marginOrders.get(k)!
@@ -103,7 +105,7 @@ export default async function MarginPage({ searchParams }: { searchParams: Promi
     add(k, o.costs?.installer ?? null, o.dima)
   }
   const outside = new Set<string>()
-  for (const r of orderRowsRes.flatMap(x => (x.data ?? []) as { order_no: string; ledger_month: string; installer: number | null; dima: number | null }[])) {
+  for (const r of orderRowsRes.rows) {
     if (months.includes(r.ledger_month) || !marginOrders.has(orderKey(r.order_no))) continue
     outside.add(orderKey(r.order_no))
     add(orderKey(r.order_no), r.installer == null ? null : Number(r.installer), r.dima == null ? null : Number(r.dima))

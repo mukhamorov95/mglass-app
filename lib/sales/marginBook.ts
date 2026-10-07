@@ -7,6 +7,7 @@
 // и страницы /sales/margin. Только относительные импорты: скрипт грузит файл самим Node.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { inChunks, pageAll } from '@/lib/supabase/pageAll'
 import { parseMoney, parseMoneyLoose, parseSheetRows, parseTabList, parseTabMonth } from './salesSheetParse.mjs'
 
 export const MARGIN_BOOK_ID = '1E5jUrBxJUTXa74LAd7ZiNq6qMJq5e0J_yMWxqvRTdPY'
@@ -359,15 +360,16 @@ export const SALE_COLUMNS = 'id, order_no, client, manager, amount, partner_fee,
 // Правки приложения по продажам — пачками: в адресе запроса сотни id не помещаются.
 export async function loadEdits(sb: SupabaseClient, saleIds: number[]): Promise<Map<number, SaleEdits>> {
   const out = new Map<number, SaleEdits>()
-  for (let i = 0; i < saleIds.length; i += 150) {
-    const { data, error } = await sb.from('margin_edits').select('sale_id, field, value, edited_by_name, edited_at')
-      .in('sale_id', saleIds.slice(i, i + 150))
-    if (error) throw new Error(`Правки маржи: ${error.message}`)
-    for (const r of (data ?? []) as { sale_id: number; field: EditField; value: number; edited_by_name: string | null; edited_at: string }[]) {
-      const e = out.get(Number(r.sale_id)) ?? {}
-      e[r.field] = { value: Number(r.value), by: r.edited_by_name, at: r.edited_at }
-      out.set(Number(r.sale_id), e)
-    }
+  type EditRow = { sale_id: number; field: EditField; value: number; edited_by_name: string | null; edited_at: string }
+  // До 13 правок на продажу × 150 продаж в пачке — больше потолка PostgREST в 1000 строк.
+  const rows = await inChunks(saleIds, 150, part => pageAll<EditRow>((from, to) => sb.from('margin_edits')
+    .select('sale_id, field, value, edited_by_name, edited_at')
+    .in('sale_id', part).order('sale_id').order('field').range(from, to)))
+    .catch((e: Error) => { throw new Error(`Правки маржи: ${e.message}`) })
+  for (const r of rows) {
+    const e = out.get(Number(r.sale_id)) ?? {}
+    e[r.field] = { value: Number(r.value), by: r.edited_by_name, at: r.edited_at }
+    out.set(Number(r.sale_id), e)
   }
   return out
 }
@@ -379,14 +381,16 @@ export async function loadEdits(sb: SupabaseClient, saleIds: number[]): Promise<
 export type MarginMonth = { month: string; tab: string; objects: MarginObject[] }
 
 export async function loadMarginMonths(sb: SupabaseClient, months: string[]): Promise<{ byMonth: MarginMonth[]; editsError: string | null }> {
-  const [rowsRes, salesRes] = await Promise.all([
-    sb.from('margin_book_rows').select('*').in('ledger_month', months).eq('voided', false).order('row_no').range(0, 4999),
-    sb.from('crm_sales').select(SALE_COLUMNS).in('ledger_month', months).eq('voided', false).neq('department', 'b2b').range(0, 4999),
+  // .range(0, 4999) потолок PostgREST в 1000 строк не поднимал: год «Маржи» — это сотни
+  // строк книги и продаж, и хвост молча терялся. Читаем страницами в устойчивом порядке.
+  const [rows, sales] = await Promise.all([
+    pageAll<MarginDbRow & { ledger_month: string; tab: string }>((from, to) => sb.from('margin_book_rows').select('*')
+      .in('ledger_month', months).eq('voided', false).order('row_no').order('id').range(from, to))
+      .catch((e: Error) => { throw new Error(`Книга «Маржа»: ${e.message}`) }),
+    pageAll<MarginSale & { ledger_month: string }>((from, to) => sb.from('crm_sales').select(SALE_COLUMNS)
+      .in('ledger_month', months).eq('voided', false).neq('department', 'b2b').order('id').range(from, to))
+      .catch((e: Error) => { throw new Error(`Продажи: ${e.message}`) }),
   ])
-  if (rowsRes.error) throw new Error(`Книга «Маржа»: ${rowsRes.error.message}`)
-  if (salesRes.error) throw new Error(`Продажи: ${salesRes.error.message}`)
-  const rows = (rowsRes.data ?? []) as unknown as (MarginDbRow & { ledger_month: string; tab: string })[]
-  const sales = (salesRes.data ?? []) as unknown as (MarginSale & { ledger_month: string })[]
   const loaded = await loadEdits(sb, sales.map(x => x.id)).then(map => ({ map, error: null }), (e: Error) => ({ map: new Map<number, SaleEdits>(), error: e.message }))
   const byMonth = months.map(m => {
     const own = rows.filter(r => r.ledger_month === m)
@@ -435,10 +439,10 @@ export async function syncMarginBook(
   const parsed: MarginTab[] = []
   for (const t of tabs) parsed.push(parseMarginTab(await fetchText(`${base}/htmlview/sheet?headers=true&gid=${t.gid}`), t.gid, t.name.trim()))
 
-  const { data: salesData, error: salesErr } = await sb.from('crm_sales').select(SALE_COLUMNS)
-    .in('ledger_month', parsed.map(p => p.month)).eq('voided', false).neq('department', 'b2b').range(0, 9999)
-  if (salesErr) throw new Error(`Продажи: ${salesErr.message}`)
-  const sales = (salesData ?? []) as unknown as (MarginSale & { ledger_month: string })[]
+  // Все продажи книги (07.10 — уже больше 1000 строк): .range(0, 9999) упирался в потолок PostgREST.
+  const sales = await pageAll<MarginSale & { ledger_month: string }>((from, to) => sb.from('crm_sales').select(SALE_COLUMNS)
+    .in('ledger_month', parsed.map(p => p.month)).eq('voided', false).neq('department', 'b2b').order('id').range(from, to))
+    .catch((e: Error) => { throw new Error(`Продажи: ${e.message}`) })
   // Расходы, внесённые в приложении, — поверх книги и в себестоимости для CFO.
   const edits = await loadEdits(sb, sales.map(s => s.id))
 
@@ -487,9 +491,11 @@ export async function syncMarginBook(
   let financeUpdated = 0
   const ids = [...financeWanted.keys()]
   if (ids.length) {
-    const { data: fin, error: finErr } = await sb.from('crm_sale_finance').select('sale_id, cost, cost_source, cost_overridden').in('sale_id', ids)
-    if (finErr) throw new Error(`Себестоимость: ${finErr.message}`)
-    const cur = new Map((fin ?? []).map(f => [f.sale_id as number, f as { cost: number; cost_source: string; cost_overridden: boolean }]))
+    type Fin = { sale_id: number; cost: number; cost_source: string; cost_overridden: boolean }
+    const fin = await inChunks(ids, 300, part => pageAll<Fin>((from, to) => sb.from('crm_sale_finance')
+      .select('sale_id, cost, cost_source, cost_overridden').in('sale_id', part).order('sale_id').range(from, to)))
+      .catch((e: Error) => { throw new Error(`Себестоимость: ${e.message}`) })
+    const cur = new Map(fin.map(f => [f.sale_id, f]))
     const changed = ids.filter(id => {
       const f = cur.get(id)
       return !f?.cost_overridden && (!f || Math.abs(Number(f.cost) - financeWanted.get(id)!) >= 0.01 || f.cost_source !== 'import')
@@ -513,14 +519,16 @@ export async function refreshSaleFinance(sb: SupabaseClient, saleId: number): Pr
   if (error) throw new Error(`Продажа: ${error.message}`)
   const month = (sale as { ledger_month?: string } | null)?.ledger_month
   if (!month) return
-  const [rows, sales] = await Promise.all([
-    sb.from('margin_book_rows').select('*').eq('ledger_month', month).eq('voided', false).order('row_no').range(0, 4999),
-    sb.from('crm_sales').select(SALE_COLUMNS).eq('ledger_month', month).eq('voided', false).neq('department', 'b2b').range(0, 4999),
-  ])
-  if (rows.error || sales.error) throw new Error(`Месяц ${month}: ${(rows.error ?? sales.error)!.message}`)
-  const list = (sales.data ?? []) as unknown as MarginSale[]
+  // Один месяц (07.10 — до 66 продаж и 58 строк книги), но читаем тем же способом, что экран,
+  // чтобы себестоимость CFO и «Маржа» не разошлись на длинном месяце.
+  const [rows, list] = await Promise.all([
+    pageAll<MarginDbRow>((from, to) => sb.from('margin_book_rows').select('*')
+      .eq('ledger_month', month).eq('voided', false).order('row_no').order('id').range(from, to)),
+    pageAll<MarginSale>((from, to) => sb.from('crm_sales').select(SALE_COLUMNS)
+      .eq('ledger_month', month).eq('voided', false).neq('department', 'b2b').order('id').range(from, to)),
+  ]).catch((e: Error) => { throw new Error(`Месяц ${month}: ${e.message}`) })
   const edits = await loadEdits(sb, list.map(x => x.id))
-  const o = reconcileMonth(month, ((rows.data ?? []) as MarginDbRow[]).map(fromDb), list, edits).find(x => x.sale_id === saleId)
+  const o = reconcileMonth(month, rows.map(fromDb), list, edits).find(x => x.sale_id === saleId)
   if (!o || o.finance_cost == null) return
   const { data: f } = await sb.from('crm_sale_finance').select('cost_overridden').eq('sale_id', saleId).maybeSingle()
   if (f?.cost_overridden) return
