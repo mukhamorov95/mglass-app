@@ -5,6 +5,7 @@ import { resolvePartnerClient } from '@/lib/partnerClient'
 import { createPaymentLink, paymentsEnabled } from '@/lib/payments/provider'
 import { appUrl } from '@/lib/appUrl'
 import { previewWriteGuard } from '@/lib/partnerPreview'
+import { amountDue, loadPaidByOrders, paymentView } from '@/lib/partner/orderMoney'
 
 // A2: инициировать онлайн-оплату по своему заказу. Пока эквайринг не подключён —
 // 501 «оплата онлайн ещё не подключена» (кнопка в кабинете и так скрыта). Когда
@@ -37,15 +38,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!order || order.client_id !== client.id) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
   const pn = parseNotes(order.notes)
-  if (pn.payment_status === 'paid') return NextResponse.json({ error: 'Заказ уже оплачен' }, { status: 409 })
+  const total = Number(order.total_after_discount ?? order.total_sale_inc_vat ?? 0) || 0
+  if (total <= 0) return NextResponse.json({ error: 'Нулевая сумма' }, { status: 400 })
 
-  const amount = Number(order.total_after_discount ?? order.total_sale_inc_vat ?? 0) || 0
-  if (amount <= 0) return NextResponse.json({ error: 'Нулевая сумма' }, { status: 400 })
+  // К оплате — остаток: уже пришедшие платежи (или отмеченная менеджером предоплата)
+  // повторно не выставляем.
+  let paidFromPayments = 0
+  try { paidFromPayments = (await loadPaidByOrders(svc, [oid])).get(oid) ?? 0 }
+  catch (e) { return NextResponse.json({ error: `Оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  const amount = amountDue(paymentView({ total, paidFromPayments, notes: pn, due: true }))
+  if (amount <= 0) return NextResponse.json({ error: 'Заказ уже оплачен' }, { status: 409 })
   const number = (order.custom_number as string | null)?.trim() || `#${oid}`
   const base = appUrl()
 
   const link = await createPaymentLink({
-    orderId: oid, amount, description: `Оплата заказа ${number} · M-Glass`,
+    orderId: oid, amount, description: `${amount < total ? 'Оплата остатка по заказу' : 'Оплата заказа'} ${number} · M-Glass`,
     returnUrl: `${base}/partner/order/${oid}`,
   })
   if (!link) return NextResponse.json({ error: 'Оплата онлайн ещё не подключена' }, { status: 501 })

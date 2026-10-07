@@ -5,7 +5,8 @@ import { resolvePartnerClient } from '@/lib/partnerClient'
 import { paymentsEnabled } from '@/lib/payments/provider'
 import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
-import { loadInvoicedOrders, markedPaid } from '@/lib/partner/orderMoney'
+import { loadInvoicedOrders, loadPaidByOrders, paymentView } from '@/lib/partner/orderMoney'
+import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { invoiceState } from '@/lib/partner/documents'
 import { pointStage } from '@/lib/partner/pointPay'
 import { decisionOf, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
@@ -47,8 +48,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const discount = Number(o.discount_percent) || 0
   const rawItems = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
   const items = rawItems.map(it => {
-    const sale = Number(it.saleIncVat ?? 0)
-    const price = Number(it.manualTotal ?? Math.round(sale * (1 - discount / 100)))
+    // Та же функция итога позиции, что у менеджера: договорная цена, позиция из
+    // индивидуального прайса (clientPriced) — без повторной скидки.
+    const price = Number(effectiveItemTotal(it as unknown as B2BOrderItem, discount)) || 0
     return {
       material: String(it.materialName ?? ''),
       thickness: Number(it.thickness ?? 0),
@@ -89,12 +91,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     try { invoiced = (await loadInvoicedOrders(svc, [oid])).has(oid) }
     catch (e) { return NextResponse.json({ error: `Реестр счетов не прочитан: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
   }
-  const paid = markedPaid(pn)
-  const point = pointStage({ isPoint, launched, submitted: lane === 'submitted', invoiced, paid })
+  const total = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
+  let paidFromPayments = 0
+  try { paidFromPayments = (await loadPaidByOrders(svc, [oid])).get(oid) ?? 0 }
+  catch (e) { return NextResponse.json({ error: `Оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  const fullyPaid = paymentView({ total, paidFromPayments, notes: pn, due: true })?.status === 'paid'
+  const point = pointStage({ isPoint, launched, submitted: lane === 'submitted', invoiced, paid: fullyPaid })
 
-  // paid — оплачен; awaiting — в работе/отгружен (или точка с выставленным счётом), а
-  // оплата не отмечена; null — просчёт.
-  const paymentStatus: 'paid' | 'awaiting' | null = paid ? 'paid' : (launched || point === 'await_payment' ? 'awaiting' : null)
+  // Оплата: «Оплачен» / «Оплачено X из Y, осталось Z» / «Ожидает оплаты» — последнее,
+  // когда заказ в работе или точке выставлен счёт; у просчёта — ничего.
+  const payment = paymentView({ total, paidFromPayments, notes: pn, due: launched || point === 'await_payment' })
 
   const canInvoice = invoiceState({ launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced }) === 'open'
   // УПД — только выданный документ (этап 7), и любому партнёру заказа: флаг — для счёта.
@@ -118,13 +124,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     progressPct: p.progressPct,
     deadline,
     estimateDays: DEFAULT_WORKING_DAYS,
-    paymentStatus,
-    onlinePayEnabled: paymentStatus === 'awaiting' && paymentsEnabled(),
+    payment,
+    onlinePayEnabled: !!payment && payment.status !== 'paid' && paymentsEnabled(),
     canInvoice,
     point,
     updIssued: !!upd,
     upd: upd ? { number: upd.number, year: upd.year, docDate: upd.doc_date } : null,
-    total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),
+    total,
     items,
     timeline: p.timeline,
     drawingUrl,

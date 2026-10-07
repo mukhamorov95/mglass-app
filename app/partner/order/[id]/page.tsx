@@ -12,7 +12,7 @@ type TL = { label: string; state: 'done' | 'now' | 'wait'; date: string | null }
 type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
   lane: string; ready: boolean; progressPct: number; deadline: string | null; estimateDays?: number
-  paymentStatus?: 'paid' | 'awaiting' | null
+  payment?: { status: 'paid' } | { status: 'partial'; paid: number; total: number; remainder: number } | { status: 'awaiting'; total: number } | null
   onlinePayEnabled?: boolean
   canInvoice?: boolean
   point?: PointStage | null
@@ -122,13 +122,11 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
           <div className="cap" style={{ marginTop: 3 }}>Создан {fmtDate(o.created_at)}{o.deadline ? ` · срок отгрузки ${fmtDate(o.deadline)}` : (o.lane === 'submitted' && o.estimateDays ? ` · срок ~${o.estimateDays} раб. дней после запуска` : '')}</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {o.paymentStatus && (
-            <span style={{
-              fontSize: 12.5, padding: '6px 13px', borderRadius: 999, fontWeight: 600,
-              background: o.paymentStatus === 'paid' ? 'rgba(16,185,129,.12)' : 'rgba(245,158,11,.14)',
-              color: o.paymentStatus === 'paid' ? '#0f766e' : '#b45309',
-            }}>
-              {o.paymentStatus === 'paid' ? '✓ Оплачен' : 'Ожидает оплаты'}
+          {o.payment && (
+            <span className={`pill ${o.payment.status === 'paid' ? 'p-ready' : 'p-sub'}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>
+              {o.payment.status === 'paid' ? 'Оплачен'
+                : o.payment.status === 'partial' ? `Оплачено ${fmt(o.payment.paid)} из ${fmt(o.payment.total)}, осталось ${fmt(o.payment.remainder)}`
+                : 'Ожидает оплаты'}
             </span>
           )}
           <span className={`pill ${pillCls}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>{statusText}</span>
@@ -271,7 +269,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
       )}
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-        {o.onlinePayEnabled && <button className="primary" onClick={payOnline} disabled={paying}>{paying ? 'Открываю оплату…' : '💳 Оплатить онлайн'}</button>}
+        {o.onlinePayEnabled && <button className="primary" onClick={payOnline} disabled={paying}>{paying ? 'Открываю оплату…' : o.payment?.status === 'partial' ? `💳 Оплатить остаток ${fmt(o.payment.remainder)}` : '💳 Оплатить онлайн'}</button>}
         <Link className="ghost" href={`/partner/order/${o.id}/kp`}>↓ Скачать КП</Link>
         {o.canInvoice && <Link className="ghost" href={`/partner/order/${o.id}/invoice`}>↓ Счёт-спецификация</Link>}
         {o.upd && <Link className="ghost" href={`/partner/order/${o.id}/upd`}>↓ УПД № {o.upd.number} от {fmtDate(o.upd.docDate)}</Link>}

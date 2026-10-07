@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
-import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
+import { partnerProgress, partnerDeadline, isLaunched } from '@/lib/partner/orderProgress'
 import { readPaged } from '@/lib/partner/readPaged'
 import { invoiceState, type UpdShort } from '@/lib/partner/documents'
 import { loadUpdByOrders } from '@/lib/partner/updByOrders'
-import { loadInvoicedOrders, markedPaid } from '@/lib/partner/orderMoney'
+import { loadInvoicedOrders, loadPaidByOrders, paymentView } from '@/lib/partner/orderMoney'
 import { pointStage } from '@/lib/partner/pointPay'
 
 // Кабинет партнёра — «мои заказы» (read-only, строго по своему клиенту).
@@ -53,9 +53,15 @@ export async function GET() {
   // Точке счёт нужен до запуска — читаем реестр счетов только для неё.
   const isPoint = client.is_point === true
   let invoiced = new Set<number>()
+  let paidMap = new Map<number, number>()
   if (isPoint) {
-    try { invoiced = await loadInvoicedOrders(svc, data.map(o => o.id as number)) }
-    catch (e) { return NextResponse.json({ error: `Реестр счетов не прочитан: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+    try {
+      invoiced = await loadInvoicedOrders(svc, data.map(o => o.id as number))
+      const notLaunched = data.filter(o => !isLaunched({ launched_at: o.launched_at as string | null }, parseNotes(o.notes as string | null))).map(o => o.id as number)
+      paidMap = await loadPaidByOrders(svc, notLaunched)
+    } catch (e) {
+      return NextResponse.json({ error: `Счета и оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+    }
   }
 
   const orders = data.map((o: Record<string, unknown>) => {
@@ -93,7 +99,10 @@ export async function GET() {
       summary,
       positions: items.length,
       invoice: invoiceState({ launched: p.launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced: invoiced.has(o.id as number) }),
-      point: pointStage({ isPoint, launched: p.launched, submitted: lane === 'submitted', invoiced: invoiced.has(o.id as number), paid: markedPaid(pn) }),
+      point: pointStage({
+        isPoint, launched: p.launched, submitted: lane === 'submitted', invoiced: invoiced.has(o.id as number),
+        paid: isPoint && paymentView({ total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0), paidFromPayments: paidMap.get(o.id as number) ?? 0, notes: pn, due: true })?.status === 'paid',
+      }),
       upd: upds.get(o.id as number) ?? null,
     }
   })

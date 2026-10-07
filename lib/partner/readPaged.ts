@@ -1,7 +1,7 @@
 // PostgREST отдаёт не больше 1000 строк за запрос, и .limit(3000) этого не меняет —
 // хвост теряется молча. Читаем страницами до короткой.
 
-type Paged = { range(from: number, to: number): PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> }
+export type Paged = { range(from: number, to: number): PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> }
 
 export const PAGE = 1000
 
