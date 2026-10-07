@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState, useMemo, useRef, Suspense } from 'react'
 import { normalizeHoles, totalHoles, type HoleGroup } from '@/lib/production/holes'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { TreatToggle } from './TreatToggle'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BMaterial, B2BService, B2BFilm, B2B_SOURCES } from '@/lib/types'
@@ -2871,11 +2872,24 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                         ? 'Лежит в «Просчётах» с отметкой «без заказчика». Ответ клиенту — кнопка «📋 Текст» выше. Когда клиент скажет «заказываю»: «Просчёты» → «＋ Заказчик», выберите или создайте клиента и нажмите «Обновить просчёт».'
                         : 'Коммерческое предложение (PDF) скачивается в разделе «Просчёты» — там же хранится вся история расчётов.'}
                     </p>
-                    <button
-                      onClick={() => router.push('/b2b-quotes')}
-                      className="w-full text-[12px] font-medium py-2 rounded-lg bg-[#1d1d1f] text-white hover:bg-black transition-colors">
-                      Перейти к просчётам →
-                    </button>
+                    {/* Следующий шаг — в одно нажатие: карточка сделки (запуск, ссылка, телефон) и счёт. */}
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/b2b-deal/${savedOrderId}`}
+                        className="flex-1 min-w-[130px] text-center text-[12px] font-semibold py-2 rounded-lg bg-[#1d1d1f] text-white hover:bg-black transition-colors">
+                        Карточка сделки →
+                      </Link>
+                      {clientId && (
+                        <a href={`/b2b-quotes/${savedOrderId}/invoice`} target="_blank" rel="noreferrer"
+                          className="flex-1 min-w-[110px] text-center text-[12px] font-semibold py-2 rounded-lg bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100 transition-colors">
+                          🧾 Счёт
+                        </a>
+                      )}
+                      <button
+                        onClick={() => router.push('/b2b-quotes')}
+                        className="flex-1 min-w-[110px] text-[12px] font-medium py-2 rounded-lg bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-100 transition-colors">
+                        Просчёты
+                      </button>
+                    </div>
                   </div>
                 )}
 

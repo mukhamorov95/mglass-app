@@ -19,6 +19,8 @@ import { promptDialog } from '@/lib/dialog'
 import { writeFailure } from '@/lib/rlsWrite'
 import { saveOrderNotes, type OrderNotesSaved } from '@/lib/b2b/orderNotesClient'
 import LaunchPanel from '@/components/b2b/LaunchPanel'
+import { copyOrShow } from '@/lib/b2b/copyOrShow'
+import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/productionMessage'
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import RowMenu, { type MenuItem } from '@/components/RowMenu'
 import { buildTelegramWorkText } from '@/lib/b2b/telegramWorkText'
@@ -416,10 +418,27 @@ export default function B2BQuotesPage() {
     setWorkDateId(q.id)
   }
 
+  // После запуска — следующий шаг сразу в тосте: производственное сообщение в чат цеха
+  // (тот же сборщик, что кнопка 📋 в /b2b-orders), из строки с номером, который дал запуск.
   function onLaunched(id: number, saved: OrderNotesSaved) {
+    const q = quotes.find(x => x.id === id)
     setQuotes(prev => prev.map(x => x.id === id ? { ...x, ...(saved.columns as Partial<Quote>), notes: saved.notes } : x))
-    showToast('Запущено в работу')
     setWorkDateId(null)
+    if (!q) { showToast('Запущено в работу'); return }
+    const msgOrder = { ...q, ...(saved.columns as Partial<Quote>) }
+    toast.success('Запущено в работу', {
+      detail: 'Задачи цеху созданы. Отправьте производственное сообщение в рабочий чат.',
+      action: {
+        label: '📋 Произв. сообщение',
+        onClick: () => {
+          void copyOrShow(buildProductionMessage(msgOrder), {
+            ok: 'Производственное сообщение скопировано', title: 'Скопируйте производственное сообщение',
+            detail: productionMessageSummary(msgOrder),
+          })
+        },
+      },
+      durationMs: 15000,
+    })
   }
 
   // ── Load ───────────────────────────────────────────────────────────────────
