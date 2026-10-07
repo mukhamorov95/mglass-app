@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { isOwnerRole } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
 import { createClient as createServerClient } from '@/lib/supabase-server'
+import { LEAD_NOTE_KEYS, leadNoteError } from '@/lib/b2b/leadQuote'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic'
 // и с 22.09 каждая правка просчёта менеджером сохраняла поля, а на notes падала:
 // «forbidden: shop action requires production role». Пишем сервером после своей проверки.
 const ROLES = ['admin', 'ceo', 'manager', 'commercial'] as const
-const KEYS = new Set(['status', 'quote_date', 'production_days', 'user_notes', 'manager_name'])
+const KEYS = new Set<string>(['status', 'quote_date', 'production_days', 'user_notes', 'manager_name', ...LEAD_NOTE_KEYS])
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createServerClient()
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   for (const [k, v] of Object.entries(body.patch ?? {})) {
     if (!KEYS.has(k)) return NextResponse.json({ error: `Поле «${k}» калькулятор не пишет` }, { status: 400 })
     if (v !== null && !['string', 'number'].includes(typeof v)) return NextResponse.json({ error: `Поле «${k}» — не строка и не число` }, { status: 400 })
+    const leadErr = leadNoteError(k, v)
+    if (leadErr) return NextResponse.json({ error: `Поле «${k}»: ${leadErr}` }, { status: 400 })
     patch[k] = typeof v === 'string' ? v.slice(0, 4000) : v
   }
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Нечего записать' }, { status: 400 })

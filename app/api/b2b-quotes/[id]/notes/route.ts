@@ -46,12 +46,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!body || typeof body !== 'object') return bad('Пустой запрос')
 
   const { data: order, error: readErr } = await sb.from('b2b_orders')
-    .select('id, client_id, client_name, notes, total_after_discount, total_sale_inc_vat').eq('id', orderId).maybeSingle()
+    .select('id, client_id, client_name, notes, total_after_discount, total_sale_inc_vat, launched_at').eq('id', orderId).maybeSingle()
   if (readErr) return bad(`Заказ не прочитан: ${readErr.message}`, 500)
   if (!order) return bad('Заказ не найден', 404)
   const o = order as {
     id: number; client_id: number | null; client_name: string | null; notes: unknown
-    total_after_discount: number | null; total_sale_inc_vat: number | null
+    total_after_discount: number | null; total_sale_inc_vat: number | null; launched_at: string | null
   }
   if (scope === 'mglass_only' && !isMGlassClient({ id: o.client_id, name: o.client_name })) return bad(MGLASS_SCOPE_ERROR, 403)
 
@@ -114,6 +114,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Заказ точки — в работу только после 100 % оплаты (решение владельца 01.10.2026).
   // Остальных партнёров правило не касается.
   if (body.action === 'launch' || (body.action === 'status' && IN_WORK_STATUSES.includes(body.to))) {
+    // Просчёт без заказчика (ответ ценой на Авито) в работу не идёт: заказчика привязывают в
+    // калькуляторе, когда человек говорит «заказываю», — иначе у заказа нет ни счёта, ни УПД.
+    // Уже запущенные заказы без клиента (1 657 до 06.07) правило не трогает.
+    if (o.client_id == null && !o.launched_at) return bad('Без заказчика в работу нельзя: откройте просчёт в калькуляторе, выберите или создайте клиента и нажмите «Обновить просчёт»', 409)
     const gate = await pointLaunchGate(svc, { client_id: o.client_id, notes: o.notes, total: orderTotal(o) })
     if (!gate.ok) return bad(gate.error, gate.status)
   }

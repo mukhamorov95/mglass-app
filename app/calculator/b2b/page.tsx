@@ -21,7 +21,8 @@ import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, isAllClientsScope, hasB2BSalesScope, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
-import { confirmDialog } from '@/lib/dialog'
+import { confirmDialog, promptDialog } from '@/lib/dialog'
+import { CUSTOMER_KINDS, buildClientQuoteText, leadNotesPatch, noClientName, noClientSaveBlocker, readQuoteLead, type CustomerKind } from '@/lib/b2b/leadQuote'
 import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
@@ -204,11 +205,19 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [ncSaving, setNcSaving] = useState(false)
   const [ncError, setNcError]   = useState<string | null>(null)
 
-  type DraftData = { clientId: number | null; items: B2BOrderItem[]; notes: string; productionDays: number; savedAt: string }
+  type DraftData = { clientId: number | null; items: B2BOrderItem[]; notes: string; productionDays: number; savedAt: string; lead?: { source: string | null; kind: CustomerKind | null; contact: string | null } }
   const [draftToast, setDraftToast] = useState<DraftData | null>(null)
   const draftRestoredRef = useRef(false)
 
   const [clientId, setClientId]         = useState<number | null>(null)
+  // Откуда пришёл и кто он — независимо от карточки клиента (lib/b2b/leadQuote.ts).
+  const [leadSource, setLeadSource]     = useState<string | null>(null)
+  const [leadKind, setLeadKind]         = useState<CustomerKind | null>(null)
+  const [leadContact, setLeadContact]   = useState('')
+  // Просчёт, открытый на правку: был ли он без заказчика и на какую сумму — чтобы при
+  // привязке клиента показать, если его прайс или скидка меняют цену, которую уже назвали.
+  const [origQuote, setOrigQuote]       = useState<{ noClient: boolean; total: number } | null>(null)
+  const [textCopied, setTextCopied]     = useState(false)
   const [ourOrderNumber, setOurOrderNumber]       = useState('')
   const [clientOrderNumber, setClientOrderNumber] = useState('')
   const [notes, setNotes]           = useState('')
@@ -526,7 +535,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       ;(async () => {
         const sb = createClient()
         const { data, error } = await sb.from('b2b_orders')
-          .select('client_id,items,custom_number,client_order_number,notes,discount_percent').eq('id', orderIdParam).single()
+          .select('client_id,items,custom_number,client_order_number,notes,discount_percent,total_after_discount').eq('id', orderIdParam).single()
         // Раньше ошибка глоталась: экран открывался пустым, менеджер набирал
         // просчёт заново и сохранял — появлялась вторая строка, исходная жила
         // дальше своей жизнью.
@@ -547,6 +556,9 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           editOrigNotesRef.current = on
           if (typeof on.production_days === 'number') setFProductionDays(on.production_days)
           if (typeof on.user_notes === 'string') setNotes(on.user_notes)
+          const lead = readQuoteLead(on)
+          setLeadSource(lead.source); setLeadKind(lead.kind); setLeadContact(lead.contact ?? '')
+          setOrigQuote({ noClient: data.client_id == null, total: Number(data.total_after_discount) || 0 })
         }
       })()
       return
@@ -623,10 +635,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   useEffect(() => {
     if (loading) return
     if (items.length > 0 || notes) {
-      const draft: DraftData = { clientId, items, notes, productionDays: fProductionDays, savedAt: new Date().toISOString() }
+      const draft: DraftData = { clientId, items, notes, productionDays: fProductionDays, savedAt: new Date().toISOString(), lead: { source: leadSource, kind: leadKind, contact: leadContact || null } }
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
     }
-  }, [clientId, items, notes, fProductionDays, loading])
+  }, [clientId, items, notes, fProductionDays, loading, leadSource, leadKind, leadContact])
 
   const superCatDef      = SUPER_CATS.find(s => s.value === fSuperCat) ?? SUPER_CATS[0]
   const categoryMaterials  = useMemo(() => materials.filter(m => (superCatDef.cats as readonly string[]).includes(m.category)), [materials, fSuperCat])
@@ -679,6 +691,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   }
 
   const selectedClient   = clients.find(c => c.id === clientId) ?? null
+  const lead = useMemo(() => ({ source: leadSource, kind: leadKind, contact: leadContact.trim() || null }), [leadSource, leadKind, leadContact])
   // Скидка из карточки клиента. В mglass-режиме клиент = M GLASS, у него 20% —
   // это НЕ баг и не «забыли обнулить»: M-Glass реально покупает у своего производства
   // со скидкой 20% (условие внутренней сделки), применяется как у любого клиента.
@@ -1274,6 +1287,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
 
   function restoreDraft(draft: DraftData) {
     if (draft.clientId) setClientId(draft.clientId)
+    if (draft.lead) { setLeadSource(draft.lead.source); setLeadKind(draft.lead.kind); setLeadContact(draft.lead.contact ?? '') }
     setItems(draft.items)
     setNotes(draft.notes)
     setFProductionDays(draft.productionDays)
@@ -1395,6 +1409,33 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     ].join('\n')
   }, [items, totals, discount, clientId, clients])
 
+  // Короткий ответ клиенту в чат (Авито и др.): что, сколько, когда, где забрать.
+  const clientText = useMemo(() => {
+    if (items.length === 0 || !totals) return ''
+    return buildClientQuoteText({
+      items, lineTotals: items.map(i => effectiveItemTotal(i, discount)), total: totals.totalAfterDiscount,
+      productionDays: fProductionDays, contact: leadContact.trim() || null,
+      kind: leadKind ?? (clientId != null ? 'wholesale' : null),
+    })
+  }, [items, totals, discount, fProductionDays, leadContact, leadKind, clientId])
+
+  async function copyClientText() {
+    if (!clientText) return
+    const label = leadSource === 'avito' ? 'Текст для Авито' : 'Текст клиенту'
+    try {
+      await navigator.clipboard.writeText(clientText)
+      setTextCopied(true)
+      setTimeout(() => setTextCopied(false), 2000)
+      toast.success(`${label} скопирован`, { detail: 'Вставьте в чат клиента. Себестоимости и маржи в тексте нет.' })
+    } catch {
+      await promptDialog({
+        title: `Скопируйте: ${label.toLowerCase()}`,
+        text: 'Буфер обмена недоступен — текст выделен, скопируйте его (⌘C / Ctrl+C).',
+        defaultValue: clientText, multiline: true, confirmLabel: 'Готово',
+      })
+    }
+  }
+
   async function handleCreateClient() {
     if (!ncName.trim()) { setNcError('Введите название компании'); return }
     setNcSaving(true)
@@ -1450,10 +1491,13 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   }
 
   async function handleSave() {
-    if (items.length === 0 || !selectedClient) return
+    if (items.length === 0) return
+    // Без карточки клиента — просчёт для ответа ценой (Авито и т.п.): только с отметкой
+    // «откуда» и «кто». Внутреннему контуру M-Glass клиент нужен всегда.
+    if (!selectedClient && (mglassOnly || noClientSaveBlocker(lead))) return
     // Scope guard: mglass_only managers cannot create quotes for any other client.
     // Owners/admins/ceo are never scope-restricted (see load() above).
-    if (mglassOnly && !isMGlassClient(selectedClient)) {
+    if (mglassOnly && selectedClient && !isMGlassClient(selectedClient)) {
       setSaveError(MGLASS_SCOPE_ERROR)
       return
     }
@@ -1482,12 +1526,13 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       production_days: fProductionDays,
       user_notes: notes || null,
       manager_name: editing ? (baseNotes.manager_name ?? authorName) : authorName,
+      ...leadNotesPatch(lead),
     }
     const orderNotes = JSON.stringify({ ...baseNotes, ...notesPatch })
 
     const commonFields = {
       client_id: clientId,
-      client_name: selectedClient.name,
+      client_name: selectedClient?.name ?? noClientName(lead.contact),
       discount_percent: discount,
       margin_percent: avgMargin,
       items: itemsAuto,
@@ -1564,6 +1609,13 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     setSaving(false)
   }
 
+  // Без карточки клиента сохранить можно только внешнему B2B-контуру и с отметками «откуда» и «кто».
+  const saveBlocker = items.length === 0 || clientId != null ? null
+    : (mglassOnly || variant === 'mglass') ? 'Выберите клиента'
+    : noClientSaveBlocker(lead)
+  const attachPriceChange = origQuote?.noClient && clientId != null && totals && Math.abs(totals.totalAfterDiscount - origQuote.total) >= 1
+    ? { was: origQuote.total, now: totals.totalAfterDiscount } : null
+
   if (isBuyer) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center space-y-4">
@@ -1638,7 +1690,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 <label className="block text-[13px] font-medium text-[#6e6e73]">Клиент</label>
                 {!mglassOnly && (
                   <button
-                    onClick={() => setShowNewClient(true)}
+                    onClick={() => {
+                      // Заказчик из просчёта без карточки: имя из чата и источник — сразу в форму.
+                      if (!clientId) { if (leadContact.trim() && !ncName) setNcName(leadContact.trim()); if (leadSource && !ncSource) setNcSource(leadSource) }
+                      setShowNewClient(true)
+                    }}
                     className="text-[10px] font-semibold text-orange-600 hover:text-orange-800 transition-colors">
                     + Новый клиент
                   </button>
@@ -1647,14 +1703,55 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               <select
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
                   value={clientId ?? ''}
-                  onChange={e => { setClientId(e.target.value ? Number(e.target.value) : null); setSavedOrderId(null) }}>
-                  <option value="">— Выберите клиента —</option>
+                  onChange={e => {
+                    const id = e.target.value ? Number(e.target.value) : null
+                    setClientId(id); setSavedOrderId(null)
+                    const src = clients.find(c => c.id === id)?.crm_source
+                    if (src && !leadSource) setLeadSource(src)
+                  }}>
+                  <option value="">{variant === 'mglass' ? '— Выберите клиента —' : '— Без заказчика —'}</option>
                 {clients.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.name}{c.discount_percent > 0 ? ` (−${c.discount_percent}%)` : ''}
                   </option>
                 ))}
               </select>
+            </div>
+            )}
+
+            {/* Откуда пришёл и кто он — две независимые отметки: с Авито приходит и опт. */}
+            {!mglassOnly && variant !== 'mglass' && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Откуда пришёл</label>
+                  <select value={leadSource ?? ''} onChange={e => { setLeadSource(e.target.value || null); setSavedOrderId(null) }}
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none">
+                    <option value="">— не указано —</option>
+                    {B2B_SOURCES.map(src => <option key={src.value} value={src.value}>{src.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Кто</label>
+                  <div className="flex gap-1">
+                    {CUSTOMER_KINDS.map(k => (
+                      <button key={k.value} type="button"
+                        onClick={() => { setLeadKind(leadKind === k.value ? null : k.value); setSavedOrderId(null) }}
+                        className={`flex-1 h-[44px] rounded-xl text-[13px] font-medium border transition-colors ${leadKind === k.value ? 'bg-[#1d1d1f] text-white border-[#1d1d1f]' : 'bg-white text-[#6e6e73] border-[#d9d9df] hover:border-[#1d1d1f]'}`}>
+                        {k.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {!clientId && (<>
+                <input type="text" maxLength={120} placeholder="Имя из чата — для приветствия (необязательно)"
+                  value={leadContact} onChange={e => { setLeadContact(e.target.value); setSavedOrderId(null) }}
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none placeholder:text-[#c4c4be]" />
+                <p className="text-[11px] text-[#9a9a95] leading-snug">
+                  Без заказчика цена — по общему прайсу. Заказчика добавите, когда клиент скажет «заказываю»; без него в работу не запускается.
+                </p>
+              </>)}
             </div>
             )}
 
@@ -3249,20 +3346,32 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 {editingOrderId != null && (
                   <p className="text-[11px] text-[#9a9a95] text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
                 )}
+                {attachPriceChange && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-snug">
+                    С заказчиком цена другая: клиенту назвали {fmt(attachPriceChange.was)}, сейчас {fmt(attachPriceChange.now)} — у клиента свой прайс или скидка. Проверьте перед «Обновить просчёт».
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <button type="button" disabled={!kpText}
                     onClick={() => { const el = document.getElementById('b2b-kp') as HTMLDetailsElement | null; if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }) } }}
                     className="flex-1 bg-white border border-[#d9d9df] text-[#1d1d1f] text-[14px] font-semibold py-3 rounded-xl hover:bg-[#f5f5f4] disabled:opacity-40 transition-colors">
                     Клиентский расчёт (КП)
                   </button>
-                  <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || savedOrderId != null}
+                  <button onClick={handleSave} disabled={saving || !!saveBlocker || items.length === 0 || savedOrderId != null}
                     className="flex-1 bg-[#1d1d1f] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-black disabled:opacity-40 transition-colors">
                     {saving ? 'Сохранение...'
                       : savedOrderId != null ? (editingOrderId != null ? 'Обновлено ✓' : 'Сохранено ✓')
-                      : !clientId ? 'Выберите клиента'
-                      : editingOrderId != null ? 'Обновить просчёт' : 'Сохранить просчёт'}
+                      : saveBlocker ? saveBlocker
+                      : editingOrderId != null ? 'Обновить просчёт'
+                      : !clientId ? 'Сохранить без заказчика' : 'Сохранить просчёт'}
                   </button>
                 </div>
+                {clientText && variant !== 'mglass' && (
+                  <button type="button" onClick={copyClientText}
+                    className="w-full bg-white border border-[#d9d9df] text-[#1d1d1f] text-[14px] font-semibold py-3 rounded-xl hover:bg-[#f5f5f4] transition-colors">
+                    {textCopied ? '✓ Скопировано' : leadSource === 'avito' ? '📋 Текст для Авито' : '📋 Текст клиенту'}
+                  </button>
+                )}
 
                 {saveError && (
                   <div className="border border-red-200 bg-red-50 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
@@ -3274,10 +3383,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 {savedOrderId && (
                   <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 flex flex-col gap-2">
                     <p className="text-[12px] font-semibold text-emerald-800">
-                      {savedAsPending ? 'Просчёт сохранён и отправлен на согласование ✓' : 'Расчёт сохранён ✓'}
+                      {savedAsPending ? 'Просчёт сохранён и отправлен на согласование ✓' : !clientId ? 'Просчёт сохранён без заказчика ✓' : 'Расчёт сохранён ✓'}
                     </p>
                     <p className="text-[11px] text-emerald-700">
-                      Коммерческое предложение (PDF) скачивается в разделе «Просчёты» — там же хранится вся история расчётов.
+                      {!clientId
+                        ? 'Лежит в «Просчётах» с отметкой «без заказчика». Ответ клиенту — кнопка «📋 Текст» выше. Когда клиент скажет «заказываю»: «Просчёты» → «＋ Заказчик», выберите или создайте клиента и нажмите «Обновить просчёт».'
+                        : 'Коммерческое предложение (PDF) скачивается в разделе «Просчёты» — там же хранится вся история расчётов.'}
                     </p>
                     <button
                       onClick={() => router.push('/b2b-quotes')}
