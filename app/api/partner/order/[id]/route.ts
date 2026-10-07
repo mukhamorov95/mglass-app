@@ -3,22 +3,14 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { paymentsEnabled } from '@/lib/payments/provider'
-import { deadlineFor, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
+import { isStageDone, stagesOf } from '@/lib/b2b/stageDone'
 import { loadUpdIssued } from '@/lib/b2b/updRegistry'
 
 // Карточка заказа для кабинета. СТРОГО по своему client_id. Отдаём только
 // клиентское: позиции (материал/размер/кол-во/цена), стадии производства,
 // срок, ссылку на чертёж. Никакой себестоимости/маржи.
-
-const LANE: { key: string; label: string }[] = [
-  { key: 'printed', label: 'Чертёж подготовлен' },
-  { key: 'material_ordered', label: 'Материал получен' },
-  { key: 'cut', label: 'Резка' },
-  { key: 'edge', label: 'Полировка кромки' },
-  { key: 'drilled', label: 'Сверление' },
-  { key: 'tempering', label: 'Закалка' },
-  { key: 'packed', label: 'Упаковка' },
-]
 
 function parseNotes(n: unknown): Record<string, unknown> {
   if (!n) return {}
@@ -46,21 +38,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!o || o.client_id !== client.id) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
   const pn = parseNotes(o.notes)
-  const stages = (pn.stages ?? {}) as Record<string, unknown>
-  const launched = !!(o.launched_at || pn.launched_at)
-  const shipped = stages.shipped === true
-  const packed = stages.packed === true
-  const status = (pn.status as string) || 'quote'
-  const lane = shipped ? 'shipped' : launched ? 'in_work' : status === 'pending_approval' ? 'submitted' : 'quote'
-  const doneN = LANE.filter(s => stages[s.key] === true).length
-
-  // Таймлайн: сделанные этапы (с датой если есть) + текущий/ожидаемые.
-  const frontierIdx = LANE.findIndex(s => stages[s.key] !== true)
-  const timeline = LANE.map((s, i) => ({
-    label: s.label,
-    state: stages[s.key] === true ? 'done' : (i === frontierIdx && launched && !shipped ? 'now' : 'wait'),
-    date: typeof stages[s.key] === 'string' ? (stages[s.key] as string) : null,
-  }))
+  const p = partnerProgress({ launched_at: o.launched_at as string | null }, pn)
+  const { lane, launched } = p
 
   const discount = Number(o.discount_percent) || 0
   const rawItems = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
@@ -83,7 +62,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Срок — единый источник lib/b2b/deadline (та же норма, что launch-production).
   // Для запущенных — реальная дата; для незапущенных отдаём null (в кабинете показываем
   // ориентир «~N раб.дней после запуска» через estimateDays, а не фабрикованную дату).
-  const deadline = launched ? deadlineFor(pn, o.created_at as string).toISOString() : null
+  const deadline = launched ? partnerDeadline({ launched_at: o.launched_at as string | null, created_at: o.created_at as string }, pn).toISOString() : null
 
   const history = Array.isArray(pn.status_history) ? pn.status_history : []
   const drawingUrl = typeof pn.drawing_url === 'string' && pn.drawing_url ? `/api/b2b/drawing/${o.id}` : null
@@ -98,7 +77,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   // Статус оплаты для партнёра: paid — оплачен (payment_status или этап invoice_paid);
   // awaiting — заказ в работе/отгружен, но оплата ещё не отмечена; null — просчёт.
-  const paid = pn.payment_status === 'paid' || typeof stages.invoice_paid === 'string' || stages.invoice_paid === true
+  const paid = pn.payment_status === 'paid' || isStageDone(stagesOf(pn), 'invoice_paid')
   const paymentStatus: 'paid' | 'awaiting' | null = paid ? 'paid' : (launched ? 'awaiting' : null)
 
   const canInvoice = !!client.can_self_invoice && launched
@@ -119,8 +98,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
     created_at: o.created_at,
     lane,
-    ready: packed && !shipped,
-    progressPct: (lane === 'in_work' || lane === 'shipped') ? Math.round((doneN / LANE.length) * 100) : 0,
+    ready: p.ready,
+    progressPct: p.progressPct,
     deadline,
     estimateDays: DEFAULT_WORKING_DAYS,
     paymentStatus,
@@ -129,7 +108,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     updIssued,
     total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),
     items,
-    timeline,
+    timeline: p.timeline,
     drawingUrl,
     drawingApproval,
     delivery,

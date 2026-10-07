@@ -2,31 +2,16 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
-import { deadlineFor } from '@/lib/b2b/deadline'
+import { partnerProgress, partnerDeadline } from '@/lib/partner/orderProgress'
+import { readPaged } from '@/lib/partner/readPaged'
 
 // Кабинет партнёра — «мои заказы» (read-only, строго по своему клиенту).
 // Клиент определяется по b2b_clients.user_id = auth.uid(). Никогда не отдаёт
 // чужие данные. Если аккаунт не привязан (или колонка ещё не создана) — пусто.
 
-// Лента заказа (order-level флаги notes.stages) → человекочитаемый этап и % готовности.
-const LANE: { key: string; label: string }[] = [
-  { key: 'printed',          label: 'Чертёж' },
-  { key: 'material_ordered', label: 'Материал' },
-  { key: 'cut',              label: 'Резка' },
-  { key: 'edge',             label: 'Полировка' },
-  { key: 'drilled',          label: 'Сверление' },
-  { key: 'tempering',        label: 'Закалка' },
-  { key: 'packed',           label: 'Упаковка' },
-]
-
 function parseNotes(n: string | null): Record<string, unknown> {
   if (!n) return {}
   try { const p = JSON.parse(n); return typeof p === 'object' && p ? p as Record<string, unknown> : {} } catch { return {} }
-}
-// Срок отгрузки считает общий модуль lib/b2b/deadline — та же формула, что видит
-// менеджер при запуске в работу. Раньше здесь жила своя копия, и даты расходились.
-function deadline(pn: Record<string, unknown>, createdAt: string): string {
-  return deadlineFor(pn, createdAt).toISOString()
 }
 
 export async function GET() {
@@ -42,35 +27,23 @@ export async function GET() {
 
   // Все состояния: просчёт → отправлен в работу → в работе → отгружен.
   // Партнёр видит и просчёты, которые мы сделали для него.
-  const { data } = await svc
-    .from('b2b_orders')
-    .select('id,custom_number,client_order_number,created_at,updated_at,launched_at,total_after_discount,total_sale_inc_vat,notes,items')
-    .eq('client_id', client.id)
-    .is('archived_at', null)
-    .order('created_at', { ascending: false })
-    .limit(300)
+  let data: Record<string, unknown>[]
+  try {
+    data = await readPaged<Record<string, unknown>>(() => svc
+      .from('b2b_orders')
+      .select('id,custom_number,client_order_number,created_at,updated_at,launched_at,total_after_discount,total_sale_inc_vat,notes,items')
+      .eq('client_id', client.id)
+      .is('archived_at', null)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false }))
+  } catch (e) {
+    return NextResponse.json({ error: `Заказы не загрузились: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
 
-  const orders = (data ?? []).map((o: Record<string, unknown>) => {
+  const orders = data.map((o: Record<string, unknown>) => {
     const pn = parseNotes(o.notes as string | null)
-    const stages = (pn.stages ?? {}) as Record<string, unknown>
-    const status = (pn.status as string | undefined) || 'quote'
-    const launched = !!(o.launched_at || pn.launched_at)
-    const shipped = stages.shipped === true
-    const packed = stages.packed === true
-    const doneN = LANE.filter(s => stages[s.key] === true).length
-    const frontier = LANE.find(s => stages[s.key] !== true)
-
-    // lane: quote (просчёт) · submitted (отправлен в работу, ждёт нас) · in_work · shipped
-    const lane = shipped ? 'shipped'
-      : launched ? 'in_work'
-      : status === 'pending_approval' ? 'submitted'
-      : 'quote'
-
-    const stage = lane === 'shipped' ? 'Отгружен'
-      : lane === 'submitted' ? 'Отправлен в работу'
-      : lane === 'quote' ? 'Просчёт'
-      : packed ? 'Готов к выдаче'
-      : frontier ? frontier.label : 'В работе'
+    const p = partnerProgress({ launched_at: o.launched_at as string | null }, pn)
+    const lane = p.lane
 
     // Пересчитан ли просчёт нами и почему (для подсветки партнёру).
     const history = Array.isArray(pn.status_history) ? pn.status_history : []
@@ -93,11 +66,11 @@ export async function GET() {
       updatedAt: (o.updated_at as string | null) ?? (o.created_at as string),
       amount: (o.total_after_discount as number | null) ?? (o.total_sale_inc_vat as number | null) ?? 0,
       lane,
-      progressPct: lane === 'in_work' || lane === 'shipped' ? Math.round((doneN / LANE.length) * 100) : 0,
-      stage,
-      shipped,
-      ready: packed && !shipped,
-      deadline: deadline(pn, o.created_at as string),
+      progressPct: p.progressPct,
+      stage: p.stage,
+      shipped: p.shipped,
+      ready: p.ready,
+      deadline: partnerDeadline({ launched_at: o.launched_at as string | null, created_at: o.created_at as string }, pn).toISOString(),
       recalcNote: history.length > 0 ? lastComment : null,
       summary,
       positions: items.length,

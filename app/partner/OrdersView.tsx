@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
+import { loadJson } from '@/lib/toast'
 
 // Списки кабинета (дизайн .pcab). Три пункта меню:
 //   view='quotes'  → просчёты (черновики). Разбиты на Недавние + Архив (>2 недель).
@@ -50,10 +51,24 @@ export default function OrdersView({ view }: { view: View }) {
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
 
-  function load() {
-    return fetch('/api/partner/orders').then(r => r.json()).then((d: Resp) => setData(d)).catch(() => setData({ linked: false, client: null, orders: [] }))
+  const [loadErr, setLoadErr] = useState<string | null>(null)
+
+  async function load() {
+    const r = await loadJson<Resp>('/api/partner/orders')
+    if (r.error !== null) { setLoadErr(r.error); return }
+    setLoadErr(null)
+    setData(r.data)
   }
-  useEffect(() => { load().finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    let alive = true
+    loadJson<Resp>('/api/partner/orders').then(r => {
+      if (!alive) return
+      if (r.error !== null) setLoadErr(r.error)
+      else setData(r.data)
+      setLoading(false)
+    })
+    return () => { alive = false }
+  }, [])
 
   async function submitQuote(id: number) {
     setSubmittingId(id)
@@ -137,7 +152,14 @@ export default function OrdersView({ view }: { view: View }) {
 
         {loading && <div className="note"><div className="s">Загрузка…</div></div>}
 
-        {!loading && !data?.linked && (
+        {!loading && loadErr && (
+          <div className="note">
+            <div className="t">Заказы не загрузились</div>
+            <div className="s">{loadErr}. Обновите страницу через минуту.</div>
+          </div>
+        )}
+
+        {!loading && !loadErr && data && !data.linked && (
           <div className="note">
             <div className="t">Аккаунт ещё не привязан к вашей компании</div>
             <div className="s">Обратитесь к вашему менеджеру M-Glass, чтобы открыть доступ к заказам.</div>

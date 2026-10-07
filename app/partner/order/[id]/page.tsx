@@ -194,7 +194,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
             {o.timeline.map((t, i) => (
               <div className={`tl${t.state === 'wait' ? ' pend' : ''}`} key={i}>
                 <span className={`dot ${t.state}`} />
-                <div><div className="ln">{t.label}</div><div className="dt">{t.state === 'now' ? 'сейчас' : t.date ? fmtDate(t.date) : 'ожидается'}</div></div>
+                <div><div className="ln">{t.label}</div><div className="dt">{t.state === 'now' ? 'сейчас' : t.date ? fmtDate(t.date) : t.state === 'done' ? 'пройден' : 'ожидается'}</div></div>
               </div>
             ))}
           </div>
