@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 import { remnantError, remnantM2, stockSummary, thresholdLabel, type Thresholds } from '@/lib/production/remnants'
 import { mskDateTime } from '@/lib/time'
+import { sendOrToast } from '@/lib/toast'
+import { confirmDialog, promptDialog } from '@/lib/dialog'
 
 // Остатки листа (Э6.3). Мастер резки: взял лист → нарезал → «Закрыл лист» → записал куски,
 // которые идут на стеллаж. Остаток — от 400×800 мм, меньше — полоса в отход. Код «ОС-12»
@@ -40,10 +42,20 @@ export default function RemnantsPage() {
     return (data?.remnants ?? []).filter(r => !s || r.material_name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s) || (r.location ?? '').toLowerCase().includes(s))
   }, [data, search])
 
-  async function patch(id: number, body: object) {
-    const r = await fetch(`/api/production/remnants/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    if (r.ok) load()
-    else alert((await r.json().catch(() => null))?.error ?? 'Не удалось')
+  async function patch(id: number, body: object, failTitle: string) {
+    const r = await sendOrToast(failTitle, `/api/production/remnants/${id}`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (r) load()
+  }
+
+  async function setLocation(r: { id: number; code: string; location: string | null }) {
+    const loc = await promptDialog({ title: `${r.code}: место на стеллаже`, defaultValue: r.location ?? '', placeholder: 'Например, С2-верх', confirmLabel: 'Сохранить' })
+    if (loc !== null) await patch(r.id, { location: loc }, 'Место не сохранилось')
+  }
+
+  async function scrap(r: { id: number; code: string }) {
+    const ok = await confirmDialog({ title: `${r.code}: списать в лом?`, text: 'Кусок уйдёт из остатков на стеллаже.', confirmLabel: 'В лом', danger: true })
+    if (ok) await patch(r.id, { status: 'scrapped' }, 'Не списалось в лом')
   }
 
   return (
@@ -104,9 +116,9 @@ export default function RemnantsPage() {
                 </div>
                 {data.canWrite && (
                   <div className="flex gap-2">
-                    <button onClick={() => { const loc = prompt('Место на стеллаже', r.location ?? ''); if (loc !== null) patch(r.id, { location: loc }) }}
+                    <button onClick={() => void setLocation(r)}
                       className={`${btn} border border-[#e4e4e0] text-[#4b4b47] hover:border-[#111110] text-[13px]`}>Место</button>
-                    <button onClick={() => { if (confirm(`${r.code}: списать в лом?`)) patch(r.id, { status: 'scrapped' }) }}
+                    <button onClick={() => void scrap(r)}
                       className={`${btn} border border-red-200 text-red-600 hover:bg-red-50 text-[13px]`}>В лом</button>
                   </div>
                 )}
