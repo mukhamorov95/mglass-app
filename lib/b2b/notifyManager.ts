@@ -13,7 +13,9 @@ async function chatIdOf(userId: string | null | undefined): Promise<number | nul
   if (!userId) return null
   try {
     const svc = createServiceClient()
-    const { data } = await svc.from('telegram_users').select('telegram_id').eq('user_id', userId).maybeSingle()
+    // Один человек может привязать бота заново с другого аккаунта — шлём на последний.
+    const { data } = await svc.from('telegram_users').select('telegram_id').eq('user_id', userId)
+      .order('linked_at', { ascending: false }).limit(1).maybeSingle()
     const id = (data as { telegram_id?: number } | null)?.telegram_id
     return typeof id === 'number' ? id : null
   } catch { return null }

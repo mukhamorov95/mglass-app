@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   canCreateCard, canCloseCard, nextStatus, isOverdue, sortCards, dueLabel, dueFromInput,
-  parseCardInput, orderProgress, isMissingTable, type BoardCard,
+  parseCardInput, orderProgress, isMissingTable, boardRecipients, boardMessage, type BoardCard,
 } from '@/lib/shopBoard/model'
 
 const NOW = Date.parse('2026-10-08T09:00:00Z') // 12:00 МСК
@@ -122,5 +122,31 @@ describe('SQL табло не применён', () => {
     expect(isMissingTable({ code: '42P01', message: 'relation does not exist' })).toBe(true)
     expect(isMissingTable({ code: '23505', message: 'duplicate key' })).toBe(false)
     expect(isMissingTable(null)).toBe(false)
+  })
+})
+
+describe('уведомления табло', () => {
+  const people = { shop: ['s1', 's2'], owners: ['owner'], boardUsers: ['dima'], orderManagers: ['m1', 's1'] }
+  it('новое — цеху, владельцу, Диме, менеджерам заказа; без повторов и без автора', () => {
+    expect(boardRecipients('created', card({ created_by: 'dima' }), 'dima', people).sort())
+      .toEqual(['m1', 'owner', 's1', 's2'])
+  })
+  it('взял/готово/вернул — поставившему и менеджерам заказа', () => {
+    expect(boardRecipients('taken', card(), 's2', people).sort()).toEqual(['m1', 'owner', 's1'])
+    expect(boardRecipients('done', card(), 'owner', people).sort()).toEqual(['m1', 's1'])
+  })
+  it('комментарий — поставившему и взявшему; закрыто — взявшему', () => {
+    expect(boardRecipients('comment', card({ taken_by: 's2' }), 'm1', people).sort()).toEqual(['owner', 's2'])
+    expect(boardRecipients('comment', card({ taken_by: 's2' }), 's2', people)).toEqual(['owner'])
+    expect(boardRecipients('closed', card({ taken_by: 's2' }), 'owner', people)).toEqual(['s2'])
+    expect(boardRecipients('closed', card(), 'owner', people)).toEqual([])
+  })
+  it('текст экранирует то, что написали люди', () => {
+    const t = boardMessage('created', card({ title: 'Отгрузить <b>завтра</b> & всё', due_at: '2026-10-09T09:00:00Z', hot: true }),
+      'Влад', [{ ref: '05522', client: 'ГлассДекор' }], NOW)
+    expect(t).toContain('🔥 Отгрузить &lt;b&gt;завтра&lt;/b&gt; &amp; всё')
+    expect(t).toContain('Заказ: 05522 ГлассДекор')
+    expect(t).toContain('Срок: до 09.10 12:00')
+    expect(boardMessage('comment', card(), 'Никита', [], NOW, 'закалка <в 10>')).toContain('закалка &lt;в 10&gt;')
   })
 })

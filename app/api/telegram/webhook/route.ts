@@ -12,6 +12,7 @@ import { captureMontageMedia } from '@/lib/montageMedia'
 import { appUrl, internalAppUrl } from '@/lib/appUrl'
 import { isOwnerRole } from '@/lib/getRole'
 import { decideRecommendation, parseRecCallback, recKeyboard, recText, undecidedRecommendations } from '@/lib/ai/recTelegram'
+import { parseLinkCode, botMode, linkLocked, afterFailedLink, NOTIFY_ONLY_TEXT, type LinkAttempts } from '@/lib/telegramLink'
 
 export const maxDuration = 60
 
@@ -103,6 +104,57 @@ async function setSession(tid: number, state: string, context: Record<string, un
 async function getTelegramUser(tid: number) {
   const { data } = await db().from('telegram_users').select('user_id').eq('telegram_id', tid).single()
   return data
+}
+
+async function roleOf(userId: string): Promise<string | null> {
+  const { data } = await db().from('users').select('role').eq('id', userId).maybeSingle()
+  return (data as { role?: string | null } | null)?.role ?? null
+}
+
+const BOARD_KB: InlineKeyboard = [[{ text: 'Открыть табло цеха', url: `${APP_URL}/production-app/control` }]]
+
+// Привязка по коду: «/start <код>» по ссылке из приложения или шесть цифр руками.
+// Неверные попытки считаем в сессии этого Telegram (у непривязанного своей строки нет,
+// поэтому не через getSession — у той TTL режимов) — пятая за час закрывает приём кодов.
+async function linkByCode(tid: number, chatId: number, msg: { from?: { first_name?: string; username?: string } }, code: string) {
+  const supabase = db()
+  const { data: sess } = await supabase.from('telegram_sessions').select('state, context').eq('telegram_id', tid).maybeSingle()
+  const ctx = ((sess?.context ?? {}) as Record<string, unknown>)
+  const attempts = ctx.link as LinkAttempts | undefined
+  const now = Date.now()
+  if (linkLocked(attempts, now)) {
+    await sendMessage(chatId, '⏳ Слишком много неверных кодов. Попробуйте через час — возьмите в приложении новую ссылку.')
+    return
+  }
+  const { data: codeRow } = await supabase
+    .from('telegram_auth_codes').select('user_id')
+    .eq('code', code).eq('used', false)
+    .gt('expires_at', new Date(now).toISOString()).maybeSingle()
+  if (!codeRow) {
+    await supabase.from('telegram_sessions').upsert({
+      telegram_id: tid, state: sess?.state ?? 'main_menu',
+      context: { ...ctx, link: afterFailedLink(attempts, now) }, updated_at: new Date(now).toISOString(),
+    })
+    await sendMessage(chatId, '❌ Код неверный или истёк. Возьмите новую ссылку в приложении: Табло цеха → «🔔 Уведомления в Telegram».')
+    return
+  }
+  // Сначала гасим код: два одновременных «/start» с одним кодом не привяжут двоих.
+  const { data: burned } = await supabase.from('telegram_auth_codes').update({ used: true })
+    .eq('code', code).eq('used', false).select('code')
+  if (!burned?.length) {
+    await sendMessage(chatId, '❌ Этот код уже использован. Возьмите новую ссылку в приложении.')
+    return
+  }
+  await supabase.from('telegram_users').upsert({
+    telegram_id: tid, user_id: codeRow.user_id, linked_at: new Date(now).toISOString(),
+    first_name: msg.from?.first_name ?? null, username: msg.from?.username ?? null,
+  })
+  await setSession(tid, 'main_menu')
+  if (botMode(await roleOf(codeRow.user_id)) === 'full') {
+    await sendMessage(chatId, `✅ Привязка успешна! Добро пожаловать.`, MAIN_MENU)
+  } else {
+    await sendMessage(chatId, `✅ Telegram подключён.\n\n${NOTIFY_ONLY_TEXT}`, BOARD_KB)
+  }
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -416,6 +468,27 @@ async function handle(update: any, baseUrl: string) {
     return
   }
 
+  const tgUser = await getTelegramUser(tid)
+
+  const linkCode = msg?.text ? parseLinkCode(msg.text, !!tgUser) : null
+  if (linkCode) { await linkByCode(tid, chatId, msg, linkCode); return }
+
+  // ── Неавторизованный ──
+  if (!tgUser) {
+    if (cb) { await answerCallback(cb.id); return }
+    await sendMessage(chatId, '🔒 Чтобы получать уведомления, откройте в приложении Табло цеха → «🔔 Уведомления в Telegram». Или введите <b>6-значный код</b>.')
+    return
+  }
+
+  // ── Не владелец: только уведомления ──
+  // Меню, лиды с телефонами, «Написать клиенту», агенты, архив и /health — владельцу.
+  // До 08.10 любой привязанный получал всё это; цех и менеджеров подключаем только так.
+  if (botMode(await roleOf(tgUser.user_id)) === 'notify') {
+    if (cb) { await answerCallback(cb.id, 'Здесь только уведомления'); return }
+    await sendMessage(chatId, NOTIFY_ONLY_TEXT, BOARD_KB)
+    return
+  }
+
   // Пересланный кадр в личке — так владелец добирает старый архив, пока Telegram
   // держит суточную паузу на экспорт. Дата берётся из оригинала, иначе весь архив
   // ляжет сегодняшним числом. Отвечаем коротко и не показываем меню.
@@ -428,34 +501,6 @@ async function handle(update: any, baseUrl: string) {
   if (msg?.text) {
     const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase()
     if (cmd === '/health') { await handleHealth(chatId); return }
-  }
-
-  const tgUser = await getTelegramUser(tid)
-
-  // ── Неавторизованный ──
-  if (!tgUser) {
-    if (msg?.text && /^\d{6}$/.test(msg.text.trim())) {
-      const code     = msg.text.trim()
-      const supabase = db()
-      const { data: codeRow } = await supabase
-        .from('telegram_auth_codes').select('user_id')
-        .eq('code', code).eq('used', false)
-        .gt('expires_at', new Date().toISOString()).single()
-      if (!codeRow) {
-        await sendMessage(chatId, '❌ Код неверный или истёк. Попроси администратора создать новый.')
-        return
-      }
-      await supabase.from('telegram_users').upsert({
-        telegram_id: tid, user_id: codeRow.user_id,
-        first_name: msg.from?.first_name ?? null, username: msg.from?.username ?? null,
-      })
-      await supabase.from('telegram_auth_codes').update({ used: true }).eq('code', code)
-      await setSession(tid, 'main_menu')
-      await sendMessage(chatId, `✅ Привязка успешна! Добро пожаловать.`, MAIN_MENU)
-      return
-    }
-    await sendMessage(chatId, '🔒 Введи <b>6-значный код</b> из MGlass (Admin → Пользователи → кнопка TG).')
-    return
   }
 
   const session = await getSession(tid)

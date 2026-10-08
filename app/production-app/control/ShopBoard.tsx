@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
+import TelegramLinkButton from '@/components/shopBoard/TelegramLinkButton'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { confirmDialog } from '@/lib/dialog'
 import { COLUMNS, dueFromInput, dueLabel, isOverdue, mskDateTime, type CardAction } from '@/lib/shopBoard/model'
@@ -101,7 +102,8 @@ export default function ShopBoard({ tv }: { tv: boolean }) {
               <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">🔥 Табло цеха</h1>
               <p className="text-[13px] text-[#9a9a95] mt-0.5">Поручения по заказам — видят весь цех и менеджеры</p>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <TelegramLinkButton />
               <Link href="/production-app/control?tv=1" className="hidden sm:inline-block text-[12px] px-3 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66]">📺 Экран цеха</Link>
               {loaded?.me.canCreate && (
                 <button onClick={() => setFormOpen(o => !o)} className="text-[13px] font-semibold px-3.5 py-2 rounded-lg bg-[#111110] text-white">＋ Поручение</button>
