@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { boardGate } from '@/lib/shopBoard/auth'
 import { createCard, loadBoard } from '@/lib/shopBoard/server'
 import { parseCardInput } from '@/lib/shopBoard/model'
+import { notifyBoard } from '@/lib/shopBoard/notify'
 
 // Табло цеха (docs/SHOP_BOARD_ROUTE.md). GET — табло (lite=1 — только открытые, для ленты);
 // POST — новое поручение. Роль сотрудника — в boardGate, право ставить — в createCard.
@@ -23,5 +24,6 @@ export async function POST(req: NextRequest) {
   if ('error' in input) return NextResponse.json({ error: input.error }, { status: 400 })
   const r = await createCard(gate.svc, input, gate.actor)
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+  after(() => notifyBoard(gate.svc, 'created', r.value, gate.actor))
   return NextResponse.json({ ok: true, card: r.value })
 }

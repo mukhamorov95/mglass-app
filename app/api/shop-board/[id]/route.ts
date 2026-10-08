@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { boardGate } from '@/lib/shopBoard/auth'
 import { actOnCard, commentCard } from '@/lib/shopBoard/server'
-import type { CardAction } from '@/lib/shopBoard/model'
+import { ACTION_EVENT, type CardAction } from '@/lib/shopBoard/model'
+import { notifyBoard } from '@/lib/shopBoard/notify'
 
 const ACTIONS = new Set<CardAction>(['take', 'done', 'reopen', 'close'])
 
@@ -16,6 +17,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (typeof body?.comment === 'string') {
     const r = await commentCard(gate.svc, id, body.comment, gate.actor)
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+    const text = body.comment.trim()
+    after(() => notifyBoard(gate.svc, 'comment', r.value, gate.actor, text))
     return NextResponse.json({ ok: true })
   }
 
@@ -23,5 +26,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!ACTIONS.has(action)) return NextResponse.json({ error: 'Неизвестное действие' }, { status: 400 })
   const r = await actOnCard(gate.svc, id, action, gate.actor)
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+  after(() => notifyBoard(gate.svc, ACTION_EVENT[action], r.value.card, gate.actor))
   return NextResponse.json({ ok: true, card: r.value.card })
 }

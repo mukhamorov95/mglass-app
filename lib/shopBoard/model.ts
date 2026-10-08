@@ -178,3 +178,47 @@ export function isMissingTable(error: { code?: string | null; message?: string |
   if (!error) return false
   return error.code === '42P01' || error.code === 'PGRST205' || /could not find the table|does not exist/i.test(error.message ?? '')
 }
+
+// Кому уведомление (этап 2). Новое поручение — всем, кто его делает и кому оно важно:
+// цеху, менеджерам заказов, Диме и владельцу. Дальше — только тем, кто в нём участвует.
+// Себе не шлём. Партнёров здесь не бывает: списки собирает сервер только из сотрудников.
+export type BoardPeople = { shop: string[]; owners: string[]; boardUsers: string[]; orderManagers: string[] }
+
+export function boardRecipients(
+  kind: BoardEvent['kind'],
+  card: Pick<BoardCard, 'created_by' | 'taken_by'>,
+  actorId: string,
+  people: BoardPeople,
+): string[] {
+  const list: (string | null)[] =
+    kind === 'created' ? [...people.shop, ...people.owners, ...people.boardUsers, ...people.orderManagers]
+    : kind === 'comment' ? [card.created_by, card.taken_by]
+    : kind === 'closed' ? [card.taken_by]
+    : [card.created_by, ...people.orderManagers]
+  return [...new Set(list.filter((id): id is string => !!id && id !== actorId))]
+}
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+// Текст в Telegram (HTML). Название, комментарий и имена пишут люди — экранируем.
+export function boardMessage(
+  kind: BoardEvent['kind'],
+  card: Pick<BoardCard, 'title' | 'due_at' | 'status' | 'hot'>,
+  actorName: string | null,
+  orders: { ref: string; client: string | null }[],
+  now: number,
+  comment?: string | null,
+): string {
+  const who = esc(actorName ?? 'кто-то')
+  const title = `${card.hot ? '🔥 ' : ''}${esc(card.title)}`
+  const ordersLine = orders.length ? `\nЗаказ: ${orders.map(o => esc(`${o.ref}${o.client ? ` ${o.client}` : ''}`)).join(', ')}` : ''
+  const due = dueLabel(card, now)
+  switch (kind) {
+    case 'created': return `📌 <b>Новое поручение на табло</b>\n${title}${ordersLine}${due ? `\nСрок: ${due}` : ''}\nПоставил: ${who}`
+    case 'taken': return `🛠 ${who} взял: ${title}${ordersLine}`
+    case 'done': return `✅ Готово: ${title}${ordersLine}\nОтметил: ${who}`
+    case 'reopened': return `↩️ Вернули в работу: ${title}${ordersLine}\nВернул: ${who}`
+    case 'closed': return `📕 Закрыто: ${title}\nЗакрыл: ${who}`
+    case 'comment': return `💬 ${who} — «${title}»:\n${esc(comment ?? '')}`
+  }
+}
