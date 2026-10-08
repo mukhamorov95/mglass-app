@@ -5,8 +5,8 @@ import { parseNotes, PROD_SINCE } from '@/lib/orderFlags'
 import { isShipped, orderDeadline, type TodayOrder } from '@/lib/b2b/todayPriorities'
 import { searchByName } from '@/lib/search/translitMatch'
 import {
-  ACTION_EVENT, canCloseCard, canCreateCard, isMissingTable, nextStatus, orderProgress, sortCards,
-  type BoardCard, type BoardEvent, type CardAction, type CardInput, type StageProgress, type TaskLite,
+  ACTION_EVENT, canCloseCard, canCreateCard, canEditCard, editSummary, isMissingTable, nextStatus, orderProgress, sortCards,
+  type BoardCard, type BoardEvent, type CardAction, type CardEdit, type CardInput, type StageProgress, type TaskLite,
 } from './model'
 
 // Табло цеха — чтение и запись через service-role. Роль проверяет вызывающий маршрут
@@ -171,6 +171,30 @@ export async function actOnCard(svc: SupabaseClient, id: number, action: CardAct
   const { error: evErr } = await svc.from('shop_board_events').insert({ card_id: id, kind: ACTION_EVENT[action], by_id: who.id, by_name: who.name })
   if (evErr) console.error(`[shop-board] event ${action} card=${id}: ${evErr.message}`)
   return { ok: true, value: { card: upd[0] as BoardCard, previous: card } }
+}
+
+// Правка «Горит» и срока. Возвращает и то, что изменилось словами, — для журнала и уведомления.
+export async function editCard(svc: SupabaseClient, id: number, edit: CardEdit, actor: BoardActor): Promise<WriteResult<{ card: BoardCard; summary: string }>> {
+  const { data: cur, error } = await svc.from('shop_board_cards').select(CARD_COLS).eq('id', id).maybeSingle()
+  if (error) return { ok: false, status: 500, error: error.message }
+  if (!cur) return { ok: false, status: 404, error: 'Поручение не найдено' }
+  const card = cur as BoardCard
+  if (!canEditCard(card, actor.id, actor.role)) return { ok: false, status: 403, error: 'Менять «Горит» и срок может тот, кто поставил, или владелец' }
+  if (card.status === 'closed') return { ok: false, status: 409, error: 'Поручение закрыто — сначала верните его' }
+  const summary = editSummary(card, edit)
+  if (!summary) return { ok: false, status: 400, error: 'Ничего не изменилось' }
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (edit.hot !== undefined) patch.hot = edit.hot
+  if (edit.due_at !== undefined) patch.due_at = edit.due_at
+  const { data: upd, error: uErr } = await svc.from('shop_board_cards').update(patch).eq('id', id).select(CARD_COLS)
+  if (uErr) return { ok: false, status: 500, error: uErr.message }
+  if (!upd?.length) return { ok: false, status: 404, error: 'Поручение не найдено' }
+
+  // До SQL 20261008_shop_board_edit.sql вида 'edited' в базе нет — правка сохранена, журнал молчит.
+  const { error: evErr } = await svc.from('shop_board_events').insert({ card_id: id, kind: 'edited', text: summary, by_id: actor.id, by_name: actor.name })
+  if (evErr) console.error(`[shop-board] event edited card=${id}: ${evErr.message}`)
+  return { ok: true, value: { card: upd[0] as BoardCard, summary } }
 }
 
 export async function commentCard(svc: SupabaseClient, id: number, text: string, actor: BoardActor): Promise<WriteResult<BoardCard>> {
