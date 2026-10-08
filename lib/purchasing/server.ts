@@ -1,6 +1,6 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { parseNotes, PROD_SINCE } from '@/lib/orderFlags'
+import { isOrderCut, parseNotes, PROD_SINCE } from '@/lib/orderFlags'
 import { readPaged, readIn } from '@/lib/production/paged'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type CuttingSettings } from '@/lib/cuttingOptimizer'
 import {
@@ -76,7 +76,7 @@ export async function loadOrders(svc: SupabaseClient, onlyIds?: number[]): Promi
       materialOrdered: stages.material_ordered ?? null,
       updatedAt: (n.material_status_updated_at as string | undefined) ?? null,
       updatedBy: typeof n.material_status_updated_by === 'string' ? n.material_status_updated_by : null,
-      cut: !!(stages.cut || stages.packaged || stages.shipped) || cutByTask.has(o.id),
+      cut: isOrderCut(stages, cutByTask.has(o.id)),
       pieces: items.reduce((s, it) => s + Math.max(1, Number(it.quantity) || 1), 0),
       netM2: Math.round(items.reduce((s, it) => s + areaOf(it), 0) * 100) / 100,
       materials: [...new Set(items.map(it => withThickness(it.materialName ?? '', it.thickness)).filter(Boolean))].slice(0, 3),
