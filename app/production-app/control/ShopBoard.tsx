@@ -6,7 +6,7 @@ import ProductionTabs from '@/components/ProductionTabs'
 import TelegramLinkButton from '@/components/shopBoard/TelegramLinkButton'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { confirmDialog } from '@/lib/dialog'
-import { COLUMNS, dueFromInput, dueLabel, dueToInputs, isOverdue, mskDateTime, type CardAction, type CardEdit } from '@/lib/shopBoard/model'
+import { COLUMNS, doneWarning, dueFromInput, dueLabel, dueToInputs, isOverdue, mskDateTime, type CardAction, type CardEdit } from '@/lib/shopBoard/model'
 import type { BoardCardView, BoardView, OrderRef } from '@/lib/shopBoard/server'
 import type { OrderOption } from '@/lib/shopBoard/server'
 
@@ -72,6 +72,17 @@ export default function ShopBoard({ tv }: { tv: boolean }) {
     if (action === 'close') {
       const ok = await confirmDialog({ title: 'Закрыть поручение?', text: `«${card.title}» уйдёт с табло в закрытые за неделю. Вернуть можно оттуда.`, confirmLabel: 'Закрыть' })
       if (!ok) return
+    }
+    if (action === 'done') {
+      const warn = doneWarning(card.orders)
+      if (warn) {
+        const ok = await confirmDialog({
+          title: 'Поручение точно выполнено?',
+          text: `${warn} «Готово» убирает поручение из работы у всех. Если сделана только ваша часть — напишите об этом в 💬, а «Готово» нажмёт тот, кто закончит.`,
+          confirmLabel: 'Да, всё готово',
+        })
+        if (!ok) return
+      }
     }
     setBusy(card.id)
     const r = await sendOrToast('Не получилось', `/api/shop-board/${card.id}`, {
