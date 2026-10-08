@@ -84,6 +84,7 @@ const BUYER_B2B_ALL: NavItem[] = [
 // Production oversight for the scoped buyer (Вера надзирает за цехом).
 const BUYER_PRODUCTION: NavItem[] = [
   { href: '/production-app',            label: 'Производство',        icon: '📱', indent: true },
+  { href: '/production-app/control',    label: 'Табло цеха',          icon: '🔥', indent: true },
 ]
 
 // ─── SEO role ─────────────────────────────────────────────────────────────────
@@ -271,6 +272,7 @@ const ADMIN_OPERATIONS: NavEntry[] = [
 // Цех — по частоте использования: сверху то, где мастер живёт каждый день
 // (задачи → заказы → скан), ниже — экраны начальника, в конце — логистика/аналитика.
 const PRODUCTION_NAV_SHOP: NavItem[] = [
+  { href: '/production-app/control',  label: 'Табло цеха',       icon: '🔥' },
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
   { href: '/production-app/orders',   label: 'Заказы',           icon: '📋' },
   { href: '/production-app/problems', label: 'Проблемы',         icon: '⚠️' },

@@ -8,6 +8,7 @@ import { shopHome, type ShopTask, type ShopOrder, type ShopOrderRow } from '@/li
 import { isShipped } from '@/lib/b2b/todayPriorities'
 import { readPaged, readIn, errorText } from '@/lib/production/paged'
 import { mskDayKey } from '@/lib/time'
+import BoardRibbon from '@/components/shopBoard/BoardRibbon'
 
 // Главная цеха (ТЗ 4.3, маршрут Н3). Раньше адрес сразу уводил в «Мои задачи»
 // (решение 14.07); теперь сверху те же «Мои задачи» одной кнопкой, а ниже — что
@@ -101,6 +102,7 @@ export default async function ProductionHome() {
       </div>
 
       <div className="px-4 pt-4 max-w-5xl space-y-3">
+        <BoardRibbon />
         {/* 1. Мои задачи — первое действие смены, поэтому крупно и одной кнопкой */}
         <Link href="/production-app/my-queue"
           className="block bg-[#111110] text-white rounded-2xl px-4 py-4 hover:bg-[#2a2a28] transition-colors">

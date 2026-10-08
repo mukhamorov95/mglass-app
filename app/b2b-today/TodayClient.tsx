@@ -15,6 +15,7 @@ import { loadTodayOrders } from '@/lib/b2b/loadTodayOrders'
 import PlanEditor from './PlanEditor'
 import { responseError, NETWORK_ERROR } from '@/lib/toast'
 import { ANSWER_SLA_MIN, inquiryTitle, minutesBetween, durationLabel, type Inquiry } from '@/lib/b2b/inquiries'
+import BoardRibbon from '@/components/shopBoard/BoardRibbon'
 
 // Сверху — три главных дела (ТЗ 4.2): просроченные отгрузки, счета без оплаты, остывающие
 // просчёты. Каждое считается в lib/b2b/todayPriorities по данным, которые реально ведутся.
@@ -155,6 +156,8 @@ export default function TodayClient() {
           {loading || !view ? 'Считаю…' : topCount > 0 ? `Главное сегодня: ${topCount}${invErr ? ' (без счетов — не загрузились)' : ''}` : invErr ? 'Счета не загрузились — список дел неполный' : 'Главное разобрано'}
         </p>
       </div>
+
+      <BoardRibbon />
 
       {error ? (
         <p className="text-[13px] text-red-600">{error}</p>

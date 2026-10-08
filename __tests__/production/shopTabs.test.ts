@@ -5,10 +5,10 @@ vi.mock('next/navigation', () => ({ usePathname: () => '/production-app' }))
 import { shopTabsView, MAIN_FOR_SHOP } from '@/components/ProductionTabs'
 
 describe('вкладки цеха для роли production', () => {
-  it('пять основных в порядке: Сегодня, Мои задачи, Заказы, Отгрузка, Скан', () => {
+  it('шесть основных в порядке: Сегодня, Табло, Мои задачи, Заказы, Отгрузка, Скан', () => {
     const { main } = shopTabsView('/production-app/my-queue', false)
     expect(main.map(t => t.href)).toEqual(MAIN_FOR_SHOP)
-    expect(main).toHaveLength(5)
+    expect(main).toHaveLength(6)
   })
 
   it('остальное — под «Ещё», ничего не потеряно', () => {

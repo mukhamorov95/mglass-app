@@ -19,6 +19,7 @@ import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import { isLiveShopOrder } from '@/lib/production/liveOrder'
 import { readPaged, readIn } from '@/lib/production/paged'
 import PointBadge from '@/components/PointBadge'
+import BoardRibbon from '@/components/shopBoard/BoardRibbon'
 
 // «Мои задачи»: карточка = ЗАКАЗ (раскрывается на месте — детали с кнопками и
 // чертёж), сверху личное табло мастера по ИЗДЕЛИЯМ (сегодня/неделя, процент),
@@ -756,6 +757,7 @@ export default function MyQueuePage() {
       </div>
 
       <div className="px-4 pt-4">
+        <BoardRibbon />
         <LeadSummary onPick={handlePick} />
 
         {/* Заказ есть, но моих задач в нём нет. Раньше здесь была пустота, и рабочий
