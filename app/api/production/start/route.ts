@@ -34,8 +34,16 @@ export async function POST(req: NextRequest) {
 
   const svc = createServiceClient()
   const now = new Date().toISOString()
-  const { data: prof } = await supabase.from('users').select('name').eq('id', user.id).maybeSingle()
-  const actor = { id: user.id, name: actorName((prof as { name: string | null } | null)?.name, user.email) }
+  const { data: prof } = await supabase.from('users').select('name, role').eq('id', user.id).maybeSingle()
+  const p = prof as { name: string | null; role: string | null } | null
+  const actor = { id: user.id, name: actorName(p?.name, user.email) }
+
+  // Автостарт по раскрытию — только у рабочих цеха: владелец и закупщик, открывшие
+  // карточку посмотреть, исполнителями не становятся. Экран это тоже проверяет, здесь —
+  // на случай старой вкладки или другого экрана.
+  if (via === 'open' && p?.role !== 'production') {
+    return NextResponse.json({ ok: true, started: 0, released: 0, skipped: 'not-production' })
+  }
 
   let started = 0
   if (ids.length > 0) {

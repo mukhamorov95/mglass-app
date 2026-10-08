@@ -82,3 +82,11 @@ export const RELEASE_TASK_PATCH: Record<string, unknown> = Object.freeze({
   // assigned_to НЕ снимаем: если задача была за человеком по явному «Взял»,
   // снятие автостарта не отменяет его решения.
 })
+
+// Автостарт пишет исполнителем того, кто раскрыл карточку. Владелец или начальник,
+// листающий чужую очередь, исполнителем от этого не становится: просмотр — не работа,
+// а его имя в started_by портило и картину цеха, и длительность этапа (П4).
+// Явное «Взял» этим правилом не ограничено — это осознанное решение.
+export function shouldAutoStart(opts: { viewingOther: boolean; role: string | null | undefined }): boolean {
+  return !opts.viewingOther && opts.role === 'production'
+}

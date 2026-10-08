@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
 
   // Запись есть — только теперь отмечаем заказы. Если отметка по какому-то
   // заказу не прошла, заказ поставщику остаётся, а сбой возвращаем списком.
-  const res = await writeSupply(svc, take, 'ordered', { today: mskDayKey(), userId: user?.id ?? null })
+  const res = await writeSupply(svc, take, 'ordered', { today: mskDayKey(), userId: user?.id ?? null, expectedDate: expected })
   return NextResponse.json({
     ok: res.failed.length === 0,
     purchaseOrderId: po.id,
@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
     estimate,
     marked: res.done,
     failed: res.failed,
+    shopFailed: res.shopFailed,
     skipped,
   })
 }

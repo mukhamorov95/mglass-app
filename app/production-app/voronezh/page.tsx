@@ -11,6 +11,8 @@ import { itemsWeight } from '@/lib/deliveryWeight'
 import { writeFailure } from '@/lib/rlsWrite'
 import { applyLoadDraft, withLoadDraft, dropShipmentDraft, loadKey, type LoadDraft } from '@/lib/shipmentLoadDraft'
 import { useCanViewMoney } from '@/lib/useCanViewMoney'
+import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/dialog'
 
 const REGION = 'voronezh'
 const CITY = 'Воронеж'
@@ -412,9 +414,11 @@ export default function VoronezhPage() {
   }
 
   async function deleteShipment(s: Shipment) {
-    if (!confirm(`Расформировать партию «${s.title ?? s.id}»? Заказы вернутся в пул.`)) return
+    const ok = await confirmDialog({ title: `Расформировать партию «${s.title ?? s.id}»?`, text: 'Заказы вернутся в пул.', confirmLabel: 'Расформировать', danger: true })
+    if (!ok) return
     const sb = createClient()
-    await sb.from('delivery_shipments').delete().eq('id', s.id)
+    const failed = writeFailure(await sb.from('delivery_shipments').delete().eq('id', s.id).select('id'), 'delete')
+    if (failed) toast.error('Партия не расформирована', { detail: failed })
     load()
   }
 
@@ -435,20 +439,24 @@ export default function VoronezhPage() {
     const loadedSet = new Set(s.loadedIds)
     const loadedOs = orders.filter(o => s.orderIds.includes(o.id) && loadedSet.has(o.id))
     const notLoaded = s.orderIds.filter(id => !loadedSet.has(id))
-    if (loadedOs.length === 0) { alert('Отметьте хотя бы один заказ как «Загружен» — иначе рейс пустой.'); return }
-    const msg = notLoaded.length > 0
-      ? `Отправить рейс с ${loadedOs.length} загруж.? ${notLoaded.length} незагруж. вернётся в пул «заказы к отправке».`
-      : `Отправить рейс с ${loadedOs.length} заказами?`
-    if (!confirm(msg)) return
+    if (loadedOs.length === 0) { toast.info('Рейс пустой', { detail: 'Отметьте хотя бы один заказ как «Загружен».' }); return }
+    const ok = await confirmDialog({
+      title: `Отправить рейс с ${loadedOs.length} ${loadedOs.length === 1 ? 'заказом' : 'заказами'}?`,
+      text: notLoaded.length > 0 ? `${notLoaded.length} незагруж. вернётся в пул «заказы к отправке».` : undefined,
+      confirmLabel: 'Отправить',
+    })
+    if (!ok) return
     const sb = createClient()
     if (notLoaded.length > 0) {
-      await sb.from('delivery_shipment_orders').delete().eq('shipment_id', s.id).in('order_id', notLoaded)
+      const failed = writeFailure(await sb.from('delivery_shipment_orders').delete().eq('shipment_id', s.id).in('order_id', notLoaded).select('order_id'), 'delete')
+      if (failed) { toast.error('Рейс не отправлен: незагруженные не вернулись в пул', { detail: failed }); load(); return }
     }
     const weight = loadedOs.reduce((sum, o) => sum + orderWeight(o), 0)
     const amount = loadedOs.reduce((sum, o) => sum + orderSum(o), 0)
-    await sb.from('delivery_shipments')
+    const failed = writeFailure(await sb.from('delivery_shipments')
       .update({ status: 'shipped', shipped_at: new Date().toISOString(), total_weight_kg: Math.round(weight * 10) / 10, total_amount: Math.round(amount) })
-      .eq('id', s.id)
+      .eq('id', s.id).select('id'))
+    if (failed) { toast.error('Рейс не отмечен отправленным', { detail: failed }); load(); return }
     setLoadDraft(prev => dropShipmentDraft(prev, s.id))
     load()
   }

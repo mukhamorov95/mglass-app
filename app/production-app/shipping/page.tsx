@@ -16,8 +16,10 @@ import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { mskDateTime, mskDayKey, mskDayShort } from '@/lib/time'
 import { isReadyToShip, sortByWaiting, daysWaiting, matchesQuery, type ShipRow } from '@/lib/production/shipping'
-import { packedOn, shippedOn, unpackedPieces } from '@/lib/production/dayLists'
+import { packedOn, shippedOn, unpackedPieces, stageDayKey } from '@/lib/production/dayLists'
 import DayReport from './DayReport'
+import { readPaged, readIn, errorText } from '@/lib/production/paged'
+import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 const PROD_SINCE = '2026-07-01'
 
@@ -39,69 +41,89 @@ export default function ShippingPage() {
   const [now, setNow]         = useState<Date | null>(null)
   const [remaining, setRemaining] = useState<Map<number, number | null>>(new Map())
   const [today, setToday]     = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: orders }, { data: tasks }] = await Promise.all([
-      sb.from('b2b_orders').select('id,custom_number,client_name,notes').gte('created_at', PROD_SINCE).limit(2000),
-      sb.from('production_tasks').select('order_id,status,station,item_index'),
-    ])
+    try {
+      // Заказы — страницами: .limit(2000) потолок PostgREST в 1000 строк не поднимает.
+      const orders = await readPaged<OrderRow>((from, to) => sb.from('b2b_orders')
+        .select('id,custom_number,client_name,notes').gte('created_at', PROD_SINCE)
+        .order('id').range(from, to))
 
-    const taskRows = (tasks ?? []) as { order_id: number; status: string; station: string; item_index: number }[]
-    const agg = new Map<number, { total: number; done: number }>()
-    for (const t of taskRows) {
-      const a = agg.get(t.order_id) ?? { total: 0, done: 0 }
-      a.total++
-      if (t.status === 'done') a.done++
-      agg.set(t.order_id, a)
-    }
+      // Задачи — только по заказам, для которых они что-то значат: ещё не уехавшим (по ним
+      // считается «цех закрыт») и уехавшим сегодня (остаток упаковки в вечернем отчёте).
+      // Раньше читалась вся таблица задач — 6600+ строк, обрезанных на первой тысяче, — и
+      // готовность новых заказов считалась по неполным данным.
+      const dayKey = mskDayKey()
+      const needTasks = orders.filter(o => {
+        const v = (parseNotes(o.notes).stages as Record<string, unknown> | undefined)?.shipped
+        const shipped = v === true || (typeof v === 'string' && v.trim() !== '')
+        return !shipped || stageDayKey(v) === dayKey
+      }).map(o => o.id)
+      const taskRows = await readIn<{ order_id: number; status: string; station: string; item_index: number }, number>(
+        needTasks, (part, from, to) => sb.from('production_tasks')
+          .select('id,order_id,status,station,item_index').in('order_id', part).order('id').range(from, to))
 
-    const list: ShipRow[] = ((orders ?? []) as OrderRow[]).map(o => {
-      const n = parseNotes(o.notes)
-      const stages = (n.stages ?? {}) as Record<string, string | null>
-      const a = agg.get(o.id) ?? { total: 0, done: 0 }
-      return {
-        id:         o.id,
-        number:     o.custom_number?.trim() || `00${o.id}`,
-        client:     o.client_name ?? '—',
-        packagedAt: stages.packaged ?? null,
-        shippedAt:  stages.shipped ?? null,
-        tasksTotal: a.total,
-        tasksDone:  a.done,
-      }
-    })
-    setRows(list)
-
-    // Остаток по упаковке считаем только для сегодняшнего списка: тянуть items
-    // всех двух тысяч заказов ради десятка строк вечернего отчёта незачем.
-    const dayKey  = mskDayKey()
-    const packed  = packedOn(list, dayKey)
-    const ids     = packed.map(r => r.id)
-    const rem     = new Map<number, number | null>()
-    if (ids.length) {
-      const { data: itemRows } = await sb.from('b2b_orders').select('id,items').in('id', ids)
-      const qtyByOrder = new Map<number, Map<number, number>>()
-      for (const r of (itemRows ?? []) as { id: number; items: unknown }[]) {
-        const m = new Map<number, number>()
-        if (Array.isArray(r.items)) {
-          r.items.forEach((it, i) => m.set(i, Math.max(1, Number((it as { quantity?: number })?.quantity) || 1)))
-        }
-        qtyByOrder.set(r.id, m)
-      }
-      const byOrder = new Map<number, typeof taskRows>()
+      const agg = new Map<number, { total: number; done: number }>()
       for (const t of taskRows) {
-        if (!ids.includes(t.order_id)) continue
-        byOrder.set(t.order_id, [...(byOrder.get(t.order_id) ?? []), t])
+        const a = agg.get(t.order_id) ?? { total: 0, done: 0 }
+        a.total++
+        if (t.status === 'done') a.done++
+        agg.set(t.order_id, a)
       }
-      for (const id of ids) rem.set(id, unpackedPieces(byOrder.get(id) ?? [], qtyByOrder.get(id) ?? new Map()))
+
+      const list: ShipRow[] = orders.map(o => {
+        const n = parseNotes(o.notes)
+        const stages = (n.stages ?? {}) as Record<string, string | null>
+        const a = agg.get(o.id) ?? { total: 0, done: 0 }
+        return {
+          id:         o.id,
+          number:     o.custom_number?.trim() || `00${o.id}`,
+          client:     o.client_name ?? '—',
+          packagedAt: stages.packaged ?? null,
+          shippedAt:  stages.shipped ?? null,
+          tasksTotal: a.total,
+          tasksDone:  a.done,
+        }
+      })
+      setRows(list)
+
+      // Остаток по упаковке считаем только для сегодняшнего списка: тянуть items
+      // всех заказов ради десятка строк вечернего отчёта незачем.
+      const packed  = packedOn(list, dayKey)
+      const ids     = packed.map(r => r.id)
+      const rem     = new Map<number, number | null>()
+      if (ids.length) {
+        const { data: itemRows, error } = await sb.from('b2b_orders').select('id,items').in('id', ids)
+        if (error) throw new Error(error.message)
+        const qtyByOrder = new Map<number, Map<number, number>>()
+        for (const r of (itemRows ?? []) as { id: number; items: unknown }[]) {
+          const m = new Map<number, number>()
+          if (Array.isArray(r.items)) {
+            r.items.forEach((it, i) => m.set(i, Math.max(1, Number((it as { quantity?: number })?.quantity) || 1)))
+          }
+          qtyByOrder.set(r.id, m)
+        }
+        const byOrder = new Map<number, typeof taskRows>()
+        for (const t of taskRows) {
+          if (!ids.includes(t.order_id)) continue
+          byOrder.set(t.order_id, [...(byOrder.get(t.order_id) ?? []), t])
+        }
+        for (const id of ids) rem.set(id, unpackedPieces(byOrder.get(id) ?? [], qtyByOrder.get(id) ?? new Map()))
+      }
+      setRemaining(rem)
+      setToday(dayKey)
+      setLoadError(null)
+    } catch (e) {
+      setLoadError(errorText(e))
+    } finally {
+      setLoading(false)
     }
-    setRemaining(rem)
-    setToday(dayKey)
-    setLoading(false)
   }, [sb])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setNow(new Date()); load().catch(() => setLoading(false)) }, [load])
+  useEffect(() => { setNow(new Date()); void load() }, [load])
 
   async function ship(id: number, undo = false) {
     setBusy(id)
@@ -117,6 +139,9 @@ export default function ShippingPage() {
         if (undo) m.delete(id); else m.set(id, j.by ?? '')
         return m
       })
+    } else {
+      // Отметка не записалась — заказ остаётся «ждёт отгрузки», а человек знает почему.
+      toast.error(undo ? 'Отгрузка не отменена' : 'Отгрузка не отмечена', { detail: res ? await responseError(res) : NETWORK_ERROR })
     }
     setBusy(null)
   }
@@ -158,6 +183,13 @@ export default function ShippingPage() {
       </div>
 
       <div className="px-4 py-4 max-w-3xl">
+        {loadError && (
+          <div className="bg-red-50 rounded-xl border border-red-200 p-4 mb-4 text-center">
+            <p className="text-[14px] font-semibold text-red-800">Не загрузилось: {loadError}</p>
+            <button onClick={() => void load()} className="mt-3 px-5 py-3 rounded-lg bg-[#111110] text-white text-[14px] font-semibold">Повторить</button>
+          </div>
+        )}
+
         {!loading && (packedToday.length > 0 || shippedToday.length > 0) && (
           <div className="space-y-2 mb-4">
             <DayReport title="📦 Упаковано сегодня" rows={packedToday} />

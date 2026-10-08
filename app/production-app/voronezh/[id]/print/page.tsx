@@ -7,6 +7,7 @@ import { useEffect, useState, use, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { itemsWeight, type WeighableItem } from '@/lib/deliveryWeight'
 import { renderDocCanvas } from '@/lib/pdfCapture'
+import { toast } from '@/lib/toast'
 
 type OrderItem = WeighableItem & { width?: number; height?: number; materialName?: string; category?: string }
 type Order = {
@@ -102,7 +103,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
       }
       pdf.save(`Рейс-Воронеж-${ship?.ship_date ?? ship?.id ?? ''}.pdf`)
     } catch (e) {
-      alert('Не удалось сформировать PDF: ' + (e instanceof Error ? e.message : 'ошибка') + '. Используйте «Печать» → Сохранить как PDF.')
+      toast.error('Не удалось сформировать PDF', { detail: `${e instanceof Error ? e.message : 'ошибка'}. Используйте «Печать» → Сохранить как PDF.` })
     } finally { setPdfBusy(false) }
   }
 

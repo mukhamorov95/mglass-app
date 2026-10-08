@@ -51,10 +51,18 @@ export function shopHome(input: {
   // скорее уехал без неё, чем лежит. В «срочные» и «к отгрузке» такие не попадают.
   const marksSince = Date.parse(SHIP_MARKS_SINCE)
 
-  // 1. Мои задачи — станции работника или назначенные ему; у кого станций нет — весь цех
+  // 1. Мои задачи — станции работника или назначенные ему; у кого станций нет — весь цех.
+  // Только по живым заказам (запущен, не в архиве, не уехал) — те же, что видит «Мои задачи»:
+  // иначе счётчик на главной обещал работу, которой в очереди нет.
+  const live = new Set<number>()
+  for (const o of orders) {
+    const n = parseNotes(o.notes)
+    if (n.is_template !== true && o.launched_at && !isShipped(n)) live.add(o.id)
+  }
   const stations = me.stations?.filter(Boolean) ?? []
   const scope: 'mine' | 'shop' = stations.length > 0 ? 'mine' : 'shop'
-  const mine = tasks.filter(t => OPEN.has(t.status) && (scope === 'shop' || stations.includes(t.station ?? '') || (me.id != null && t.assigned_to === me.id)))
+  const mine = tasks.filter(t => OPEN.has(t.status) && live.has(t.order_id) &&
+    (scope === 'shop' || stations.includes(t.station ?? '') || (me.id != null && t.assigned_to === me.id)))
   const byStationMap = new Map<string, number>()
   for (const t of mine) byStationMap.set(t.station ?? t.stage_key, (byStationMap.get(t.station ?? t.stage_key) ?? 0) + 1)
 

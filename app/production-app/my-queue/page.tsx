@@ -7,12 +7,17 @@ import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, stageLabel, stageCountLabel, type DetailStageKey } from '@/lib/productionStages'
 import { holesFromComment, normalizeHoles, holesLabel } from '@/lib/production/holes'
 import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
-import { explainEmptyQueue } from '@/lib/production/completeOrder'
+import { explainEmptyQueue, canCloseWholeOrder } from '@/lib/production/completeOrder'
+import { queueEmptyState } from '@/lib/production/queueState'
+import { shouldAutoStart } from '@/lib/production/start'
+import { toast, sendOrToast } from '@/lib/toast'
 import { myStationGroups, canCompleteWholeDetail, type StationGroup, type StationTask } from '@/lib/production/completeMyStage'
-import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
+import { PROD_SINCE, parseNotes, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel, shopMaterial, shopMaterialLabel, type ShopMaterial } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
 import { materialLabelShort } from '@/lib/materialLabel'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
+import { isLiveShopOrder } from '@/lib/production/liveOrder'
+import { readPaged, readIn } from '@/lib/production/paged'
 import PointBadge from '@/components/PointBadge'
 
 // «Мои задачи»: карточка = ЗАКАЗ (раскрывается на месте — детали с кнопками и
@@ -50,6 +55,9 @@ type OrderLite = { id: number; client_id?: number | null; client_name: string; c
 type BlockerLite = { id: number; status: string; stage_key: string }
 
 const orderNo = (o: OrderLite | undefined, id: number) => o?.custom_number?.trim() || `00${id}`
+const MAT_TONE: Record<ShopMaterial['state'], string> = {
+  needed: 'bg-red-100 text-red-700', ordered: 'bg-blue-100 text-blue-700', arrived: 'bg-emerald-100 text-emerald-700',
+}
 const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' }) }
 const qtyOf = (o: OrderLite | undefined, idx: number) => Math.max(1, o?.items?.[idx]?.quantity ?? 1)
 
@@ -103,28 +111,38 @@ const HORIZONS: { key: Horizon; label: string; cls: string }[] = [
 
 // PostgREST отдаёт ограниченное число строк за запрос, и молча: ответ выглядит
 // нормальным, просто короче. Поэтому читаем страницами, пока приходит полная.
+// Ошибку не глотаем: раньше упавшая страница превращалась в «Нет задач в очереди»,
+// и рабочий не мог отличить пустую смену от сломанной сети.
 const PAGE = 1000
-async function fetchAllTasks(sb: ReturnType<typeof createClient>, orFilter: string) {
+async function fetchAllTasks(sb: ReturnType<typeof createClient>, orFilter: string): Promise<TaskRow[]> {
   const cols = 'id,order_id,item_index,stage_key,sequence_order,station,status,blocked_by_task_id,production_day,layer_note,rework_count'
   const out: TaskRow[] = []
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await sb.from('production_tasks')
       .select(cols).or(orFilter)
       .in('status', ['queued', 'in_progress', 'problem'])
-      .order('sequence_order', { ascending: true })
+      .order('sequence_order', { ascending: true }).order('id', { ascending: true })
       .range(from, from + PAGE - 1)
-    if (error) return { data: out.length ? out : null }
+    if (error) throw new Error(error.message)
     const page = (data ?? []) as TaskRow[]
     out.push(...page)
     if (page.length < PAGE) break
   }
-  return { data: out }
+  return out
 }
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+const post = (body: unknown): RequestInit => ({ method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) })
+const patchDone: RequestInit = { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ action: 'done' }) }
 
 export default function MyQueuePage() {
   const sb = createClient()
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [tasks, setTasks] = useState<TaskRow[]>([])
+  // Сколько задач пришло до фильтра по живым заказам — отличает «станция не назначена»
+  // от «назначенное лично есть, но оно по старым/уехавшим заказам».
+  const [rawCount, setRawCount] = useState(0)
   const [doneWeek, setDoneWeek] = useState<DoneRow[]>([])
   const [doneOrders, setDoneOrders] = useState<Map<number, OrderLite>>(new Map())
   const [orders, setOrders] = useState<Map<number, OrderLite>>(new Map())
@@ -137,11 +155,16 @@ export default function MyQueuePage() {
   // известное, а тут цех сам покажет, чего в нём не хватает (через месяц будет видно из данных).
   const [reworkOther, setReworkOther] = useState('')
   const [myStations, setMyStations] = useState<string[]>([])
+  // Свой профиль — не тот, чью очередь смотрим: сервер проверяет права нажавшего.
+  const [myRole, setMyRole] = useState<string | null>(null)
+  const [ownStations, setOwnStations] = useState<string[]>([])
   // «Всё готово» закрывает ЗАКАЗ целиком — это решение упаковщика: он последний
   // в маршруте и единственный, кто физически видит, что заказ собран. Резчик,
   // нажав её, закроет и полировку, и закалку, и упаковку по всем деталям —
   // получится каша, за которую потом никто не отвечает (решение владельца 28.08).
-  const canCloseOrder = myStations.includes('packaging')
+  // Кнопку показываем только тому, кого пустит сервер (то же правило, что в маршруте).
+  const canCloseWhole = canCloseWholeOrder(myRole, ownStations)
+  const canCloseOrder = myStations.includes('packaging') && canCloseWhole
   // Какую станцию какого заказа подтверждаем: `${orderId}:${station}`. Одна кнопка — одна станция.
   const [confirmMine, setConfirmMine] = useState<string | null>(null)
   // Заказ, найденный по номеру, но БЕЗ моих задач: менеджер не отметил признак,
@@ -181,134 +204,141 @@ export default function MyQueuePage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data: { user } } = await sb.auth.getUser()
-    if (!user) { setLoading(false); return }
+    try {
+      const { data: { user }, error: authErr } = await sb.auth.getUser()
+      if (authErr || !user) throw new Error('Сессия истекла — войдите заново')
 
-    let queueUserId = user.id
-    const { data: profile } = await sb.from('users').select('production_stations,name').eq('id', user.id).single()
-    const prof = profile as { production_stations: string[] | null; name: string | null } | null
-    setMe({ id: user.id, name: prof?.name ?? user.email ?? 'Цех' })
-    let stations: string[]
-    if (viewMaster) {
-      queueUserId = viewMaster.id
-      stations = viewMaster.stations
-    } else {
-      stations = prof?.production_stations ?? []
-    }
-    setMyStations(stations)
+      let queueUserId = user.id
+      const { data: profile, error: profErr } = await sb.from('users').select('production_stations,name,role').eq('id', user.id).maybeSingle()
+      if (profErr) throw new Error(`Профиль не прочитан: ${profErr.message}`)
+      const prof = profile as { production_stations: string[] | null; name: string | null; role: string | null } | null
+      setMe({ id: user.id, name: prof?.name ?? user.email ?? 'Цех' })
+      setMyRole(prof?.role ?? null)
+      setOwnStations(prof?.production_stations ?? [])
+      let stations: string[]
+      if (viewMaster) {
+        queueUserId = viewMaster.id
+        stations = viewMaster.stations
+      } else {
+        stations = prof?.production_stations ?? []
+      }
+      setMyStations(stations)
 
-    const orFilter = stations.length
-      ? `assigned_to.eq.${queueUserId},and(assigned_to.is.null,station.in.(${stations.join(',')}))`
-      : `assigned_to.eq.${queueUserId}`
+      const orFilter = stations.length
+        ? `assigned_to.eq.${queueUserId},and(assigned_to.is.null,station.in.(${stations.join(',')}))`
+        : `assigned_to.eq.${queueUserId}`
 
-    // Понедельник этой недели — для табло «за неделю»
-    const monday = new Date()
-    monday.setHours(0, 0, 0, 0)
-    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+      // Понедельник этой недели — для табло «за неделю»
+      const monday = new Date()
+      monday.setHours(0, 0, 0, 0)
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
 
-    const [{ data: taskRows }, { data: doneRows }] = await Promise.all([
-      // Берём и закрытые задачи: в обычном списке они не показываются, но
-      // нужны поиску — иначе отмеченный заказ пропадает и его не найти.
-      // Только незакрытые: рабочая очередь. Закрытые задачи (их столько же, сколько
-      // открытых) переполняли ответ, и упаковка — последняя по sequence_order —
-      // обрезалась первой: заказ переставал выпадать у мастера, хотя задачи в нём
-      // были. Поиск по уже отмеченным заказам делает отдельный запрос ниже.
-      //
-      // Страницами: у Никиты одних незакрытых больше тысячи, а PostgREST отдаёт
-      // не больше страницы за раз. Одним запросом часть очереди молча терялась.
-      fetchAllTasks(sb, orFilter),
-      stations.length
-        ? sb.from('production_tasks').select('order_id,item_index,completed_at')
-            .eq('status', 'done').in('station', stations).gte('completed_at', monday.toISOString())
-        : Promise.resolve({ data: [] as DoneRow[] }),
-    ])
+      const [taskRows, doneRows] = await Promise.all([
+        // Берём и закрытые задачи: в обычном списке они не показываются, но
+        // нужны поиску — иначе отмеченный заказ пропадает и его не найти.
+        // Только незакрытые: рабочая очередь. Закрытые задачи (их столько же, сколько
+        // открытых) переполняли ответ, и упаковка — последняя по sequence_order —
+        // обрезалась первой: заказ переставал выпадать у мастера, хотя задачи в нём
+        // были. Поиск по уже отмеченным заказам делает отдельный запрос ниже.
+        //
+        // Страницами: у Никиты одних незакрытых больше тысячи, а PostgREST отдаёт
+        // не больше страницы за раз. Одним запросом часть очереди молча терялась.
+        fetchAllTasks(sb, orFilter),
+        // Отмеченное за неделю — тоже страницами: у упаковщика за неделю бывает больше тысячи.
+        stations.length
+          ? readPaged<DoneRow>((from, to) => sb.from('production_tasks').select('order_id,item_index,completed_at')
+              .eq('status', 'done').in('station', stations).gte('completed_at', monday.toISOString())
+              .order('id').range(from, to))
+          : Promise.resolve([] as DoneRow[]),
+      ])
 
-    const list = (taskRows ?? []) as TaskRow[]
-    const dw = (doneRows ?? []) as DoneRow[]
+      const list = taskRows
+      setRawCount(list.length)
+      const dw = doneRows
 
-    const orderIds = [...new Set(list.map(t => t.order_id))]
-    const doneOrderIds = [...new Set(dw.map(t => t.order_id))].filter(id => !orderIds.includes(id))
-    const blockerIds = [...new Set(list.map(t => t.blocked_by_task_id).filter((x): x is number => x != null))]
+      const orderIds = [...new Set(list.map(t => t.order_id))]
+      const doneOrderIds = [...new Set(dw.map(t => t.order_id))].filter(id => !orderIds.includes(id))
+      const blockerIds = [...new Set(list.map(t => t.blocked_by_task_id).filter((x): x is number => x != null))]
 
-    const [{ data: orderRows }, { data: doneOrderRows }, { data: blockerRows }, points] = await Promise.all([
-      orderIds.length
-        ? sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes').in('id', orderIds).gte('created_at', PROD_SINCE)
-        : Promise.resolve({ data: [] as OrderLite[] }),
-      doneOrderIds.length
-        ? sb.from('b2b_orders').select('id,items').in('id', doneOrderIds).gte('created_at', PROD_SINCE)
-        : Promise.resolve({ data: [] as OrderLite[] }),
-      blockerIds.length
-        ? sb.from('production_tasks').select('id,status,stage_key').in('id', blockerIds)
-        : Promise.resolve({ data: [] as BlockerLite[] }),
-      loadPointClientIds(sb),
-    ])
-    setPointClients(points)
+      // Списки id — пачками по 500 (lib/production/paged.ts): у Никиты заказов в очереди
+      // сотни, и одним .in() упираемся и в длину адреса, и в потолок строк.
+      const [orderRows, doneOrderRows, blockerRows, points] = await Promise.all([
+        readIn<OrderLite, number>(orderIds, (part, from, to) => sb.from('b2b_orders')
+          .select('id,client_id,client_name,custom_number,items,notes')
+          .in('id', part).gte('created_at', PROD_SINCE).is('archived_at', null)
+          .order('id').range(from, to)),
+        readIn<Pick<OrderLite, 'id' | 'items'>, number>(doneOrderIds, (part, from, to) => sb.from('b2b_orders')
+          .select('id,items').in('id', part).gte('created_at', PROD_SINCE)
+          .order('id').range(from, to)),
+        readIn<BlockerLite, number>(blockerIds, (part, from, to) => sb.from('production_tasks')
+          .select('id,status,stage_key').in('id', part).order('id').range(from, to)),
+        loadPointClientIds(sb),
+      ])
+      setPointClients(points)
 
-    // Что по этим заказам ещё открыто у ВСЕГО цеха, а не только у меня.
-    const { data: workRows } = orderIds.length
-      ? await sb.from('production_tasks').select('order_id,station').in('order_id', orderIds).neq('status', 'done')
-      : { data: [] as { order_id: number; station: string }[] }
-    const workMap = new Map<number, Map<string, number>>()
-    for (const w of (workRows ?? []) as { order_id: number; station: string }[]) {
-      const byStation = workMap.get(w.order_id) ?? new Map<string, number>()
-      byStation.set(w.station, (byStation.get(w.station) ?? 0) + 1)
-      workMap.set(w.order_id, byStation)
-    }
-    setOrderWork(new Map([...workMap].map(([id, m]) =>
-      [id, [...m].map(([station, n]) => ({ station, n })).sort((a, b) => b.n - a.n)])))
-    setWorkLoaded(true)
+      // Производственный контур — только заказы с PROD_SINCE, не в архиве и не уехавшие:
+      // задачи отгруженного заказа — не работа, даже если их никто не закрыл.
+      const freshOrders = new Map(orderRows.filter(o => isLiveShopOrder(o)).map(o => [o.id, o]))
+      const freshIds = [...freshOrders.keys()]
+      setTasks(list.filter(t => freshOrders.has(t.order_id)))
+      setOrders(freshOrders)
 
-    // Производственный контур — только заказы с PROD_SINCE
-    const freshOrders = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
-    setTasks(list.filter(t => freshOrders.has(t.order_id)))
-    setOrders(freshOrders)
+      // Маршрут целиком по видимым заказам: без этого рабочий видит только свою станцию и не
+      // понимает, готова ли деталь и кто её вёл до него. Это ВСЕ задачи заказов (и закрытые) —
+      // на сотне заказов их тысячи, поэтому пачками и страницами. Из них же — что открыто
+      // у всего цеха (orderWork): отдельный запрос по тем же заказам был бы вторым чтением.
+      const routeRows = await readIn<RouteStage & { order_id: number }, number>(freshIds, (part, from, to) => sb.from('production_tasks')
+        .select('id,item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
+        .in('order_id', part).order('id').range(from, to))
 
-    // Статус закупки для заказов с пометкой «нет материала» — мастер видит,
-    // когда стекло заказано и когда пришло, не выходя из очереди
-    const marked = [...freshOrders.values()].filter(o => {
-      const n = parseNotes(o.notes)
-      return materialStatus(o.notes) === 'needed' || (Array.isArray(n.material_needed_items) && (n.material_needed_items as number[]).length > 0)
-    }).map(o => o.id)
-    if (marked.length) {
-      const { data: reqs } = await sb.from('shop_purchase_requests')
-        .select('id,b2b_order_id,item_index,status,expected_date')
-        .in('b2b_order_id', marked)
-        .order('id', { ascending: true })
+      const workMap = new Map<number, Map<string, number>>()
+      for (const w of routeRows) {
+        if (w.status === 'done') continue
+        const byStation = workMap.get(w.order_id) ?? new Map<string, number>()
+        byStation.set(w.station, (byStation.get(w.station) ?? 0) + 1)
+        workMap.set(w.order_id, byStation)
+      }
+      setOrderWork(new Map([...workMap].map(([id, m]) =>
+        [id, [...m].map(([station, n]) => ({ station, n })).sort((a, b) => b.n - a.n)])))
+      setWorkLoaded(true)
+
+      // Заявки цеха на материал — мастер видит, когда стекло заказано и когда пришло,
+      // не выходя из очереди. По всем заказам, а не только с 'needed': закупщик,
+      // отметив «заказан», затирает 'needed', а ожидание цеха остаётся (shopMaterial).
+      const reqs = await readIn<{ b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }, number>(
+        [...freshOrders.keys()], (part, from, to) => sb.from('shop_purchase_requests')
+          .select('id,b2b_order_id,item_index,status,expected_date')
+          .in('b2b_order_id', part).order('id', { ascending: true }).range(from, to))
       const m = new Map<string, { status: string; expected: string | null }>()
-      for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }[]) {
+      for (const r of reqs) {
         m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, { status: r.status, expected: r.expected_date }) // позднейшая заявка перезаписывает
       }
       setMatReq(m)
-    } else setMatReq(new Map())
-    const dMap = new Map<number, OrderLite>(((doneOrderRows ?? []) as OrderLite[]).map(o => [o.id, o]))
-    for (const [id, o] of freshOrders) dMap.set(id, o)
-    setDoneOrders(dMap)
-    setDoneWeek(dw.filter(t => dMap.has(t.order_id)))
-    setBlockers(new Map((blockerRows ?? []).map((b: BlockerLite) => [b.id, b])))
+      // Для табло нужны только количества изделий — имя клиента здесь не читаем.
+      const dMap = new Map<number, OrderLite>(doneOrderRows.map(o => [o.id, { ...o, client_name: '', custom_number: null }]))
+      for (const [id, o] of freshOrders) dMap.set(id, o)
+      setDoneOrders(dMap)
+      setDoneWeek(dw.filter(t => dMap.has(t.order_id)))
+      setBlockers(new Map(blockerRows.map(b => [b.id, b])))
 
-    // Маршрут целиком по видимым заказам: без этого рабочий видит только свою
-    // станцию и не понимает, готова ли деталь и кто её вёл до него.
-    if (orderIds.length) {
-      const { data: routeRows } = await sb.from('production_tasks')
-        .select('id,item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
-        .in('order_id', orderIds)
-        .order('sequence_order', { ascending: true })
       const rm = new Map<string, RouteStage[]>()
-      for (const r of (routeRows ?? []) as (RouteStage & { order_id: number })[]) {
+      for (const r of [...routeRows].sort((a, b) => a.sequence_order - b.sequence_order || a.id - b.id)) {
         const k = `${r.order_id}:${r.item_index}`
         const arr = rm.get(k) ?? []
         arr.push(r)
         rm.set(k, arr)
       }
       setRoutes(rm)
-    } else {
-      setRoutes(new Map())
+      setLoadError(null)
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [sb, viewMaster])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
+  useEffect(() => { void load() }, [load])
 
   const handlePick = useCallback((m: { id: string; name: string; stations: string[] } | null) => {
     setViewMaster(prev => ((prev?.id ?? null) === (m?.id ?? null) ? prev : m))
@@ -316,12 +346,26 @@ export default function MyQueuePage() {
 
   // Один вход на все старты (П2): и явное «Взял», и автостарт при раскрытии
   // карточки. via отличает сильный сигнал от слабого — см. lib/production/start.ts.
-  function sendStart(taskIds: number[], via: 'button' | 'open', orderId: number | null) {
+  async function sendStart(taskIds: number[], via: 'button' | 'open', orderId: number | null) {
+    const was = new Map(tasks.filter(t => taskIds.includes(t.id)).map(t => [t.id, t.status]))
     if (taskIds.length) setTasks(prev => prev.map(t => taskIds.includes(t.id) ? { ...t, status: 'in_progress' } : t))
-    return fetch('/api/production/start', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_ids: taskIds, order_id: orderId, via }),
-    }).catch(() => {})
+    const r = await sendOrToast(via === 'button' ? 'Не взято в работу' : 'Отметка «в работе» не записалась',
+      '/api/production/start', post({ task_ids: taskIds, order_id: orderId, via }))
+    // Сервер не принял — на экране не должно висеть «в работе», которого нет в базе.
+    if (!r && was.size) setTasks(prev => prev.map(t => was.has(t.id) ? { ...t, status: was.get(t.id)! } : t))
+  }
+
+  // Убрать задачи с экрана сразу (кнопку жмут в перчатке — ждать ответа незачем),
+  // а если сервер отказал — вернуть их на место. Причина отказа — в тосте.
+  async function optimistic(removeIf: (t: TaskRow) => boolean, failTitle: string, url: string, init: RequestInit): Promise<boolean> {
+    const removed = tasks.filter(removeIf)
+    setTasks(prev => prev.filter(t => !removeIf(t)))
+    const r = await sendOrToast(failTitle, url, init, removed.length ? 'Задачи вернулись в список' : undefined)
+    if (!r) {
+      setTasks(prev => [...prev, ...removed.filter(x => !prev.some(t => t.id === x.id))])
+      return false
+    }
+    return true
   }
 
   async function markStart(taskId: number) {
@@ -334,11 +378,8 @@ export default function MyQueuePage() {
 
   async function markDone(taskId: number) {
     const task = tasks.find(t => t.id === taskId)
-    setTasks(prev => prev.filter(t => t.id !== taskId))
-    await fetch(`/api/production-tasks/${taskId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'done' }),
-    }).catch(() => {})
+    const ok = await optimistic(t => t.id === taskId, 'Не отмечено', `/api/production-tasks/${taskId}`, patchDone)
+    if (!ok) return
     // Деталь готова = материал на неё был: гасим её пометку «ждёт материал»
     if (task) {
       const marked = parseNotes(orders.get(task.order_id)?.notes).material_needed_items
@@ -346,10 +387,10 @@ export default function MyQueuePage() {
         await mergeNotes(task.order_id, n => {
           const prev = Array.isArray(n.material_needed_items) ? (n.material_needed_items as number[]) : []
           return { ...n, material_needed_items: prev.filter(i => i !== task.item_index) }
-        })
+        }).catch(e => toast.error('Отметка «нет материала» не снялась', { detail: String(e instanceof Error ? e.message : e) }))
       }
     }
-    load()
+    void load()
   }
 
   // «Готово всё» по ОДНОЙ детали (обращение №3 от цеха). У Никиты две станции —
@@ -362,13 +403,15 @@ export default function MyQueuePage() {
       .filter(r => r.status !== 'done')
       .sort((a, b) => a.sequence_order - b.sequence_order)
     const last = route[route.length - 1]
-    if (!last) return
-    setTasks(prev => prev.filter(t => !(t.order_id === orderId && t.item_index === itemIndex)))
-    await fetch(`/api/production-tasks/${last.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'done' }),
-    }).catch(() => {})
-    load()
+    // Маршрута нет в памяти — значит не догрузился или деталь уже закрыта. Молча ничего
+    // не делать нельзя: рабочий решит, что отметил.
+    if (!last) {
+      toast.error('Деталь не закрыта', { detail: 'Маршрут детали не загружен или все этапы уже закрыты — обновите экран' })
+      return
+    }
+    const ok = await optimistic(t => t.order_id === orderId && t.item_index === itemIndex,
+      'Деталь не закрыта', `/api/production-tasks/${last.id}`, patchDone)
+    if (ok) void load()
   }
 
   // «Готово: <станция>»: закрыть ОДНУ свою станцию по всем деталям заказа.
@@ -378,12 +421,9 @@ export default function MyQueuePage() {
   // отполировал — отметил полировку. Границу проверяет сервер по станциям профиля.
   async function completeMyStage(orderId: number, station: string) {
     setConfirmMine(null)
-    setTasks(prev => prev.filter(t => !(t.order_id === orderId && t.station === station)))
-    await fetch('/api/production/complete-my-stage', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId, station }),
-    }).catch(() => {})
-    load()
+    const ok = await optimistic(t => t.order_id === orderId && t.station === station,
+      `Не отмечено: ${stageLabel(station)}`, '/api/production/complete-my-stage', post({ order_id: orderId, station }))
+    if (ok) void load()
   }
 
   // «Всё готово»: закрыть заказ целиком, минуя цепочку готовности. Именно она и была
@@ -393,17 +433,15 @@ export default function MyQueuePage() {
   // остальное закрывает каскад без исполнителя.
   async function completeOrder(orderId: number) {
     setConfirmDone(null)
-    setTasks(prev => prev.filter(t => t.order_id !== orderId))
-    await fetch('/api/production/complete-order', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId }),
-    }).catch(() => {})
-    load()
+    const ok = await optimistic(t => t.order_id === orderId, 'Заказ не закрыт', '/api/production/complete-order', post({ order_id: orderId }))
+    if (ok) { setForeignOrder(null); void load() }
   }
 
   async function purchaseRequest(title: string, details: string | null, orderId: number, itemIndex: number | null) {
-    await sb.from('shop_purchase_requests').insert({ title, qty: null, details, author_id: me?.id, author_name: me?.name ?? 'Цех', b2b_order_id: orderId, item_index: itemIndex })
-    fetch('/api/shop-purchases/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, qty: '', author: me?.name ?? 'Цех', link: '' }) }).catch(() => {})
+    const { error } = await sb.from('shop_purchase_requests').insert({ title, qty: null, details, author_id: me?.id, author_name: me?.name ?? 'Цех', b2b_order_id: orderId, item_index: itemIndex })
+    if (error) { toast.error('Заявка на материал не записалась', { detail: `${error.message}. Скажите закупщику голосом` }); return }
+    await sendOrToast('Заявка записана, но закупщику не ушло сообщение', '/api/shop-purchases/notify',
+      post({ title, qty: '', author: me?.name ?? 'Цех', link: '', order_id: orderId }), 'Скажите закупщику голосом')
   }
 
   // Точечный патч notes под блокировкой строки. Раньше здесь был свежий
@@ -417,19 +455,38 @@ export default function MyQueuePage() {
     const changed: Record<string, unknown> = {}
     for (const k of Object.keys(next)) if (next[k] !== n[k]) changed[k] = next[k]
     if (Object.keys(changed).length === 0) return
-    await sb.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: changed })
+    const { error } = await sb.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: changed })
+    if (error) throw new Error(error.message)
+  }
+
+  // «Пришёл» от цеха закрывает его заявки: иначе закупщик видит их открытыми,
+  // а у резчика плашка висит дальше (shopMaterial держит ожидание на заявке).
+  async function closeShopRequests(orderId: number, itemIndex: number | null) {
+    let q = sb.from('shop_purchase_requests')
+      .update({ status: 'arrived', arrived_at: new Date().toISOString(), arrived_by: me?.name ?? 'Цех' })
+      .eq('b2b_order_id', orderId).in('status', ['need', 'ordered'])
+    q = itemIndex == null ? q.is('item_index', null) : q.eq('item_index', itemIndex)
+    const { error } = await q
+    if (error) toast.error('«Пришёл» записан, но заявка у закупщика осталась открытой', { detail: `${error.message}. Скажите закупщику` })
   }
 
   // «Нет материала на весь заказ» (повторное нажатие = материал пришёл)
   async function toggleNoMaterialOrder(orderId: number) {
     const o = orders.get(orderId)
-    const turnOn = materialStatus(o?.notes) !== 'needed'
-    await mergeNotes(orderId, n => ({ ...n, material_status: turnOn ? 'needed' : 'ready', material_checked_at: new Date().toISOString(), material_checked_by: me?.name ?? null }))
+    const turnOn = shopMaterial(parseNotes(o?.notes).material_status, matReq.get(`${orderId}:all`)) == null
+    try {
+      await mergeNotes(orderId, n => ({ ...n, material_status: turnOn ? 'needed' : 'ready', material_checked_at: new Date().toISOString(), material_checked_by: me?.name ?? null }))
+    } catch (e) {
+      toast.error(turnOn ? '«Нет материала» не записалось' : '«Материал пришёл» не записалось', { detail: e instanceof Error ? e.message : String(e) })
+      return
+    }
     if (turnOn) {
       const details = (o?.items ?? []).map(it => specLine(it)).filter(Boolean).join('; ')
       await purchaseRequest(`Материал: ${orderNo(o, orderId)} — весь заказ (${o?.client_name ?? ''})`, details || null, orderId, null)
+    } else {
+      await closeShopRequests(orderId, null)
     }
-    load()
+    void load()
   }
 
   // «Нет материала» на конкретную деталь: остальной заказ идёт дальше, эта позиция ждёт
@@ -438,13 +495,19 @@ export default function MyQueuePage() {
     const cur = parseNotes(o?.notes).material_needed_items
     const arr = Array.isArray(cur) ? (cur as number[]) : []
     const turnOn = !arr.includes(itemIndex)
-    await mergeNotes(orderId, n => {
-      const prev = Array.isArray(n.material_needed_items) ? (n.material_needed_items as number[]) : []
-      const next = turnOn ? [...new Set([...prev, itemIndex])] : prev.filter(i => i !== itemIndex)
-      return { ...n, material_needed_items: next }
-    })
+    try {
+      await mergeNotes(orderId, n => {
+        const prev = Array.isArray(n.material_needed_items) ? (n.material_needed_items as number[]) : []
+        const next = turnOn ? [...new Set([...prev, itemIndex])] : prev.filter(i => i !== itemIndex)
+        return { ...n, material_needed_items: next }
+      })
+    } catch (e) {
+      toast.error(`Поз. ${itemIndex + 1}: отметка материала не записалась`, { detail: e instanceof Error ? e.message : String(e) })
+      return
+    }
     if (turnOn) await purchaseRequest(`Материал: ${orderNo(o, orderId)} · поз. ${itemIndex + 1} (${o?.client_name ?? ''})`, specLine(o?.items?.[itemIndex]) || null, orderId, itemIndex)
-    load()
+    else await closeShopRequests(orderId, itemIndex)
+    void load()
   }
 
   // Тап по причине И ЕСТЬ подтверждение — ни модалки с «Отправить», ни обязательного
@@ -452,14 +515,14 @@ export default function MyQueuePage() {
   async function submitRework(reason: ReworkReason, comment?: string) {
     if (reworkFor == null || reworkBusy) return
     setReworkBusy(true)
-    await fetch('/api/production/rework', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: reworkFor, reason, comment: comment?.trim() || null }),
-    }).catch(() => {})
+    const r = await sendOrToast('Переделка не записалась', '/api/production/rework',
+      post({ task_id: reworkFor, reason, comment: comment?.trim() || null }), 'Попробуйте ещё раз')
+    setReworkBusy(false)
+    // Отказ — лист причин остаётся открытым, чтобы повторить, не выбирая заново.
+    if (!r) return
     setReworkFor(null)
     setReworkOther('')
-    setReworkBusy(false)
-    load()
+    void load()
   }
 
   const isReady = (t: TaskRow) => {
@@ -491,8 +554,10 @@ export default function MyQueuePage() {
       })
     }
     if (!opening) return
+    // Чужая очередь (начальник выбрал мастера в сводке) или не рабочий цеха — только смотрим.
+    if (!shouldAutoStart({ viewingOther: viewMaster != null, role: myRole })) return
     const ids = tasks.filter(t => t.order_id === orderId && t.status === 'queued' && isReady(t)).map(t => t.id)
-    sendStart(ids, 'open', orderId)
+    void sendStart(ids, 'open', orderId)
   }
 
   // Автораскрытие в поиске НЕ считается взятием в работу: совпадений может быть
@@ -564,13 +629,11 @@ export default function MyQueuePage() {
 
   async function addMyStage(orderId: number, stage: string) {
     setAddingStage(true)
-    await fetch('/api/production/add-my-stage', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId, stage }),
-    }).catch(() => {})
+    const r = await sendOrToast(`Этап «${stageLabel(stage)}» не добавлен`, '/api/production/add-my-stage', post({ order_id: orderId, stage }))
     setAddingStage(false)
+    if (!r) return
     setForeignOrder(null)
-    load()
+    void load()
   }
 
   // Горизонт по дате отгрузки заказа
@@ -654,6 +717,11 @@ export default function MyQueuePage() {
   const pctToday = planToday > 0 ? Math.round(donePiecesToday / planToday * 100) : null
   const pctWeek = planWeek > 0 ? Math.round(donePiecesWeek / planWeek * 100) : null
 
+  const emptyState = queueEmptyState({
+    loadError, stations: myStations,
+    assignedToMe: myStations.length ? 0 : rawCount,
+    visible: byOrder.size,
+  })
   const totalReady = activeTasks.filter(isReady).length
   const totalWaiting = activeTasks.length - totalReady
   const totalDetails = new Set(activeTasks.map(t => `${t.order_id}:${t.item_index}`)).size
@@ -716,23 +784,29 @@ export default function MyQueuePage() {
                     : ''}
                 </p>
                 <div className="flex flex-wrap gap-2 mt-2.5">
-                  <button
-                    onClick={() => confirmDone === foreignOrder.id
-                      ? completeOrder(foreignOrder.id)
-                      : setConfirmDone(foreignOrder.id)}
-                    className={`px-3.5 py-2.5 rounded-lg text-[12px] font-semibold ${
-                      confirmDone === foreignOrder.id
-                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                        : 'bg-[#111110] text-white hover:bg-black'}`}>
-                    {confirmDone === foreignOrder.id ? 'Точно всё? Нажмите ещё раз' : 'Всё готово'}
-                  </button>
+                  {/* Закрыть заказ целиком сервер разрешает только упаковщику и владельцу —
+                      остальным кнопка обещала бы то, чего не сделает. */}
+                  {canCloseWhole && (
+                    <button
+                      onClick={() => confirmDone === foreignOrder.id
+                        ? completeOrder(foreignOrder.id)
+                        : setConfirmDone(foreignOrder.id)}
+                      className={`px-3.5 py-2.5 rounded-lg text-[12px] font-semibold ${
+                        confirmDone === foreignOrder.id
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          : 'bg-[#111110] text-white hover:bg-black'}`}>
+                      {confirmDone === foreignOrder.id ? 'Точно всё? Нажмите ещё раз' : 'Всё готово'}
+                    </button>
+                  )}
                   <a href={`/production-app/orders/${foreignOrder.id}`}
                     className="px-3.5 py-2.5 rounded-lg border border-[#111110] text-[#111110] text-[12px] font-semibold hover:bg-[#f0f0ec]">
                     Открыть по деталям
                   </a>
                 </div>
                 <p className="text-[11px] text-amber-700 mt-2">
-                  «Всё готово» закроет заказ целиком: упаковано — значит все предыдущие станции пройдены.
+                  {canCloseWhole
+                    ? '«Всё готово» закроет заказ целиком: упаковано — значит все предыдущие станции пройдены.'
+                    : 'Свой этап отметьте по деталям. Заказ целиком закрывает упаковщик.'}
                 </p>
               </>
             ) : (
@@ -814,9 +888,38 @@ export default function MyQueuePage() {
           </div>
         )}
 
-        {byOrder.size === 0 && (
+        {/* Ошибка загрузки — отдельно и сверху: прежний список (если был) остаётся под ней. */}
+        {emptyState === 'error' && (
+          <div className="bg-red-50 rounded-xl border border-red-200 p-5 mb-4 text-center">
+            <p className="text-[14px] font-semibold text-red-800">Не загрузилось: {loadError}</p>
+            <button onClick={() => void load()}
+              className="mt-3 px-5 py-3 rounded-lg bg-[#111110] text-white text-[14px] font-semibold">
+              Повторить
+            </button>
+          </div>
+        )}
+
+        {emptyState !== 'error' && byOrder.size === 0 && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 text-center">
-            <p className="text-[13px] text-[#9a9a95]">{q ? `По запросу «${search}» ничего не найдено` : 'Нет задач в очереди'}</p>
+            {q ? (
+              <p className="text-[13px] text-[#9a9a95]">По запросу «{search}» ничего не найдено</p>
+            ) : emptyState === 'no-station' ? (
+              <>
+                <p className="text-[15px] font-semibold text-[#111110]">
+                  {viewMaster ? `У ${viewMaster.name} не назначена станция` : 'Станция не назначена — скажите владельцу'}
+                </p>
+                <p className="text-[12px] text-[#6b6b66] mt-1">
+                  Очередь собирается по станциям из профиля. Пока станции нет, сюда ничего не придёт.
+                </p>
+                {(myRole === 'admin' || myRole === 'ceo') && (
+                  <Link href="/production-app/activity" className="inline-block mt-3 text-[13px] text-blue-600 underline underline-offset-2">
+                    Состав цеха и ссылка для входа →
+                  </Link>
+                )}
+              </>
+            ) : (
+              <p className="text-[13px] text-[#9a9a95]">Нет задач в очереди</p>
+            )}
           </div>
         )}
 
@@ -982,8 +1085,12 @@ function OrderCard({ order, orderId, point, tasks, blockers, open, onToggle, isR
   const pn = parseNotes(notes)
   const drawingUrl = (pn.drawing_url as string | undefined) ?? null
   const isImg = drawingUrl ? /\.(png|jpe?g|webp|gif)(\?|$)/i.test(drawingUrl) : false
-  const noMatOrder = materialStatus(notes) === 'needed'
+  const orderMat = shopMaterial(pn.material_status, matReq.get(`${orderId}:all`))
+  const noMatOrder = orderMat != null
   const noMatItems = Array.isArray(pn.material_needed_items) ? (pn.material_needed_items as number[]) : []
+  const itemMat = (idx: number): ShopMaterial | null => noMatItems.includes(idx)
+    ? shopMaterial('needed', matReq.get(`${orderId}:${idx}`) ?? matReq.get(`${orderId}:all`))
+    : orderMat
   // В поиске в карточку попадают и закрытые задачи — их показываем отдельной
   // строкой «уже сделано», а в счётчиках работы они не участвуют.
   const doneTasks = tasks.filter(t => t.status === 'done')
@@ -1022,14 +1129,7 @@ function OrderCard({ order, orderId, point, tasks, blockers, open, onToggle, isR
               {point && <PointBadge />}
               {orderNo(order, orderId)}
               {drawingUrl && <span title="Есть чертёж">📐</span>}
-              {noMatOrder && (() => {
-                const r = matReq.get(`${orderId}:all`)
-                return r?.status === 'arrived'
-                  ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">📦 материал пришёл</span>
-                  : r?.status === 'ordered'
-                  ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">🚚 материал заказан{r.expected ? ` · к ${fmtShort(r.expected)}` : ''}</span>
-                  : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🛒 ждёт материал</span>
-              })()}
+              {orderMat && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${MAT_TONE[orderMat.state]}`}>{shopMaterialLabel(orderMat)}</span>}
               {!noMatOrder && noMatItems.length > 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">🛒 нет мат. на {noMatItems.length} поз.</span>}
             </p>
             <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
@@ -1217,12 +1317,7 @@ function OrderCard({ order, orderId, point, tasks, blockers, open, onToggle, isR
                       })()}
                       <p className={`text-[11px] ${noMat ? 'text-red-700' : 'text-[#6b6b66]'}`}>
                         Поз. {idx + 1}
-                        {noMat && (() => {
-                          const r = matReq.get(`${orderId}:${idx}`) ?? matReq.get(`${orderId}:all`)
-                          return r?.status === 'arrived' ? ' · 📦 материал пришёл'
-                            : r?.status === 'ordered' ? ` · 🚚 материал заказан${r.expected ? ` · к ${fmtShort(r.expected)}` : ''}`
-                            : ' · 🛒 ждёт материал'
-                        })()}
+                        {noMat && (() => { const m = itemMat(idx); return m ? ` · ${shopMaterialLabel(m)}` : '' })()}
                       </p>
                     </div>
                     <button onClick={() => onNoMatItem(orderId, idx)} title={noMatItems.includes(idx) ? 'Материал пришёл' : 'Нет материала на эту деталь'}

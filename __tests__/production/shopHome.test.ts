@@ -24,6 +24,14 @@ describe('главная цеха', () => {
     expect(h.my).toMatchObject({ scope: 'mine', open: 4, inProgress: 1, problems: 1 })
   })
 
+  it('мои задачи — только по живым заказам: уехавший и незапущенный не считаются', () => {
+    const h = run(
+      [task(1, 'queued'), task(2, 'queued'), task(3, 'queued'), task(4, 'queued')],
+      [order(1), order(2, { stages: { shipped: '2026-09-10' } }), order(3, {}, { launched_at: null })],
+    )
+    expect(h.my.open).toBe(1)
+  })
+
   it('без станций — весь цех', () => {
     const h = run([task(1, 'queued'), task(1, 'queued', { station: 'packaging' })], [order(1)], { id: 'owner', stations: null })
     expect(h.my).toMatchObject({ scope: 'shop', open: 2 })

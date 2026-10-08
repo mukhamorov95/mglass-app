@@ -20,6 +20,44 @@ export function materialStatus(notes: unknown): MaterialStatus | null {
   return s === 'ready' || s === 'needed' ? s : null
 }
 
+// Статусы material_status, которые значат «заказан у поставщика» — пишет закупщик
+// (/purchasing, канбан закупок). Один список на закупку и цех.
+export const MATERIAL_ORDERED: ReadonlySet<string> = new Set(['ordered', 'invoice_received', 'paid', 'shipped'])
+
+export type ShopMaterialState = 'needed' | 'ordered' | 'arrived'
+export type ShopMaterial = { state: ShopMaterialState; expected: string | null }
+// Последняя заявка цеха на этот заказ/деталь (shop_purchase_requests): need → ordered → arrived.
+export type ShopRequestLite = { status: string; expected: string | null }
+
+// Плашка у резчика: нужно / заказан к <дата> / есть. Цех жмёт «Нет мат.» —
+// material_status = 'needed' и заявка закупщику. Закупщик пишет то же поле
+// («заказан», «принят»), и «нужно» затирается — поэтому ожидание цеха держится на его
+// заявке, пока цех сам не нажмёт «Пришёл» (тогда 'ready', и плашки нет).
+export function shopMaterial(materialStatus: unknown, req?: ShopRequestLite | null): ShopMaterial | null {
+  const s = typeof materialStatus === 'string' ? materialStatus : ''
+  if (s === 'needed') {
+    if (req?.status === 'arrived') return { state: 'arrived', expected: null }
+    if (req?.status === 'ordered') return { state: 'ordered', expected: req.expected ?? null }
+    return { state: 'needed', expected: null }
+  }
+  if (!req) return null
+  if (s === 'received' || (req.status === 'arrived' && MATERIAL_ORDERED.has(s))) return { state: 'arrived', expected: null }
+  if (MATERIAL_ORDERED.has(s)) return { state: 'ordered', expected: req.expected ?? null }
+  return null
+}
+
+// '2026-10-09' → '09.10'. Дата в заявке — колонка date, без часового пояса.
+const ddmm = (d: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d); return m ? `${m[3]}.${m[2]}` : null }
+
+export function shopMaterialLabel(m: ShopMaterial): string {
+  if (m.state === 'arrived') return '📦 материал есть'
+  if (m.state === 'ordered') {
+    const d = m.expected ? ddmm(m.expected) : null
+    return d ? `🚚 заказан к ${d}` : '🚚 заказан, срок не назван'
+  }
+  return '🛒 материал нужен'
+}
+
 export function isUrgent(notes: unknown): boolean {
   return parseNotes(notes).urgent === true
 }

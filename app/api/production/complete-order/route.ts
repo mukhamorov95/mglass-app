@@ -3,7 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireRole } from '@/lib/apiAuth'
 import { actorName, buildTaskUpdate } from '@/lib/production/executor'
-import { pickFinalTasks, type ClosableTask } from '@/lib/production/completeOrder'
+import { pickFinalTasks, canCloseWholeOrder, type ClosableTask } from '@/lib/production/completeOrder'
 import { cascadePriorStages } from '@/lib/productionCascade'
 import { consumeCutting, loadCascadedTasks } from '@/lib/production/consumeBridge'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
@@ -42,10 +42,9 @@ export async function POST(req: NextRequest) {
   // единственный, кто физически видит, что заказ собран. Кнопку на экране мы
   // прячем, но прятать — не значит запрещать: без этой проверки любой рабочий
   // закрывает чужие этапы запросом (решение владельца 28.08).
+  // Та же функция решает, показывать ли кнопку на экране «Мои задачи».
   const p = prof as { name: string | null; role: string | null; production_stations: string[] | null } | null
-  const stations = p?.production_stations ?? []
-  const isOwnerRole = p?.role === 'admin' || p?.role === 'ceo'
-  if (!isOwnerRole && !stations.includes('packaging')) {
+  if (!canCloseWholeOrder(p?.role, p?.production_stations)) {
     return NextResponse.json({ error: 'Закрыть заказ целиком может только упаковщик' }, { status: 403 })
   }
   const all = (rows ?? []) as (ClosableTask & { started_at: string | null; assigned_to: string | null; started_by: string | null; stage_key: string })[]

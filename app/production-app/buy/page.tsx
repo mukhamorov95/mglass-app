@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
+import { toast } from '@/lib/toast'
 
 type SpeechRec = {
   start: () => void; stop: () => void; lang: string; continuous: boolean; interimResults: boolean
@@ -76,7 +77,7 @@ export default function BuyPage() {
     if (recording) { recRef.current?.stop(); return }
     const W = window as unknown as { webkitSpeechRecognition?: new () => SpeechRec; SpeechRecognition?: new () => SpeechRec }
     const Ctor = W.SpeechRecognition ?? W.webkitSpeechRecognition
-    if (!Ctor) { alert('Голосовой ввод не поддерживается этим браузером. Введите вручную.'); return }
+    if (!Ctor) { toast.info('Голосовой ввод не поддерживается этим браузером', { detail: 'Введите вручную.' }); return }
     const rec = new Ctor()
     rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = false
     let acc = ''

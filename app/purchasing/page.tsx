@@ -14,6 +14,7 @@ type QueueOrder = {
   updatedAt: string | null; updatedByName: string | null
   cut: boolean; pieces: number; netM2: number; materials: string[]
   po: { id: number; supplier: string } | null
+  shopWaiting: boolean; shopWaitingSince: string | null
 }
 type SupplierOrder = {
   id: number; supplier: string; invoice: string | null; amount: number | null; status: string
@@ -23,7 +24,7 @@ type PoForm = { ids: number[]; supplierName: string; amount: string; invoice: st
 type Data = {
   queue: QueueOrder[]
   frontier: { lastId: number | null; gaps: number[]; after: number[] }
-  counts: { active: number; cut: number; toOrder: number }
+  counts: { active: number; cut: number; toOrder: number; shopWaiting: number }
   needs: NeedRow[]
   unknown: UnknownMaterial[]
   resolved: { from: string; to: string; thickness: number; pieces: number; m2: number; orders: number[] }[]
@@ -44,6 +45,12 @@ const STATE_UI: Record<SupplyState, { label: string; on: string; dot: string }> 
   in_stock: { label: 'Есть', on: 'bg-emerald-50 border-emerald-300 text-emerald-700', dot: 'bg-emerald-500' },
 }
 const ORDER: SupplyState[] = ['not_ordered', 'ordered', 'in_stock']
+
+// Отметка в заказе записалась, а заявка цеха за ней не пошла — у резчика плашка отстанет.
+function shopFailedText(list: { id: number; error: string }[] | undefined): string {
+  if (!list?.length) return ''
+  return `цех не увидит отметку по заказам ${list.map(f => f.id).join(', ')}: ${list[0].error}`
+}
 
 export default function PurchasingPage() {
   const [d, setD] = useState<Data | null>(null)
@@ -73,7 +80,11 @@ export default function PurchasingPage() {
       })
       const j = await r.json().catch(() => null)
       if (!r.ok || !j) { setMsg(j?.error ?? 'Не сохранилось'); return }
-      if (j.failed?.length) setMsg(`Не сохранились: ${j.failed.map((f: { id: number }) => f.id).join(', ')}`)
+      const problems = [
+        j.failed?.length ? `Не сохранились: ${j.failed.map((f: { id: number }) => f.id).join(', ')}` : '',
+        shopFailedText(j.shopFailed),
+      ].filter(Boolean)
+      if (problems.length) setMsg(problems.join(' · '))
       setPicked(new Set())
       await load(withCut)
     } finally { setBusy(false) }
@@ -102,6 +113,7 @@ export default function PurchasingPage() {
       const parts = [`Заказ поставщику №${j.purchaseOrderId} заведён, отмечено «заказан»: ${j.marked.length}`]
       if (j.skipped?.length) parts.push(`пропущено ${j.skipped.length} (уже заказаны или нарезаны)`)
       if (j.failed?.length) parts.push(`не отметились: ${j.failed.map((f: { id: number }) => f.id).join(', ')}`)
+      if (j.shopFailed?.length) parts.push(shopFailedText(j.shopFailed))
       setMsg(parts.join(' · '))
       setForm(null); setPicked(new Set())
       await load(withCut)
@@ -119,12 +131,14 @@ export default function PurchasingPage() {
       if (!r.ok || !j) { setMsg(j?.error ?? 'Не сохранилось'); return }
       const parts = [`Материал по заказу поставщику №${poId} пришёл, «есть»: ${j.marked.length}`]
       if (j.skipped?.length) parts.push(`не тронуты ${j.skipped.length} — у них уже стояла другая отметка`)
+      if (j.shopFailed?.length) parts.push(shopFailedText(j.shopFailed))
       setMsg(parts.join(' · '))
       await load(withCut)
     } finally { setBusy(false) }
   }
 
   const byId = useMemo(() => new Map((d?.queue ?? []).map(o => [o.id, o])), [d])
+  const shopWaiting = useMemo(() => (d?.queue ?? []).filter(o => o.shopWaiting && !o.cut), [d])
   const last = d?.frontier.lastId != null ? byId.get(d.frontier.lastId) : null
 
   if (!d) {
@@ -144,6 +158,17 @@ export default function PurchasingPage() {
         </div>
 
         {msg && <p className="text-[12px] text-[#c2410c]">{msg}</p>}
+
+        {/* Цех нажал «Нет мат.» — эти заказы стоят у станка, их первыми */}
+        {shopWaiting.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <p className="text-[13.5px] font-semibold text-red-800">🛠 Цех ждёт материал · {shopWaiting.length}</p>
+            <p className="text-[12px] text-red-700 mt-0.5">
+              {shopWaiting.map(o => `${o.number}${o.shopWaitingSince ? ` (с ${dm(o.shopWaitingSince)})` : ''}`).join(', ')}.
+              {' '}Отметка «заказан» с датой покажет резчику, когда ждать; «есть» — что можно резать.
+            </p>
+          </div>
+        )}
 
         {/* Граница: ответ на «на какой заказ мы последний раз заказывали материал» */}
         <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
@@ -342,7 +367,10 @@ export default function PurchasingPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-[#e4e4e0] flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <p className="text-[14px] font-semibold text-[#111110]">Заказы по порядку добавления · {d.queue.length}</p>
+              <p className="text-[14px] font-semibold text-[#111110]">
+                Заказы по порядку добавления · {d.queue.length}
+                {d.counts.shopWaiting > 0 && <span className="ml-2 text-[11px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700">цех ждёт · {d.counts.shopWaiting}</span>}
+              </p>
               <p className="text-[12px] text-[#9a9a95] mt-0.5">
                 {withCut ? 'Все заказы с 07.07, включая нарезанные.' : `Ещё не нарезанные. Нарезанных — ${d.counts.cut}: материал на них уже был.`}
               </p>
@@ -369,7 +397,7 @@ export default function PurchasingPage() {
           <div className="divide-y divide-[#f0f0ec]">
             {d.queue.map(o => (
               <div key={o.id}>
-                <div className={`px-4 py-2.5 flex items-center gap-3 flex-wrap ${d.frontier.gaps.includes(o.id) ? 'bg-amber-50/50' : ''}`}>
+                <div className={`px-4 py-2.5 flex items-center gap-3 flex-wrap ${o.shopWaiting && !o.cut ? 'bg-red-50/60 border-l-4 border-red-400' : d.frontier.gaps.includes(o.id) ? 'bg-amber-50/50' : ''}`}>
                   <input type="checkbox" checked={picked.has(o.id)}
                     onChange={() => setPicked(prev => { const n = new Set(prev); if (n.has(o.id)) n.delete(o.id); else n.add(o.id); return n })} />
                   <div className="min-w-0 flex-1">
@@ -379,6 +407,11 @@ export default function PurchasingPage() {
                         : <span className="font-semibold">{o.number}</span>}
                       <span className="text-[#9a9a95]"> · {dm(o.createdAt)} · </span>{o.client}
                       {o.cut && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-[#f0f0ec] text-[#6b6b66]">нарезан</span>}
+                      {o.shopWaiting && !o.cut && (
+                        <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                          цех ждёт{o.shopWaitingSince ? ` с ${dm(o.shopWaitingSince)}` : ''}
+                        </span>
+                      )}
                       {o.po && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">в заказе поставщику №{o.po.id} · {o.po.supplier}</span>}
                     </p>
                     <p className="text-[11.5px] text-[#9a9a95] truncate">

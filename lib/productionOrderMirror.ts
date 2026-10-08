@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { notifyOrderManager } from '@/lib/b2b/notifyManager'
+import { packagedNotice, orderLink } from '@/lib/production/managerNotices'
 
 // Третье зеркало: когда все позиционные задачи этапа (production_tasks) закрыты,
 // проставляем order-level флаг notes.stages, который читают /b2b-orders и Сводка.
@@ -54,6 +56,13 @@ export function pickOrderStageFlags(
 // изменилось» от «заказ только что закрылся». На переходе `packaged` в волне V
 // повиснет списание материала со склада (П19), и повесить его на «зеркало
 // отработало» вместо «флаг сменился» означало бы звать склад на каждую отметку.
+//
+// На переходе `packaged` менеджеру уходит личное сообщение «упакован — согласуйте
+// отгрузку» (маршрут «Порядок по всей системе», этап 2): до этого он узнавал об упаковке
+// случайно, и заказы лежали упакованными неделями. Ровно один раз на переход — флаг
+// ставит mark_order_stages_forward, который отвечает, какие ключи поставил именно этот
+// вызов (две быстрые отметки цеха по одному заказу иначе обе «закрыли бы» заказ).
+// Сбой отправки отметку цеха не роняет.
 export async function mirrorOrderStages(
   svc: SupabaseClient,
   orderId: number,
@@ -64,7 +73,7 @@ export async function mirrorOrderStages(
     .eq('order_id', orderId)
   if (!tasks || tasks.length === 0) return []
 
-  const { data: order } = await svc.from('b2b_orders').select('notes').eq('id', orderId).single()
+  const { data: order } = await svc.from('b2b_orders').select('notes, custom_number, client_name').eq('id', orderId).single()
   if (!order) return []
   const notes = typeof order.notes === 'string'
     ? (() => { try { return JSON.parse(order.notes) } catch { return {} } })()
@@ -72,10 +81,30 @@ export async function mirrorOrderStages(
   const current = (notes.stages ?? {}) as Record<string, unknown>
 
   const patch = pickOrderStageFlags(tasks as MirrorTask[], current, new Date().toISOString().slice(0, 10))
-  const flags = Object.keys(patch)
-  if (flags.length === 0) return []
+  if (Object.keys(patch).length === 0) return []
 
-  const { error } = await svc.rpc('mark_order_stages', { p_order_id: orderId, p_stages: patch })
-  if (error) return []
+  const flags = await markForward(svc, orderId, patch)
+
+  if (flags.includes('packaged')) {
+    try {
+      await notifyOrderManager(orderId, packagedNotice({ id: orderId, custom_number: order.custom_number, client_name: order.client_name }), orderLink(orderId))
+    } catch { /* уведомление — побочный эффект, отметка цеха уже записана */ }
+  }
   return flags
+}
+
+// Запись «только вперёд». Пока миграция 20261008_mark_order_stages_forward не применена —
+// как раньше: безусловная mark_order_stages, а поставленными считаем свой расчёт (тогда
+// «ровно один раз» держится на том, что две отметки по заказу редко совпадают до секунды).
+async function markForward(svc: SupabaseClient, orderId: number, patch: Record<string, string>): Promise<string[]> {
+  const { data, error } = await svc.rpc('mark_order_stages_forward', { p_order_id: orderId, p_stages: patch })
+  if (!error) return Array.isArray(data) ? data.filter((k): k is string => typeof k === 'string') : []
+  if (!isMissingFunction(error)) return []
+  const { error: legacyErr } = await svc.rpc('mark_order_stages', { p_order_id: orderId, p_stages: patch })
+  return legacyErr ? [] : Object.keys(patch)
+}
+
+// 42883 — функции нет в базе, PGRST202 — её нет в кэше схемы PostgREST.
+export function isMissingFunction(error: { code?: string | null; message?: string | null }): boolean {
+  return error.code === '42883' || error.code === 'PGRST202' || /could not find the function/i.test(error.message ?? '')
 }

@@ -3,7 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import * as tg from '@/lib/telegram'
 import { readMemory, writeMemory, writeLog, startRun, finishRun, failRun } from '@/lib/agentMemory'
-import { deadlineOf } from '@/lib/orderFlags'
+import { deadlineOf, PROD_SINCE } from '@/lib/orderFlags'
+import { readPaged, readIn } from '@/lib/production/paged'
+import { isLiveShopOrder } from '@/lib/production/liveOrder'
+import { mskDayKey } from '@/lib/time'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -33,34 +36,43 @@ export async function GET(req: Request) {
     // Реальный цех живёт в production_tasks (B2B, строка = деталь×этап).
     // До 20.07 агент фильтровал orders по статусам confirmed/in_production/ready,
     // которых в таблице не существует, — и месяцами рапортовал «нет заказов».
-    const { data: taskRows } = await supabase
-      .from('production_tasks')
-      .select('order_id, status, completed_at')
-    const tasks = (taskRows ?? []) as { order_id: number; status: string; completed_at: string | null }[]
+    //
+    // Страницами (lib/production/paged.ts): задач 6600+, PostgREST молча отдавал первую
+    // тысячу, и агент считал цех по случайной её части. Читаем только нужное: открытые
+    // задачи и закрытые сегодня (МСК), а не всю историю.
+    const todayStart = new Date(`${mskDayKey(now)}T00:00:00+03:00`)
+    const [openRows, doneRows] = await Promise.all([
+      readPaged<{ order_id: number; status: string }>((from, to) => supabase.from('production_tasks')
+        .select('id, order_id, status').neq('status', 'done').order('id').range(from, to)),
+      readPaged<{ id: number }>((from, to) => supabase.from('production_tasks')
+        .select('id').eq('status', 'done').gte('completed_at', todayStart.toISOString()).order('id').range(from, to)),
+    ])
+    const doneToday = doneRows.length
+
+    // Цех — это живые заказы: с начала производственного контура, не в архиве, не уехавшие.
+    // Задачи отгруженных и архивных заказов (на 07.10 — 59 из 1380 открытых) и старых,
+    // до PROD_SINCE, — не работа цеха, а неснятые хвосты; агент рапортовал их как «стоит».
+    const candidateIds = [...new Set(openRows.map(t => t.order_id))]
+    const orderRows = await readIn<{ id: number; custom_number: string | null; client_name: string | null; notes: unknown; archived_at: string | null }, number>(
+      candidateIds, (part, from, to) => supabase.from('b2b_orders')
+        .select('id, custom_number, client_name, notes, archived_at')
+        .in('id', part).gte('created_at', PROD_SINCE).order('id').range(from, to))
+    const liveOrders = orderRows.filter(o => isLiveShopOrder(o))
+    const liveIds = new Set(liveOrders.map(o => o.id))
+    const openTasks = openRows.filter(t => liveIds.has(t.order_id))
 
     const openByOrder = new Map<number, number>()
     let problemCount = 0
-    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
-    let doneToday = 0
-    for (const t of tasks) {
-      if (t.status !== 'done') {
-        openByOrder.set(t.order_id, (openByOrder.get(t.order_id) ?? 0) + 1)
-        if (t.status === 'problem') problemCount++
-      } else if (t.completed_at && new Date(t.completed_at) >= todayStart) doneToday++
+    for (const t of openTasks) {
+      openByOrder.set(t.order_id, (openByOrder.get(t.order_id) ?? 0) + 1)
+      if (t.status === 'problem') problemCount++
     }
     const shopOrderIds = [...openByOrder.keys()]
 
     // Дедлайны отгрузки — из notes заказа (единый getDeadline-приоритет)
-    let overdueB2b: { id: number; custom_number: string | null; client_name: string | null }[] = []
-    if (shopOrderIds.length) {
-      const { data: b2b } = await supabase
-        .from('b2b_orders')
-        .select('id, custom_number, client_name, notes')
-        .in('id', shopOrderIds)
-      const todayISO = now.toISOString().slice(0, 10)
-      overdueB2b = ((b2b ?? []) as { id: number; custom_number: string | null; client_name: string | null; notes: unknown }[])
-        .filter(o => { const d = deadlineOf(o.notes); return d != null && d.slice(0, 10) < todayISO })
-    }
+    const todayISO = now.toISOString().slice(0, 10)
+    const overdueB2b = liveOrders
+      .filter(o => { const d = deadlineOf(o.notes); return d != null && d.slice(0, 10) < todayISO })
 
     // Розница (orders) — реальные статусы конечного автомата
     const { data: retail } = await supabase
@@ -87,7 +99,7 @@ export async function GET(req: Request) {
 
 ДАННЫЕ (источник — реальные задачи цеха production_tasks):
 - Заказов в цехе (есть открытые этапы): ${shopOrderIds.length}
-- Открытых этапов всего: ${tasks.filter(t => t.status !== 'done').length}
+- Открытых этапов всего: ${openTasks.length}
 - Этапов с проблемой (андон): ${problemCount}
 - Этапов закрыто сегодня: ${doneToday}
 - Просрочена отгрузка: ${overdueB2b.length} заказов${overdueB2b.length ? ` (${overdueB2b.slice(0, 5).map(o => o.custom_number?.trim() || `#${o.id}`).join(', ')})` : ''}

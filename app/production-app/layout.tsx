@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { getUserProfile } from '@/lib/getRole'
 import { hasB2BSalesScope } from '@/lib/b2bScope'
 import RegisterSW from './RegisterSW'
+import { ProductionRoleProvider } from '@/components/ProductionTabs'
 
 // Отдельный манифест цеха: установка открывает прямо /production-app.
 export const metadata: Metadata = {
@@ -20,5 +21,5 @@ export default async function ProductionAppLayout({ children }: { children: Reac
   const scopedBuyer = role === 'buyer' && hasB2BSalesScope(profile?.permissions)
   const allowed = !!role && ((ALLOWED_ROLES as readonly string[]).includes(role) || scopedBuyer)
   if (!allowed) redirect('/')
-  return <><RegisterSW />{children}</>
+  return <><RegisterSW /><ProductionRoleProvider role={role ?? null}>{children}</ProductionRoleProvider></>
 }
