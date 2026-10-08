@@ -6,7 +6,7 @@ import ProductionTabs from '@/components/ProductionTabs'
 import TelegramLinkButton from '@/components/shopBoard/TelegramLinkButton'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { confirmDialog } from '@/lib/dialog'
-import { COLUMNS, dueFromInput, dueLabel, isOverdue, mskDateTime, type CardAction } from '@/lib/shopBoard/model'
+import { COLUMNS, dueFromInput, dueLabel, dueToInputs, isOverdue, mskDateTime, type CardAction, type CardEdit } from '@/lib/shopBoard/model'
 import type { BoardCardView, BoardView, OrderRef } from '@/lib/shopBoard/server'
 import type { OrderOption } from '@/lib/shopBoard/server'
 
@@ -89,6 +89,14 @@ export default function ShopBoard({ tv }: { tv: boolean }) {
     return !!r
   }
 
+  async function edit(card: BoardCardView, change: CardEdit): Promise<boolean> {
+    const r = await sendOrToast('Не сохранилось', `/api/shop-board/${card.id}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edit: change }),
+    })
+    if (r) reload()
+    return !!r
+  }
+
   // «Сейчас» — момент последней загрузки: табло само обновляется раз в 30–60 с.
   const now = updatedAt ?? 0
   const loaded = data && !data.missing ? (data as Loaded) : null
@@ -162,7 +170,7 @@ export default function ShopBoard({ tv }: { tv: boolean }) {
                     )}
                     {cards.map(c => (
                       <CardView key={c.id} card={c} tv={tv} now={now} me={loaded.me} busy={busy === c.id}
-                        onAct={a => act(c, a)} onComment={t => comment(c, t)} />
+                        onAct={a => act(c, a)} onComment={t => comment(c, t)} onEdit={ch => edit(c, ch)} />
                     ))}
                   </div>
                 </section>
@@ -231,16 +239,19 @@ function OrderLine({ o, tv, now }: { o: OrderRef; tv: boolean; now: number }) {
   )
 }
 
-function CardView({ card, tv, now, me, busy, onAct, onComment }: {
+function CardView({ card, tv, now, me, busy, onAct, onComment, onEdit }: {
   card: BoardCardView; tv: boolean; now: number; me: Loaded['me']; busy: boolean
-  onAct: (a: CardAction) => void; onComment: (t: string) => Promise<boolean>
+  onAct: (a: CardAction) => void; onComment: (t: string) => Promise<boolean>; onEdit: (ch: CardEdit) => Promise<boolean>
 }) {
   const [commenting, setCommenting] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
   const late = isOverdue(card, now)
   const due = dueLabel(card, now)
   const canClose = me.isOwner || card.created_by === me.id
-  const comments = card.events.filter(e => e.kind === 'comment').slice(-3)
+  const canEdit = canClose // то же правило, что canEditCard на сервере: поставивший или владелец
+  // Комментарии и правки — одна лента: «кто что сказал и что поменял».
+  const comments = card.events.filter(e => e.kind === 'comment' || e.kind === 'edited').slice(-3)
   const alarm = card.hot || late
 
   return (
@@ -271,7 +282,7 @@ function CardView({ card, tv, now, me, busy, onAct, onComment }: {
         <div className={`mt-2 space-y-1 ${tv ? 'text-[16px]' : 'text-[12px]'}`}>
           {comments.map(e => (
             <p key={e.id} className={tv ? 'text-[#d6d6d2]' : 'text-[#3b3b38]'}>
-              💬 <span className="font-medium">{e.by_name ?? '—'}:</span> {e.text}
+              {e.kind === 'edited' ? '✏️' : '💬'} <span className="font-medium">{e.by_name ?? '—'}:</span> {e.text}
             </p>
           ))}
         </div>
@@ -291,8 +302,17 @@ function CardView({ card, tv, now, me, busy, onAct, onComment }: {
           {canClose && (
             <button disabled={busy} onClick={() => onAct('close')} className="text-[12px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66]">Закрыть</button>
           )}
-          <button onClick={() => setCommenting(v => !v)} className="text-[12px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66]">💬</button>
+          {canEdit && (
+            <button onClick={() => { setEditing(v => !v); setCommenting(false) }} title="Горит и срок"
+              className="text-[12px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66]">✏️</button>
+          )}
+          <button onClick={() => { setCommenting(v => !v); setEditing(false) }} className="text-[12px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66]">💬</button>
         </div>
+      )}
+
+      {editing && !tv && (
+        <EditCard card={card} onCancel={() => setEditing(false)}
+          onSave={async ch => { if (await onEdit(ch)) { setEditing(false); toast.success('Поручение изменено', { detail: 'Видно на табло и в ленте сразу; поставившему, взявшему и менеджеру заказа ушло уведомление' }) } }} />
       )}
 
       {commenting && !tv && (
@@ -307,6 +327,57 @@ function CardView({ card, tv, now, me, busy, onAct, onComment }: {
         </form>
       )}
     </div>
+  )
+}
+
+// Правка «Горит» и срока. Шлём только то, что поменяли, — сервер пишет это в журнал словами.
+function EditCard({ card, onSave, onCancel }: { card: BoardCardView; onSave: (ch: CardEdit) => Promise<void>; onCancel: () => void }) {
+  const init = dueToInputs(card.due_at)
+  const [hot, setHot] = useState(card.hot)
+  const [date, setDate] = useState(init.date)
+  const [time, setTime] = useState(init.time)
+  const [err, setErr] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    const ch: CardEdit = {}
+    if (hot !== card.hot) ch.hot = hot
+    if (date !== init.date || time !== init.time) {
+      if (!date) ch.due_at = null
+      else {
+        const due = dueFromInput(date, time)
+        if (!due) { setErr('Срок не распознан'); return }
+        ch.due_at = due
+      }
+    }
+    if (!Object.keys(ch).length) { setErr('Ничего не изменилось'); return }
+    setErr(null)
+    setSaving(true)
+    await onSave(ch)
+    setSaving(false)
+  }
+
+  return (
+    <form onSubmit={save} className="mt-2 rounded-lg border border-[#e4e4e0] bg-[#fafaf9] p-2.5 space-y-2">
+      <label className="flex items-center gap-2 text-[13px]">
+        <input type="checkbox" checked={hot} onChange={e => setHot(e.target.checked)} className="w-4 h-4" />
+        🔥 Горит
+      </label>
+      <div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="text-[13px] px-2 py-1.5 rounded-lg border border-[#e4e4e0] bg-white" />
+          <input type="time" value={time} onChange={e => setTime(e.target.value)} className="text-[13px] px-2 py-1.5 rounded-lg border border-[#e4e4e0] bg-white" />
+          {date && <button type="button" onClick={() => { setDate(''); setTime('') }} className="text-[12px] underline text-[#6b6b66]">без срока</button>}
+        </div>
+        <p className="text-[11px] text-[#9a9a95] mt-0.5">по Москве; без времени — до 18:00</p>
+      </div>
+      {err && <p className="text-[12px] text-red-700">{err}</p>}
+      <div className="flex gap-1.5">
+        <button disabled={saving} className="text-[13px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white disabled:opacity-50">{saving ? 'Сохраняю…' : 'Сохранить'}</button>
+        <button type="button" onClick={onCancel} className="text-[13px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66]">Отмена</button>
+      </div>
+    </form>
   )
 }
 

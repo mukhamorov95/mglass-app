@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   canCreateCard, canCloseCard, nextStatus, isOverdue, sortCards, dueLabel, dueFromInput,
-  parseCardInput, orderProgress, isMissingTable, boardRecipients, boardMessage, type BoardCard,
+  parseCardInput, orderProgress, isMissingTable, boardRecipients, boardMessage,
+  canEditCard, parseCardEdit, editSummary, dueToInputs, type BoardCard,
 } from '@/lib/shopBoard/model'
 
 const NOW = Date.parse('2026-10-08T09:00:00Z') // 12:00 МСК
@@ -148,5 +149,39 @@ describe('уведомления табло', () => {
     expect(t).toContain('Заказ: 05522 ГлассДекор')
     expect(t).toContain('Срок: до 09.10 12:00')
     expect(boardMessage('comment', card(), 'Никита', [], NOW, 'закалка <в 10>')).toContain('закалка &lt;в 10&gt;')
+  })
+})
+
+describe('правка «Горит» и срока', () => {
+  it('правит поставивший или владелец', () => {
+    expect(canEditCard(card(), 'owner', 'manager')).toBe(true)
+    expect(canEditCard(card(), 'u2', 'admin')).toBe(true)
+    expect(canEditCard(card(), 'u2', 'production')).toBe(false)
+  })
+  it('вход: горит, срок, снять срок; пустое — ошибка', () => {
+    expect(parseCardEdit({ hot: true })).toEqual({ hot: true })
+    expect(parseCardEdit({ due_at: '2026-10-10T15:00:00Z' })).toEqual({ due_at: '2026-10-10T15:00:00.000Z' })
+    expect(parseCardEdit({ due_at: null })).toEqual({ due_at: null })
+    expect(parseCardEdit({})).toEqual({ error: 'Нечего менять' })
+    expect(parseCardEdit({ hot: 'да' })).toHaveProperty('error')
+    expect(parseCardEdit({ due_at: 'завтра' })).toEqual({ error: 'Срок не распознан' })
+  })
+  it('что изменилось — словами, по Москве; без изменений — пусто', () => {
+    const c = card({ hot: false, due_at: '2026-10-09T09:00:00Z' })
+    expect(editSummary(c, { hot: true })).toBe('🔥 горит')
+    expect(editSummary(c, { due_at: '2026-10-10T15:00:00Z' })).toBe('срок: до 10.10 18:00 (было 09.10 12:00)')
+    expect(editSummary(c, { hot: true, due_at: null })).toBe('🔥 горит, срок снят')
+    expect(editSummary(c, { hot: false, due_at: '2026-10-09T09:00:00.000Z' })).toBe('')
+    expect(editSummary(card(), { due_at: '2026-10-10T15:00:00Z' })).toBe('срок: до 10.10 18:00')
+  })
+  it('срок в поля формы и обратно', () => {
+    expect(dueToInputs('2026-10-09T09:00:00Z')).toEqual({ date: '2026-10-09', time: '12:00' })
+    expect(dueFromInput(dueToInputs('2026-10-09T09:00:00Z').date, dueToInputs('2026-10-09T09:00:00Z').time)).toBe('2026-10-09T09:00:00.000Z')
+    expect(dueToInputs(null)).toEqual({ date: '', time: '' })
+  })
+  it('уведомление о правке — поставившему, взявшему, менеджерам заказа', () => {
+    const people = { shop: ['s1'], owners: ['owner'], boardUsers: [], orderManagers: ['m1'] }
+    expect(boardRecipients('edited', card({ taken_by: 's1' }), 'owner', people).sort()).toEqual(['m1', 's1'])
+    expect(boardMessage('edited', card({ hot: true }), 'Влад', [], NOW, '🔥 горит')).toContain('✏️ Влад изменил: 🔥 Отгрузить 05522\n🔥 горит')
   })
 })

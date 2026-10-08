@@ -32,7 +32,7 @@ export type BoardCard = {
 export type BoardEvent = {
   id: number
   card_id: number
-  kind: 'created' | 'taken' | 'done' | 'reopened' | 'closed' | 'comment'
+  kind: 'created' | 'taken' | 'done' | 'reopened' | 'closed' | 'comment' | 'edited'
   text: string | null
   by_name: string | null
   created_at: string
@@ -59,6 +59,10 @@ export function canCreateCard(role: string | null | undefined, permissions?: { s
 export function canCloseCard(card: Pick<BoardCard, 'created_by'>, userId: string | null, role: string | null | undefined): boolean {
   return OWNER.has(role ?? '') || (userId != null && card.created_by === userId)
 }
+
+// Править «Горит» и срок — тем же, кто закрывает: поставивший или владелец. Приоритет
+// поручения задаёт тот, кто его поставил, а не тот, кто делает.
+export const canEditCard = canCloseCard
 
 // Куда переходит карточка. null — так нельзя (уже закрыта, уже взята и т. п.).
 export function nextStatus(card: Pick<BoardCard, 'status' | 'taken_by'>, action: CardAction): CardStatus | null {
@@ -125,6 +129,47 @@ export function dueFromInput(date: string, time?: string | null): string | null 
   const t = time && /^\d{2}:\d{2}$/.test(time) ? time : '18:00'
   const ms = Date.parse(`${date}T${t}:00+03:00`)
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null
+}
+
+// Срок из базы → поля формы по Москве (обратное dueFromInput).
+export function dueToInputs(iso: string | null): { date: string; time: string } {
+  if (!iso) return { date: '', time: '' }
+  const p = mskParts(Date.parse(iso))
+  return { date: `${p.y}-${pad(p.mo)}-${pad(p.d)}`, time: `${pad(p.h)}:${pad(p.mi)}` }
+}
+
+export type CardEdit = { hot?: boolean; due_at?: string | null }
+
+// Правка: «Горит» и/или срок. due_at: null — снять срок.
+export function parseCardEdit(body: unknown): CardEdit | { error: string } {
+  const b = (body ?? {}) as Record<string, unknown>
+  const out: CardEdit = {}
+  if ('hot' in b) {
+    if (typeof b.hot !== 'boolean') return { error: 'Не понял «Горит»' }
+    out.hot = b.hot
+  }
+  if ('due_at' in b) {
+    if (b.due_at === null || b.due_at === '') out.due_at = null
+    else {
+      const ms = typeof b.due_at === 'string' ? Date.parse(b.due_at) : NaN
+      if (!Number.isFinite(ms)) return { error: 'Срок не распознан' }
+      out.due_at = new Date(ms).toISOString()
+    }
+  }
+  if (!('hot' in out) && !('due_at' in out)) return { error: 'Нечего менять' }
+  return out
+}
+
+// Что изменилось словами — для журнала карточки и уведомления. Пусто — ничего не изменилось.
+export function editSummary(prev: Pick<BoardCard, 'hot' | 'due_at'>, edit: CardEdit): string {
+  const parts: string[] = []
+  if (edit.hot !== undefined && edit.hot !== prev.hot) parts.push(edit.hot ? '🔥 горит' : 'снял «горит»')
+  if (edit.due_at !== undefined) {
+    const same = (edit.due_at === null && prev.due_at === null)
+      || (edit.due_at !== null && prev.due_at !== null && Date.parse(edit.due_at) === Date.parse(prev.due_at))
+    if (!same) parts.push(edit.due_at === null ? 'срок снят' : `срок: до ${mskDateTime(edit.due_at)}${prev.due_at ? ` (было ${mskDateTime(prev.due_at)})` : ''}`)
+  }
+  return parts.join(', ')
 }
 
 export type CardInput = { title: string; details: string | null; order_ids: number[]; due_at: string | null; hot: boolean }
@@ -194,6 +239,7 @@ export function boardRecipients(
     kind === 'created' ? [...people.shop, ...people.owners, ...people.boardUsers, ...people.orderManagers]
     : kind === 'comment' ? [card.created_by, card.taken_by]
     : kind === 'closed' ? [card.taken_by]
+    : kind === 'edited' ? [card.created_by, card.taken_by, ...people.orderManagers]
     : [card.created_by, ...people.orderManagers]
   return [...new Set(list.filter((id): id is string => !!id && id !== actorId))]
 }
@@ -220,5 +266,6 @@ export function boardMessage(
     case 'reopened': return `↩️ Вернули в работу: ${title}${ordersLine}\nВернул: ${who}`
     case 'closed': return `📕 Закрыто: ${title}\nЗакрыл: ${who}`
     case 'comment': return `💬 ${who} — «${title}»:\n${esc(comment ?? '')}`
+    case 'edited': return `✏️ ${who} изменил: ${title}${ordersLine}\n${esc(comment ?? '')}`
   }
 }
