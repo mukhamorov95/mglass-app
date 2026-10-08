@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { PROD_SINCE, parseNotes, materialStatus } from '@/lib/orderFlags'
+import { PROD_SINCE, parseNotes, materialStatus, isOrderCut } from '@/lib/orderFlags'
+import { readPaged, readIn, errorText } from '@/lib/production/paged'
 import { materialLabelShort } from '@/lib/materialLabel'
 
 // «Нужен материал» — сводка закупки: все заказы, где мастер отметил «нет
@@ -21,44 +22,61 @@ const specOf = (it: Item) => {
   return [dims, mat].filter(Boolean).join(' · ')
 }
 
-export default function NeededMaterial() {
+type ReqStatus = Map<string, { status: string; expected: string | null }>
+
+async function loadNeeded(): Promise<{ orders: Order[]; reqStatus: ReqStatus }> {
   const sb = createClient()
+  const all = await readPaged<Order>((from, to) => sb.from('b2b_orders')
+    .select('id,custom_number,client_name,items,notes')
+    .gte('created_at', PROD_SINCE)
+    .is('archived_at', null)
+    .not('notes', 'ilike', '%"status":"quote"%')
+    .not('notes', 'ilike', '%"historical":true%')
+    .order('id').range(from, to))
+  const flagged = all.filter(o => {
+    const n = parseNotes(o.notes)
+    const items = Array.isArray(n.material_needed_items) ? (n.material_needed_items as number[]) : []
+    return materialStatus(o.notes) === 'needed' || items.length > 0
+  })
+  // Нарезанный заказ материал уже не ждёт — то же правило, что в закупке и на главной цеха.
+  const cutTasks = await readIn<{ order_id: number }, number>(flagged.map(o => o.id), (part, from, to) =>
+    sb.from('production_tasks').select('id, order_id').eq('stage_key', 'cutting').eq('status', 'done')
+      .in('order_id', part).order('id').range(from, to))
+  const cutByTask = new Set(cutTasks.map(t => Number(t.order_id)))
+  const orders = flagged.filter(o => !isOrderCut(parseNotes(o.notes).stages as Record<string, unknown> | undefined, cutByTask.has(o.id)))
+  const reqs = await readIn<{ b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }, number>(
+    orders.map(o => o.id), (part, from, to) => sb.from('shop_purchase_requests')
+      .select('id,b2b_order_id,item_index,status,expected_date')
+      .in('b2b_order_id', part).order('id', { ascending: true }).range(from, to))
+  const reqStatus: ReqStatus = new Map()
+  for (const r of reqs) reqStatus.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, { status: r.status, expected: r.expected_date })
+  return { orders, reqStatus }
+}
+
+export default function NeededMaterial() {
   const [orders, setOrders] = useState<Order[]>([])
   // Статус закупки: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
-  const [reqStatus, setReqStatus] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
+  const [reqStatus, setReqStatus] = useState<ReqStatus>(new Map())
   const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    try {
-      const { data } = await sb.from('b2b_orders')
-        .select('id,custom_number,client_name,items,notes')
-        .gte('created_at', PROD_SINCE)
-        .is('archived_at', null)
-        .not('notes', 'ilike', '%"status":"quote"%')
-        .not('notes', 'ilike', '%"historical":true%')
-      const all = (data ?? []) as Order[]
-      const marked = all.filter(o => {
-        const n = parseNotes(o.notes)
-        const items = Array.isArray(n.material_needed_items) ? (n.material_needed_items as number[]) : []
-        return materialStatus(o.notes) === 'needed' || items.length > 0
-      })
-      setOrders(marked)
-      if (marked.length) {
-        const { data: reqs } = await sb.from('shop_purchase_requests')
-          .select('id,b2b_order_id,item_index,status,expected_date')
-          .in('b2b_order_id', marked.map(o => o.id))
-          .order('id', { ascending: true })
-        const m = new Map<string, { status: string; expected: string | null }>()
-        for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }[]) {
-          m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, { status: r.status, expected: r.expected_date })
-        }
-        setReqStatus(m)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [sb])
-  useEffect(() => { void load() }, [load])
+  const [tick, setTick] = useState(0)
+  const reload = () => { setLoading(true); setTick(t => t + 1) }
+
+  useEffect(() => {
+    let alive = true
+    loadNeeded().then(r => {
+      if (!alive) return
+      setOrders(r.orders)
+      setReqStatus(r.reqStatus)
+      setErr(null)
+    }).catch(e => {
+      if (alive) setErr(errorText(e))
+    }).finally(() => {
+      if (alive) setLoading(false)
+    })
+    return () => { alive = false }
+  }, [tick])
 
   if (loading) return <div className="px-4 pt-6 text-center text-[13px] text-[#9a9a95]">Загрузка…</div>
 
@@ -84,7 +102,13 @@ export default function NeededMaterial() {
 
   return (
     <div className="px-4 pt-4 space-y-4">
-      {sorted.length === 0 && (
+      {err && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[13px] text-red-800 flex items-center justify-between gap-3">
+          <span>Список не загрузился: {err}</span>
+          <button onClick={reload} className="underline flex-shrink-0">Повторить</button>
+        </div>
+      )}
+      {!err && sorted.length === 0 && (
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
           <p className="text-[14px] text-[#9a9a95]">Отметок «нет материала» нет — материала хватает</p>
           <p className="text-[12px] text-[#b0b0aa] mt-1">Мастер ставит их в «Моих задачах» (на заказ или на деталь) или во вкладке «Проверка материала»</p>

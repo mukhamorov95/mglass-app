@@ -1,5 +1,5 @@
 import { isShipped, orderDeadline, SHIP_MARKS_SINCE, type TodayOrder } from '../b2b/todayPriorities'
-import { isUrgent, materialStatus, parseNotes } from '../orderFlags'
+import { isOrderCut, isUrgent, materialStatus, parseNotes } from '../orderFlags'
 import { stageDayKey } from './dayLists'
 import { mskDayKey } from '../time'
 
@@ -68,7 +68,9 @@ export function shopHome(input: {
 
   // Задачи по заказам: сколько открыто, сколько всего
   const perOrder = new Map<number, { open: number; total: number }>()
+  const cutDone = new Set<number>()
   for (const t of tasks) {
+    if (t.stage_key === 'cutting' && t.status === 'done') cutDone.add(t.order_id)
     const a = perOrder.get(t.order_id) ?? { open: 0, total: 0 }
     a.total++
     if (OPEN.has(t.status)) a.open++
@@ -107,7 +109,8 @@ export function shopHome(input: {
     }
 
     const needItems = Array.isArray(n.material_needed_items) ? (n.material_needed_items as unknown[]).length : 0
-    if (materialStatus(o.notes) === 'needed' || needItems > 0) {
+    // Нарезанный заказ материал уже не ждёт, даже если отметку «нет материала» не сняли.
+    if ((materialStatus(o.notes) === 'needed' || needItems > 0) && !isOrderCut(stages, cutDone.has(o.id))) {
       material.push({ ...base, note: needItems > 0 ? `нет материала на ${needItems} поз.` : 'нет материала на заказ', days: daysLeft })
     }
 

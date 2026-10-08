@@ -64,6 +64,17 @@ describe('главная цеха', () => {
     expect(h.material.rows.map(r => r.note)).toEqual(['нет материала на заказ', 'нет материала на 2 поз.'])
   })
 
+  it('материал — нарезанный заказ не ждёт, даже с неснятой отметкой (то же правило, что в закупке)', () => {
+    const h = run([task(1, 'done'), task(2, 'queued', { stage_key: 'polishing', station: 'polishing' }), task(4, 'queued')], [
+      order(1, { material_status: 'needed' }),
+      order(2, { material_status: 'needed', stages: { cut: '2026-09-10' } }),
+      order(3, { material_needed_items: [0], stages: { packaged: '2026-09-12' } }),
+      order(4, { material_status: 'needed' }),
+    ])
+    expect(h.material.orders).toBe(1)
+    expect(h.material.rows.map(r => r.id)).toEqual([4])
+  })
+
   it('отгрузка — упакован или все этапы закрыты, не отгружен; отгружено сегодня по отметке', () => {
     const h = run([task(1, 'queued'), task(2, 'done'), task(3, 'done')], [
       order(1, { stages: { packaged: '2026-09-12' } }),

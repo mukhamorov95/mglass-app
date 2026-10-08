@@ -22,6 +22,15 @@ export function materialStatus(notes: unknown): MaterialStatus | null {
 
 // Статусы material_status, которые значат «заказан у поставщика» — пишет закупщик
 // (/purchasing, канбан закупок). Один список на закупку и цех.
+// Нарезан = материал уже был: отметка этапа (резка, упаковка, отгрузка) или закрытая задача
+// резки цеха — пишут их две разные точки, и одна без другой бывает. Одно правило для закупки,
+// главной цеха и «Нужен материал»: иначе цех видит «ждут материал» по уже нарезанному заказу,
+// а закупка его же — нет.
+export function isOrderCut(stages: Record<string, unknown> | null | undefined, cuttingTaskDone: boolean): boolean {
+  const s = stages ?? {}
+  return !!(s.cut || s.packaged || s.shipped) || cuttingTaskDone
+}
+
 export const MATERIAL_ORDERED: ReadonlySet<string> = new Set(['ordered', 'invoice_received', 'paid', 'shipped'])
 
 export type ShopMaterialState = 'needed' | 'ordered' | 'arrived'
