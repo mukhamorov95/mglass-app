@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
-import { getRole, isOwnerRole } from '@/lib/getRole'
+import { getRole, isOwnerRole, canAccessRoute } from '@/lib/getRole'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { finalTotalOf, type PriceApproval } from '@/lib/b2b/priceOverride'
 import { paidByOrder, remainderStatus } from '@/lib/b2b/orderPayments'
@@ -14,6 +14,7 @@ import { isShipped } from '@/lib/b2b/todayPriorities'
 import { stageDayKey } from '@/lib/production/dayLists'
 import { paymentReminderText } from '@/lib/b2b/clientTexts'
 import { readQuoteLead } from '@/lib/b2b/leadQuote'
+import { orderProgress, type TaskLite } from '@/lib/shopBoard/model'
 import DealActions from './DealActions'
 
 const TONE_TEXT: Record<MarginTone, string> = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-500' }
@@ -75,10 +76,11 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   // A23: оплата — из payments (не из notes). Прямые платежи по заказу + доля от
   // оплаченных счетов, куда заказ входит. Считаем на сервере — деньги наружу
   // без себестоимости.
-  const [{ data: pays, error: paysErr }, { data: invs, error: invsErr }, { rates }] = await Promise.all([
+  const [{ data: pays, error: paysErr }, { data: invs, error: invsErr }, { rates }, { data: taskRows, error: tasksErr }] = await Promise.all([
     sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').eq('b2b_order_id', dealId).is('voided_at', null),
     sb.from('invoices').select('id, invoice_no, status, order_ids, amount').overlaps('order_ids', [dealId]),
     loadB2BRates(sb),
+    sb.from('production_tasks').select('stage_key, status, completed_at, completed_by_name').eq('order_id', dealId),
   ])
   let invPays: { amount: number; b2b_order_id: number | null; invoice_id: number | null; voided_at: string | null }[] = []
   let invPaysErr: { message: string } | null = null
@@ -119,6 +121,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   // Отгрузка — отметка notes.stages.shipped (цех и экран заказов); shipped_date никто не пишет
   const shipped = isShipped(notes)
   const shippedDay = stageDayKey((notes.stages as Record<string, unknown> | undefined)?.shipped)
+  // Этапы цеха — из тех же задач, что видит цех (владелец 08.10: «искал 05522 — отрезан или нет, а тут ни слова»).
+  const progress = orderProgress((taskRows ?? []) as TaskLite[])
+  const shopLink = launched && canAccessRoute(role, `/production-app/orders/${dealId}`)
   const history = (Array.isArray(notes.total_history) ? notes.total_history : []) as { old_total?: number; new_total?: number; changed_by?: string; changed_at?: string; reset?: boolean }[]
 
   return (
@@ -295,6 +300,42 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               <dt className="text-[#9a9a95]">Объём</dt>
               <dd className="font-mono">{(Number(order.total_area) || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м² · {(Number(order.total_weight) || 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг</dd>
             </div>
+            {launched && (
+              <div className="pt-1">
+                <dt className="text-[#9a9a95] mb-1">Цех</dt>
+                <dd>
+                  {tasksErr ? (
+                    <p role="alert" className="text-[#c23a2b]">Этапы цеха не загрузились: {tasksErr.message}. Обновите страницу.</p>
+                  ) : progress.length === 0 ? (
+                    <p className="text-[#9a9a95]">задач цеха по заказу нет</p>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {progress.map(p => {
+                        const full = p.done === p.total
+                        return (
+                          <li key={p.key} className="flex justify-between gap-3">
+                            <span className={full ? 'text-emerald-700' : p.done > 0 ? 'text-amber-700' : 'text-[#6b6b66]'}>
+                              {full ? '✓' : p.done > 0 ? '◐' : '○'} {p.label}
+                            </span>
+                            <span className="text-right text-[#9a9a95]">
+                              {p.done === 0 ? 'не отмечено' : [
+                                p.total > 1 ? `${p.done} из ${p.total}` : null,
+                                p.at ? `${dt(p.at)}${p.by ? ` ${p.by}` : ''}` : null,
+                              ].filter(Boolean).join(' · ')}
+                            </span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                  {shopLink && (
+                    <Link href={`/production-app/orders/${dealId}`} className="inline-block mt-1.5 text-[#111110] underline decoration-[#d6d6d2]">
+                      Открыть в цеху →
+                    </Link>
+                  )}
+                </dd>
+              </div>
+            )}
           </dl>
         </Section>
       </div>

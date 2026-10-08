@@ -1,0 +1,126 @@
+import { describe, it, expect } from 'vitest'
+import {
+  canCreateCard, canCloseCard, nextStatus, isOverdue, sortCards, dueLabel, dueFromInput,
+  parseCardInput, orderProgress, isMissingTable, type BoardCard,
+} from '@/lib/shopBoard/model'
+
+const NOW = Date.parse('2026-10-08T09:00:00Z') // 12:00 МСК
+const card = (c: Partial<BoardCard> = {}): BoardCard => ({
+  id: 1, title: 'Отгрузить 05522', details: null, order_ids: [5522], due_at: null, hot: false, status: 'new',
+  created_by: 'owner', created_by_name: 'Влад', taken_by: null, taken_by_name: null, taken_at: null,
+  done_by: null, done_by_name: null, done_at: null, closed_by: null, closed_by_name: null, closed_at: null,
+  created_at: '2026-10-08T08:00:00Z', ...c,
+})
+
+describe('кто ставит и закрывает поручения', () => {
+  it('ставят владелец, весь цех и обладатель права shop_board (Дима); менеджер без права — нет', () => {
+    expect(canCreateCard('admin')).toBe(true)
+    expect(canCreateCard('ceo')).toBe(true)
+    expect(canCreateCard('production')).toBe(true)
+    expect(canCreateCard('manager', { shop_board: true })).toBe(true)
+    expect(canCreateCard('manager')).toBe(false)
+    expect(canCreateCard('manager', { shop_board: false })).toBe(false)
+    expect(canCreateCard('partner', { shop_board: true })).toBe(false)
+    expect(canCreateCard(null)).toBe(false)
+  })
+  it('закрывает поставивший или владелец', () => {
+    expect(canCloseCard(card(), 'owner', 'manager')).toBe(true)
+    expect(canCloseCard(card(), 'u2', 'production')).toBe(false)
+    expect(canCloseCard(card(), 'u2', 'admin')).toBe(true)
+    expect(canCloseCard(card(), null, 'production')).toBe(false)
+  })
+})
+
+describe('переходы карточки', () => {
+  it('взять — только новую; готово — новую или в работе', () => {
+    expect(nextStatus(card(), 'take')).toBe('in_progress')
+    expect(nextStatus(card({ status: 'in_progress' }), 'take')).toBeNull()
+    expect(nextStatus(card(), 'done')).toBe('done')
+    expect(nextStatus(card({ status: 'in_progress' }), 'done')).toBe('done')
+    expect(nextStatus(card({ status: 'done' }), 'done')).toBeNull()
+  })
+  it('вернуть — из готово/закрытой: к тому, кто взял, или в новые', () => {
+    expect(nextStatus(card({ status: 'done', taken_by: 'u2' }), 'reopen')).toBe('in_progress')
+    expect(nextStatus(card({ status: 'closed' }), 'reopen')).toBe('new')
+    expect(nextStatus(card({ status: 'new' }), 'reopen')).toBeNull()
+  })
+  it('закрыть — любую незакрытую', () => {
+    expect(nextStatus(card(), 'close')).toBe('closed')
+    expect(nextStatus(card({ status: 'closed' }), 'close')).toBeNull()
+  })
+})
+
+describe('срок', () => {
+  it('сорван — только у незакрытой и не готовой', () => {
+    expect(isOverdue(card({ due_at: '2026-10-08T08:00:00Z' }), NOW)).toBe(true)
+    expect(isOverdue(card({ due_at: '2026-10-08T08:00:00Z', status: 'done' }), NOW)).toBe(false)
+    expect(isOverdue(card({ due_at: '2026-10-09T15:00:00Z' }), NOW)).toBe(false)
+    expect(isOverdue(card(), NOW)).toBe(false)
+  })
+  it('подпись — по Москве', () => {
+    expect(dueLabel(card({ due_at: '2026-10-08T15:00:00Z' }), NOW)).toBe('сегодня до 18:00')
+    expect(dueLabel(card({ due_at: '2026-10-09T15:00:00Z' }), NOW)).toBe('до 09.10 18:00')
+    expect(dueLabel(card({ due_at: '2026-10-08T06:00:00Z' }), NOW)).toBe('сорван срок 09:00')
+    expect(dueLabel(card({ due_at: '2026-09-30T15:00:00Z' }), NOW)).toBe('просрочено на 7 дн.')
+    expect(dueLabel(card(), NOW)).toBeNull()
+  })
+  it('из формы: дата + время по Москве, без времени — 18:00', () => {
+    expect(dueFromInput('2026-10-09')).toBe('2026-10-09T15:00:00.000Z')
+    expect(dueFromInput('2026-10-09', '10:30')).toBe('2026-10-09T07:30:00.000Z')
+    expect(dueFromInput('09.10.2026')).toBeNull()
+  })
+})
+
+describe('порядок на табло', () => {
+  it('горящие, потом сорванные, потом по сроку, без срока — в конце', () => {
+    const cards = [
+      card({ id: 1, due_at: '2026-10-10T15:00:00Z' }),
+      card({ id: 2 }),
+      card({ id: 3, due_at: '2026-10-07T15:00:00Z' }),
+      card({ id: 4, hot: true, due_at: '2026-10-12T15:00:00Z' }),
+      card({ id: 5, due_at: '2026-10-09T15:00:00Z' }),
+    ]
+    expect(sortCards(cards, NOW).map(c => c.id)).toEqual([4, 3, 5, 1, 2])
+  })
+})
+
+describe('вход формы', () => {
+  it('нормальное поручение', () => {
+    expect(parseCardInput({ title: '  Отгрузить завтра ', order_ids: [5522, '5522', 0, 'x'], due_at: '2026-10-09T15:00:00Z', hot: true }))
+      .toEqual({ title: 'Отгрузить завтра', details: null, order_ids: [5522], due_at: '2026-10-09T15:00:00.000Z', hot: true })
+  })
+  it('ошибки словами', () => {
+    expect(parseCardInput({ title: ' ' })).toEqual({ error: 'Напишите, что сделать' })
+    expect(parseCardInput({ title: 'x'.repeat(201) })).toHaveProperty('error')
+    expect(parseCardInput({ title: 'ок', due_at: 'завтра' })).toEqual({ error: 'Срок не распознан' })
+    expect(parseCardInput({ title: 'ок', order_ids: Array.from({ length: 11 }, (_, i) => i + 1) })).toHaveProperty('error')
+  })
+})
+
+describe('прогресс заказа по отметкам цеха', () => {
+  it('этапы в порядке цеха, закрыто из всего', () => {
+    expect(orderProgress([
+      { stage_key: 'packaging', status: 'queued' }, { stage_key: 'cutting', status: 'done' },
+      { stage_key: 'cutting', status: 'queued' }, { stage_key: 'tempering', status: 'in_progress' },
+    ])).toEqual([
+      { key: 'cutting', label: 'Резка', done: 1, total: 2 },
+      { key: 'tempering', label: 'Закалка', done: 0, total: 1 },
+      { key: 'packaging', label: 'Упаковка', done: 0, total: 1 },
+    ])
+  })
+  it('последняя отметка этапа — кто и когда', () => {
+    expect(orderProgress([
+      { stage_key: 'cutting', status: 'done', completed_at: '2026-10-07T10:00:00Z', completed_by_name: 'Никита' },
+      { stage_key: 'cutting', status: 'done', completed_at: '2026-10-08T06:00:00Z', completed_by_name: 'Эльзат' },
+    ])).toEqual([{ key: 'cutting', label: 'Резка', done: 2, total: 2, at: '2026-10-08T06:00:00Z', by: 'Эльзат' }])
+  })
+})
+
+describe('SQL табло не применён', () => {
+  it('узнаём «таблицы нет» по коду и тексту', () => {
+    expect(isMissingTable({ code: 'PGRST205', message: "Could not find the table 'public.shop_board_cards'" })).toBe(true)
+    expect(isMissingTable({ code: '42P01', message: 'relation does not exist' })).toBe(true)
+    expect(isMissingTable({ code: '23505', message: 'duplicate key' })).toBe(false)
+    expect(isMissingTable(null)).toBe(false)
+  })
+})
