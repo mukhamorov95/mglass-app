@@ -218,6 +218,17 @@ export function orderProgress(tasks: TaskLite[]): StageProgress[] {
     })
 }
 
+// «Готово» на поручении, чей заказ ещё не упакован, — частая ошибка: человек отмечает свою
+// часть (08.10: резку 05522 отметили и через 30 с закрыли поручение «Отгрузить»). Упакован —
+// по отметке в заказе или по закрытой упаковке в очереди цеха.
+export function doneWarning(orders: { ref: string; packaged: boolean; shipped: boolean; progress?: StageProgress[] }[]): string | null {
+  const packed = (o: (typeof orders)[number]) => o.packaged || o.shipped
+    || !!o.progress?.some(p => p.key === 'packaging' && p.total > 0 && p.done === p.total)
+  const open = orders.filter(o => !packed(o)).map(o => o.ref)
+  if (!open.length) return null
+  return open.length === 1 ? `Заказ ${open[0]} ещё не упакован.` : `Заказы ${open.join(', ')} ещё не упакованы.`
+}
+
 // Ошибка «таблицы нет» — SQL табло ещё не применён: экран говорит об этом, а не падает.
 export function isMissingTable(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
   if (!error) return false

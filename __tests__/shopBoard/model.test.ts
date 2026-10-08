@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   canCreateCard, canCloseCard, nextStatus, isOverdue, sortCards, dueLabel, dueFromInput,
   parseCardInput, orderProgress, isMissingTable, boardRecipients, boardMessage,
-  canEditCard, parseCardEdit, editSummary, dueToInputs, type BoardCard,
+  canEditCard, parseCardEdit, editSummary, dueToInputs, doneWarning, type BoardCard,
 } from '@/lib/shopBoard/model'
 
 const NOW = Date.parse('2026-10-08T09:00:00Z') // 12:00 МСК
@@ -183,5 +183,21 @@ describe('правка «Горит» и срока', () => {
     const people = { shop: ['s1'], owners: ['owner'], boardUsers: [], orderManagers: ['m1'] }
     expect(boardRecipients('edited', card({ taken_by: 's1' }), 'owner', people).sort()).toEqual(['m1', 's1'])
     expect(boardMessage('edited', card({ hot: true }), 'Влад', [], NOW, '🔥 горит')).toContain('✏️ Влад изменил: 🔥 Отгрузить 05522\n🔥 горит')
+  })
+})
+
+describe('«Готово» на неупакованном заказе', () => {
+  const o = (ref: string, c: { packaged?: boolean; shipped?: boolean; progress?: { key: string; label: string; done: number; total: number }[] } = {}) =>
+    ({ ref, packaged: false, shipped: false, ...c })
+  it('предупреждает, пока заказ не упакован и не отгружен', () => {
+    expect(doneWarning([o('05522', { progress: [{ key: 'cutting', label: 'Резка', done: 1, total: 1 }, { key: 'packaging', label: 'Упаковка', done: 0, total: 1 }] })]))
+      .toBe('Заказ 05522 ещё не упакован.')
+    expect(doneWarning([o('05522'), o('05523')])).toBe('Заказы 05522, 05523 ещё не упакованы.')
+  })
+  it('молчит, если упакован по отметке, по очереди цеха или отгружен; и без заказов', () => {
+    expect(doneWarning([o('05522', { packaged: true })])).toBeNull()
+    expect(doneWarning([o('05522', { shipped: true })])).toBeNull()
+    expect(doneWarning([o('05522', { progress: [{ key: 'packaging', label: 'Упаковка', done: 2, total: 2 }] })])).toBeNull()
+    expect(doneWarning([])).toBeNull()
   })
 })
