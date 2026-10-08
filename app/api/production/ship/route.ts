@@ -3,7 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireRole } from '@/lib/apiAuth'
 import { CASCADE_FROM } from '@/lib/production/managerCascade'
-import { closeOpenTasksOnOrderMark } from '@/lib/production/closeOnOrderMark'
+import { closeOpenTasksOnOrderMark, reopenTasksOnOrderUnmark } from '@/lib/production/closeOnOrderMark'
 
 // Отметка «Отгружен» — отдельное событие, не этап производства.
 //
@@ -48,11 +48,11 @@ export async function POST(req: NextRequest) {
 
   // Уехал — значит в цеху по нему делать нечего: открытые задачи закрываем каскадом,
   // как при отметке менеджера (lib/production/managerCascade.ts). Отмена отгрузки
-  // задачи не переоткрывает.
-  const shop: { closed: number; error?: string } = undo
-    ? { closed: 0 }
-    : await closeOpenTasksOnOrderMark(svc, orderId, 'shipped', CASCADE_FROM.shipping.shipped, { id: user.id, name: who })
+  // возвращает в очередь то, что закрыл именно этот каскад (кроме покрытого упаковкой).
+  const shop: { closed: number; reopened: number; error?: string } = undo
+    ? { closed: 0, ...(await reopenTasksOnOrderUnmark(svc, orderId, [CASCADE_FROM.shipping.shipped], { id: user.id })) }
+    : { reopened: 0, ...(await closeOpenTasksOnOrderMark(svc, orderId, 'shipped', CASCADE_FROM.shipping.shipped, { id: user.id, name: who })) }
   if (shop.error) console.error(`[ship] shop cascade failed order=${orderId}: ${shop.error}`)
 
-  return NextResponse.json({ ok: true, shipped_at: undo ? null : nowIso, by: who, shop_closed: shop.closed })
+  return NextResponse.json({ ok: true, shipped_at: undo ? null : nowIso, by: who, shop_closed: shop.closed, shop_reopened: shop.reopened })
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { orderMarkOf, pickTasksToClose, CASCADE_FROM } from '@/lib/production/managerCascade'
+import { orderMarkOf, orderUnmarksOf, pickTasksToClose, pickTasksToReopen, CASCADE_FROM } from '@/lib/production/managerCascade'
 import { isLiveShopOrder } from '@/lib/production/liveOrder'
 
 const t = (id: number, stage_key: string, status = 'queued') => ({ id, stage_key, status })
@@ -45,5 +45,40 @@ describe('живой заказ цеха', () => {
     expect(isLiveShopOrder({ notes: JSON.stringify({ stages: { shipped: true } }) })).toBe(false)
     expect(isLiveShopOrder({ notes: JSON.stringify({ stages: { packaged: '2026-10-05' } }) })).toBe(true)
     expect(isLiveShopOrder({ notes: null })).toBe(true)
+  })
+})
+
+describe('снятие отметки возвращает в очередь закрытое этим каскадом', () => {
+  const c = (id: number, stage_key: string, from: string | null, extra: Partial<{ status: string; auto_closed: boolean; completed_by: string | null }> = {}) =>
+    ({ id, stage_key, status: 'done', auto_closed: true, auto_closed_from: from, completed_by: null, ...extra })
+
+  it('снятые отметки — ключ пришёл пустым; поставленные и отсутствующие — нет', () => {
+    expect(orderUnmarksOf({ packaged: null })).toEqual(['packaged'])
+    expect(orderUnmarksOf({ shipped: null, packaged: null })).toEqual(['packaged', 'shipped'])
+    expect(orderUnmarksOf({ shipped: '', packaged: false })).toEqual(['packaged', 'shipped'])
+    expect(orderUnmarksOf({ packaged: '2026-10-08' })).toEqual([])
+    expect(orderUnmarksOf({ cut: null })).toEqual([])
+  })
+
+  it('переоткрывается только закрытое этим каскадом и без исполнителя', () => {
+    const tasks = [
+      c(1, 'cutting', 'manager:packaged'),
+      c(2, 'packaging', 'manager:packaged'),
+      c(3, 'cutting', 'manager:shipped'),                               // другой каскад
+      c(4, 'polishing', 'tempering'),                                   // каскад цеха
+      c(5, 'drilling', 'manager:packaged', { completed_by: 'u1' }),     // отметил человек
+      c(6, 'tempering', 'manager:packaged', { auto_closed: false }),
+      c(7, 'tempering', 'manager:packaged', { status: 'queued' }),      // уже открыта
+      c(8, 'cutting', null),
+    ]
+    expect(pickTasksToReopen(tasks, [CASCADE_FROM.manager.packaged], null).map(t => t.id)).toEqual([1, 2])
+    expect(pickTasksToReopen(tasks, [CASCADE_FROM.manager.shipped], null).map(t => t.id)).toEqual([3])
+  })
+
+  it('оставшаяся отметка держит своё: отгружен — ничего, упакован — до упаковки не трогаем', () => {
+    const tasks = [c(1, 'cutting', 'shipping:shipped'), c(2, 'packaging', 'shipping:shipped'), c(3, 'custom_stage', 'shipping:shipped')]
+    expect(pickTasksToReopen(tasks, [CASCADE_FROM.shipping.shipped], 'shipped')).toEqual([])
+    expect(pickTasksToReopen(tasks, [CASCADE_FROM.shipping.shipped], 'packaged').map(t => t.id)).toEqual([3])
+    expect(pickTasksToReopen(tasks, [CASCADE_FROM.shipping.shipped], null).map(t => t.id)).toEqual([1, 2, 3])
   })
 })

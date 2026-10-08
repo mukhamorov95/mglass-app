@@ -9,8 +9,9 @@ import { PRODUCTION_STAGES } from '@/lib/productionStages'
 //
 // Закрываем как каскад (auto_closed), без исполнителя: этапы физически пройдены, но
 // никто из цеха их не отмечал — приписать их рабочему значит исказить выработку.
-// Снятие отметки задачи НЕ переоткрывает: снятие — исправление в учёте заказа, а
-// пройденная работа от него не исчезает.
+// Снятие отметки возвращает в очередь ровно то, что закрыл этот каскад: «Упакован» в
+// «Заказах B2B» ставится одним кликом, и случайный клик иначе молча выкидывал заказ
+// в работе из очередей рабочих. Закрытое цехом или другим каскадом не трогаем.
 
 export type OrderMark = 'packaged' | 'shipped'
 
@@ -48,3 +49,28 @@ export const CASCADE_FROM = {
   manager: { packaged: 'manager:packaged', shipped: 'manager:shipped' },
   shipping: { packaged: 'shipping:packaged', shipped: 'shipping:shipped' },
 } as const satisfies Record<string, Record<OrderMark, string>>
+
+// Какие отметки сняты в этом запросе: ключ пришёл, значение пустое.
+export function orderUnmarksOf(stages: Record<string, unknown>): OrderMark[] {
+  const unset = (k: OrderMark) => Object.prototype.hasOwnProperty.call(stages, k)
+    && (stages[k] === null || stages[k] === false || (typeof stages[k] === 'string' && (stages[k] as string).trim() === ''))
+  return (['packaged', 'shipped'] as const).filter(unset)
+}
+
+export type CascadedTask = OpenTask & { auto_closed: boolean | null; auto_closed_from: string | null; completed_by: string | null }
+
+// Переоткрыть — только закрытое этим каскадом (from) и без исполнителя. Отметка, что
+// осталась на заказе, держит своё: отгружен — не переоткрываем ничего, упакован — этапы
+// до упаковки включительно остаются пройденными.
+export function pickTasksToReopen<T extends CascadedTask>(tasks: T[], from: readonly string[], stillMarked: OrderMark | null): T[] {
+  if (stillMarked === 'shipped') return []
+  return tasks.filter(t => {
+    if (t.status !== 'done' || t.auto_closed !== true || t.completed_by != null) return false
+    if (!t.auto_closed_from || !from.includes(t.auto_closed_from)) return false
+    if (stillMarked === 'packaged') {
+      const i = ORDER.indexOf(t.stage_key)
+      if (i !== -1 && i <= PACKAGING) return false
+    }
+    return true
+  })
+}
