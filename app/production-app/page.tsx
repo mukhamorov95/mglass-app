@@ -124,7 +124,7 @@ export default async function ProductionHome() {
             rows={h.urgent.rows} empty="Ничего не горит" />
           <Block title="Отгрузка сегодня" href="/production-app/shipping" tone="emerald"
             stat={`${h.shipping.ready}`}
-            sub={`готово к отгрузке · уже отгружено сегодня ${h.shipping.shippedToday}`}
+            sub={`готово к отгрузке, упакованы с 01.09 (раньше — скорее уехали без отметки) · уже отгружено сегодня ${h.shipping.shippedToday}`}
             rows={h.shipping.rows} empty="Готовых к отгрузке нет" />
           <Block title="Заказы в работе" href="/production-app/orders" tone="plain"
             stat={`${h.inWork.count}`} sub="есть незакрытые этапы · ближайшие по сроку"
