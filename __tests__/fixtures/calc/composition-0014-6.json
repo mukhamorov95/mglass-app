@@ -1,0 +1,47 @@
+{
+  "_source": "Снимок прода 09.10.2026: b2b_materials id 14, glass_price_matrix, b2b_rates, скидка M GLASS (b2b_clients id 1), supplier_price_rows АВ24. Чертёж 0014-6: две распашные двери 424×2004 в нише, матовый хром, Matelux 8 мм. Сверено вручную 08.10: стекло 8 972, фурнитура 18 202,5.",
+  "material": { "id": 14, "name": "CrystalVision Matelux", "category": "стекло", "thickness": 8, "cost_price": 2352, "vat_rate": 22, "waste_percent": 30, "active": true, "notes": "{\"sale_price\":6600}", "sheet_width": 3210, "sheet_height": 2250, "pattern_direction": "none", "supplier_id": null, "supplier_material_name": null, "stock_sheets": 0 },
+  "matrix": [
+    { "name": "CrystalVision Matelux", "category": "glass", "price_type": "sale", "t4": 3100, "t5": null, "t6": 4800, "t8": 6600, "t10": 8200, "waste_pct": 0 },
+    { "name": "CrystalVision Matelux", "category": "glass", "price_type": "cost", "t4": 1050, "t5": null, "t6": 1659, "t8": 2352, "t10": 2972, "waste_pct": 30 }
+  ],
+  "rates": [
+    { "key": "edge_per_m", "value": 40 }, { "key": "margin_min", "value": 25 }, { "key": "margin_target", "value": 35 },
+    { "key": "min_glass_tempering", "value": 2500 }, { "key": "min_mirror", "value": 1500 }, { "key": "min_narrow_detail", "value": 1500 },
+    { "key": "min_tinted_tempering", "value": 3000 }, { "key": "packaging_per_m2", "value": 120 }, { "key": "tempering_10", "value": 600 },
+    { "key": "tempering_12", "value": 950 }, { "key": "tempering_4", "value": 300 }, { "key": "tempering_5", "value": 350 },
+    { "key": "tempering_6", "value": 400 }, { "key": "tempering_8", "value": 500 }, { "key": "transport_per_piece", "value": 77 }
+  ],
+  "mgDiscount": 20,
+  "av24": [
+    { "article": "FDP-230 BR/BL", "name": "Петля Афродита FDP-230 стена-стекло 90° с крышками, латунь/черный", "color": "черный", "retail_price": 4200, "discount_percent": 25, "cost_price": 3150 },
+    { "article": "FDP-230 BR/BTP", "name": "Петля Афродита FDP-230 стена-стекло с боковым креплением 90° с крышками, латунь/брашированное золото", "color": "брашированное золото", "retail_price": 4700, "discount_percent": 25, "cost_price": 3525 },
+    { "article": "FDP-230 BR/CR", "name": "Петля Афродита FDP-230 стена-стекло 90° с крышками, латунь/хром", "color": "хром", "retail_price": 3900, "discount_percent": 25, "cost_price": 2925 },
+    { "article": "FDP-230 BR/GG", "name": "Петля Афродита FDP-230 стена-стекло 90° с крышками, латунь/оружейная сталь", "color": "оружейная сталь", "retail_price": 4500, "discount_percent": 25, "cost_price": 3375 },
+    { "article": "FDP-230 BR/MW", "name": "Петля Афродита FDP-230 стена-стекло 90° с крышками, латунь/белый", "color": "белый", "retail_price": 4400, "discount_percent": 25, "cost_price": 3300 },
+    { "article": "FDP-230 BR/SSS", "name": "Петля Афродита FDP-230 стена-стекло 90° с крышками, латунь/матовый", "color": "матовый", "retail_price": 4300, "discount_percent": 25, "cost_price": 3225 },
+    { "article": "FDPP-16.1 PVC/BL", "name": "Порог акриловый для душевой 16х8 мм 1 м черный FDPP-16.1", "color": "BL", "retail_price": 350, "discount_percent": 25, "cost_price": 262 },
+    { "article": "FDPP-16.1 PVC/CL", "name": "Порог акриловый для душевой 16х8 мм, 1 м прозрачный FDPP-16.1", "color": "CL", "retail_price": 420, "discount_percent": 25, "cost_price": 315 },
+    { "article": "FDPP-16.1-DEF PVC/BL", "name": "Порог акриловый с дефектом для душевой 16х8 мм 1 м черный FDPP-16.1-DEF", "color": "BL", "retail_price": 50, "discount_percent": 25, "cost_price": 38 },
+    { "article": "FDPP-16.2 PVC/BL", "name": "Порог акриловый для душевой 16х8 мм 2 м черный FDPP-16.2", "color": "BL", "retail_price": 700, "discount_percent": 25, "cost_price": 525 },
+    { "article": "FDPP-16.2 PVC/CL", "name": "Порог акриловый для душевой 16х8 мм 2 м Прозрачный FDPP-16.2", "color": "CL", "retail_price": 700, "discount_percent": 25, "cost_price": 525 },
+    { "article": "FDPP-402.8 PVC/BL", "name": "Уплотнитель ПРЕМИУМ Ч-образный черный 2.2 м, ус 18 мм под стекло 8 мм FDPP-402.8", "color": "BL", "retail_price": 270, "discount_percent": 25, "cost_price": 202 },
+    { "article": "FDPP-402.8 PVC/CL", "name": "Уплотнитель ПРЕМИУМ Ч-образный прозрачный 2.2 м, ус 18 мм под стекло 8 мм FDPP-402.8", "color": "CL", "retail_price": 250, "discount_percent": 25, "cost_price": 188 },
+    { "article": "FDPP-402.8-DEF PVC/CL", "name": "Уплотнитель FDPP-402.8-DEF с дефектом ПРЕМИУМ Ч-образный длина 2.2 м, ус 18 мм под стекло 8 мм, ПВХ/прозрачный", "color": "прозрачный", "retail_price": 50, "discount_percent": 25, "cost_price": 38 },
+    { "article": "FDPP-404.8 PVC/BL", "name": "Уплотнитель ПРЕМИУМ А-образный черный 2.2 м под стекло 8 мм FDPP-404.8", "color": "BL", "retail_price": 260, "discount_percent": 25, "cost_price": 195 },
+    { "article": "FDPP-404.8 PVC/CL", "name": "Уплотнитель ПРЕМИУМ А-образный прозрачный 2.2 м под стекло 8 мм FDPP-404.8", "color": "CL", "retail_price": 250, "discount_percent": 25, "cost_price": 188 },
+    { "article": "FDPP-404.8-DEF PVC/CL", "name": "Уплотнитель FDPP-404.8-DEF с дефектом ПРЕМИУМ А-образный длина 2.2 м под стекло 8 мм, ПВХ/прозрачный", "color": "прозрачный", "retail_price": 50, "discount_percent": 25, "cost_price": 38 },
+    { "article": "FDPP-502.8 PVC/BL", "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° черный 2.2 м под стекло 8 мм FDPP-502.8", "color": "BL", "retail_price": 1370, "discount_percent": 25, "cost_price": 1028 },
+    { "article": "FDPP-502.8 PVC/CL-BL", "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, черный магнит 2.2 м под стекло 8 мм FDPP-502.8", "color": "CL-BL", "retail_price": 1580, "discount_percent": 25, "cost_price": 1185 },
+    { "article": "FDPP-502.8 PVC/CL-W", "name": "Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный, белый магнит 2.2 м под стекло 8 мм FDPP-502.8", "color": "CL-W", "retail_price": 1370, "discount_percent": 25, "cost_price": 1028 },
+    { "article": "FDPP-503.8 PVC/BL", "name": "Уплотнитель ПРЕМИУМ магнитный 180° черный 2.2 м под стекло 8 мм FDPP-503.8", "color": "BL", "retail_price": 1700, "discount_percent": 25, "cost_price": 1275 },
+    { "article": "FDPP-503.8 PVC/CL-W", "name": "Уплотнитель ПРЕМИУМ магнитный 180° прозрачный, белый магнит 2.2 м под стекло 8 мм FDPP-503.8", "color": "CL-W", "retail_price": 1700, "discount_percent": 25, "cost_price": 1275 },
+    { "article": "FDPP-503.8-DEF PVC/CL-W", "name": "Уплотнитель магнитный FDPP-503.8-DEF с дефектом 180° прозрачный, белый магнит 2.2м под 8мм", "color": "CL-W", "retail_price": 50, "discount_percent": 25, "cost_price": 38 },
+    { "article": "FDR-90 SUS304/BL", "name": "Ручка скоба FDR-90, 10х15х220х1.0 мм, нержавейка/черный", "color": "черный", "retail_price": 2100, "discount_percent": 25, "cost_price": 1575 },
+    { "article": "FDR-90 SUS304/BTP", "name": "Ручка скоба FDR-90, 10х15х220х1.0 мм, нержавейка/брашированное золото", "color": "брашированное золото", "retail_price": 3500, "discount_percent": 25, "cost_price": 2625 },
+    { "article": "FDR-90 SUS304/PSS", "name": "Ручка скоба FDR-90, 10х15х220х1.0 мм, нержавейка/полированный", "color": "полированный", "retail_price": 2100, "discount_percent": 25, "cost_price": 1575 },
+    { "article": "FDR-90 SUS304/SSS", "name": "Ручка скоба FDR-90, 10х15х220х1.0 мм, нержавейка/матовый", "color": "матовый", "retail_price": 2100, "discount_percent": 25, "cost_price": 1575 },
+    { "article": "FDR-90-DEF SUS304/BL", "name": "Ручка скоба FDR-90-DEF с дефектом 10х15х220х1.0 мм, нержавейка/черный", "color": "черный", "retail_price": 200, "discount_percent": 25, "cost_price": 150 },
+    { "article": "FDR-90-DEF SUS304/PSS", "name": "Ручка скоба FDR-90-DEF с дефектом 10х15х220х1.0 мм, нержавейка/полированный", "color": "полированный", "retail_price": 200, "discount_percent": 25, "cost_price": 150 }
+  ]
+}
