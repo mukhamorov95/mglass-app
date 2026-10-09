@@ -7,27 +7,30 @@ import { FINANCE_FALLBACK, type Finance } from '@/lib/pricing/pickFinance'
 import type { BomItem } from '@/lib/kp/bomSections'
 import type { CompositionResult, CompositionRole } from '@/lib/calc/composition'
 import type { CatalogGroupId, CatalogModel } from '@/lib/calc/compositionCatalog'
-import { COMPOSE_TEMPLATES, applyTemplate, resolvePieces, type AutoLen, type ComposeTemplate, type Run } from '@/lib/calc/composeTemplates'
+import { COMPOSE_TEMPLATES, applyTemplate, resolvePieces, type ComposeTemplate } from '@/lib/calc/composeTemplates'
+import { DRAFT_KEY, DRAFT_KEY_V1, migrateDraft, type Draft, type Edge, type HwRow, type PanelKind, type PanelRow, type Shape, type Spot } from '@/lib/calc/composeDraft'
+import { composeLayout, effectiveSpots, sameSpot } from '@/lib/calc/composeLayout'
+import { confirmDialog } from '@/lib/dialog'
+import { ComposeScheme } from './ComposeScheme'
 
-// Конструктор «Из деталей» (docs/configurator/CONSTRUCTOR_ROUTE.md, К1): душевая, которой нет
+// Конструктор «Из деталей» (docs/configurator/CONSTRUCTOR_ROUTE.md, К1–К3): душевая, которой нет
 // среди моделей, собирается из стёкол и фурнитуры каталога АВ24 с фото. Себестоимость
 // считает сервер (/api/calc/composition — тот же расчёт по составу, что для чертежа),
 // цена клиенту — той же формулой, что у моделей. Корзина общая с родителем.
 // Черновик живёт в localStorage до «+ В КП» или явной очистки: собранное руками не теряется.
+// Схема (К3) рисует состав и привязку деталей к кромкам; в цену она не входит.
 
 export type ComposeCartItem = {
   title: string; cost: number; productPrice: number; install: number
   delivery: number; lift: number; total: number; stops?: string[]; bom: BomItem
 }
 
-type PanelRow = { id: string; label: string; w: string; h: string; run?: Run }
-// auto — длины кусков от размеров стёкол (из шаблона); правка длин руками его снимает.
-type HwRow = { id: string; base: string; role: CompositionRole; label: string; stockMm: number | null; qty: string; pieces: string; auto?: AutoLen[] }
-type Draft = { v: 1; glassId: string; thickness: number; finishId: FinishId; panels: PanelRow[]; hardware: HwRow[]; kind?: string }
 type Catalog = { groups: { id: CatalogGroupId; label: string }[]; models: CatalogModel[] }
 type Priced = CompositionResult & { finance?: Finance }
 
-const DRAFT_KEY = 'mglass_compose_draft_v1'
+const SHAPES: { id: Shape; label: string }[] = [{ id: 'niche', label: 'В нишу' }, { id: 'corner', label: 'Угловая' }, { id: 'walkin', label: 'Открытая' }]
+const KINDS: { id: PanelKind; label: string }[] = [{ id: 'fixed', label: 'Неподвижное' }, { id: 'door', label: 'Дверь' }, { id: 'slide', label: 'Раздвижная' }]
+const EDGE_RU: Record<Edge, string> = { left: 'левая кромка', right: 'правая кромка', top: 'верх', bottom: 'низ' }
 // Те же id, что GLASS_TYPES в page.tsx; имя материала B2B — на сервере (compositionServer.ts).
 const GLASS = [
   { id: 'clear', label: 'Прозрачное', swatch: '#cfe3d3' },
@@ -52,14 +55,19 @@ const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
 // Не через fld: его w-full перебивает ширину, и поле количества растягивалось на всю строку.
 const qtyFld = 'w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 py-2 text-[14px] font-mono text-center text-[#111110] outline-none focus:border-[#111110]'
 const chip = (on: boolean) => `px-3 py-2 rounded-lg border text-[13px] transition-colors ${on ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`
+const miniChip = (on: boolean) => `px-2 py-1 rounded-md border text-[12px] transition-colors ${on ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#6b6b66] hover:border-[#111110]'}`
 
-const emptyDraft = (): Draft => ({ v: 1, glassId: 'clear', thickness: 8, finishId: 'chrome', panels: [{ id: uid(), label: 'Стекло 1', w: '', h: '' }], hardware: [] })
+const emptyDraft = (): Draft => ({ v: 2, glassId: 'clear', thickness: 8, finishId: 'chrome', shape: 'niche', panels: [{ id: uid(), label: 'Стекло 1', w: '', h: '', kind: 'fixed' }], hardware: [] })
 
+// Сначала v2; нет — переводим черновик v1 (его ключ не трогаем: старая вкладка его не затрёт).
 function readDraft(): Draft | null {
-  try {
-    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null') as Draft | null
-    return d && d.v === 1 && Array.isArray(d.panels) && Array.isArray(d.hardware) ? d : null
-  } catch { return null }
+  for (const key of [DRAFT_KEY, DRAFT_KEY_V1]) {
+    try {
+      const d = migrateDraft(JSON.parse(localStorage.getItem(key) ?? 'null'))
+      if (d) return d
+    } catch { /* битый черновик — пробуем следующий */ }
+  }
+  return null
 }
 
 export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, clientSlot }: {
@@ -84,10 +92,36 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     if (!loaded) return
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch { /* черновик не сохранится — расчёт работает */ }
   }, [draft, loaded])
-  const { glassId, thickness, finishId, panels, hardware } = draft
+  const { glassId, thickness, finishId, shape, panels, hardware } = draft
   const set = (patch: Partial<Draft>) => setDraft(d => ({ ...d, ...patch }))
   const setPanel = (id: string, patch: Partial<PanelRow>) => setDraft(d => ({ ...d, panels: d.panels.map(p => (p.id === id ? { ...p, ...patch } : p)) }))
   const setHw = (id: string, patch: Partial<HwRow>) => setDraft(d => ({ ...d, hardware: d.hardware.map(h => (h.id === id ? { ...h, ...patch } : h)) }))
+
+  // Схема: раскладка из того же черновика. Выбранная строка подсвечена на схеме, а касание
+  // кромки ставит её деталь туда или убирает — привязка пишется в строку явно.
+  const layout = useMemo(() => composeLayout(
+    shape,
+    panels.map(p => ({ id: p.id, label: p.label || 'Стекло', w: numOr(p.w), h: numOr(p.h), run: p.run, kind: p.kind, hinge: p.hinge })),
+    hardware.map(h => ({ id: h.id, role: h.role, stockMm: h.stockMm, qty: numOr(h.qty), at: h.at, auto: h.auto })),
+  ), [shape, panels, hardware])
+  const [picked, setPicked] = useState<string | null>(null)
+  const selected = hardware.some(h => h.id === picked) ? picked : null
+  const selRow = hardware.find(h => h.id === selected) ?? null
+  const spotsOf = (h: HwRow) => effectiveSpots({ ...h, qty: numOr(h.qty) }, layout.elevation.panels)
+  const selSpots = selRow ? spotsOf(selRow) : []
+  const schemeRef = useRef<HTMLElement>(null)
+  function toggleSpot(s: Spot) {
+    if (!selRow) return
+    const cur = spotsOf(selRow)
+    setHw(selRow.id, { at: cur.some(x => sameSpot(x, s)) ? cur.filter(x => !sameSpot(x, s)) : [...cur, s] })
+  }
+  function pickRow(id: string, scroll: 'scheme' | 'row' | null) {
+    setPicked(id)
+    if (scroll === 'scheme') schemeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (scroll === 'row') document.getElementById(`hw-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+  const panelName = (id: string) => layout.elevation.panels.find(p => p.id === id)?.label ?? 'стекло'
+  const whereText = (h: HwRow) => spotsOf(h).map(s => `${panelName(s.panelId)} — ${EDGE_RU[s.edge]}`).join('; ')
 
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [catalogErr, setCatalogErr] = useState<string | null>(null)
@@ -190,17 +224,18 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     setAddedAt({ key: bodyKey, text: `В корзине ${cartCount + 1} — «Сохранить» сделает расчёт и КП. Состав оставлен: можно поменять и добавить ещё вариант.` })
   }
 
-  function clearAll() {
-    if (!window.confirm('Очистить состав? Стёкла и фурнитура этого изделия будут удалены.')) return
+  async function clearAll() {
+    const ok = await confirmDialog({ title: 'Очистить состав?', text: 'Стёкла и фурнитура этого изделия будут удалены.', confirmLabel: 'Очистить', danger: true })
+    if (!ok) return
     setDraft(d => ({ ...emptyDraft(), glassId: d.glassId, thickness: d.thickness, finishId: d.finishId }))
     setTplMissing([])
   }
 
   // Шаблон заменяет стёкла и фурнитуру; стекло, толщина и цвет остаются выбранными.
   const [tplMissing, setTplMissing] = useState<string[]>([])
-  function pickTemplate(t: ComposeTemplate) {
+  async function pickTemplate(t: ComposeTemplate) {
     const filled = hardware.length > 0 || panels.some(p => p.w || p.h)
-    if (filled && !window.confirm(`Заменить текущий состав шаблоном «${t.label}»? Стёкла и фурнитура этого изделия будут заменены.`)) return
+    if (filled && !(await confirmDialog({ title: `Заменить состав шаблоном «${t.label}»?`, text: 'Стёкла и фурнитура этого изделия будут заменены.', confirmLabel: 'Заменить' }))) return
     const a = applyTemplate(t, uid)
     const missing: string[] = []
     const rows: HwRow[] = []
@@ -209,10 +244,11 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       if (!m) { missing.push(h.base); continue }
       // В каталоге позиция штучная, а в шаблоне куски — считаем кусками-штуками, а не теряем.
       const linear = m.stockMm != null
-      rows.push({ id: uid(), base: m.base, role: m.role, label: m.name, stockMm: m.stockMm, qty: String(h.qty ?? h.auto?.length ?? 1), pieces: '', ...(linear && h.auto ? { auto: h.auto } : {}) })
+      rows.push({ id: uid(), base: m.base, role: m.role, label: m.name, stockMm: m.stockMm, qty: String(h.qty ?? h.auto?.length ?? 1), pieces: '', ...(linear && h.auto ? { auto: h.auto } : {}), at: h.at })
     }
-    setDraft(d => ({ ...d, panels: a.panels, hardware: rows, kind: t.label }))
+    setDraft(d => ({ ...d, shape: a.shape, panels: a.panels, hardware: rows, kind: t.label }))
     setTplMissing(missing)
+    setPicked(null)
   }
 
   function addModel(mdl: CatalogModel) {
@@ -248,11 +284,80 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           {tplMissing.length > 0 && <p className="text-[12px] text-[#c2410c]">Нет в каталоге АВ24, строка не добавлена: {tplMissing.join(', ')}.</p>}
         </section>
 
+        <section ref={schemeRef} className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3 scroll-mt-4">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-[15px] font-semibold text-[#111110]">Схема</h2>
+            {layout.elevation.panels.length > 0 && !selRow && <span className="text-[11px] text-[#9a9a95] text-right">коснитесь детали — откроется её строка</span>}
+          </div>
+          {layout.elevation.panels.length > 0
+            ? <ComposeScheme elevation={layout.elevation} plan={layout.plan} selected={selected} activeSpots={selSpots}
+                onSelect={id => pickRow(id, null)} onEdge={toggleSpot}
+                glassSwatch={GLASS.find(g => g.id === glassId)?.swatch ?? '#dfeaf6'} finishHex={FINISHES.find(f => f.id === finishId)?.hex ?? '#c0c0c0'} />
+            : <p className="text-[13px] text-[#9a9a95]">Впишите размеры стёкол — здесь появится вид снаружи и план сверху.</p>}
+          {selRow && (() => {
+            const num = hardware.findIndex(h => h.id === selRow.id) + 1
+            const mdl = byBase.get(selRow.base)
+            const lin = selRow.stockMm != null
+            return (
+              <div className="rounded-xl border border-[#bfd0f5] bg-[#f5f8ff] p-3 flex gap-3">
+                <Thumb src={mdl?.variants[finishId]?.image ?? mdl?.image} alt={selRow.label} size="w-14 h-14" />
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[13px] text-[#111110] leading-snug"><b>{num}.</b> {selRow.label}</div>
+                      <div className="text-[11px] text-[#9a9a95] font-mono">{selRow.base}</div>
+                    </div>
+                    <button onClick={() => setPicked(null)} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold shrink-0">Готово</button>
+                  </div>
+                  <p className="text-[12px] text-[#4b4b47]">Коснитесь кромки стекла на схеме — деталь встанет туда, ещё раз — уберётся.</p>
+                  <p className="text-[12px] text-[#111110]">
+                    {selSpots.length ? whereText(selRow) : 'Сейчас на схеме её нет.'}
+                    {selRow.at === undefined && selSpots.length > 0 && <span className="text-[#9a9a95]"> · по умолчанию</span>}
+                  </p>
+                  {!lin && (
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => setHw(selRow.id, { qty: String(Math.max(0, numOr(selRow.qty) - 1)) })} className="w-9 h-9 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">−</button>
+                      <input inputMode="numeric" className={qtyFld} value={selRow.qty} onChange={e => setHw(selRow.id, { qty: e.target.value })} />
+                      <button onClick={() => setHw(selRow.id, { qty: String(numOr(selRow.qty) + 1) })} className="w-9 h-9 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">+</button>
+                      <span className="text-[12px] text-[#9a9a95] ml-1">шт</span>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+                    {selRow.at !== undefined && <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button>}
+                    <button onClick={() => pickRow(selRow.id, 'row')} className="text-[#2563eb] hover:underline">К строке ↓</button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+          {layout.elevation.unplaced.length > 0 && !selRow && (
+            <p className="text-[12px] text-[#6b6b66]">
+              Не на схеме:{' '}
+              {layout.elevation.unplaced.map((id, i) => {
+                const h = hardware.find(x => x.id === id)!
+                return (
+                  <span key={id}>{i > 0 && ', '}
+                    <button onClick={() => pickRow(id, null)} className="text-[#2563eb] hover:underline">{hardware.indexOf(h) + 1}. {h.label}</button>
+                  </span>
+                )
+              })}
+              <span className="text-[#9a9a95]"> — выберите и коснитесь кромки.</span>
+            </p>
+          )}
+        </section>
+
         <section className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-[15px] font-semibold text-[#111110]">Стекло</h2>
             <button onClick={clearAll} className="text-[12px] text-[#9a9a95] hover:text-[#c2410c]">Очистить состав</button>
           </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-[12px] text-[#6e6e73] mr-1">Форма</span>
+            {SHAPES.map(s => <button key={s.id} onClick={() => set({ shape: s.id })} className={chip(shape === s.id)}>{s.label}</button>)}
+          </div>
+          {shape === 'corner' && !panels.some(p => p.run === 'side') && (
+            <p className="text-[11px] text-[#c2410c] -mt-1">Отметьте у бокового стекла «сбоку» — иначе схема покажет все стёкла в один ряд.</p>
+          )}
           <div className="flex flex-wrap gap-2">
             {GLASS.map(g => (
               <button key={g.id} onClick={() => set({ glassId: g.id })} className={`${chip(glassId === g.id)} flex items-center gap-2`}>
@@ -276,6 +381,27 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                   <div><label className={lbl}>{i === 0 ? 'Высота, мм' : ' '}</label><input inputMode="numeric" className={fld} value={p.h} onChange={e => setPanel(p.id, { h: e.target.value })} placeholder="2000" /></div>
                   <button onClick={() => set({ panels: panels.filter(x => x.id !== p.id) })} disabled={panels.length === 1}
                     className="h-[38px] w-[38px] rounded-lg border border-[#e4e4e0] text-[#9a9a95] hover:text-[#c2410c] disabled:opacity-30" aria-label="Убрать стекло">✕</button>
+                  <div className="col-span-4 flex flex-wrap items-center gap-1.5">
+                    {KINDS.map(k => <button key={k.id} onClick={() => setPanel(p.id, { kind: k.id })} className={miniChip(p.kind === k.id)}>{k.label}</button>)}
+                    {p.kind === 'door' && (() => {
+                      const hinge = layout.elevation.panels.find(x => x.id === p.id)?.hinge ?? p.hinge
+                      return (
+                        <>
+                          <span className="text-[11px] text-[#9a9a95] ml-1.5">петли</span>
+                          {(['left', 'right'] as const).map(sd => (
+                            <button key={sd} onClick={() => setPanel(p.id, { hinge: sd })} className={miniChip(hinge === sd)}>{sd === 'left' ? 'слева' : 'справа'}</button>
+                          ))}
+                        </>
+                      )
+                    })()}
+                    {shape === 'corner' && (
+                      <>
+                        <span className="text-[11px] text-[#9a9a95] ml-1.5">ряд</span>
+                        <button onClick={() => setPanel(p.id, { run: 'front' })} className={miniChip(p.run !== 'side')}>спереди</button>
+                        <button onClick={() => setPanel(p.id, { run: 'side' })} className={miniChip(p.run === 'side')}>сбоку</button>
+                      </>
+                    )}
+                  </div>
                   {(line || half) && (
                     <p className={`col-span-4 -mt-1 text-[11px] ${half ? 'text-[#c2410c]' : 'text-[#9a9a95]'}`}>
                       {half ? 'Впишите оба размера от 50 мм' : `${line!.areaM2.toLocaleString('ru-RU')} м² × ${RUB(line!.pricePerM2)} → ${RUB(line!.total)} со скидкой M GLASS`}
@@ -285,11 +411,11 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               )
             })}
             <div className="flex flex-wrap gap-2">
-              {['Дверь', 'Неподвижное'].map(kind => (
+              {([['Дверь', 'door'], ['Неподвижное', 'fixed']] as const).map(([name, kind]) => (
                 <button key={kind} disabled={panels.length >= 12}
-                  onClick={() => set({ panels: [...panels, { id: uid(), label: `${kind} ${panels.filter(p => p.label.startsWith(kind)).length + 1}`, w: '', h: '' }] })}
+                  onClick={() => set({ panels: [...panels, { id: uid(), label: `${name} ${panels.filter(p => p.label.startsWith(name)).length + 1}`, w: '', h: '', kind }] })}
                   className="px-3 py-2 rounded-lg border border-dashed border-[#c9c9c4] text-[13px] text-[#4b4b47] hover:border-[#111110] disabled:opacity-40">
-                  + {kind.toLowerCase()}
+                  + {name.toLowerCase()}
                 </button>
               ))}
             </div>
@@ -318,31 +444,41 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           {catalogErr && <p className="text-[12px] text-[#c2410c]">{catalogErr}</p>}
           {!hardware.length && <p className="text-[13px] text-[#9a9a95]">Петли, коннекторы, ручки, уплотнители — из каталога АВ24 с фото. Цена берётся в выбранном цвете.</p>}
           <div className="divide-y divide-[#efefeb]">
-            {hardware.map(h => {
+            {hardware.map((h, idx) => {
               const mdl = byBase.get(h.base)
               const img = mdl?.variants[finishId]?.image ?? mdl?.image
               const line = hwLineOf(h.id)
               const lin = isLinear(h)
               const waiting = lin ? !piecesOf(h).length : !(numOr(h.qty) > 0)
+              const where = whereText(h)
+              const on = selected === h.id
+              // Длины отвязываются от стёкол — место на схеме, выведенное из них, фиксируем.
+              const unbind = (pieces: string) => setHw(h.id, { pieces, auto: undefined, ...(h.at === undefined ? { at: spotsOf(h) } : {}) })
               return (
-                <div key={h.id} className="py-3 flex gap-3">
-                  <Thumb src={img} alt={h.label} size="w-14 h-14" />
+                <div key={h.id} id={`hw-${h.id}`} className={`py-3 flex gap-3 scroll-mt-24 ${on ? 'bg-[#f5f8ff] -mx-2 px-2 rounded-xl' : ''}`}>
+                  <div className="relative shrink-0">
+                    <Thumb src={img} alt={h.label} size="w-14 h-14" />
+                    <span className={`absolute -top-1.5 -left-1.5 min-w-[20px] h-5 px-1 rounded-full border text-[11px] font-semibold grid place-items-center ${on ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#111110] border-[#111110]'}`}>{idx + 1}</span>
+                  </div>
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[13px] text-[#111110] leading-snug">{h.label}</div>
                         <div className="text-[11px] text-[#9a9a95] font-mono">{line?.article ?? h.base}{materialOf(h.base) && <span className="font-sans"> · {materialOf(h.base)}</span>}{lin && <span className="font-sans"> · полоса {(h.stockMm! / 1000).toLocaleString('ru-RU')} м</span>}</div>
+                        <button onClick={() => (on ? setPicked(null) : pickRow(h.id, 'scheme'))} className="text-left text-[11.5px] text-[#2563eb] hover:underline mt-0.5">
+                          {on ? 'Выбрана на схеме — готово' : where ? `На схеме: ${where}` : 'Нет на схеме — указать'}
+                        </button>
                       </div>
                       <button onClick={() => set({ hardware: hardware.filter(x => x.id !== h.id) })} className="text-[#9a9a95] hover:text-[#c2410c] px-1" aria-label="Убрать">✕</button>
                     </div>
                     {lin ? (
                       <div className="space-y-1.5">
-                        <input className={fld} value={h.auto ? piecesOf(h).join(', ') : h.pieces} onChange={e => setHw(h.id, { pieces: e.target.value, auto: undefined })} placeholder="куски, мм: 2004, 2004" />
+                        <input className={fld} value={h.auto ? piecesOf(h).join(', ') : h.pieces} onChange={e => unbind(e.target.value)} placeholder="куски, мм: 2004, 2004" />
                         {h.auto && <p className="text-[11px] text-[#9a9a95]">Длины от размеров стёкол — меняются вместе с ними. Правка руками отвяжет.</p>}
                         {!!dimChips.length && (
                           <div className="flex flex-wrap gap-1.5">
                             {dimChips.map(v => (
-                              <button key={v} onClick={() => setHw(h.id, { pieces: [...piecesOf(h), v].join(', '), auto: undefined })}
+                              <button key={v} onClick={() => unbind([...piecesOf(h), v].join(', '))}
                                 className="px-2.5 py-1 rounded-md border border-[#e4e4e0] text-[12px] font-mono text-[#4b4b47] hover:border-[#111110]">+{v}</button>
                             ))}
                           </div>
