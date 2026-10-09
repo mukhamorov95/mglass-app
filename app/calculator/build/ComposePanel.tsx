@@ -347,14 +347,37 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   // Замена детали вариантом той же разновидности: количество, длины и места строки остаются.
   // Модель, которая уже есть другой строкой, не берём — вышел бы дубль строки состава.
   const inUseElsewhere = (rowId: string) => (m: CatalogModel) => hardware.some(h => h.id !== rowId && rowKeyOf(h) === keyOf(m.supplier, m.base))
-  function swapRow(rowId: string, mdl: CatalogModel) {
-    setDraft(d => (d.hardware.some(h => h.id !== rowId && rowKeyOf(h) === keyOf(mdl.supplier, mdl.base)) ? d : {
+  // Замена — одно касание, на телефоне легко промахнуться: последняя замена помнится и
+  // откатывается кнопкой «Вернуть», пока строку не поменяли снова.
+  type SwapPrev = Pick<HwRow, 'base' | 'role' | 'label' | 'stockMm' | 'supplier'>
+  const [lastSwap, setLastSwap] = useState<{ rowId: string; prev: SwapPrev; to: string }[]>([])
+  function swapRows(list: { id: string; to: CatalogModel }[]) {
+    const ok = list.filter(x => !hardware.some(h => h.id !== x.id && rowKeyOf(h) === keyOf(x.to.supplier, x.to.base)))
+    if (!ok.length) return
+    setLastSwap(ok.flatMap(x => {
+      const h = hardware.find(r => r.id === x.id)
+      return h ? [{ rowId: x.id, prev: { base: h.base, role: h.role, label: h.label, stockMm: h.stockMm, supplier: h.supplier }, to: keyOf(x.to.supplier, x.to.base) }] : []
+    }))
+    setDraft(d => ({
       ...d,
-      hardware: d.hardware.map(h => (h.id === rowId
-        ? { ...h, base: mdl.base, role: mdl.role, label: mdl.name, stockMm: mdl.stockMm, supplier: mdl.supplier === 'vetro' ? 'vetro' as const : undefined }
-        : h)),
+      hardware: d.hardware.map(h => {
+        const mdl = ok.find(x => x.id === h.id)?.to
+        return mdl ? { ...h, base: mdl.base, role: mdl.role, label: mdl.name, stockMm: mdl.stockMm, supplier: mdl.supplier === 'vetro' ? 'vetro' as const : undefined } : h
+      }),
     }))
   }
+  const swapRow = (rowId: string, mdl: CatalogModel) => swapRows([{ id: rowId, to: mdl }])
+  const undoable = lastSwap.filter(x => hardware.some(h => h.id === x.rowId && rowKeyOf(h) === x.to))
+  function undoSwap() {
+    setDraft(d => ({ ...d, hardware: d.hardware.map(h => { const x = undoable.find(u => u.rowId === h.id); return x ? { ...h, ...x.prev } : h }) }))
+    setLastSwap([])
+  }
+  const undoLine = (items: typeof undoable) => items.length > 0 && (
+    <p className="text-[12px] text-[#4b4b47] rounded-lg bg-[#f5f5f3] px-2.5 py-1.5 flex items-baseline gap-2">
+      <span className="min-w-0 flex-1 truncate">Заменено: {items.map(x => `${x.prev.base} → ${hardware.find(h => h.id === x.rowId)?.base}`).join(', ')}</span>
+      <button onClick={undoSwap} className="text-[#2563eb] hover:underline shrink-0">Вернуть</button>
+    </p>
+  )
   // Сменили цвет — часть деталей в нём не продаётся: строка подсвечена, а одной кнопкой каждая
   // меняется на ближайший вариант той же разновидности, который в этом цвете есть.
   const noFinish = hardware.filter(h => { const m = byBase.get(rowKeyOf(h)); return !!m && !m.variants[finishId] })
@@ -481,6 +504,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         {mdl && !mdl.variants[finishId] && (
           <p className="text-[12px] text-[#c2410c]">В цвете «{finish.label}» этой детали нет — выберите замену: варианты ниже в этом цвете есть.</p>
         )}
+        {undoLine(undoable.filter(x => x.rowId === selRow.id))}
         {mdl && alts.length > 0 && (
           <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label} cols="grid-cols-4 md:grid-cols-8 lg:grid-cols-4"
             inUse={inUseElsewhere(selRow.id)} onSwap={m => swapRow(selRow.id, m)}
@@ -498,12 +522,13 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         <button onClick={() => setPicker(true)} disabled={!catalog} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12.5px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40">+ Из каталога</button>
       </div>
       {catalogErr && <p className="text-[12px] text-[#c2410c]">{catalogErr}</p>}
+      {undoLine(undoable)}
       {noFinish.length > 0 && (
         <div className="rounded-xl border border-[#f1d3bf] bg-[#fdf6f1] p-2.5 space-y-1.5">
           <p className="text-[12px] text-[#c2410c]">В цвете «{finish.label}» нет: {noFinish.map(h => h.base).join(', ')}. Цена без них не считается.</p>
           {finishSwaps.length > 0
             ? <>
-                <button onClick={() => finishSwaps.forEach(x => swapRow(x.id, x.to))} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold">
+                <button onClick={() => swapRows(finishSwaps)} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold">
                   Заменить {finishSwaps.length === noFinish.length ? '' : `${finishSwaps.length} из ${noFinish.length} `}на похожие в этом цвете
                 </button>
                 <p className="text-[11px] text-[#9a9a95]">Та же разновидность, ближе по цене; не подойдёт — коснитесь строки и выберите другую.</p>
