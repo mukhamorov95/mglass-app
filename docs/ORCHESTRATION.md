@@ -23,6 +23,7 @@
 | **Склад** | `/inventory`, `lib/inventory/**`, `api/inventory/**` | inventory (PR #237) | ⚠️ построен, **пуст** (0 позиций) |
 | Кабинет партнёра (B2B) | `/partner`, `api/partner/**`, `b2b_clients` | партнёрская | 🟡 A11 (УПД/ЭДО) |
 | 3D-конфигуратор / сайт | `components/configurator/**`, `app/configurator`, `app/embed/shower` | Сайт+3D | 🟢 идёт |
+| **Конструктор «Из деталей» — визуал** (схема К3, 3D К4) | `app/calculator/build/ComposeScheme.tsx`, `ComposePanel.tsx` (схема, привязка), `lib/calc/composeDraft.ts`, `lib/calc/composeLayout.ts` — маршрут `docs/configurator/CONSTRUCTOR_ROUTE.md`. Цену не трогает (`/api/calc/composition`, `lib/calc/composition.ts` — не его); 3D-сцену импортирует, правки в `components/configurator/**` — через `docs/CONFIGURATOR_COORDINATION.md` | Конструктор — визуал (с 09.10) | 🟢 К3 в работе |
 | Ограждения | калькулятор ограждений, `feat/railing-manager` | railing | 🟡 |
 | **Кабинет менеджера (B2C, MGlass)** | `/calculator/quick`, `/calculations`, `/kp`, `/contracts`, `/clients`, новая `deals` | b2b-quote-price-adjustment | 🟢 идёт (шаг 1) |
 | Кабинет менеджера (B2B) | `b2b-quotes`, `b2b-orders`, `b2b-invoices`, `b2b-crm`, `lib/b2b/**`, `calculator/b2b` | b2b-quote-price-adjustment | 🟢 идёт |
