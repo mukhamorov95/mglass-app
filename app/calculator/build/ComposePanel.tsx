@@ -5,7 +5,7 @@ import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { FINANCE_FALLBACK, type Finance } from '@/lib/pricing/pickFinance'
 import type { BomItem } from '@/lib/kp/bomSections'
-import type { CompositionResult, CompositionRole } from '@/lib/calc/composition'
+import { SUPPLIER_RU, type CompositionResult, type CompositionRole } from '@/lib/calc/composition'
 import type { CatalogGroupId, CatalogModel } from '@/lib/calc/compositionCatalog'
 import { COMPOSE_TEMPLATES, applyTemplate, resolvePieces, type ComposeTemplate } from '@/lib/calc/composeTemplates'
 import { DRAFT_KEY, DRAFT_KEY_V1, migrateDraft, type Draft, type Edge, type HwRow, type PanelKind, type PanelRow, type Shape, type Spot } from '@/lib/calc/composeDraft'
@@ -19,7 +19,7 @@ import type { GlassTint } from '@/components/configurator/scene/assembly'
 import { ComposeScheme } from './ComposeScheme'
 
 // Конструктор «Из деталей» (docs/configurator/CONSTRUCTOR_ROUTE.md, К1–К3): душевая, которой нет
-// среди моделей, собирается из стёкол и фурнитуры каталога АВ24 с фото. Себестоимость
+// среди моделей, собирается из стёкол и фурнитуры каталогов АВ24 и Ветро (К5). Себестоимость
 // считает сервер (/api/calc/composition — тот же расчёт по составу, что для чертежа),
 // цена клиенту — той же формулой, что у моделей. Корзина общая с родителем.
 // Черновик живёт в localStorage до «+ В КП» или явной очистки: собранное руками не теряется.
@@ -54,6 +54,9 @@ const DEFAULT_QTY: Partial<Record<CompositionRole, number>> = { hinge: 2, connec
 const GROUP_OF: Partial<Record<CompositionRole, CatalogGroupId>> = { 'seal-hinge': 'seal', 'seal-magnet': 'seal', 'seal-bottom': 'seal' }
 // Строка «ждёт подбора» на схеме и в 3D; без двоеточия — ключ детали сцены режет id по нему.
 const PENDING = 'pend_'
+// Модель каталога — поставщик + база: у АВ24 и Ветро базы могли бы совпасть.
+const keyOf = (supplier: string | undefined, base: string) => `${supplier ?? 'av24'}|${base}`
+const rowKeyOf = (h: HwRow) => keyOf(h.supplier, h.base)
 
 const RUB = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const RUBk = (n: number) => `${n.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`
@@ -165,7 +168,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       .then(setCatalog)
       .catch((e: Error) => setCatalogErr(`Каталог фурнитуры не загрузился: ${e.message}`))
   }, [])
-  const byBase = useMemo(() => new Map((catalog?.models ?? []).map(m => [m.base, m])), [catalog])
+  const byBase = useMemo(() => new Map((catalog?.models ?? []).map(m => [keyOf(m.supplier, m.base), m])), [catalog])
   const [picker, setPicker] = useState(false)
 
   const [margin, setMargin] = useState(String(FINANCE_FALLBACK.marginPct))
@@ -189,7 +192,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   const bodyKey = JSON.stringify({
     glassId, thickness, finishId,
     panels: okPanels.map(p => ({ label: p.label || 'Стекло', w: numOr(p.w), h: numOr(p.h) })),
-    hardware: okHw.map(h => ({ role: h.role, label: h.label, article: h.base, ...(isLinear(h) ? { pieces_mm: piecesOf(h) } : { qty: numOr(h.qty) }) })),
+    hardware: okHw.map(h => ({ role: h.role, label: h.label, article: h.base, ...(h.supplier === 'vetro' ? { supplier: 'vetro' } : {}), ...(isLinear(h) ? { pieces_mm: piecesOf(h) } : { qty: numOr(h.qty) }) })),
   })
   const hasPanels = okPanels.length > 0
 
@@ -276,7 +279,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     const missing: string[] = []
     const rows: HwRow[] = []
     for (const h of a.hardware) {
-      const m = byBase.get(h.base)
+      const m = byBase.get(keyOf('av24', h.base))
       if (!m) { missing.push(h.base); continue }
       // В каталоге позиция штучная, а в шаблоне куски — считаем кусками-штуками, а не теряем.
       const linear = m.stockMm != null
@@ -327,13 +330,13 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
 
   function addModel(mdl: CatalogModel) {
     setDraft(d => {
-      const have = d.hardware.find(h => h.base === mdl.base)
+      const have = d.hardware.find(h => rowKeyOf(h) === keyOf(mdl.supplier, mdl.base))
       if (have && mdl.stockMm == null) return { ...d, hardware: d.hardware.map(h => (h.id === have.id ? { ...h, qty: String(numOr(h.qty) + 1) } : h)) }
       if (have || d.hardware.length >= 30) return d
-      return { ...d, hardware: [...d.hardware, { id: uid(), base: mdl.base, role: mdl.role, label: mdl.name, stockMm: mdl.stockMm, qty: String(DEFAULT_QTY[mdl.role] ?? 1), pieces: '' }] }
+      return { ...d, hardware: [...d.hardware, { id: uid(), base: mdl.base, role: mdl.role, label: mdl.name, stockMm: mdl.stockMm, qty: String(DEFAULT_QTY[mdl.role] ?? 1), pieces: '', ...(mdl.supplier === 'vetro' ? { supplier: 'vetro' as const } : {}) }] }
     })
   }
-  const countIn = (base: string) => { const h = hardware.find(x => x.base === base); return h ? (h.stockMm == null ? numOr(h.qty) : 1) : 0 }
+  const countIn = (m: CatalogModel) => { const h = hardware.find(x => rowKeyOf(x) === keyOf(m.supplier, m.base)); return h ? (h.stockMm == null ? numOr(h.qty) : 1) : 0 }
   // Подсказки длин — размеры стёкол: уплотнитель по высоте двери, порог по ширине.
   const dimChips = [...new Set(okPanels.flatMap(p => [numOr(p.h), numOr(p.w)]))].sort((a, b) => b - a)
 
@@ -404,7 +407,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                   glassSwatch={GLASS.find(g => g.id === glassId)?.swatch ?? '#dfeaf6'} finishHex={finish.hex} />}
           {selRow && (() => {
             const num = hardware.findIndex(h => h.id === selRow.id) + 1
-            const mdl = byBase.get(selRow.base)
+            const mdl = byBase.get(rowKeyOf(selRow))
             const lin = selRow.stockMm != null
             return (
               <div className="rounded-xl border border-[#bfd0f5] bg-[#f5f8ff] p-3 flex gap-3">
@@ -553,7 +556,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           {pending.length > 0 && (
             <div className="rounded-xl border border-[#f1d3bf] bg-[#fdf6f1] p-3 space-y-1">
               <p className="text-[12.5px] text-[#c2410c]">
-                <b>Из чертежа{draft.step?.file ? ` «${draft.step.file}»` : ''} — нет в каталоге АВ24 · {pending.length}.</b>{' '}
+                <b>Из чертежа{draft.step?.file ? ` «${draft.step.file}»` : ''} — нет в каталоге · {pending.length}.</b>{' '}
                 На схеме и в 3D стоят на своих местах, в цену не вошли — подберите позицию из каталога.
               </p>
               {pending.map((p, j) => (
@@ -574,10 +577,10 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               ))}
             </div>
           )}
-          {!hardware.length && !pending.length && <p className="text-[13px] text-[#9a9a95]">Петли, коннекторы, ручки, уплотнители — из каталога АВ24 с фото. Цена берётся в выбранном цвете.</p>}
+          {!hardware.length && !pending.length && <p className="text-[13px] text-[#9a9a95]">Петли, коннекторы, ручки, уплотнители — из каталогов АВ24 и Ветро. Цена берётся в выбранном цвете.</p>}
           <div className="divide-y divide-[#efefeb]">
             {hardware.map((h, idx) => {
-              const mdl = byBase.get(h.base)
+              const mdl = byBase.get(rowKeyOf(h))
               const img = mdl?.variants[finishId]?.image ?? mdl?.image
               const line = hwLineOf(h.id)
               const lin = isLinear(h)
@@ -596,7 +599,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[13px] text-[#111110] leading-snug">{h.label}</div>
-                        <div className="text-[11px] text-[#9a9a95] font-mono">{line?.article ?? h.base}{materialOf(h.base) && <span className="font-sans"> · {materialOf(h.base)}</span>}{lin && <span className="font-sans"> · полоса {(h.stockMm! / 1000).toLocaleString('ru-RU')} м</span>}</div>
+                        <div className="text-[11px] text-[#9a9a95] font-mono">{line?.article ?? h.base}<span className="font-sans"> · {SUPPLIER_RU[h.supplier ?? 'av24']}</span>{materialOf(h.base) && <span className="font-sans"> · {materialOf(h.base)}</span>}{lin && <span className="font-sans"> · полоса {(h.stockMm! / 1000).toLocaleString('ru-RU')} м</span>}</div>
                         <button onClick={() => (on ? setPicked(null) : pickRow(h.id, 'scheme'))} className="text-left text-[11.5px] text-[#2563eb] hover:underline mt-0.5">
                           {on ? 'Выбрана на схеме — готово' : where ? `На схеме: ${where}` : 'Нет на схеме — указать'}
                         </button>
@@ -645,7 +648,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         <h2 className="text-[15px] font-semibold text-[#111110]">Цена</h2>
         <div className="space-y-1">
           <div className="flex justify-between"><span className="text-[#6b6b66]">Стекло{res?.glass.material ? ` · ${res.glass.material} ${thickness} мм` : ''}</span><span className="font-mono">{RUB(glassCost)}</span></div>
-          <div className="flex justify-between"><span className="text-[#6b6b66]">Фурнитура АВ24 · закупка</span><span className="font-mono">{RUB(hwCost)}</span></div>
+          <div className="flex justify-between"><span className="text-[#6b6b66]">Фурнитура · закупка</span><span className="font-mono">{RUB(hwCost)}</span></div>
           <div className="flex justify-between font-semibold"><span>Себестоимость</span><span className="font-mono">{RUB(cost)}</span></div>
         </div>
         {fresh && fresh.stops.length > 0 && (
@@ -727,7 +730,7 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
   catalog: Catalog
   finishId: FinishId
   finishLabel: string
-  countIn: (base: string) => number
+  countIn: (m: CatalogModel) => number
   onPick: (m: CatalogModel) => void
   onClose: () => void
   full: boolean
@@ -738,7 +741,7 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
   const [q, setQ] = useState('')
   const [onlyFinish, setOnlyFinish] = useState(true)
   const needle = q.trim().toLowerCase().replace(/x/g, 'х')
-  const match = (m: CatalogModel) => !needle || `${m.name} ${m.base} ${m.category}`.toLowerCase().replace(/x/g, 'х').includes(needle)
+  const match = (m: CatalogModel) => !needle || `${m.name} ${m.base} ${m.category} ${SUPPLIER_RU[m.supplier]}`.toLowerCase().replace(/x/g, 'х').includes(needle)
   const avail = (m: CatalogModel) => !onlyFinish || !!m.variants[finishId]
   // Поиск идёт по всем разделам: менеджер помнит артикул, а не раздел.
   const list = catalog.models.filter(m => (needle ? true : m.group === group) && match(m) && avail(m))
@@ -760,7 +763,7 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
         <div className="bg-white border-b border-[#e4e4e0] p-3 space-y-2">
           {forName && <p className="text-[12.5px] text-[#4b4b47]">Позиция каталога для детали из чертежа: <b className="text-[#111110]">{forName}</b>. Количество и места останутся как в чертеже.</p>}
           <div className="flex items-center gap-2">
-            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: FDP-230, петля 90, коннектор стекло-стекло…"
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: FDP-230, Dessau-103, петля 90, ветро…"
               className="flex-1 bg-[#f5f5f3] border border-[#e4e4e0] rounded-lg px-3 py-2.5 text-[14px] outline-none focus:border-[#111110]" />
             <button onClick={onClose} className="px-4 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold">Готово</button>
           </div>
@@ -783,14 +786,14 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
             {list.map(m => {
               const v = m.variants[finishId]
-              const n = countIn(m.base)
+              const n = countIn(m)
               return (
-                <button key={m.base} onClick={() => v && onPick(m)} disabled={!v || (full && !n)}
+                <button key={`${m.supplier}|${m.base}`} onClick={() => v && onPick(m)} disabled={!v || (full && !n)}
                   className={`relative text-left bg-white rounded-xl border p-2 flex flex-col gap-1.5 transition-colors ${n ? 'border-[#111110]' : 'border-[#e4e4e0] hover:border-[#111110]'} disabled:opacity-50 disabled:hover:border-[#e4e4e0]`}>
                   <Thumb src={v?.image ?? m.image} alt={m.name} size="w-full aspect-square" />
                   {n > 0 && <span className="absolute top-3 right-3 bg-[#111110] text-white text-[11px] font-semibold rounded-full px-2 py-0.5">{m.stockMm == null ? `×${n}` : '✓'}</span>}
                   <span className="text-[12px] leading-snug text-[#111110] line-clamp-3">{m.name}</span>
-                  <span className="text-[10.5px] text-[#9a9a95] font-mono">{m.base}{materialOf(m.base) && <span className="font-sans"> · {materialOf(m.base)}</span>}</span>
+                  <span className="text-[10.5px] text-[#9a9a95] font-mono">{m.base}<span className="font-sans"> · {SUPPLIER_RU[m.supplier]}</span>{materialOf(m.base) && <span className="font-sans"> · {materialOf(m.base)}</span>}</span>
                   <span className="text-[12px] font-mono text-[#111110] mt-auto">
                     {v ? <>{RUBk(v.cost)}{m.stockMm != null && <span className="font-sans text-[#9a9a95]"> / {(m.stockMm / 1000).toLocaleString('ru-RU')} м</span>}</>
                       : <span className="font-sans text-[#c2410c]">нет в этом цвете</span>}

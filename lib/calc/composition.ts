@@ -3,6 +3,7 @@ import type { B2BMaterial } from '@/lib/types'
 import type { B2BRates } from '@/lib/b2b/rates'
 import type { FINISH_IDS } from '@/lib/configurator/pricing'
 import { articleBase, isDefectRow, rowCost, rowFinish, splitAv24Article, type ColorAxis, type SupplierRowLike } from '@/lib/supplier/colorCode'
+import { pickVetroRow, vetroRowsFor } from '@/lib/calc/vetroRows'
 
 // Расчёт душевой по составу чертежа (SHOWROOM_COST_ROUTE.md, этап Ч3). Для изделий, которых
 // нет среди моделей М1…М12 (две распашные двери в нишу и т.п.): створки с размерами и
@@ -11,6 +12,7 @@ import { articleBase, isDefectRow, rowCost, rowFinish, splitAv24Article, type Co
 //    скидка M GLASS.
 //  • Фурнитура — справочник АВ24 по артикулу и цвету: розница × (1 − скидка), округление
 //    только у итога (так считает лист закупки владельца). Погонное — целыми полосами.
+//    Строка конструктора бывает и Ветро (К5): модель и цвет — vetroRows.ts.
 // Чего нет в справочнике или не читается — остановка, а не догадка. Сверено вручную 08.10
 // на чертеже 0014-6: стекло 8 972, фурнитура 18 202,5.
 
@@ -31,11 +33,17 @@ export const axisOf = (r: CompositionRole): ColorAxis => (CONSUMABLE.has(r) ? 'c
 // Артикул или база артикула АВ24: «FDP-230», «FDP-230 BR», «TUB 2.2».
 export const ARTICLE_RE = /^[A-Za-z0-9][A-Za-z0-9.\- /]{1,40}$/
 
+// Поставщик строки состава: чертёж и шаблоны — АВ24, конструктор — модель каталога любого (К5).
+export const SUPPLIERS = ['av24', 'vetro'] as const
+export type Supplier = typeof SUPPLIERS[number]
+export const SUPPLIER_RU: Record<Supplier, string> = { av24: 'АВ24', vetro: 'Ветро' }
+
 export type CompositionPanel = { label: string; w: number; h: number; derived?: boolean; evidence?: string }
 export type CompositionHardware = {
   role: CompositionRole
   label: string
   article: string | null      // как на чертеже: «FDP-230» или с материалом «FDP-230 BR»
+  supplier?: Supplier         // нет — АВ24; у Ветро article — база модели («Dessau-103»)
   qty?: number                // штучное
   pieces_mm?: number[]        // погонное: длины кусков
   evidence?: string
@@ -52,6 +60,7 @@ export type HardwareLine = {
   label: string
   article: string | null      // строка справочника, по которой взята цена
   base: string | null
+  supplier: Supplier
   fromDrawing: boolean        // false — артикула на чертеже нет, взят ходовой
   qty: number
   unit: number | null
@@ -142,6 +151,7 @@ export function priceComposition(
     rates: B2BRates
     mgDiscount: number
     av24: SupplierRowLike[]    // строки АВ24 по всем нужным артикулам (лишние отсекаются здесь)
+    vetro?: SupplierRowLike[]  // строки Ветро по моделям состава (так же)
   },
 ): CompositionResult {
   const stops: string[] = []
@@ -172,18 +182,20 @@ export function priceComposition(
     const pieces = (hw.pieces_mm ?? []).map(Math.round).filter(n => n > 0)
     const fromDrawing = !!hw.article?.trim()
     const asked = fromDrawing ? hw.article!.trim() : defaultArticle(hw.role, hw.label, pieces)
-    const line: HardwareLine = { role: hw.role, label: hw.label, article: null, base: null, fromDrawing, qty: 0, unit: null, total: null }
+    const sup: Supplier = hw.supplier ?? 'av24'
+    const line: HardwareLine = { role: hw.role, label: hw.label, article: null, base: null, supplier: sup, fromDrawing, qty: 0, unit: null, total: null }
     lines.push(line)
     if (!asked) { stops.push(`${hw.label}: нет артикула на чертеже и нет ходовой позиции — укажите артикул`); continue }
     if (!fromDrawing) notes.push(`${hw.label}: артикула на чертеже нет — взят ходовой ${asked}`)
 
-    const own = rowsForArticle(asked, ctx.av24)
-    const bases = [...new Set(own.map(r => articleBase('av24', r.article)))]
-    if (!own.length) { stops.push(`${hw.label}: ${asked} нет в справочнике АВ24`); continue }
+    const vetro = sup === 'vetro'
+    const own = vetro ? vetroRowsFor(asked, ctx.vetro ?? []) : rowsForArticle(asked, ctx.av24)
+    const bases = vetro ? [asked] : [...new Set(own.map(r => articleBase('av24', r.article)))]
+    if (!own.length) { stops.push(`${hw.label}: ${asked} нет в справочнике ${SUPPLIER_RU[sup]}`); continue }
     if (bases.length > 1) { stops.push(`${hw.label}: у ${asked} несколько исполнений (${bases.join(', ')}) — уточните артикул`); continue }
     line.base = bases[0]
 
-    const row = pickRow(own, axisOf(hw.role), input.finishId)
+    const row = vetro ? pickVetroRow(own, axisOf(hw.role), input.finishId) : pickRow(own, axisOf(hw.role), input.finishId)
     if (!row) { stops.push(`${hw.label}: у ${line.base} нет цены нужного цвета`); continue }
     const unit = rowCost(row)
     line.unit = unit

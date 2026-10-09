@@ -459,7 +459,7 @@ export function interpretStep(m: StepModel): StepImport {
 
 // ── В черновик конструктора ──
 
-export type StepCatalogItem = Pick<CatalogModel, 'base' | 'role' | 'name' | 'stockMm'>
+export type StepCatalogItem = Pick<CatalogModel, 'base' | 'role' | 'name' | 'stockMm'> & { supplier?: CatalogModel['supplier'] }
 
 // Артикул из названия детали: «Dessau-103 Петля хром» → Dessau-103. Слово с цифрой через дефис.
 export function articlesOf(name: string): string[] {
@@ -486,6 +486,7 @@ export function hwRowOf(src: { qty: number; pieces?: number[]; at: Spot[] }, m: 
     id, base: m.base, role: m.role, label: m.name, stockMm: m.stockMm,
     qty: String(linear ? Math.max(1, src.pieces?.length ?? 1) : qty),
     pieces: linear ? (src.pieces ?? []).join(', ') : '', at: src.at,
+    ...(m.supplier === 'vetro' ? { supplier: 'vetro' as const } : {}),
   }
 }
 
