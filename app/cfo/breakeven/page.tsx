@@ -332,7 +332,7 @@ export default function BreakevenPage() {
               {saveErr && <span className="text-[12px] text-red-600">Не сохранилось: {saveErr}</span>}
               <button onClick={save} disabled={saving || (isFact && !factDirty)}
                 className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
-                {saving ? '…' : isFact ? (factDirty ? '💾 Сохранить правки' : '✓ Правки сохранены') : savedOk ? '✓ Сохранено' : '💾 Сохранить'}
+                {saving ? '…' : isFact ? (factDirty ? '💾 Сохранить правки' : editCount ? '✓ Правки сохранены' : 'Правок нет') : savedOk ? '✓ Сохранено' : '💾 Сохранить'}
               </button>
             </div>
           )}
@@ -365,7 +365,7 @@ export default function BreakevenPage() {
                   {fact.editsError && <span className="text-amber-700"> Правки из приложения не прочитаны — только книга.</span>}
                 </p>}
             <p className="text-[#9a9a95]">
-              Числа можно править: бледным слева от поля — исходное (доля «Маржи» или значение вкладки M-Glass), подсвеченное поле — ваша правка, ↺ возвращает исходное. Можно добавить свою строку переменных (например, ГСМ).
+              Числа можно править: бледным слева от поля — исходное (доля «Маржи» или значение вкладки M-Glass), подсвеченное поле — ваша правка, «вернуть» возвращает исходное. Можно добавить свою строку переменных (например, ГСМ).
               {editCount > 0 && <> Правок: {editCount}{factDirty && ' — не сохранены'}. <button
                 onClick={() => { if (window.confirm('Сбросить все правки на вкладке «M-Glass · факт «Маржи»»?')) setFactEdits({}) }}
                 className="underline text-[#6b6b66] hover:text-[#111110]">Сбросить все</button></>}
@@ -772,14 +772,14 @@ export default function BreakevenPage() {
 }
 
 // Вкладка факта: исходное значение бледно слева от поля — видно, что было и что введено.
+// Возврат — словом: знак ↺ в моноширинном шрифте страницы читался как «σ».
 function Orig({ value, edited, onReset, pct }: { value: number | undefined; edited: boolean; onReset: () => void; pct?: boolean }) {
   const text = value == null ? 'своя строка'
     : pct ? `${Number(value.toFixed(2)).toLocaleString('ru-RU')} %` : Math.round(value).toLocaleString('ru-RU')
   return (
-    <span className={`w-28 shrink-0 text-right text-[10px] font-mono leading-tight ${edited ? 'text-amber-700' : 'text-[#bdbdb7]'}`}
-      title={edited ? 'Исходное значение — ↺ вернёт его' : 'Исходное значение'}>
-      {edited && <button onClick={onReset} className="mr-1 hover:text-[#111110]" aria-label="Вернуть исходное">↺</button>}
-      {edited ? `было ${text}` : text}
+    <span className={`w-32 shrink-0 text-right text-[10px] font-mono leading-tight ${edited ? 'text-amber-700' : 'text-[#bdbdb7]'}`}
+      title="Исходное значение">
+      {edited ? <>было {text} · <button onClick={onReset} className="underline hover:text-[#111110]">вернуть</button></> : text}
     </span>
   )
 }
