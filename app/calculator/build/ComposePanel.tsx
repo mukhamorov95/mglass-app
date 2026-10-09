@@ -16,7 +16,10 @@ import { confirmDialog } from '@/lib/dialog'
 import { getModel } from '@/lib/configurator/arrangement'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
 import type { GlassTint } from '@/components/configurator/scene/assembly'
+import { alternativesOf, kindOf, sameKind, type Kind } from '@/lib/calc/catalogKinds'
 import { ComposeScheme } from './ComposeScheme'
+import { Thumb } from './ComposeThumb'
+import { Variants } from './ComposeVariants'
 
 // Конструктор «Из деталей» (docs/configurator/CONSTRUCTOR_ROUTE.md, К1–К3): душевая, которой нет
 // среди моделей, собирается из стёкол и фурнитуры каталогов АВ24 и Ветро (К5). Себестоимость
@@ -136,7 +139,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   }
   const [pendFocus, setPendFocus] = useState<string | null>(null)
   const unplacedHw = layout.elevation.unplaced.filter(id => !id.startsWith(PENDING))
-  function pickRow(id: string, scroll: 'scheme' | 'row' | null) {
+  function pickRow(id: string, scroll: 'scheme' | 'row' | 'card' | null) {
     if (id.startsWith(PENDING)) {
       const pid = id.slice(PENDING.length)
       setPicked(null); setPendFocus(pid)
@@ -147,6 +150,8 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     setPicked(id)
     if (scroll === 'scheme') schemeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     if (scroll === 'row') document.getElementById(`hw-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // Карточка появляется после перерисовки — прокрутка следом за ней.
+    if (scroll === 'card') setTimeout(() => document.getElementById('sel-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
   }
   // 3D из той же раскладки: касание детали на сцене выбирает её строку, как на схеме.
   const [view, setView] = useState<'scheme' | '3d'>('scheme')
@@ -336,6 +341,24 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       return { ...d, hardware: [...d.hardware, { id: uid(), base: mdl.base, role: mdl.role, label: mdl.name, stockMm: mdl.stockMm, qty: String(DEFAULT_QTY[mdl.role] ?? 1), pieces: '', ...(mdl.supplier === 'vetro' ? { supplier: 'vetro' as const } : {}) }] }
     })
   }
+  // Замена детали вариантом той же разновидности: количество, длины и места строки остаются.
+  // Модель, которая уже есть другой строкой, не берём — вышел бы дубль строки состава.
+  const inUseElsewhere = (rowId: string) => (m: CatalogModel) => hardware.some(h => h.id !== rowId && rowKeyOf(h) === keyOf(m.supplier, m.base))
+  function swapRow(rowId: string, mdl: CatalogModel) {
+    setDraft(d => (d.hardware.some(h => h.id !== rowId && rowKeyOf(h) === keyOf(mdl.supplier, mdl.base)) ? d : {
+      ...d,
+      hardware: d.hardware.map(h => (h.id === rowId
+        ? { ...h, base: mdl.base, role: mdl.role, label: mdl.name, stockMm: mdl.stockMm, supplier: mdl.supplier === 'vetro' ? 'vetro' as const : undefined }
+        : h)),
+    }))
+  }
+  const [replaceFor, setReplaceFor] = useState<string | null>(null)
+  const replaceRow = hardware.find(h => h.id === replaceFor) ?? null
+  const replaceKind = useMemo(() => {
+    const mdl = replaceRow ? byBase.get(rowKeyOf(replaceRow)) : undefined
+    return mdl ? kindOf(mdl) : undefined
+  }, [replaceRow, byBase])
+  const closePicker = () => { setPicker(false); setPickFor(null); setReplaceFor(null) }
   const countIn = (m: CatalogModel) => { const h = hardware.find(x => rowKeyOf(x) === keyOf(m.supplier, m.base)); return h ? (h.stockMm == null ? numOr(h.qty) : 1) : 0 }
   // Подсказки длин — размеры стёкол: уплотнитель по высоте двери, порог по ширине.
   const dimChips = [...new Set(okPanels.flatMap(p => [numOr(p.h), numOr(p.w)]))].sort((a, b) => b - a)
@@ -410,7 +433,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             const mdl = byBase.get(rowKeyOf(selRow))
             const lin = selRow.stockMm != null
             return (
-              <div className="rounded-xl border border-[#bfd0f5] bg-[#f5f8ff] p-3 flex gap-3">
+              <div id="sel-card" className="rounded-xl border border-[#bfd0f5] bg-[#f5f8ff] p-3 flex gap-3 scroll-mt-4">
                 <Thumb src={mdl?.variants[finishId]?.image ?? mdl?.image} alt={selRow.label} size="w-14 h-14" />
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
@@ -437,6 +460,16 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                     {selRow.at !== undefined && <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button>}
                     <button onClick={() => pickRow(selRow.id, 'row')} className="text-[#2563eb] hover:underline">К строке ↓</button>
                   </div>
+                  {mdl && (() => {
+                    const alts = alternativesOf(mdl, catalog?.models ?? [], finishId)
+                    return alts.length > 0 && (
+                      <div className="pt-1.5 border-t border-[#dfe6f5]">
+                        <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label}
+                          inUse={inUseElsewhere(selRow.id)} onSwap={m => swapRow(selRow.id, m)}
+                          onAll={() => { setReplaceFor(selRow.id); setPicker(true) }} />
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             )
@@ -582,6 +615,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             {hardware.map((h, idx) => {
               const mdl = byBase.get(rowKeyOf(h))
               const img = mdl?.variants[finishId]?.image ?? mdl?.image
+              const altCount = mdl ? alternativesOf(mdl, catalog?.models ?? [], finishId).length : 0
               const line = hwLineOf(h.id)
               const lin = isLinear(h)
               const waiting = lin ? !piecesOf(h).length : !(numOr(h.qty) > 0)
@@ -603,6 +637,11 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                         <button onClick={() => (on ? setPicked(null) : pickRow(h.id, 'scheme'))} className="text-left text-[11.5px] text-[#2563eb] hover:underline mt-0.5">
                           {on ? 'Выбрана на схеме — готово' : where ? `На схеме: ${where}` : 'Нет на схеме — указать'}
                         </button>
+                        {altCount > 0 && (
+                          <button onClick={() => pickRow(h.id, 'card')} className="block text-left text-[11.5px] text-[#2563eb] hover:underline">
+                            Заменить · {kindOf(mdl!).label} · {altCount} вариантов
+                          </button>
+                        )}
                       </div>
                       <button onClick={() => set({ hardware: hardware.filter(x => x.id !== h.id) })} className="text-[#9a9a95] hover:text-[#c2410c] px-1" aria-label="Убрать">✕</button>
                     </div>
@@ -706,27 +745,16 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
 
       {picker && catalog && (
         <Picker catalog={catalog} finishId={finishId} finishLabel={finish.label} countIn={countIn}
-          onPick={pickForRow ? resolvePending : addModel} onClose={() => { setPicker(false); setPickFor(null) }}
-          full={!pickForRow && hardware.length >= 30} forName={pickForRow?.name}
-          initialGroup={pickForRow ? GROUP_OF[pickForRow.role] ?? (pickForRow.role as CatalogGroupId) : undefined} />
+          onPick={pickForRow ? resolvePending : replaceRow ? m => { swapRow(replaceRow.id, m); closePicker() } : addModel} onClose={closePicker}
+          full={!pickForRow && !replaceRow && hardware.length >= 30} forName={pickForRow?.name ?? replaceRow?.label}
+          replacing={!!replaceRow} kind={replaceKind} linear={replaceRow ? replaceRow.stockMm != null : undefined}
+          initialGroup={pickForRow ? GROUP_OF[pickForRow.role] ?? (pickForRow.role as CatalogGroupId) : replaceRow ? byBase.get(rowKeyOf(replaceRow))?.group : undefined} />
       )}
     </div>
   )
 }
 
-function Thumb({ src, alt, size }: { src?: string | null; alt: string; size: string }) {
-  const [broken, setBroken] = useState(false)
-  return (
-    <div className={`${size} shrink-0 rounded-lg bg-white border border-[#efefeb] overflow-hidden flex items-center justify-center`}>
-      {src && !broken
-        // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="w-full h-full object-contain" />
-        : <span className="text-[10px] text-[#c9c9c4] text-center px-1">нет фото</span>}
-    </div>
-  )
-}
-
-function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full, forName, initialGroup }: {
+function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full, forName, initialGroup, replacing, kind, linear }: {
   catalog: Catalog
   finishId: FinishId
   finishLabel: string
@@ -734,17 +762,22 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
   onPick: (m: CatalogModel) => void
   onClose: () => void
   full: boolean
-  forName?: string                // подбор позиции для детали из чертежа: выбор закрывает окно
+  forName?: string                // подбор позиции для детали из чертежа или замена строки: выбор закрывает окно
   initialGroup?: CatalogGroupId
+  replacing?: boolean
+  kind?: Kind                     // замена: только эта разновидность, пока фишку не сняли
+  linear?: boolean                // замена: погонную — только на погонную
 }) {
   const [group, setGroup] = useState<CatalogGroupId>(initialGroup && catalog.groups.some(g => g.id === initialGroup) ? initialGroup : 'hinge')
   const [q, setQ] = useState('')
   const [onlyFinish, setOnlyFinish] = useState(true)
+  const [onlyKind, setOnlyKind] = useState(!!kind)
   const needle = q.trim().toLowerCase().replace(/x/g, 'х')
   const match = (m: CatalogModel) => !needle || `${m.name} ${m.base} ${m.category} ${SUPPLIER_RU[m.supplier]}`.toLowerCase().replace(/x/g, 'х').includes(needle)
   const avail = (m: CatalogModel) => !onlyFinish || !!m.variants[finishId]
   // Поиск идёт по всем разделам: менеджер помнит артикул, а не раздел.
-  const list = catalog.models.filter(m => (needle ? true : m.group === group) && match(m) && avail(m))
+  const fits = (m: CatalogModel) => (linear === undefined || (m.stockMm != null) === linear) && (!kind || !onlyKind || (m.group === group && sameKind(kind, kindOf(m))))
+  const list = catalog.models.filter(m => (needle ? true : m.group === group) && match(m) && avail(m) && fits(m))
   const counts = useMemo(() => {
     const c: Partial<Record<CatalogGroupId, number>> = {}
     for (const m of catalog.models) if (avail(m)) c[m.group] = (c[m.group] ?? 0) + 1
@@ -761,7 +794,8 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
     <div className="fixed inset-0 z-50 bg-black/30 flex md:p-6" onClick={onClose}>
       <div className="bg-[#f5f5f3] flex-1 flex flex-col md:rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="bg-white border-b border-[#e4e4e0] p-3 space-y-2">
-          {forName && <p className="text-[12.5px] text-[#4b4b47]">Позиция каталога для детали из чертежа: <b className="text-[#111110]">{forName}</b>. Количество и места останутся как в чертеже.</p>}
+          {forName && !replacing && <p className="text-[12.5px] text-[#4b4b47]">Позиция каталога для детали из чертежа: <b className="text-[#111110]">{forName}</b>. Количество и места останутся как в чертеже.</p>}
+          {forName && replacing && <p className="text-[12.5px] text-[#4b4b47]">Замена для <b className="text-[#111110]">{forName}</b>: количество и места на схеме останутся.</p>}
           <div className="flex items-center gap-2">
             <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: FDP-230, Dessau-103, петля 90, ветро…"
               className="flex-1 bg-[#f5f5f3] border border-[#e4e4e0] rounded-lg px-3 py-2.5 text-[14px] outline-none focus:border-[#111110]" />
@@ -775,10 +809,18 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-[12px] text-[#6e6e73]">
-            <input type="checkbox" checked={onlyFinish} onChange={e => setOnlyFinish(e.target.checked)} />
-            Только то, что есть в цвете «{finishLabel}»
-          </label>
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap">
+            <label className="flex items-center gap-2 text-[12px] text-[#6e6e73]">
+              <input type="checkbox" checked={onlyFinish} onChange={e => setOnlyFinish(e.target.checked)} />
+              Только то, что есть в цвете «{finishLabel}»
+            </label>
+            {kind && (
+              <label className="flex items-center gap-2 text-[12px] text-[#6e6e73]">
+                <input type="checkbox" checked={onlyKind} onChange={e => setOnlyKind(e.target.checked)} />
+                Только «{kind.label}»
+              </label>
+            )}
+          </div>
           {full && <p className="text-[12px] text-[#c2410c]">В изделии уже 30 позиций — больше расчёт не принимает.</p>}
         </div>
         <div className="flex-1 overflow-y-auto p-3">
