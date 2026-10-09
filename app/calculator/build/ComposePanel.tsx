@@ -458,12 +458,12 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     const wasMdl = wasPrev ? byBase.get(keyOf(wasPrev.supplier, wasPrev.base)) : undefined
     const unbind = (pieces: string) => setHw(selRow.id, { pieces, auto: undefined, ...(selRow.at === undefined ? { at: spotsOf(selRow) } : {}) })
     return (
-      <div id="sel-card" className="space-y-2 scroll-mt-4">
+      <div id="sel-card" className="space-y-1.5 scroll-mt-4">
         <div className="flex items-start gap-2.5">
           <Thumb src={mdl?.variants[finishId]?.image ?? mdl?.image} alt={selRow.label} size="w-14 h-14" />
           <div className="flex-1 min-w-0">
             <div className="text-[11px] text-[#9a9a95]">{num}. {groupLabel.get(groupOfRow(selRow)) ?? 'Деталь'}{mdl ? ` · ${kindOf(mdl).label}` : ''}</div>
-            <div className="text-[13.5px] font-semibold text-[#111110] leading-snug">{selRow.label}</div>
+            <div title={selRow.label} className="text-[13.5px] font-semibold text-[#111110] leading-snug lg:truncate">{selRow.label}</div>
             <div className="text-[11px] text-[#9a9a95] font-mono truncate">{line?.article ?? selRow.base}<span className="font-sans"> · {SUPPLIER_RU[selRow.supplier ?? 'av24']}{materialOf(selRow.base) && ` · ${materialOf(selRow.base)}`}{lin && ` · полоса ${(selRow.stockMm! / 1000).toLocaleString('ru-RU')} м`}</span></div>
           </div>
           <button onClick={() => setPicked(null)} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold shrink-0">Готово</button>
@@ -498,10 +498,11 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               ) : fresh ? <span className="text-[#c2410c]">не посчитано — см. итог</span> : <span className="text-[#9a9a95]">считаю…</span>}
           </span>
         </div>
+        {/* Как ставить на схеме — подсказкой в заголовке схемы: панель держит оба ряда вариантов на одном экране. */}
         <div className="text-[12px] text-[#4b4b47] rounded-lg bg-[#f5f8ff] border border-[#dfe6f5] px-2.5 py-1.5">
           <span className="text-[#111110]">{selSpots.length ? whereText(selRow) : 'На схеме её нет.'}</span>
           {selRow.at === undefined && selSpots.length > 0 && <span className="text-[#9a9a95]"> · по умолчанию</span>}
-          <span className="block text-[11px] text-[#6b6b66]">Касание кромки на схеме ставит или убирает деталь.{selRow.at !== undefined && <> <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button></>}</span>
+          {selRow.at !== undefined && <> · <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button></>}
         </div>
         {mdl && !mdl.variants[finishId] && (
           <p className="text-[12px] text-[#c2410c]">В цвете «{finish.label}» этой детали нет — выберите замену: варианты ниже в этом цвете есть.</p>
@@ -509,7 +510,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         {/* Прежняя деталь в ряду вариантов — бейдж «было», касание возвращает; строка — только если её там нет. */}
         {!(wasMdl && alts.slice(0, 7).includes(wasMdl)) && undoLine(undoable.filter(x => x.rowId === selRow.id))}
         {mdl && alts.length > 0 && (
-          <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label} cols="grid-cols-4 md:grid-cols-8 lg:grid-cols-4"
+          <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label} cols="grid-cols-4 md:grid-cols-8 lg:grid-cols-4" thumb="aspect-[3/2]"
             was={wasMdl} inUse={inUseElsewhere(selRow.id)} onSwap={m => swapRow(selRow.id, m)}
             onAll={() => { setReplaceFor(selRow.id); setPicker(true) }} />
         )}
@@ -669,9 +670,10 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               <button onClick={() => setDoorOpen(o => !o)} className={miniChip(false)}>{doorOpen ? 'Закрыть двери' : 'Открыть двери'}</button>
             )}
           </div>
-          {layout.elevation.panels.length > 0 && !selRow && (
-            <span className="text-[11px] text-[#9a9a95] text-right">
-              {view === '3d' ? 'крутите пальцем или мышью · касание детали — её варианты' : 'коснитесь детали — откроются её варианты'}
+          {layout.elevation.panels.length > 0 && (
+            <span className={`text-[11px] text-right ${selRow && view === 'scheme' ? 'text-[#2563eb]' : 'text-[#9a9a95]'}`}>
+              {view === '3d' ? 'крутите пальцем или мышью · касание детали — её варианты'
+                : selRow ? 'касание кромки ставит или убирает выбранную деталь' : 'коснитесь детали — откроются её варианты'}
             </span>
           )}
         </div>

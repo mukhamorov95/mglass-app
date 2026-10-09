@@ -32,7 +32,7 @@ function hints(ms: CatalogModel[], kindLabel: string): Map<CatalogModel, string>
   return new Map(ms.map((m, i) => [m, per[i].filter(w => count.get(low(w))! < ms.length).join(' ')]))
 }
 
-export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, onAll, was, limit = 7, cols = 'grid-cols-4 md:grid-cols-8' }: {
+export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, onAll, was, limit = 7, cols = 'grid-cols-4 md:grid-cols-8', thumb = 'aspect-[5/4]' }: {
   current: CatalogModel
   alts: CatalogModel[]
   finishId: FinishId
@@ -43,6 +43,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
   was?: CatalogModel                       // что стояло до последней замены: касание возвращает его
   limit?: number
   cols?: string                            // сетка зависит от того, где стоит панель: узкая колонка или во всю ширину
+  thumb?: string                           // пропорция фото: в узкой панели ниже, чтобы оба ряда помещались
 }) {
   const shown = [current, ...alts.slice(0, limit)]
   const hint = hints(shown, kindLabel)
@@ -62,7 +63,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
               title={`${m.name} · ${SUPPLIER_RU[m.supplier]}`}
               className={`relative text-left bg-white rounded-lg border p-1 flex flex-col gap-0.5 transition-colors disabled:opacity-40 ${now ? 'border-[#111110] ring-1 ring-[#111110]' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
               <span className="relative block">
-                <Thumb src={v?.image ?? m.image} alt={m.name} size="w-full aspect-[5/4]" />
+                <Thumb src={v?.image ?? m.image} alt={m.name} size={`w-full ${thumb}`} />
                 <span className="absolute bottom-0.5 right-0.5 bg-white/90 text-[#6b6b66] text-[9px] rounded px-1 leading-tight">{SUPPLIER_RU[m.supplier]}</span>
               </span>
               {now && <span className="absolute top-1.5 left-1.5 bg-[#111110] text-white text-[9.5px] font-semibold rounded px-1">сейчас</span>}
