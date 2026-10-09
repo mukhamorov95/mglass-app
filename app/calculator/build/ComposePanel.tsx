@@ -156,6 +156,8 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   const glassCost = fresh?.glass.cost ?? 0
   const hwCost = fresh?.hardware.cost ?? 0
   const cost = glassCost + hwCost
+  // Пока цена считается, сумм нет — «0 ₽» читался как «бесплатно».
+  const sum = (n: number) => (fresh || !hasPanels ? RUB(n) : '…')
   // Недописанная строка не входит в запрос, значит и в цену: пока она есть, цена занижена.
   const halfDone = okPanels.length < panels.length || okHw.length < hardware.length
   const usable = !!fresh && fresh.complete && !halfDone
@@ -376,9 +378,9 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       <aside className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3 text-[13px] lg:sticky lg:top-4">
         <h2 className="text-[15px] font-semibold text-[#111110]">Цена</h2>
         <div className="space-y-1">
-          <div className="flex justify-between"><span className="text-[#6b6b66]">Стекло{res?.glass.material ? ` · ${res.glass.material} ${thickness} мм` : ''}</span><span className="font-mono">{RUB(glassCost)}</span></div>
-          <div className="flex justify-between"><span className="text-[#6b6b66]">Фурнитура АВ24 · закупка</span><span className="font-mono">{RUB(hwCost)}</span></div>
-          <div className="flex justify-between font-semibold"><span>Себестоимость</span><span className="font-mono">{RUB(cost)}</span></div>
+          <div className="flex justify-between"><span className="text-[#6b6b66]">Стекло{res?.glass.material ? ` · ${res.glass.material} ${thickness} мм` : ''}</span><span className="font-mono">{sum(glassCost)}</span></div>
+          <div className="flex justify-between"><span className="text-[#6b6b66]">Фурнитура АВ24 · закупка</span><span className="font-mono">{sum(hwCost)}</span></div>
+          <div className="flex justify-between font-semibold"><span>Себестоимость</span><span className="font-mono">{sum(cost)}</span></div>
         </div>
         {fresh && fresh.stops.length > 0 && (
           <ul className="text-[12px] text-[#c2410c] space-y-0.5 list-disc pl-4">{fresh.stops.map(s => <li key={s}>{s}</li>)}</ul>
