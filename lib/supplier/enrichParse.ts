@@ -112,6 +112,61 @@ export function pickAv24Href(html: string, article: string): string {
   return exact ?? sameMaterial ?? hits[0]
 }
 
+// Ветро (Битрикс): ссылка в прайсе — на свой цвет (`…/2087/?oid=4146`), а страница товара одна на
+// модель, и в её конфиге JCCatalogElement лежат все цвета: 'OFFERS':[{'ID':'2090','NAME':'Dessau-103/CP. …',
+// … 'PREVIEW_PICTURE':{…'SRC':'/upload/…'}, 'DETAIL_PICTURE':{…}, 'SLIDER':[…]}]. Одна загрузка страницы
+// даёт фото каждого цвета (CONSTRUCTOR_ROUTE.md, К0 для Ветро). Превью 480 px — для сетки карточек,
+// большое 1200 px — только если превью нет.
+export type VetroPage = { image: string; offers: Map<string, string>; specs: Record<string, string> }
+
+export const vetroOfferId = (url: string) => url.match(/[?&]oid=(\d+)/)?.[1] ?? ''
+export const vetroProductUrl = (url: string) => url.split(/[?#]/)[0]
+
+export function pickVetroPage(html: string, url: string): VetroPage {
+  const offers = new Map<string, string>()
+  const at = html.indexOf("'OFFERS':[")
+  if (at >= 0) {
+    const end = html.indexOf("'OFFER_SELECTED'", at)
+    const block = html.slice(at, end > at ? end : undefined)
+    const starts = [...block.matchAll(/\{'ID':'(\d+)','NAME':'/g)]
+    starts.forEach((m, i) => {
+      const chunk = block.slice(m.index!, starts[i + 1]?.index ?? block.length)
+      const src = ['PREVIEW_PICTURE', 'DETAIL_PICTURE'].map(k => chunk.match(new RegExp(`'${k}':\\{[^{}]*?'SRC':'([^']+)'`))?.[1])
+        .find(Boolean) ?? chunk.match(/'SLIDER':\[\{[^{}]*?'SRC':'([^']+)'/)?.[1]
+      if (src) offers.set(m[1], abs(src.replace(/\\\//g, '/'), url))
+    })
+  }
+  return { image: pickImage(html, url), offers, specs: pickVetroSpecs(html, url) }
+}
+
+// Характеристики модели: материал из шапки и свойства цветов, у которых значение одно на всю модель
+// («Угол установки: 180°», «Открывание: В обе стороны»). Цвет и всё, что меняется от цвета, — нет:
+// у строки прайса он и так свой.
+export function pickVetroSpecs(html: string, url: string): Record<string, string> {
+  const specs: Record<string, string> = {}
+  const mat = html.match(/top_info-title">\s*Материал:?\s*<\/div>\s*<div class="top_info-value">([^<]+)</)
+  if (mat) specs['Материал'] = decode(mat[1])
+  const id = vetroProductUrl(url).match(/\/(\d+)\/?$/)?.[1]
+  const at = id ? html.indexOf(`_${id}_skudiv`) : -1
+  if (at < 0) return specs
+  const stop = html.indexOf('itemprop="offers"', at)
+  const block = html.slice(at, stop > at ? stop : at + 15000)
+  const values = new Map<string, Set<string>>()
+  for (const m of block.matchAll(/<li[^>]*title="([^":]+):\s*([^"]+)"/g)) {
+    const k = decode(m[1]), v = decode(m[2])
+    if (!values.has(k)) values.set(k, new Set())
+    values.get(k)!.add(v)
+  }
+  for (const [k, vs] of values) if (k !== 'Цвет' && vs.size === 1 && k.length < 60) { const v = [...vs][0]; specs[k] = v === k ? 'да' : v }
+  return specs
+}
+
+export async function fetchVetroPage(url: string): Promise<VetroPage | null> {
+  const page = vetroProductUrl(url)
+  const html = await getHtml(page)
+  return html ? pickVetroPage(html, page) : null
+}
+
 export async function fetchProductInfo(row: { supplier: string; article: string; name: string; url: string }): Promise<ProductInfo | null> {
   const url = row.url || (row.supplier === 'av24' ? await findAv24Url(row.article) : '')
   if (!url) return null
