@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import {
-  analyzeBreakeven, combineUnits, withoutDebt, kindOf, allocationCheck, companyLevelCosts,
+  analyzeBreakeven, combineUnits, withoutDebt, kindOf, allocationCheck, companyLevelCosts, applyFactEdits, factEditsFrom,
   BREAKEVEN_LABELS, BREAKEVEN_HINTS, DISTRIBUTION_NOTE, FIXED_KIND_LABELS,
-  type BreakevenModel, type FixedRow, type FixedKind, type SharedCost,
+  type BreakevenModel, type FixedRow, type FixedKind, type SharedCost, type FactEdits,
 } from '@/lib/breakeven'
 
 // Финансовое планирование (модель Хаббарда) — точки безубыточности.
@@ -16,7 +16,8 @@ import {
 // Остаток сверх всего = Фонд перелива, из него % на бонусы производства.
 // «M-Glass · факт «Маржи»» — та же вкладка M-Glass (доходы, постоянные, фонды), но переменные
 // — фактические доли статей книги «Маржа» по закрытым заказам (/api/cfo/margin-shares).
-// Только для чтения, не сохраняется и в сводки «Компания» не входит.
+// Числа на ней владелец правит: правки (FactEdits) лежат поверх исходного в строке total
+// (mglassFact), исходное видно бледно слева от поля. В сводки «Компания» вкладка не входит.
 
 type VarRow  = { name: string; pct: number }
 type Income  = { name: string; plan: number; vars: VarRow[] }
@@ -119,6 +120,7 @@ const ym = (s: string) => `${MONTHS_RU[Number(s.slice(5, 7)) - 1]} ${s.slice(0, 
 // без w-full: числовое поле с width:100% рядом с flex-1 отжимало поле названия в ноль
 const inputCls = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] min-w-0 disabled:bg-[#fafaf8] disabled:border-[#eeeeea]'
 const inputBlue = inputCls.replace('text-[#111110]', 'text-blue-700 font-semibold')
+const inputEdited = inputBlue.replace('bg-white', 'bg-amber-50').replace('border-[#e4e4e0]', 'border-amber-300')
 
 export default function BreakevenPage() {
   const sb = createClient()
@@ -140,6 +142,9 @@ export default function BreakevenPage() {
   const [factPeriod, setFactPeriod] = useState<FactPeriod>('year')
   const [fact, setFact] = useState<Fact | null>(null)
   const [factErr, setFactErr] = useState<string | null>(null)
+  const [factEdits, setFactEdits] = useState<FactEdits>({})
+  const [savedFactEdits, setSavedFactEdits] = useState<FactEdits>({})
+  const [saveErr, setSaveErr] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -165,6 +170,8 @@ export default function BreakevenPage() {
         }
         return next
       })
+      const tot = data.find(r => r.unit === 'total')?.data as { mglassFact?: FactEdits } | undefined
+      if (tot?.mglassFact) { setFactEdits(tot.mglassFact); setSavedFactEdits(tot.mglassFact) }
     }
     setLoading(false)
   }, [sb])
@@ -198,25 +205,57 @@ export default function BreakevenPage() {
   }, [models, companyExtra])
   const total1Model = useMemo(() => withoutDebt(totalModel) as Model, [totalModel])
 
-  const factModel = useMemo((): Model => ({
+  const factReady = fact?.period === factPeriod
+  // Исходное вкладки факта: M-Glass с долями «Маржи»; поверх — правки владельца.
+  const factBase = useMemo((): Model => ({
     ...models.mglass,
-    incomes: models.mglass.incomes.map(i => ({ ...i, vars: (fact?.period === factPeriod ? fact.vars : []).map(v => ({ name: v.name, pct: v.pct })) })),
-  }), [models.mglass, fact, factPeriod])
+    incomes: models.mglass.incomes.map(i => ({ ...i, vars: (factReady ? fact!.vars : []).map(v => ({ name: v.name, pct: v.pct })) })),
+  }), [models.mglass, fact, factReady])
+  const factModel = useMemo(() => applyFactEdits(factBase, factEdits) as Model, [factBase, factEdits])
 
   const summary = unit === 'total' || unit === 'total1'
-  const ro = summary || unit === 'mglass_fact' // read-only: сводки и факт, правки — в юнитах
-  const m = unit === 'total' ? totalModel : unit === 'total1' ? total1Model : unit === 'mglass_fact' ? factModel : models[unit]
+  const isFact = unit === 'mglass_fact'
+  // read-only: сводки (правки — в юнитах) и факт, пока доли «Маржи» не пришли — иначе правка
+  // сравнилась бы с пустым исходным и потеряла уже внесённые числа
+  const ro = summary || (isFact && !factReady)
+  const m = unit === 'total' ? totalModel : unit === 'total1' ? total1Model : isFact ? factModel : models[unit]
   const patch = (fn: (m: Model) => Model) => {
     if (ro) return
-    setModels(prev => ({ ...prev, [unit]: fn(structuredClone(prev[unit])) }))
+    if (isFact) { setFactEdits(factEditsFrom(factBase, fn(structuredClone(factModel)))); return }
+    setModels(prev => ({ ...prev, [unit]: fn(structuredClone(prev[unit as EditUnit])) }))
   }
+  const dropEdit = (sect: 'plan' | 'vars' | 'fixed' | 'funds', key: string) => setFactEdits(prev => {
+    const next = structuredClone(prev)
+    const rec = next[sect] as Record<string, unknown> | undefined
+    if (rec) { delete rec[key]; if (!Object.keys(rec).length) delete next[sect] }
+    return next
+  })
+  const editCount = Object.keys(factEdits.plan ?? {}).length + Object.keys(factEdits.vars ?? {}).length
+    + (factEdits.extra?.length ?? 0) + Object.keys(factEdits.fixed ?? {}).length + Object.keys(factEdits.funds ?? {}).length
+  const factDirty = JSON.stringify(factEdits) !== JSON.stringify(savedFactEdits)
 
   async function save() {
     if (ro) return
-    setSaving(true)
+    setSaving(true); setSaveErr(null)
     try {
-      await sb.from('finplan_models').upsert({ unit, data: models[unit], updated_by: meName || null, updated_at: new Date().toISOString() })
+      if (isFact) {
+        const extra = factEdits.extra?.filter(v => v.name.trim() || v.pct)
+        const clean: FactEdits = { ...factEdits, extra }
+        if (!extra?.length) delete clean.extra
+        // Строка total хранит и кассу, перелив, общие статьи — сливаем, а не перезаписываем.
+        const { data: cur } = await sb.from('finplan_models').select('data').eq('unit', 'total').maybeSingle()
+        const { data: wrote, error } = await sb.from('finplan_models').upsert({
+          unit: 'total', data: { ...(cur?.data ?? {}), mglassFact: clean },
+          updated_by: meName || null, updated_at: new Date().toISOString(),
+        }).select('unit')
+        if (error || !wrote?.length) throw new Error(error?.message ?? 'запись не прошла — нет прав на финмодель')
+        setFactEdits(clean); setSavedFactEdits(clean)
+      } else {
+        await sb.from('finplan_models').upsert({ unit, data: models[unit as EditUnit], updated_by: meName || null, updated_at: new Date().toISOString() })
+      }
       setSavedOk(true); setTimeout(() => setSavedOk(false), 2000)
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : 'не сохранилось')
     } finally { setSaving(false) }
   }
 
@@ -270,16 +309,14 @@ export default function BreakevenPage() {
   // Строки постоянных с индексом в модели юнита (для правки) или с юнитом-источником (сводки).
   // На «Компании 1» обязательств нет — withoutDebt уже убрал их из модели.
   type Line = { f: FixedRow; fi: number; unitTitle?: string }
-  const lines: Line[] = unit === 'mglass_fact'
-    ? m.fixed.map(f => ({ f, fi: -1 }))
-    : ro
+  const lines: Line[] = summary
     ? ([['Производство', models.production], ['M-Glass', models.mglass]] as [string, Model][])
         .flatMap(([title, um]) => (unit === 'total1' ? withoutDebt(um) : um).fixed.map(f => ({ f, fi: -1, unitTitle: title })))
         .concat(companyExtra.map(f => ({ f, fi: -1, unitTitle: 'Компания' })))
     : m.fixed.map((f, fi) => ({ f, fi }))
   const opexLines = lines.filter(l => kindOf(l.f).kind !== 'obligation')
   const debtLines = lines.filter(l => kindOf(l.f).kind === 'obligation')
-  const suggestedCount = ro ? 0 : m.fixed.filter(f => !f.kind).length
+  const suggestedCount = ro || isFact ? 0 : m.fixed.filter(f => !f.kind).length
   const setKind = (fi: number, kind: FixedKind) => patch(x => { x.fixed[fi].kind = kind; return x })
 
   return (
@@ -291,10 +328,13 @@ export default function BreakevenPage() {
             <p className="text-[12px] text-[#9a9a95] mt-0.5">Доходы → переменные → маржа → расходы P&amp;L → денежные обязательства → распределение прибыли. Синие поля — редактируемые.</p>
           </div>
           {!ro && (
-            <button onClick={save} disabled={saving}
-              className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
-              {saving ? '…' : savedOk ? '✓ Сохранено' : '💾 Сохранить'}
-            </button>
+            <div className="flex items-center gap-2">
+              {saveErr && <span className="text-[12px] text-red-600">Не сохранилось: {saveErr}</span>}
+              <button onClick={save} disabled={saving || (isFact && !factDirty)}
+                className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
+                {saving ? '…' : isFact ? (factDirty ? '💾 Сохранить правки' : '✓ Правки сохранены') : savedOk ? '✓ Сохранено' : '💾 Сохранить'}
+              </button>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-3 flex-wrap">
@@ -321,9 +361,15 @@ export default function BreakevenPage() {
                   {ym(fact.from)} — {ym(fact.to)} (полные месяцы): закрыто {fact.closed} из {fact.objects} заказов на {fmt(fact.closedSales)},
                   их расходы {fmt(fact.costs)} — <b className="text-[#111110]">{(fact.costs / fact.closedSales * 100).toFixed(2)}%</b>.
                   Продажи всех заказов в среднем <b className="text-[#111110]">{fmt(fact.avgSales)}/мес</b>.
-                  Доходы, постоянные и фонды — из вкладки M-Glass, правки вносите там.
+                  Доходы, постоянные и фонды — из вкладки M-Glass.
                   {fact.editsError && <span className="text-amber-700"> Правки из приложения не прочитаны — только книга.</span>}
                 </p>}
+            <p className="text-[#9a9a95]">
+              Числа можно править: бледным слева от поля — исходное (доля «Маржи» или значение вкладки M-Glass), подсвеченное поле — ваша правка, ↺ возвращает исходное. Можно добавить свою строку переменных (например, ГСМ).
+              {editCount > 0 && <> Правок: {editCount}{factDirty && ' — не сохранены'}. <button
+                onClick={() => { if (window.confirm('Сбросить все правки на вкладке «M-Glass · факт «Маржи»»?')) setFactEdits({}) }}
+                className="underline text-[#6b6b66] hover:text-[#111110]">Сбросить все</button></>}
+            </p>
           </div>
         )}
         {unit === 'total' && allocIssues > 0 && (
@@ -343,12 +389,13 @@ export default function BreakevenPage() {
             </p>
             {m.incomes.map((inc, ii) => (
               <div key={ii} className="flex items-center gap-2 mb-1.5">
-                <input value={inc.name} placeholder="Название дохода" disabled={ro}
+                <input value={inc.name} placeholder="Название дохода" disabled={ro || isFact}
                   onChange={e => patch(x => { x.incomes[ii].name = e.target.value; return x })}
                   className={inputCls + ' flex-1'} />
+                {isFact && <Orig value={factBase.incomes[ii]?.plan} edited={inc.plan !== factBase.incomes[ii]?.plan} onReset={() => dropEdit('plan', inc.name)} />}
                 <input type="number" value={inc.plan || ''} disabled={ro}
                   onChange={e => patch(x => { x.incomes[ii].plan = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' w-36 shrink-0 text-right'} />
+                  className={(isFact && inc.plan !== factBase.incomes[ii]?.plan ? inputEdited : inputBlue) + ' w-36 shrink-0 text-right'} />
               </div>
             ))}
             <div className="flex justify-between text-[13px] font-bold border-t border-[#f0f0ec] pt-2 mt-2">
@@ -362,22 +409,29 @@ export default function BreakevenPage() {
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
                 Переменные расходы — {inc.name} <span className="normal-case text-[#c4c4be]">(% от этого дохода)</span>
               </p>
-              {inc.vars.map((v, vi) => (
+              {inc.vars.map((v, vi) => {
+                // На вкладке факта первые строки — статьи «Маржи» (название не правится), дальше — свои.
+                const baseVar = isFact ? factBase.incomes[ii]?.vars[vi] : undefined
+                const varEdited = !!baseVar && v.pct !== baseVar.pct
+                return (
                 <div key={vi} className="flex items-center gap-2 mb-1">
-                  <input value={v.name} disabled={ro}
+                  <input value={v.name} disabled={ro || !!baseVar} placeholder={isFact ? 'Своя статья, например ГСМ' : undefined}
                     onChange={e => patch(x => { x.incomes[ii].vars[vi].name = e.target.value; return x })}
                     className={inputCls + ' flex-1'} />
+                  {isFact && <Orig value={baseVar?.pct} edited={varEdited} onReset={() => dropEdit('vars', v.name)} pct />}
                   <div className="flex items-center gap-1 w-24 shrink-0">
                     <input type="number" step="0.01" value={v.pct || ''} disabled={ro}
                       onChange={e => patch(x => { x.incomes[ii].vars[vi].pct = Number(e.target.value) || 0; return x })}
-                      className={inputBlue + ' w-full text-right'} />
+                      className={(varEdited ? inputEdited : inputBlue) + ' w-full text-right'} />
                     <span className="text-[11px] text-[#9a9a95]">%</span>
                   </div>
                   <span className="w-24 text-right font-mono text-[11px] text-[#6b6b66]">{fmt((inc.plan || 0) * (v.pct || 0) / 100)}</span>
-                  {!ro && <button onClick={() => patch(x => { x.incomes[ii].vars.splice(vi, 1); return x })}
+                  {!ro && !baseVar && <button onClick={() => patch(x => { x.incomes[ii].vars.splice(vi, 1); return x })}
                     className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
+                  {!ro && baseVar && <span className="w-[9px]" />}
                 </div>
-              ))}
+                )
+              })}
               {!ro && <button onClick={() => patch(x => { x.incomes[ii].vars.push({ name: '', pct: 0 }); return x })}
                 className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>}
               <div className="border-t border-[#f0f0ec] pt-2 mt-2 space-y-1 text-[12px]">
@@ -418,16 +472,17 @@ export default function BreakevenPage() {
             {opexLines.map((l, i) => (
               <div key={`${l.unitTitle ?? ''}${l.fi}-${i}`} className="flex items-center gap-2 mb-1">
                 {l.unitTitle && <span className="w-20 shrink-0 text-[10px] text-[#9a9a95] truncate">{l.unitTitle}</span>}
-                <input value={l.f.name} disabled={ro} onChange={e => patch(x => { x.fixed[l.fi].name = e.target.value; return x })}
+                <input value={l.f.name} disabled={ro || isFact} onChange={e => patch(x => { x.fixed[l.fi].name = e.target.value; return x })}
                   className={inputCls + ' flex-1'} />
-                <KindSelect f={l.f} disabled={ro} onChange={k => setKind(l.fi, k)} />
+                <KindSelect f={l.f} disabled={ro || isFact} onChange={k => setKind(l.fi, k)} />
+                {isFact && <Orig value={factBase.fixed[l.fi]?.amount} edited={l.f.amount !== factBase.fixed[l.fi]?.amount} onReset={() => dropEdit('fixed', l.f.name)} />}
                 <input type="number" value={l.f.amount || ''} disabled={ro} onChange={e => patch(x => { x.fixed[l.fi].amount = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' w-28 shrink-0 text-right'} />
-                {!ro && <button onClick={() => patch(x => { x.fixed.splice(l.fi, 1); return x })}
+                  className={(isFact && l.f.amount !== factBase.fixed[l.fi]?.amount ? inputEdited : inputBlue) + ' w-28 shrink-0 text-right'} />
+                {!ro && !isFact && <button onClick={() => patch(x => { x.fixed.splice(l.fi, 1); return x })}
                   className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
               </div>
             ))}
-            {!ro && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0, kind: 'fixed' }); return x })}
+            {!ro && !isFact && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0, kind: 'fixed' }); return x })}
               className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>}
             <div className="border-t border-[#f0f0ec] pt-2 mt-2 space-y-1 text-[12px]">
               <div className="flex justify-between"><span className="text-[#6b6b66]">Постоянные без обязательств</span>
@@ -516,22 +571,23 @@ export default function BreakevenPage() {
                 <div key={`${l.unitTitle ?? ''}${l.fi}-${i}`} className="mb-2 pb-2 border-b border-[#f5f5f3] last:border-0">
                   <div className="flex items-center gap-2">
                     {l.unitTitle && <span className="w-20 shrink-0 text-[10px] text-[#9a9a95] truncate">{l.unitTitle}</span>}
-                    <input value={l.f.name} disabled={ro} onChange={e => patch(x => { x.fixed[l.fi].name = e.target.value; return x })}
+                    <input value={l.f.name} disabled={ro || isFact} onChange={e => patch(x => { x.fixed[l.fi].name = e.target.value; return x })}
                       className={inputCls + ' flex-1'} />
-                    <KindSelect f={l.f} disabled={ro} onChange={k => setKind(l.fi, k)} />
+                    <KindSelect f={l.f} disabled={ro || isFact} onChange={k => setKind(l.fi, k)} />
+                {isFact && <Orig value={factBase.fixed[l.fi]?.amount} edited={l.f.amount !== factBase.fixed[l.fi]?.amount} onReset={() => dropEdit('fixed', l.f.name)} />}
                     <input type="number" value={l.f.amount || ''} disabled={ro} title="Платёж в месяц"
                       onChange={e => patch(x => { x.fixed[l.fi].amount = Number(e.target.value) || 0; return x })}
-                      className={inputBlue + ' w-28 shrink-0 text-right'} />
-                    {!ro && <button onClick={() => patch(x => { x.fixed.splice(l.fi, 1); return x })}
+                      className={(isFact && l.f.amount !== factBase.fixed[l.fi]?.amount ? inputEdited : inputBlue) + ' w-28 shrink-0 text-right'} />
+                    {!ro && !isFact && <button onClick={() => patch(x => { x.fixed.splice(l.fi, 1); return x })}
                       className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
                   </div>
                   <div className="flex items-center gap-3 mt-1 flex-wrap text-[11px] text-[#6b6b66]">
                     <label className="flex items-center gap-1">тело
-                      <input type="number" value={l.f.body ?? ''} disabled={ro} placeholder="—"
+                      <input type="number" value={l.f.body ?? ''} disabled={ro || isFact} placeholder="—"
                         onChange={e => patch(x => { x.fixed[l.fi].body = e.target.value === '' ? undefined : Number(e.target.value) || 0; return x })}
                         className={inputBlue + ' w-24 text-right'} /></label>
                     <label className="flex items-center gap-1">амортизация
-                      <input type="number" value={l.f.amortization ?? ''} disabled={ro} placeholder="—"
+                      <input type="number" value={l.f.amortization ?? ''} disabled={ro || isFact} placeholder="—"
                         onChange={e => patch(x => { x.fixed[l.fi].amortization = e.target.value === '' ? undefined : Number(e.target.value) || 0; return x })}
                         className={inputBlue + ' w-24 text-right'} /></label>
                     <span>проценты = платёж − тело: <span className="font-mono text-[#111110]">{fmt((l.f.amount || 0) - body)}</span></span>
@@ -544,7 +600,7 @@ export default function BreakevenPage() {
                 </div>
               )
             })}
-            {!ro && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0, kind: 'obligation' }); return x })}
+            {!ro && !isFact && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0, kind: 'obligation' }); return x })}
               className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ обязательство</button>}
             {unit !== 'total1' && debtLines.length > 0 && (
               <div className="border-t border-[#f0f0ec] pt-2 mt-2 space-y-1 text-[12px]">
@@ -565,10 +621,11 @@ export default function BreakevenPage() {
             {FUND_KEYS.map(([k, label]) => (
               <div key={k} className="flex items-center gap-2 mb-1">
                 <span className="flex-1 text-[12px] text-[#111110]">{label}</span>
+                {isFact && <Orig value={factBase.funds[k]} edited={m.funds[k] !== factBase.funds[k]} onReset={() => dropEdit('funds', k)} pct />}
                 <div className="flex items-center gap-1 w-24 shrink-0">
                   <input type="number" step="0.1" value={ro ? (m.funds[k] ? Number(m.funds[k].toFixed(2)) : '') : (m.funds[k] || '')} disabled={ro}
                     onChange={e => patch(x => { x.funds[k] = Number(e.target.value) || 0; return x })}
-                    className={inputBlue + ' w-full text-right'} />
+                    className={(isFact && m.funds[k] !== factBase.funds[k] ? inputEdited : inputBlue) + ' w-full text-right'} />
                   <span className="text-[11px] text-[#9a9a95]">%</span>
                 </div>
                 <span className="w-24 text-right font-mono text-[11px] text-[#6b6b66]">{fmt(calc.fundRub(m.funds[k]))}</span>
@@ -711,6 +768,19 @@ export default function BreakevenPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Вкладка факта: исходное значение бледно слева от поля — видно, что было и что введено.
+function Orig({ value, edited, onReset, pct }: { value: number | undefined; edited: boolean; onReset: () => void; pct?: boolean }) {
+  const text = value == null ? 'своя строка'
+    : pct ? `${Number(value.toFixed(2)).toLocaleString('ru-RU')} %` : Math.round(value).toLocaleString('ru-RU')
+  return (
+    <span className={`w-28 shrink-0 text-right text-[10px] font-mono leading-tight ${edited ? 'text-amber-700' : 'text-[#bdbdb7]'}`}
+      title={edited ? 'Исходное значение — ↺ вернёт его' : 'Исходное значение'}>
+      {edited && <button onClick={onReset} className="mr-1 hover:text-[#111110]" aria-label="Вернуть исходное">↺</button>}
+      {edited ? `было ${text}` : text}
+    </span>
   )
 }
 
