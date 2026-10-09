@@ -293,3 +293,21 @@ export function companyFixed(rows: { unit: string; data: unknown }[]): { units: 
   }
   return { units, extra: companyLevelCosts(allocationCheck(units, shared)) }
 }
+
+// Переменные «по факту» для вкладки «M-Glass · факт «Маржи»»: доли статей книги «Маржа» от
+// продаж закрытых заказов. Сотые раздаются по наибольшему остатку — сумма долей равна
+// округлённой общей доле, иначе «Итого переменные» расходилось бы с «Маржой» на сотую.
+export type FactVar = { key: string; name: string; rub: number; pct: number }
+
+export function factVars(byCost: Record<string, number>, closedSales: number, labels: Record<string, string>): FactVar[] {
+  if (!(closedSales > 0)) return []
+  const keys = Object.keys(byCost).filter(k => byCost[k] > 0)
+  const raw = keys.map(k => byCost[k] / closedSales * 10000)
+  const cents = raw.map(Math.floor)
+  let left = Math.round(raw.reduce((s, x) => s + x, 0)) - cents.reduce((s, x) => s + x, 0)
+  for (const i of raw.map((x, i) => i).sort((a, b) => (raw[b] - cents[b]) - (raw[a] - cents[a]))) {
+    if (left <= 0) break
+    cents[i]++; left--
+  }
+  return keys.map((k, i) => ({ key: k, name: labels[k] ?? k, rub: byCost[k], pct: cents[i] / 100 }))
+}

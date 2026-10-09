@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   analyzeBreakeven, computeBreakeven, combineUnits, withoutDebt, revenueToCover, isDebtRow,
-  splitFixed, suggestKind, kindOf, costKey, totalFromName, allocationCheck, companyLevelCosts, companyFixed,
+  splitFixed, suggestKind, kindOf, costKey, totalFromName, allocationCheck, companyLevelCosts, companyFixed, factVars,
   BREAKEVEN_LABELS, type BreakevenModel,
 } from '@/lib/breakeven'
 import { computeBe } from '@/lib/cfo/factModel'
@@ -200,4 +200,33 @@ it('companyFixed: остаток общих статей — только по �
   expect(c.units.map(u => u.title)).toEqual(['Производство', 'M-Glass'])
   expect(c.extra).toEqual([{ name: 'Аренда помещения — на уровне компании', amount: 50_000, kind: 'fixed' }])
   expect(companyFixed(rows.slice(0, 2)).extra).toEqual([])
+})
+
+describe('factVars — переменные M-Glass по книге «Маржа»', () => {
+  // 2026 год, закрытые заказы, снимок 09.10: продажи 26 049 894, расходы 17 095 252 (65,63 %).
+  const byCost = {
+    glass: 3892205, hardware: 3517633, designer: 389000, measurer: 444490, installer: 3435100, delivery: 575200,
+    partners: 1076531, claims: 47200, tax: 2669654, bonus_manager: 467526, bonus_ror: 386386, bonus_rop: 194327,
+  }
+  const labels = { glass: 'Стекло', hardware: 'Фурнитура' }
+
+  it('сумма долей = доля расходов «Маржи» с точностью до сотой, а не сумма округлений', () => {
+    const v = factVars(byCost, 26049894, labels)
+    expect(Math.round(v.reduce((s, x) => s + x.pct, 0) * 100) / 100).toBe(65.63)
+    expect(v.find(x => x.key === 'glass')).toMatchObject({ name: 'Стекло', pct: 14.94, rub: 3892205 })
+    expect(v.find(x => x.key === 'tax')?.name).toBe('tax')
+  })
+
+  it('с факт-переменными ТБ M-Glass выше плановой: 62 % → 65,63 %', () => {
+    const vars = factVars(byCost, 26049894, labels).map(x => ({ name: x.name, pct: x.pct }))
+    const plan = analyzeBreakeven(mglass)
+    const fact = analyzeBreakeven({ ...mglass, incomes: mglass.incomes.map(i => ({ ...i, vars })) })
+    expect(fact.perIncome[0].varPct).toBeCloseTo(0.6563, 6)
+    expect(fact.tb0!).toBeGreaterThan(plan.tb0!)
+  })
+
+  it('нет закрытых — пусто; нулевые статьи не показываются', () => {
+    expect(factVars(byCost, 0, labels)).toEqual([])
+    expect(factVars({ glass: 100, claims: 0 }, 1000, labels).map(x => x.key)).toEqual(['glass'])
+  })
 })
