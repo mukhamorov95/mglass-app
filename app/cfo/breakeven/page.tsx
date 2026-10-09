@@ -14,6 +14,9 @@ import {
 // из юнитов, маржа складывается, одноимённые фонды и постоянные суммируются.
 // Операционная ТБ, целевая выручка с фондами и с доходом собственника — lib/breakeven.ts.
 // Остаток сверх всего = Фонд перелива, из него % на бонусы производства.
+// «M-Glass · факт «Маржи»» — та же вкладка M-Glass (доходы, постоянные, фонды), но переменные
+// — фактические доли статей книги «Маржа» по закрытым заказам (/api/cfo/margin-shares).
+// Только для чтения, не сохраняется и в сводки «Компания» не входит.
 
 type VarRow  = { name: string; pct: number }
 type Income  = { name: string; plan: number; vars: VarRow[] }
@@ -21,13 +24,21 @@ type Funds   = { invest: number; training: number; reserve: number; prodBonus: n
 type Model   = BreakevenModel & { incomes: Income[]; funds: Funds; fixed: FixedRow[] }
 
 type EditUnit = 'mglass' | 'production'
-type Unit = 'total' | 'total1' | EditUnit
+type Unit = 'total' | 'total1' | EditUnit | 'mglass_fact'
 const UNITS: { key: Unit; label: string }[] = [
-  { key: 'total',      label: 'Компания 0' },
-  { key: 'total1',     label: 'Компания 1 · без кредитов и лизинга' },
-  { key: 'mglass',     label: 'M-Glass' },
-  { key: 'production', label: 'Производство' },
+  { key: 'total',       label: 'Компания 0' },
+  { key: 'total1',      label: 'Компания 1 · без кредитов и лизинга' },
+  { key: 'mglass',      label: 'M-Glass' },
+  { key: 'production',  label: 'Производство' },
+  { key: 'mglass_fact', label: 'M-Glass · факт «Маржи»' },
 ]
+type FactPeriod = 'year' | '12m'
+type Fact = {
+  period: FactPeriod; from: string; to: string; months: number
+  objects: number; closed: number; sales: number; closedSales: number; costs: number; avgSales: number
+  vars: { key: string; name: string; rub: number; pct: number }[]
+  editsError: string | null
+}
 const FUND_KEYS: [keyof Funds, string][] = [
   ['invest', 'Фонд возврата инвестиций'],
   ['training', 'Фонд обучения'],
@@ -103,6 +114,8 @@ const DEFAULTS: Record<EditUnit, Model> = {
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
+const MONTHS_RU = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+const ym = (s: string) => `${MONTHS_RU[Number(s.slice(5, 7)) - 1]} ${s.slice(0, 4)}`
 // без w-full: числовое поле с width:100% рядом с flex-1 отжимало поле названия в ноль
 const inputCls = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] min-w-0 disabled:bg-[#fafaf8] disabled:border-[#eeeeea]'
 const inputBlue = inputCls.replace('text-[#111110]', 'text-blue-700 font-semibold')
@@ -124,6 +137,9 @@ export default function BreakevenPage() {
   const [sharedDraft, setSharedDraft] = useState<Record<string, string>>({})
   const [shSaving, setShSaving] = useState(false)
   const [shSaved, setShSaved] = useState(false)
+  const [factPeriod, setFactPeriod] = useState<FactPeriod>('year')
+  const [fact, setFact] = useState<Fact | null>(null)
+  const [factErr, setFactErr] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -156,6 +172,16 @@ export default function BreakevenPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
+  useEffect(() => {
+    if (unit !== 'mglass_fact') return
+    let alive = true
+    fetch(`/api/cfo/margin-shares?period=${factPeriod}`)
+      .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || `ошибка ${r.status}`); return j as Fact })
+      .then(j => { if (alive) { setFact(j); setFactErr(null) } })
+      .catch((e: Error) => { if (alive) { setFact(null); setFactErr(e.message) } })
+    return () => { alive = false }
+  }, [unit, factPeriod])
+
   // Сверка общих расходов: сколько распределено по юнитам против суммы по компании
   const allocRows = useMemo(() => allocationCheck([
     { title: 'Производство', fixed: models.production.fixed },
@@ -172,8 +198,14 @@ export default function BreakevenPage() {
   }, [models, companyExtra])
   const total1Model = useMemo(() => withoutDebt(totalModel) as Model, [totalModel])
 
-  const ro = unit === 'total' || unit === 'total1' // read-only: сводки, правки — в юнитах
-  const m = unit === 'total' ? totalModel : unit === 'total1' ? total1Model : models[unit]
+  const factModel = useMemo((): Model => ({
+    ...models.mglass,
+    incomes: models.mglass.incomes.map(i => ({ ...i, vars: (fact?.period === factPeriod ? fact.vars : []).map(v => ({ name: v.name, pct: v.pct })) })),
+  }), [models.mglass, fact, factPeriod])
+
+  const summary = unit === 'total' || unit === 'total1'
+  const ro = summary || unit === 'mglass_fact' // read-only: сводки и факт, правки — в юнитах
+  const m = unit === 'total' ? totalModel : unit === 'total1' ? total1Model : unit === 'mglass_fact' ? factModel : models[unit]
   const patch = (fn: (m: Model) => Model) => {
     if (ro) return
     setModels(prev => ({ ...prev, [unit]: fn(structuredClone(prev[unit])) }))
@@ -230,13 +262,17 @@ export default function BreakevenPage() {
     const a = analyzeBreakeven(m)
     return { ...a, fundRub: (pct: number) => a.margin * pct / 100 }
   }, [m])
+  // На вкладке факта — с чем сравнивать: та же модель с плановыми переменными M-Glass.
+  const planCalc = useMemo(() => analyzeBreakeven(models.mglass), [models.mglass])
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
   // Строки постоянных с индексом в модели юнита (для правки) или с юнитом-источником (сводки).
   // На «Компании 1» обязательств нет — withoutDebt уже убрал их из модели.
   type Line = { f: FixedRow; fi: number; unitTitle?: string }
-  const lines: Line[] = ro
+  const lines: Line[] = unit === 'mglass_fact'
+    ? m.fixed.map(f => ({ f, fi: -1 }))
+    : ro
     ? ([['Производство', models.production], ['M-Glass', models.mglass]] as [string, Model][])
         .flatMap(([title, um]) => (unit === 'total1' ? withoutDebt(um) : um).fixed.map(f => ({ f, fi: -1, unitTitle: title })))
         .concat(companyExtra.map(f => ({ f, fi: -1, unitTitle: 'Компания' })))
@@ -268,8 +304,28 @@ export default function BreakevenPage() {
               {u.label}
             </button>
           ))}
-          {ro && <span className="text-[11px] text-[#9a9a95] ml-1">Σ автоматическая сумма вкладок M-Glass и Производство{unit === 'total1' ? ' БЕЗ кредитов и лизинга' : ''} — правки вносите там</span>}
+          {summary && <span className="text-[11px] text-[#9a9a95] ml-1">Σ автоматическая сумма вкладок M-Glass и Производство{unit === 'total1' ? ' БЕЗ кредитов и лизинга' : ''} — правки вносите там</span>}
         </div>
+        {unit === 'mglass_fact' && (
+          <div className="mt-3 text-[12px] text-[#6b6b66] bg-[#fafaf8] border border-[#e4e4e0] rounded-lg px-3 py-2 space-y-1.5 max-w-[920px]">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span>Переменные — факт книги «Маржа» по закрытым заказам:</span>
+              {([['year', 'с начала года'], ['12m', '12 месяцев']] as [FactPeriod, string][]).map(([k, l]) => (
+                <button key={k} onClick={() => setFactPeriod(k)}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${factPeriod === k ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>{l}</button>
+              ))}
+            </div>
+            {factErr ? <p className="text-red-600">Книга «Маржа» не прочитана: {factErr}</p>
+              : !fact || fact.period !== factPeriod ? <p className="text-[#9a9a95]">Загрузка…</p>
+              : <p>
+                  {ym(fact.from)} — {ym(fact.to)} (полные месяцы): закрыто {fact.closed} из {fact.objects} заказов на {fmt(fact.closedSales)},
+                  их расходы {fmt(fact.costs)} — <b className="text-[#111110]">{(fact.costs / fact.closedSales * 100).toFixed(2)}%</b>.
+                  Продажи всех заказов в среднем <b className="text-[#111110]">{fmt(fact.avgSales)}/мес</b>.
+                  Доходы, постоянные и фонды — из вкладки M-Glass, правки вносите там.
+                  {fact.editsError && <span className="text-amber-700"> Правки из приложения не прочитаны — только книга.</span>}
+                </p>}
+          </div>
+        )}
         {unit === 'total' && allocIssues > 0 && (
           <p className="mt-2 text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 inline-block">
             Общие расходы не сходятся с распределением по юнитам: {allocIssues} стат. — см. «Распределение общих расходов» ниже.
@@ -283,7 +339,7 @@ export default function BreakevenPage() {
           {/* Доходы */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
-              План по доходам, ₽/мес{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · из вкладок юнитов</span>}
+              План по доходам, ₽/мес{summary && <span className="normal-case tracking-normal text-[#c4c4be]"> · из вкладок юнитов</span>}
             </p>
             {m.incomes.map((inc, ii) => (
               <div key={ii} className="flex items-center gap-2 mb-1.5">
@@ -329,12 +385,16 @@ export default function BreakevenPage() {
                   <span className="font-mono">{(calc.perIncome[ii].varPct * 100).toFixed(2)}% · {fmt(calc.perIncome[ii].varRub)}</span></div>
                 <div className="flex justify-between font-semibold"><span>Маржинальная прибыль</span>
                   <span className="font-mono text-emerald-700">{(calc.perIncome[ii].marginPct * 100).toFixed(2)}% · {fmt(calc.perIncome[ii].margin)}</span></div>
+                {unit === 'mglass_fact' && planCalc.perIncome[ii] && (
+                  <div className="flex justify-between text-[11px] text-[#9a9a95]"><span>Во вкладке M-Glass (план): переменные · точка безубыточности</span>
+                    <span className="font-mono">{(planCalc.perIncome[ii].varPct * 100).toFixed(2)}% · {planCalc.tb0 == null ? '—' : fmt(planCalc.tb0)}</span></div>
+                )}
               </div>
             </div>
           ))}
 
           {/* Общая маржа (на сводке — сумма юнитов) */}
-          {ro && (
+          {summary && (
             <div className="bg-white rounded-xl border border-[#e4e4e0] p-4 flex justify-between items-center">
               <span className="text-[13px] font-bold">МАРЖИНАЛЬНАЯ ПРИБЫЛЬ — производство + M-Glass</span>
               <span className="font-mono text-[15px] font-bold text-emerald-700">{fmt(calc.margin)} · {(calc.marginPct * 100).toFixed(1)}%</span>
@@ -345,7 +405,7 @@ export default function BreakevenPage() {
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">
-                Операционные расходы P&amp;L, ₽/мес{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · производство + M-Glass</span>}
+                Операционные расходы P&amp;L, ₽/мес{summary && <span className="normal-case tracking-normal text-[#c4c4be]"> · производство + M-Glass</span>}
               </p>
               {suggestedCount > 0 && (
                 <button onClick={() => patch(x => { x.fixed.forEach(f => { if (!f.kind) f.kind = kindOf(f).kind }); return x })}
@@ -499,7 +559,7 @@ export default function BreakevenPage() {
           {/* 3. Распределение прибыли и фонды */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-1">
-              Распределение прибыли и фонды{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · одноимённые фонды юнитов суммируются, % — от общей маржи</span>}
+              Распределение прибыли и фонды{summary && <span className="normal-case tracking-normal text-[#c4c4be]"> · одноимённые фонды юнитов суммируются, % — от общей маржи</span>}
             </p>
             <p className="text-[11px] text-[#9a9a95] mb-2">{DISTRIBUTION_NOTE}</p>
             {FUND_KEYS.map(([k, label]) => (
@@ -520,7 +580,9 @@ export default function BreakevenPage() {
             </div>
 
             <p className="text-[11px] font-semibold text-[#6b6b66] mt-3 mb-1">Доход собственника</p>
-            {ro ? (
+            {unit === 'mglass_fact' ? (
+              <p className="text-[12px] text-[#6b6b66]">При плановой выручке: <span className="font-mono font-semibold text-[#111110]">{fmt(calc.ownerRub)}</span> /мес — задаётся во вкладке M-Glass.</p>
+            ) : ro ? (
               <p className="text-[12px] text-[#6b6b66]">Σ по юнитам при плановой выручке: <span className="font-mono font-semibold text-[#111110]">{fmt(calc.ownerRub)}</span> /мес — задаётся во вкладках M-Glass и Производство.</p>
             ) : (
               <>
