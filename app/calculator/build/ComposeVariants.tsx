@@ -11,6 +11,27 @@ import { Thumb } from './ComposeThumb'
 
 const RUBk = (n: number) => `${n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽`
 
+// Чем вариант отличается от соседей: слова названия, которых нет у всех карточек ряда, без
+// артикула — серия и особенности («Йота с резиновым торцом», «Регулируемый»). Название целиком
+// живёт только в подсказке, а на телефоне подсказок нет.
+const low = (w: string) => w.toLowerCase().replace(/ё/g, 'е').replace(/[˚º]/g, '°')
+// Род детали, крепление и угол уже в заголовке ряда («Заменить на · стена-стекло 90°»).
+const STOP = new Set(['петля', 'петли', 'ручка', 'ручка-кноб', 'ручка-скоба', 'кноб', 'скоба', 'коннектор', 'для', 'стекла',
+  'уплотнитель', 'уплотнительный', 'профиль', 'профиля', 'под'])
+// Обрывки длины и единиц («3м», «мм-», «2.5») — шум; однобуквенное оставляем только «с» и греческое (серия «Альфа α»).
+const letters = (w: string) => (w.match(/[a-zа-я]/g) ?? []).length
+const generic = (w: string) => !/^\d+[хx×]\d+$/.test(w) && (STOP.has(w) || /^(стена|стекло)(-|$)/.test(w) || /^\d+(°|с)?([-–]\d+(°|с)?)?$/.test(w)
+  || (letters(w) < 2 && !/^(с|[α-ω])$/.test(w)) || /^[\d.,]*(мм|см|м)[-–.]*$/.test(w))
+const words = (m: CatalogModel, kind: Set<string>) => m.name.replace(/[()]/g, ' ').split(/[\s,]+/)
+  .filter(w => w && !(/[a-z]/i.test(w) && /\d/.test(w)) && !generic(low(w)) && !kind.has(low(w)) && !m.base.toLowerCase().split(/\s+/).includes(w.toLowerCase()))
+function hints(ms: CatalogModel[], kindLabel: string): Map<CatalogModel, string> {
+  const kind = new Set(kindLabel.split(/[\s·]+/).map(low))
+  const per = ms.map(m => words(m, kind))
+  const count = new Map<string, number>()
+  per.forEach(ws => new Set(ws.map(low)).forEach(w => count.set(w, (count.get(w) ?? 0) + 1)))
+  return new Map(ms.map((m, i) => [m, per[i].filter(w => count.get(low(w))! < ms.length).join(' ')]))
+}
+
 export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, onAll, limit = 7, cols = 'grid-cols-4 md:grid-cols-8' }: {
   current: CatalogModel
   alts: CatalogModel[]
@@ -23,6 +44,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
   cols?: string                            // сетка зависит от того, где стоит панель: узкая колонка или во всю ширину
 }) {
   const shown = [current, ...alts.slice(0, limit)]
+  const hint = hints(shown, kindLabel)
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between gap-2">
@@ -45,6 +67,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
               {now && <span className="absolute top-1.5 left-1.5 bg-[#111110] text-white text-[9.5px] font-semibold rounded px-1">сейчас</span>}
               {busy && <span className="absolute top-1.5 left-1.5 bg-white text-[#6b6b66] border border-[#e4e4e0] text-[9.5px] rounded px-1">в составе</span>}
               <span className="text-[10.5px] font-mono text-[#111110] leading-tight truncate">{m.base}</span>
+              {hint.get(m) && <span className="text-[10px] text-[#6b6b66] leading-tight line-clamp-2">{hint.get(m)}</span>}
               <span className="text-[11.5px] font-mono font-semibold text-[#111110] leading-tight">{v ? RUBk(v.cost) : '—'}</span>
             </button>
           )
