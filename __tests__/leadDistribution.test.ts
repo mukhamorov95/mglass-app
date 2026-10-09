@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  decide, knownOwner, normalizePhone, overload, phoneFromLeadName, shiftState,
+  decide, isOutgoingCallLead, knownOwner, normalizePhone, overload, phoneFromLeadName, shiftState,
   type Seller, type SellerState,
 } from '@/lib/leadDistribution/rules'
 
@@ -108,5 +108,12 @@ describe('чей клиент', () => {
     expect(phoneFromLeadName('Душевая 1200')).toBeNull()
     expect(normalizePhone('+7 (985) 314-06-87')).toBe('79853140687')
     expect(normalizePhone('8 985 314 06 87')).toBe('79853140687')
+  })
+
+  it('исходящий звонок менеджера — не заявка; входящий и пропущенный — заявки', () => {
+    expect(isOutgoingCallLead('Исходящий 79626295677 (79311097535 - 79311097535)')).toBe(true)
+    expect(isOutgoingCallLead('Входящий 79626295677 (79311097535 - 79311097535)')).toBe(false)
+    expect(isOutgoingCallLead('Пропущенный 79853140687 (79311097535 - 79311097535)')).toBe(false)
+    expect(isOutgoingCallLead('Исходящий звонок по КП')).toBe(false)
   })
 })

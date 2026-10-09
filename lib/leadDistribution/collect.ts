@@ -4,7 +4,7 @@ import { amoGetAll, getPipelines } from '@/lib/amocrm'
 import { isOwnAction, mskDay, mskDayStart, type AmoActivityEvent } from '@/lib/amoActivity'
 import { collectFocusLiveMany } from '@/lib/coaching/focus'
 import {
-  decide, knownOwner, normalizePhone, phoneFromLeadName, shiftState,
+  OUTGOING_REASON, decide, isOutgoingCallLead, knownOwner, normalizePhone, phoneFromLeadName, shiftState,
   type Decision, type Seller, type SellerState,
 } from '@/lib/leadDistribution/rules'
 
@@ -115,6 +115,10 @@ export async function runDistribution(sb: SupabaseClient, now = Math.floor(Date.
   for (const lead of pending) {
     if (lead.status_id === WON || lead.status_id === LOST) {
       if (persist) await save(sb, lead, null, { status: 'skipped', reason: 'закрыта до распределения' }, now, [])
+      continue
+    }
+    if (isOutgoingCallLead(lead.name)) {
+      if (persist) await save(sb, lead, phoneFromLeadName(lead.name), { status: 'skipped', reason: OUTGOING_REASON }, now, [])
       continue
     }
     const phones = await leadPhones(lead)
