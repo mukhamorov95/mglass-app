@@ -949,16 +949,17 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
         </div>
         <div className="flex-1 overflow-y-auto p-3">
           {!list.length && <p className="text-[13px] text-[#9a9a95] p-2">Ничего не нашлось{onlyFinish ? ` в цвете «${finishLabel}» — снимите галочку, чтобы увидеть остальные цвета` : ''}.</p>}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+          {/* Плотная сетка: на ноутбуке видно больше двух рядов, а не полтора (было 6 карточек из 36). */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
             {shown.map(m => {
               const v = m.variants[finishId]
               const n = countIn(m)
               return (
                 <button key={`${m.supplier}|${m.base}`} onClick={() => v && onPick(m)} disabled={!v || (full && !n)}
                   className={`relative text-left bg-white rounded-xl border p-2 flex flex-col gap-1.5 transition-colors ${n ? 'border-[#111110]' : 'border-[#e4e4e0] hover:border-[#111110]'} disabled:opacity-50 disabled:hover:border-[#e4e4e0]`}>
-                  <Thumb src={v?.image ?? m.image} alt={m.name} size="w-full aspect-square" />
+                  <Thumb src={v?.image ?? m.image} alt={m.name} size="w-full aspect-[4/3]" />
                   {n > 0 && <span className="absolute top-3 right-3 bg-[#111110] text-white text-[11px] font-semibold rounded-full px-2 py-0.5">{m.stockMm == null ? `×${n}` : '✓'}</span>}
-                  <span className="text-[12px] leading-snug text-[#111110] line-clamp-3">{m.name}</span>
+                  <span title={m.name} className="text-[12px] leading-snug text-[#111110] line-clamp-2">{m.name}</span>
                   <span className="text-[10.5px] text-[#9a9a95] font-mono">{m.base}<span className="font-sans"> · {SUPPLIER_RU[m.supplier]}</span>{materialOf(m.base) && <span className="font-sans"> · {materialOf(m.base)}</span>}</span>
                   <span className="text-[12px] font-mono text-[#111110] mt-auto">
                     {v ? <>{RUBk(v.cost)}{m.stockMm != null && <span className="font-sans text-[#9a9a95]"> / {(m.stockMm / 1000).toLocaleString('ru-RU')} м</span>}</>
