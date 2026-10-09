@@ -454,6 +454,8 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     const line = hwLineOf(selRow.id)
     const waiting = lin ? !piecesOf(selRow).length : !(numOr(selRow.qty) > 0)
     const alts = mdl ? alternativesOf(mdl, catalog?.models ?? [], finishId) : []
+    const wasPrev = undoable.find(x => x.rowId === selRow.id)?.prev
+    const wasMdl = wasPrev ? byBase.get(keyOf(wasPrev.supplier, wasPrev.base)) : undefined
     const unbind = (pieces: string) => setHw(selRow.id, { pieces, auto: undefined, ...(selRow.at === undefined ? { at: spotsOf(selRow) } : {}) })
     return (
       <div id="sel-card" className="space-y-2 scroll-mt-4">
@@ -504,10 +506,11 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         {mdl && !mdl.variants[finishId] && (
           <p className="text-[12px] text-[#c2410c]">В цвете «{finish.label}» этой детали нет — выберите замену: варианты ниже в этом цвете есть.</p>
         )}
-        {undoLine(undoable.filter(x => x.rowId === selRow.id))}
+        {/* Прежняя деталь в ряду вариантов — бейдж «было», касание возвращает; строка — только если её там нет. */}
+        {!(wasMdl && alts.slice(0, 7).includes(wasMdl)) && undoLine(undoable.filter(x => x.rowId === selRow.id))}
         {mdl && alts.length > 0 && (
           <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label} cols="grid-cols-4 md:grid-cols-8 lg:grid-cols-4"
-            inUse={inUseElsewhere(selRow.id)} onSwap={m => swapRow(selRow.id, m)}
+            was={wasMdl} inUse={inUseElsewhere(selRow.id)} onSwap={m => swapRow(selRow.id, m)}
             onAll={() => { setReplaceFor(selRow.id); setPicker(true) }} />
         )}
         <button onClick={() => { set({ hardware: hardware.filter(x => x.id !== selRow.id) }); setPicked(null) }} className="text-[12px] text-[#9a9a95] hover:text-[#c2410c]">Убрать из состава</button>

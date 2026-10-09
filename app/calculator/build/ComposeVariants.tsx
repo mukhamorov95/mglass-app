@@ -32,7 +32,7 @@ function hints(ms: CatalogModel[], kindLabel: string): Map<CatalogModel, string>
   return new Map(ms.map((m, i) => [m, per[i].filter(w => count.get(low(w))! < ms.length).join(' ')]))
 }
 
-export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, onAll, limit = 7, cols = 'grid-cols-4 md:grid-cols-8' }: {
+export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, onAll, was, limit = 7, cols = 'grid-cols-4 md:grid-cols-8' }: {
   current: CatalogModel
   alts: CatalogModel[]
   finishId: FinishId
@@ -40,6 +40,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
   inUse: (m: CatalogModel) => boolean      // уже другая строка состава — замена сделала бы дубль
   onSwap: (m: CatalogModel) => void
   onAll: () => void
+  was?: CatalogModel                       // что стояло до последней замены: касание возвращает его
   limit?: number
   cols?: string                            // сетка зависит от того, где стоит панель: узкая колонка или во всю ширину
 }) {
@@ -66,6 +67,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
               </span>
               {now && <span className="absolute top-1.5 left-1.5 bg-[#111110] text-white text-[9.5px] font-semibold rounded px-1">сейчас</span>}
               {busy && <span className="absolute top-1.5 left-1.5 bg-white text-[#6b6b66] border border-[#e4e4e0] text-[9.5px] rounded px-1">в составе</span>}
+              {m === was && !busy && <span className="absolute top-1.5 left-1.5 bg-[#2563eb] text-white text-[9.5px] font-semibold rounded px-1">было</span>}
               <span className="text-[10.5px] font-mono text-[#111110] leading-tight truncate">{m.base}</span>
               {hint.get(m) && <span className="text-[10px] text-[#6b6b66] leading-tight line-clamp-2">{hint.get(m)}</span>}
               <span className="text-[11.5px] font-mono font-semibold text-[#111110] leading-tight">{v ? RUBk(v.cost) : '—'}</span>
