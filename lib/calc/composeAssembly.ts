@@ -1,15 +1,21 @@
 import type { Assembly, GlassPart, HardwarePlacement, MetalPart, Niche } from '@/components/configurator/scene/assembly'
 import type { CompositionRole } from '@/lib/calc/composition'
-import type { Shape } from '@/lib/calc/composeDraft'
+import type { Edge, Shape, Side } from '@/lib/calc/composeDraft'
 import type { Elevation, LPanel } from '@/lib/calc/composeLayout'
+import type { Run } from '@/lib/calc/composeTemplates'
 import { inferShape } from '@/lib/configurator/hardwareShapes'
 import { partForItem } from '@/lib/configurator/parts/registry'
 import { placePart, surfaces } from '@/lib/configurator/parts/mount'
 
 // 3D собранного (CONSTRUCTOR_ROUTE.md, К4): та же раскладка, что у схемы К3, в метрах сцены
 // «Сайт + 3D» (assembly.ts): фронт вдоль X, глубина вдоль Z, двери открываются наружу (−Z
-// спереди, +X сбоку). Каждая деталь сцены несёт ключ `row:<id>:<n>` — касание на сцене
+// спереди, −X сбоку). Каждая деталь сцены несёт ключ `row:<id>:<n>` — касание на сцене
 // возвращает строку состава. Цену сцена не знает.
+//
+// Камера сцены смотрит снаружи вдоль +Z, и +X у неё слева. Схема рисует ряд слева направо
+// от стены — поэтому сцену строим из зеркала раскладки: левый край схемы ложится в x = ширине
+// фронта, угол — в x = 0, боковой ряд — вдоль x = 0 (как угловая у самой «Сайт + 3D»).
+// Без зеркала дверь на 3D стояла с другой стороны, чем на схеме.
 
 const M = 0.001
 const DOOR_OPEN_DEG = 32
@@ -31,10 +37,33 @@ type Frame = { at: (u: number, v: number, off?: number) => V3; dir: XZ; out: XZ;
 
 const rotYOf = (d: XZ) => Math.atan2(-d[1], d[0])
 
-function frames(p: LPanel, Wf: number, sideStart: number, doorOpen: boolean): { closed: Frame; live: Frame } {
-  const L: XZ = p.run === 'side' ? [Wf, p.x0 - sideStart] : [p.x0, 0]
-  const d: XZ = p.run === 'side' ? [0, 1] : [1, 0]
-  const n: XZ = p.run === 'side' ? [1, 0] : [0, -1]
+type Mirrored = Pick<Elevation, 'panels' | 'marks' | 'lines'>
+
+// Зеркало внутри каждого ряда: координаты отражены, кромки «лево/право» поменяны местами.
+// Отражаем данные, а не сцену: несимметричные детали (петля к стене, крепление трубы) встают
+// своей стороной, а не вывернутыми.
+function mirror(el: Elevation): Mirrored {
+  const span = new Map<Run, [number, number]>()
+  for (const p of el.panels) {
+    const s = span.get(p.run)
+    span.set(p.run, s ? [Math.min(s[0], p.x0), Math.max(s[1], p.x0 + p.w)] : [p.x0, p.x0 + p.w])
+  }
+  const runOf = new Map(el.panels.map(p => [p.id, p.run]))
+  const fx = (run: Run, x: number) => { const [a, b] = span.get(run)!; return a + b - x }
+  const side = (v: Side | null): Side | null => v === 'left' ? 'right' : v === 'right' ? 'left' : v
+  const edge = (e: Edge): Edge => e === 'left' ? 'right' : e === 'right' ? 'left' : e
+  return {
+    panels: el.panels.map(p => ({ ...p, x0: fx(p.run, p.x0 + p.w), left: p.right, right: p.left, hinge: side(p.hinge), free: side(p.free) })),
+    marks: el.marks.map(m => ({ ...m, x: fx(runOf.get(m.panelId)!, m.x), edge: edge(m.edge) })),
+    lines: el.lines.map(l => { const r = runOf.get(l.panelId)!; return { ...l, x1: fx(r, l.x2), x2: fx(r, l.x1), edge: edge(l.edge) } }),
+  }
+}
+
+// Боковой ряд после зеркала идёт от задней стены (z = Ws) к углу (z = 0) вдоль x = 0, наружу −X.
+function frames(p: LPanel, Ws: number, sideStart: number, doorOpen: boolean): { closed: Frame; live: Frame } {
+  const L: XZ = p.run === 'side' ? [0, Ws - (p.x0 - sideStart)] : [p.x0, 0]
+  const d: XZ = p.run === 'side' ? [0, -1] : [1, 0]
+  const n: XZ = p.run === 'side' ? [-1, 0] : [0, -1]
   const make = (o: XZ, dir: XZ, out: XZ, u0: number): Frame => ({
     at: (u, v, off = 0) => [(o[0] + (u - u0) * dir[0] + off * out[0]) * M, v * M, (o[1] + (u - u0) * dir[1] + off * out[1]) * M],
     dir, out, rotY: rotYOf(dir),
@@ -58,15 +87,17 @@ function frames(p: LPanel, Wf: number, sideStart: number, doorOpen: boolean): { 
   return { closed, live: closed }
 }
 
-export function composeAssembly(shape: Shape, el: Elevation, rows: AssemblyRow[], thicknessMm: number, doorOpen = true): Assembly {
+export function composeAssembly(shape: Shape, elevation: Elevation, rows: AssemblyRow[], thicknessMm: number, doorOpen = true): Assembly {
   const t = thicknessMm * M
+  const el = mirror(elevation)
   const front = el.panels.filter(p => p.run === 'front')
   const side = el.panels.filter(p => p.run === 'side')
   const Wf = front.reduce((s, p) => s + p.w, 0)
   const Ws = side.reduce((s, p) => s + p.w, 0)
-  const sideStart = side[0]?.x0 ?? 0
+  // Начало ряда — меньший x0: боковые хранятся от стены к углу, а не по порядку на схеме.
+  const sideStart = Math.min(...side.map(p => p.x0), Infinity)
   const byRow = new Map(rows.map(r => [r.id, r]))
-  const fr = new Map(el.panels.map(p => [p.id, frames(p, Wf, sideStart, doorOpen)]))
+  const fr = new Map(el.panels.map(p => [p.id, frames(p, Ws, sideStart, doorOpen)]))
 
   const glass: GlassPart[] = el.panels.map(p => {
     const f = fr.get(p.id)!.live
@@ -148,7 +179,8 @@ export function composeAssembly(shape: Shape, el: Elevation, rows: AssemblyRow[]
   const depth = side.length ? Ws : NICHE_DEPTH
   const niche: Niche = {
     w: Wf * M, depth: depth * M, wallH: Math.max(2.2, H * M + 0.25), trayH: TRAY_H,
-    walls: shape === 'niche' ? { back: true, left: true, right: true } : { back: true, left: true, right: false },
+    // Стена, от которой начинается ряд (левый край схемы), после зеркала — при x = ширине фронта.
+    walls: shape === 'niche' ? { back: true, left: true, right: true } : { back: true, left: false, right: true },
   }
   return { glass, metal, hardware, niche, bounds: { w: Wf * M, d: depth * M, h: H * M }, center: [(Wf * M) / 2, (H * M) / 2, (depth * M) / 2] }
 }

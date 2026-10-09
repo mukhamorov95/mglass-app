@@ -43,7 +43,7 @@ describe('3D из состава', () => {
     const hinges = asm.hardware.filter(h => rowOfKey(h.key) === 'r0')
     expect(hinges).toHaveLength(4)
     // Петли на стенах: x = 0 и x = 0,9 м, наружу не уходят.
-    expect([...new Set(hinges.map(h => +h.pos[0].toFixed(3)))]).toEqual([0, 0.9])
+    expect([...new Set(hinges.map(h => +h.pos[0].toFixed(3)))].sort()).toEqual([0, 0.9])
     // Открытая дверь повёрнута, её центр снаружи (z < 0).
     for (const g of asm.glass) { expect(g.rotY).not.toBe(0); expect(g.pos[2]).toBeLessThan(0) }
     expect(asm.niche.walls).toEqual({ back: true, left: true, right: true })
@@ -52,15 +52,33 @@ describe('3D из состава', () => {
     const { asm } = build('niche-two-doors', false)
     for (const g of asm.glass) { expect(g.rotY).toBeCloseTo(0); expect(g.pos[2]).toBeCloseTo(0) }
   })
-  it('угловая: боковое стекло вдоль глубины у x = ширины фронта, профиль и труба — металл, уплотнители не рисуются', () => {
+  it('сцена совпадает со схемой: левый край схемы — слева в кадре (x = ширине фронта), ручка у правой стены', () => {
+    const { asm, rows } = build('niche-glass-door', false)
+    const [fixed, door] = asm.glass
+    expect(fixed.pos[0]).toBeCloseTo(0.95)      // неподвижное 500 мм у левой стены: x 1,2…0,7
+    expect(door.pos[0]).toBeCloseTo(0.35)       // дверь 700 мм у правой стены: x 0,7…0
+    const xs = (role: string) => asm.hardware.filter(h => rowOfKey(h.key) === rows.find(r => r.role === role)!.id).map(h => h.pos[0])
+    expect(Math.max(...xs('handle'))).toBeLessThan(Math.min(...xs('hinge')))
+  })
+  it('угловая: боковое стекло вдоль глубины у x = 0 (угол справа, как на схеме), профиль и труба — металл, уплотнители не рисуются', () => {
     const { asm, rows } = build('corner-swing', false)
     const side = asm.glass[2]
-    expect(side.pos[0]).toBeCloseTo(1.0)
+    expect(side.pos[0]).toBeCloseTo(0)
     expect(side.pos[2]).toBeCloseTo(0.45)
     expect(asm.niche.depth).toBeCloseTo(0.9)
+    expect(asm.niche.walls).toEqual({ back: true, left: false, right: true })
     const sealRows = rows.filter(r => r.role === 'seal').map(r => r.id)
     expect(asm.metal.some(m => sealRows.includes(rowOfKey(m.key)!))).toBe(false)
     expect(asm.metal.filter(m => m.kind === 'rail')).toHaveLength(2)   // труба над неподвижным и над дверью
+  })
+  it('угловая раздвижная: оба боковых стекла в глубине ниши — неподвижное у задней стены, створка у угла и внутри', () => {
+    const { asm } = build('corner-sliding', false)
+    const side = asm.glass.slice(2)
+    expect(side.map(g => +g.pos[2].toFixed(3)).sort()).toEqual([0.25, 0.75])
+    const fixed = side.find(g => g.role === 'fixed')!, slide = side.find(g => g.role === 'door')!
+    expect(fixed.pos[2]).toBeCloseTo(0.75)
+    expect(fixed.pos[0]).toBeCloseTo(0)
+    expect(slide.pos[0]).toBeCloseTo(0.04)
   })
   it('раздвижная: створка внутри от линии стёкол, ролики на ней', () => {
     const { asm } = build('niche-sliding', false)
