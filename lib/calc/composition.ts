@@ -121,7 +121,8 @@ const CLEAR_ORDER: Record<string, string[]> = {
 export function pickRow(rows: SupplierRowLike[], axis: ColorAxis, finish: FinishId): SupplierRowLike | null {
   const usable = rows
     .filter(r => !isDefectRow(r) && rowCost(r) > 0)
-    .sort((a, b) => Number(!!splitAv24Article(a.article)?.alt) - Number(!!splitAv24Article(b.article)?.alt))
+    // Порядок как в pricesByFinish: из строк одного цвета — дорогая, чтобы состав и модель совпали.
+    .sort((a, b) => Number(!!splitAv24Article(a.article)?.alt) - Number(!!splitAv24Article(b.article)?.alt) || rowCost(b) - rowCost(a))
   const own = usable.find(r => rowFinish('av24', r, axis) === finish)
   if (own) return own
   // Позиция без кода цвета в артикуле (тубус, образцы, монтажные мелочи) — одна цена на любой цвет.
