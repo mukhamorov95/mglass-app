@@ -20,6 +20,7 @@ import { alternativesOf, kindOf, sameKind, type Kind } from '@/lib/calc/catalogK
 import { ComposeScheme } from './ComposeScheme'
 import { Thumb } from './ComposeThumb'
 import { Variants } from './ComposeVariants'
+import { TplIcon } from './ComposeTplIcon'
 
 // Конструктор «Из деталей» (docs/configurator/CONSTRUCTOR_ROUTE.md, К1–К3): душевая, которой нет
 // среди моделей, собирается из стёкол и фурнитуры каталогов АВ24 и Ветро (К5). Себестоимость
@@ -605,9 +606,12 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {COMPOSE_TEMPLATES.map(t => (
                 <button key={t.id} onClick={() => { pickTemplate(t); setTplOpen(false) }} disabled={!catalog}
-                  className={`text-left rounded-xl border px-2.5 py-2 transition-colors disabled:opacity-40 ${draft.kind === t.label ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] bg-white hover:border-[#111110]'}`}>
-                  <span className="block text-[12.5px] font-semibold text-[#111110] leading-snug">{t.label}</span>
-                  <span className="block text-[11px] text-[#6b6b66]">{t.share} · {t.source}</span>
+                  className={`flex items-center gap-2 text-left rounded-xl border px-2 py-1.5 transition-colors disabled:opacity-40 ${draft.kind === t.label ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] bg-white hover:border-[#111110]'}`}>
+                  <span className="shrink-0 rounded-lg bg-white border border-[#efefeb] p-0.5"><TplIcon t={t} /></span>
+                  <span className="min-w-0">
+                    <span className="block text-[12.5px] font-semibold text-[#111110] leading-snug">{t.label}</span>
+                    <span className="block text-[11px] text-[#6b6b66] leading-snug">{t.share} · {t.source}</span>
+                  </span>
                 </button>
               ))}
             </div>
