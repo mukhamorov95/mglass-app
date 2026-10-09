@@ -47,6 +47,8 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 const materialOf = (base: string) => MATERIAL[base.split(/\s+/)[1] ?? ''] ?? ''
 const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]'
 const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
+// Не через fld: его w-full перебивает ширину, и поле количества растягивалось на всю строку.
+const qtyFld = 'w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 py-2 text-[14px] font-mono text-center text-[#111110] outline-none focus:border-[#111110]'
 const chip = (on: boolean) => `px-3 py-2 rounded-lg border text-[13px] transition-colors ${on ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`
 
 const emptyDraft = (): Draft => ({ v: 1, glassId: 'clear', thickness: 8, finishId: 'chrome', panels: [{ id: uid(), label: 'Стекло 1', w: '', h: '' }], hardware: [] })
@@ -306,7 +308,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => setHw(h.id, { qty: String(Math.max(0, numOr(h.qty) - 1)) })} className="w-9 h-9 rounded-lg border border-[#e4e4e0] text-[16px]">−</button>
-                        <input inputMode="numeric" className={`${fld} w-14 text-center`} value={h.qty} onChange={e => setHw(h.id, { qty: e.target.value })} />
+                        <input inputMode="numeric" className={qtyFld} value={h.qty} onChange={e => setHw(h.id, { qty: e.target.value })} />
                         <button onClick={() => setHw(h.id, { qty: String(numOr(h.qty) + 1) })} className="w-9 h-9 rounded-lg border border-[#e4e4e0] text-[16px]">+</button>
                         <span className="text-[12px] text-[#9a9a95] ml-1">шт</span>
                       </div>
