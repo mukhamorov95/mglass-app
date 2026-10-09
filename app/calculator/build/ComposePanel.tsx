@@ -63,6 +63,8 @@ const rowKeyOf = (h: HwRow) => keyOf(h.supplier, h.base)
 
 const RUB = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const RUBk = (n: number) => `${n.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`
+// Закупка в панели детали — с копейками, чтобы «цена × количество = сумма» сходилось на экране.
+const RUB2 = (n: number) => `${n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`
 const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const pieceList = (s: string) => s.split(/[^\d]+/).map(Number).filter(n => n > 0)
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -226,7 +228,6 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   }, [hasPanels, bodyKey])
 
   const fresh = priced?.key === bodyKey ? priced.res : null
-  const res = priced?.res ?? null
   const dirty = !fresh || state === 'loading'
   const hwLineOf = (id: string) => { const i = okHw.findIndex(h => h.id === id); return i >= 0 ? fresh?.hardware.lines[i] ?? null : null }
 
@@ -420,27 +421,30 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               </div>
             )}
           </div>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => setHw(selRow.id, { qty: String(Math.max(0, numOr(selRow.qty) - 1)) })} className="w-8 h-8 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">−</button>
-            <input inputMode="numeric" className={qtyFld} value={selRow.qty} onChange={e => setHw(selRow.id, { qty: e.target.value })} />
-            <button onClick={() => setHw(selRow.id, { qty: String(numOr(selRow.qty) + 1) })} className="w-8 h-8 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">+</button>
-            <span className="text-[12px] text-[#9a9a95]">шт</span>
-          </div>
-        )}
-        <div className="text-[12px]">
-          {waiting ? <span className="text-[#c2410c]">{lin ? 'Впишите длины кусков или нажмите размер' : 'Укажите количество'}</span>
-            : line?.total != null ? (
-              <span className="text-[#4b4b47]">
-                Закупка: {RUBk(line.unit!)} × {line.qty}{lin ? ` ${line.qty === 1 ? 'полоса' : 'полосы'}` : ' шт'} = <b className="font-mono">{RUBk(line.total)}</b>
-                {lin && line.layout && <span className="text-[#9a9a95]"> · раскрой {line.layout.map(s => s.join('+')).join(' | ')}</span>}
-              </span>
-            ) : fresh ? <span className="text-[#c2410c]">не посчитано — см. итог</span> : <span className="text-[#9a9a95]">считаю…</span>}
+        ) : null}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {!lin && (
+            <>
+              <button onClick={() => setHw(selRow.id, { qty: String(Math.max(0, numOr(selRow.qty) - 1)) })} className="w-8 h-8 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">−</button>
+              <input inputMode="numeric" className={qtyFld} value={selRow.qty} onChange={e => setHw(selRow.id, { qty: e.target.value })} />
+              <button onClick={() => setHw(selRow.id, { qty: String(numOr(selRow.qty) + 1) })} className="w-8 h-8 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">+</button>
+              <span className="text-[12px] text-[#9a9a95] mr-1">шт</span>
+            </>
+          )}
+          <span className="text-[12px] ml-auto text-right">
+            {waiting ? <span className="text-[#c2410c]">{lin ? 'Впишите длины кусков или нажмите размер' : 'Укажите количество'}</span>
+              : line?.total != null ? (
+                <span className="text-[#4b4b47]">
+                  {RUB2(line.unit!)} × {line.qty}{lin ? ` ${line.qty === 1 ? 'полоса' : 'полосы'}` : ''} = <b className="font-mono">{RUB2(line.total)}</b>
+                  {lin && line.layout && <span className="block text-[#9a9a95]">раскрой {line.layout.map(s => s.join('+')).join(' | ')}</span>}
+                </span>
+              ) : fresh ? <span className="text-[#c2410c]">не посчитано — см. итог</span> : <span className="text-[#9a9a95]">считаю…</span>}
+          </span>
         </div>
         <div className="text-[12px] text-[#4b4b47] rounded-lg bg-[#f5f8ff] border border-[#dfe6f5] px-2.5 py-1.5">
           <span className="text-[#111110]">{selSpots.length ? whereText(selRow) : 'На схеме её нет.'}</span>
           {selRow.at === undefined && selSpots.length > 0 && <span className="text-[#9a9a95]"> · по умолчанию</span>}
-          <span className="block text-[11px] text-[#6b6b66] mt-0.5">Коснитесь кромки стекла на схеме — деталь встанет туда, ещё раз — уберётся.{selRow.at !== undefined && <> <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button></>}</span>
+          <span className="block text-[11px] text-[#6b6b66]">Касание кромки на схеме ставит или убирает деталь.{selRow.at !== undefined && <> <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button></>}</span>
         </div>
         {mdl && alts.length > 0 && (
           <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label} cols="grid-cols-4 md:grid-cols-8 lg:grid-cols-4"
@@ -484,7 +488,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             <button onClick={() => setShut(s => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n })}
               className="w-full flex items-center justify-between gap-2 py-1.5 text-left">
               <span className="text-[12.5px] font-semibold text-[#111110]">{g.label} <span className="font-normal text-[#9a9a95]">· {g.rows.length}</span></span>
-              <span className="text-[12px] font-mono text-[#4b4b47]">{sum > 0 && RUBk(sum)} <span className="text-[#9a9a95] font-sans">{open ? '▾' : '▸'}</span></span>
+              <span className="text-[12px] font-mono text-[#4b4b47]">{!open && sum > 0 && RUB(sum)} <span className="text-[#9a9a95] font-sans">{open ? '▾' : '▸'}</span></span>
             </button>
             {open && g.rows.map(h => {
               const idx = hardware.indexOf(h)
@@ -507,7 +511,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                       {' · '}{SUPPLIER_RU[h.supplier ?? 'av24']}{!placed && ' · нет на схеме'}
                     </span>
                   </span>
-                  <span className="text-[12px] font-mono text-[#111110] shrink-0">{line?.total != null ? RUBk(line.total) : ''}</span>
+                  <span className="text-[12px] font-mono text-[#111110] shrink-0">{line?.total != null ? RUB(line.total) : ''}</span>
                 </button>
               )
             })}
@@ -532,7 +536,6 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           <input ref={fileRef} type="file" accept=".step,.stp" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importStep(f) }} />
           <div className={segWrap}>{SHAPES.map(s => <button key={s.id} onClick={() => set({ shape: s.id })} className={seg(shape === s.id)}>{s.label}</button>)}</div>
           <div className={segWrap}>{THICKNESSES.map(t => <button key={t} onClick={() => set({ thickness: t })} className={seg(thickness === t)}>{t} мм</button>)}</div>
-          <button onClick={clearAll} className="ml-auto text-[12px] text-[#9a9a95] hover:text-[#c2410c]">Очистить</button>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <div className="flex items-center gap-1.5">
@@ -545,6 +548,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             {FINISHES.map(f => <button key={f.id} onClick={() => set({ finishId: f.id })} title={f.label} aria-label={f.label} className={dot(finishId === f.id)} style={{ background: f.hex }} />)}
             <span className="text-[12px] text-[#111110] ml-1">{finish.label}</span>
           </div>
+          <button onClick={clearAll} className="ml-auto text-[12px] text-[#9a9a95] hover:text-[#c2410c]">Очистить состав</button>
         </div>
         {showTpl && (
           <div className="space-y-1.5 pt-1">
@@ -679,7 +683,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         )}
       </section>
 
-      <aside className="order-3 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-3 lg:h-[calc(100dvh-1.5rem)] lg:max-h-[860px] flex flex-col gap-3 min-h-0">
+      <aside className="order-3 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-3 lg:h-[calc(100dvh-5.5rem)] lg:max-h-[860px] flex flex-col gap-3 min-h-0">
         <section className="bg-white border border-[#e4e4e0] rounded-2xl p-3 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
           {inspector || composition}
         </section>
@@ -687,7 +691,8 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         <section className="bg-white border border-[#e4e4e0] rounded-2xl p-3 space-y-2 text-[13px] shrink-0 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:rounded-none max-lg:border-x-0 max-lg:border-b-0 max-lg:shadow-[0_-4px_16px_rgba(0,0,0,0.06)] max-lg:max-h-[70dvh] max-lg:overflow-y-auto">
           <div className="space-y-0.5">
             <div className="flex justify-between"><span className="text-[#6b6b66]">Себестоимость</span><span className="font-mono font-semibold">{RUB(cost)}</span></div>
-            <div className="text-[11px] text-[#9a9a95]">стекло{res?.glass.material ? ` ${res.glass.material} ${thickness} мм` : ''} {RUB(glassCost)} + фурнитура · закупка {RUB(hwCost)}</div>
+            {/* Фурнитура — вычитанием из округлённых: стекло + фурнитура = себестоимость и на экране. */}
+            <div className="text-[11px] text-[#9a9a95]">стекло {RUB(glassCost)} + фурнитура (закупка) {RUB(Math.round(cost) - Math.round(glassCost))}</div>
             {usable && (
               <div className="text-[11.5px] text-[#6b6b66]">
                 Изделие {RUB(productPrice)}{install > 0 && ` · монтаж ${sections} × ${RUB(numOr(perSection))}`}{deliveryN > 0 && ` · доставка ${RUB(deliveryN)}`}{liftN > 0 && ` · подъём ${RUB(liftN)}`}{discPct > 0 && ` · скидка ${discPct}%`}
@@ -766,12 +771,23 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
   const [q, setQ] = useState('')
   const [onlyFinish, setOnlyFinish] = useState(true)
   const [onlyKind, setOnlyKind] = useState(!!kind)
+  // Разновидность внутри раздела (К9 В3): «Ручки» → кноб 91 · скоба 68 · купе 26…
+  const [sub, setSub] = useState<string | null>(null)
   const needle = q.trim().toLowerCase().replace(/x/g, 'х')
   const match = (m: CatalogModel) => !needle || `${m.name} ${m.base} ${m.category} ${SUPPLIER_RU[m.supplier]}`.toLowerCase().replace(/x/g, 'х').includes(needle)
   const avail = (m: CatalogModel) => !onlyFinish || !!m.variants[finishId]
   // Поиск идёт по всем разделам: менеджер помнит артикул, а не раздел.
   const fits = (m: CatalogModel) => (linear === undefined || (m.stockMm != null) === linear) && (!kind || !onlyKind || (m.group === group && sameKind(kind, kindOf(m))))
-  const list = catalog.models.filter(m => (needle ? true : m.group === group) && match(m) && avail(m) && fits(m))
+  const list = catalog.models.filter(m => (needle ? true : m.group === group && (!sub || kindOf(m).label === sub)) && match(m) && avail(m) && fits(m))
+  const subs = useMemo(() => {
+    const c = new Map<string, number>()
+    for (const m of catalog.models) {
+      if (m.group !== group || (onlyFinish && !m.variants[finishId]) || (linear !== undefined && (m.stockMm != null) !== linear)) continue
+      const l = kindOf(m).label
+      c.set(l, (c.get(l) ?? 0) + 1)
+    }
+    return [...c].sort((a, b) => b[1] - a[1])
+  }, [catalog, group, finishId, onlyFinish, linear])
   const counts = useMemo(() => {
     const c: Partial<Record<CatalogGroupId, number>> = {}
     for (const m of catalog.models) if (avail(m)) c[m.group] = (c[m.group] ?? 0) + 1
@@ -797,12 +813,22 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
           </div>
           <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
             {catalog.groups.map(g => (
-              <button key={g.id} onClick={() => { setGroup(g.id); setQ('') }}
+              <button key={g.id} onClick={() => { setGroup(g.id); setQ(''); setSub(null) }}
                 className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[13px] ${!needle && group === g.id ? 'bg-[#111110] text-white' : 'bg-[#f5f5f3] text-[#4b4b47]'}`}>
                 {g.label} <span className="opacity-60">{counts[g.id] ?? 0}</span>
               </button>
             ))}
           </div>
+          {!needle && subs.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1">
+              <button onClick={() => setSub(null)} className={`${miniChip(!sub)} whitespace-nowrap`}>Все</button>
+              {subs.map(([l, n]) => (
+                <button key={l} onClick={() => setSub(l === sub ? null : l)} className={`${miniChip(sub === l)} whitespace-nowrap`}>
+                  {l[0].toUpperCase() + l.slice(1)} <span className="opacity-60">{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-x-4 gap-y-1 flex-wrap">
             <label className="flex items-center gap-2 text-[12px] text-[#6e6e73]">
               <input type="checkbox" checked={onlyFinish} onChange={e => setOnlyFinish(e.target.checked)} />
@@ -819,7 +845,7 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
         </div>
         <div className="flex-1 overflow-y-auto p-3">
           {!list.length && <p className="text-[13px] text-[#9a9a95] p-2">Ничего не нашлось{onlyFinish ? ` в цвете «${finishLabel}» — снимите галочку, чтобы увидеть остальные цвета` : ''}.</p>}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2">
             {list.map(m => {
               const v = m.variants[finishId]
               const n = countIn(m)

@@ -11,7 +11,7 @@ import { sameSpot, type Elevation, type LMark, type LPanel, type P, type Plan } 
 const GLASS_STROKE = '#7c8c93'
 const DIM = '#9a9a95'
 const INK = '#111110'
-const FACADE_MAX_H = 340      // px — фасад не выше этого, иначе стёкла уезжают за экран планшета
+const FACADE_MAX_H = 300      // px — фасад не выше этого: вид, панель и итог — на одном экране (К9 В2)
 
 // Ширина контейнера в px: шрифт и толщины задаём в пикселях экрана, а не в миллиметрах.
 function useWidth<T extends HTMLElement>() {
