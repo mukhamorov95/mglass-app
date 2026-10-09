@@ -1,5 +1,5 @@
 import type { FinishId } from '@/lib/configurator/catalog'
-import type { CompositionRole } from '@/lib/calc/composition'
+import type { CompositionRole, Supplier } from '@/lib/calc/composition'
 import { COMPOSE_TEMPLATES, templateSpots, type AutoLen, type Run } from '@/lib/calc/composeTemplates'
 
 // Черновик конструктора «Из деталей» (CONSTRUCTOR_ROUTE.md, К1–К3) и его перевод между версиями.
@@ -20,9 +20,10 @@ export type Spot = { panelId: string; edge: Edge; pos?: number[] }
 export type PanelRow = { id: string; label: string; w: string; h: string; run?: Run; kind: PanelKind; hinge?: Side }
 // auto — длины кусков от размеров стёкол (из шаблона); правка длин руками его снимает.
 // at — где деталь на схеме: нет поля — по умолчанию от роли, [] — убрана со схемы явно.
+// supplier — нет поля у АВ24 (строки до К5), у Ветро 'vetro'.
 export type HwRow = {
   id: string; base: string; role: CompositionRole; label: string; stockMm: number | null
-  qty: string; pieces: string; auto?: AutoLen[]; at?: Spot[]
+  qty: string; pieces: string; auto?: AutoLen[]; at?: Spot[]; supplier?: Supplier
 }
 // Деталь из чертежа, которой нет в каталоге: ждёт подбора, в расчёт не идёт (К8).
 export type StepPending = { id: string; name: string; role: CompositionRole; qty: number; pieces?: number[]; at: Spot[] }
@@ -94,6 +95,7 @@ export function migrateDraft(input: unknown): Draft | null {
     stockMm: typeof h.stockMm === 'number' ? h.stockMm : null, qty: str(h.qty), pieces: str(h.pieces),
     ...(Array.isArray(h.auto) ? { auto: h.auto as AutoLen[] } : {}),
     ...(spots(h.at) ? { at: spots(h.at) } : {}),
+    ...(h.supplier === 'vetro' ? { supplier: 'vetro' as const } : {}),
   }))
   const shape = d.v === 2 && SHAPES.includes(d.shape as Shape) ? (d.shape as Shape) : shapeFrom(panels, draftKind)
   const out: Draft = {

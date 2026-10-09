@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireAnyPageAccess } from '@/lib/apiAuth'
 import { FINISH_IDS } from '@/lib/configurator/pricing'
-import { ARTICLE_RE, COMPOSITION_ROLES, type CompositionHardware, type CompositionPanel } from '@/lib/calc/composition'
+import { ARTICLE_RE, COMPOSITION_ROLES, SUPPLIERS, type CompositionHardware, type CompositionPanel, type Supplier } from '@/lib/calc/composition'
+import { VETRO_BASE_RE } from '@/lib/calc/vetroRows'
 import { GLASS_B2B_NAME, loadComposition, type CompositionRequest } from '@/lib/calc/compositionServer'
 import { getFinance } from '@/lib/configurator/financeStore'
 
@@ -37,13 +38,15 @@ function parse(body: unknown): CompositionRequest | string {
   const hardware: CompositionHardware[] = []
   for (const [i, x] of (b.hardware as Record<string, unknown>[]).entries()) {
     if (!(COMPOSITION_ROLES as readonly string[]).includes(String(x?.role))) return `фурнитура ${i + 1}: неизвестная роль`
+    const supplier: Supplier = x.supplier == null ? 'av24' : (SUPPLIERS as readonly string[]).includes(String(x.supplier)) ? x.supplier as Supplier : ('' as Supplier)
+    if (!supplier) return `фурнитура ${i + 1}: неизвестный поставщик`
     const article = x.article == null || x.article === '' ? null : String(x.article).trim()
-    if (article && !ARTICLE_RE.test(article)) return `фурнитура ${i + 1}: артикул не похож на артикул`
+    if (article && !(supplier === 'vetro' ? VETRO_BASE_RE : ARTICLE_RE).test(article)) return `фурнитура ${i + 1}: артикул не похож на артикул`
     const pieces = Array.isArray(x.pieces_mm) ? (x.pieces_mm as unknown[]).slice(0, 20).map(v => int(v, 1, 4000)) : []
     if (pieces.some(v => v == null)) return `фурнитура ${i + 1}: длина куска 1–4000 мм`
     const qty = x.qty == null ? undefined : int(x.qty, 0, 50)
     if (qty === null) return `фурнитура ${i + 1}: количество 0–50`
-    hardware.push({ role: x.role as CompositionHardware['role'], label: String(x.label ?? '').slice(0, 80) || String(x.role), article, qty, pieces_mm: pieces as number[] })
+    hardware.push({ role: x.role as CompositionHardware['role'], label: String(x.label ?? '').slice(0, 80) || String(x.role), article, ...(supplier === 'vetro' ? { supplier } : {}), qty, pieces_mm: pieces as number[] })
   }
   return { glassId: b.glassId, thickness, finishId: b.finishId as CompositionRequest['finishId'], panels, hardware }
 }
