@@ -71,7 +71,6 @@ const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-2 text-[
 const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
 // Не через fld: его w-full перебивает ширину, и поле количества растягивалось на всю строку.
 const qtyFld = 'w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 py-2 text-[14px] font-mono text-center text-[#111110] outline-none focus:border-[#111110]'
-const chip = (on: boolean) => `px-3 py-2 rounded-lg border text-[13px] transition-colors ${on ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`
 const miniChip = (on: boolean) => `px-2 py-1 rounded-md border text-[12px] transition-colors ${on ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#6b6b66] hover:border-[#111110]'}`
 
 const emptyDraft = (): Draft => ({ v: 2, glassId: 'clear', thickness: 8, finishId: 'chrome', shape: 'niche', panels: [{ id: uid(), label: 'Стекло 1', w: '', h: '', kind: 'fixed' }], hardware: [] })
@@ -87,13 +86,15 @@ function readDraft(): Draft | null {
   return null
 }
 
-export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, clientSlot }: {
+export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, clientSlot, noteSlot, clientOk = true }: {
   onAdd: (item: ComposeCartItem) => void
   cartCount: number
   onSave: () => void
   saving: boolean
   deliveryTaken: boolean          // доставка уже есть у изделия в корзине — второй раз не берём
   clientSlot: ReactNode           // «Кому считаем» родителя: без клиента «Сохранить» откажет
+  noteSlot?: ReactNode            // ответ «Сохранить» — на виду, даже когда «Кому считаем» свёрнут
+  clientOk?: boolean
 }) {
   // Черновик читаем после монтирования: на сервере localStorage нет, и разметка разошлась бы.
   // Пишем только после чтения — иначе пустой состав первого рендера затёр бы сохранённый.
@@ -151,7 +152,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     if (scroll === 'scheme') schemeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     if (scroll === 'row') document.getElementById(`hw-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     // Карточка появляется после перерисовки — прокрутка следом за ней.
-    if (scroll === 'card') setTimeout(() => document.getElementById('sel-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+    if (scroll === 'card') setTimeout(() => document.getElementById('sel-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
   }
   // 3D из той же раскладки: касание детали на сцене выбирает её строку, как на схеме.
   const [view, setView] = useState<'scheme' | '3d'>('scheme')
@@ -358,171 +359,283 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     const mdl = replaceRow ? byBase.get(rowKeyOf(replaceRow)) : undefined
     return mdl ? kindOf(mdl) : undefined
   }, [replaceRow, byBase])
-  const closePicker = () => { setPicker(false); setPickFor(null); setReplaceFor(null) }
+  const [pickerGroup, setPickerGroup] = useState<CatalogGroupId | null>(null)
+  const closePicker = () => { setPicker(false); setPickFor(null); setReplaceFor(null); setPickerGroup(null) }
   const countIn = (m: CatalogModel) => { const h = hardware.find(x => rowKeyOf(x) === keyOf(m.supplier, m.base)); return h ? (h.stockMm == null ? numOr(h.qty) : 1) : 0 }
   // Подсказки длин — размеры стёкол: уплотнитель по высоте двери, порог по ширине.
   const dimChips = [...new Set(okPanels.flatMap(p => [numOr(p.h), numOr(p.w)]))].sort((a, b) => b - a)
 
-  return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] items-start pb-44 lg:pb-0">
-      <div className="space-y-4">
-        <section className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3">
-          <div>
-            <h2 className="text-[15px] font-semibold text-[#111110]">Шаблоны</h2>
-            <p className="text-[11px] text-[#9a9a95] mt-0.5">Типовые душевые по 961 монтажу 2022–2026: стёкла и фурнитура одним касанием, дальше впишите размеры. Доля — среди всех установленных душевых.</p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {COMPOSE_TEMPLATES.map(t => (
-              <button key={t.id} onClick={() => pickTemplate(t)} disabled={!catalog}
-                className={`text-left rounded-xl border px-3 py-2.5 transition-colors disabled:opacity-40 ${draft.kind === t.label ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] bg-white hover:border-[#111110]'}`}>
-                <span className="block text-[13px] font-semibold text-[#111110] leading-snug">{t.label}</span>
-                <span className="block text-[11px] text-[#6b6b66] mt-0.5">{t.share}</span>
-                <span className="block text-[10.5px] text-[#9a9a95]">{t.source}</span>
-              </button>
-            ))}
-          </div>
-          {tplMissing.length > 0 && <p className="text-[12px] text-[#c2410c]">Нет в каталоге АВ24, строка не добавлена: {tplMissing.join(', ')}.</p>}
-          <div className="flex items-center gap-x-3 gap-y-1 flex-wrap pt-1">
-            <button onClick={() => fileRef.current?.click()} disabled={!catalog}
-              className="px-3 py-2 rounded-lg border border-[#111110] text-[#111110] text-[13px] font-semibold hover:bg-[#f0f0ec] disabled:opacity-40">
-              Из SolidWorks (STEP)
-            </button>
-            <span className="text-[11px] text-[#9a9a95] flex-1 min-w-[180px]">Сборка душевой из SolidWorks: стёкла, форма и места петель, ручки, держателей — как начерчено.</span>
-            <input ref={fileRef} type="file" accept=".step,.stp" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importStep(f) }} />
-          </div>
-          {stepMsg && (
-            <div className={`text-[12px] ${stepMsg.ok ? 'text-[#4b4b47]' : 'text-[#c2410c]'}`}>
-              {stepMsg.text}
-              {stepMsg.notes.length > 0 && <ul className="list-disc pl-4 mt-0.5 text-[#6b6b66]">{stepMsg.notes.map(n => <li key={n}>{n}</li>)}</ul>}
-            </div>
-          )}
-        </section>
+  // Один экран (К9 В2, по образцу NextCAD): сверху строка настроек, в центре вид, справа панель —
+  // выбранная деталь с вариантами или состав группами; итог и кнопки всегда на виду. Длинное
+  // (шаблоны, стёкла, условия цены) свёрнуто, пока не нужно.
+  const empty = !hardware.length && !pending.length && !panels.some(p => p.w || p.h)
+  const [tplOpen, setTplOpen] = useState<boolean | null>(null)
+  const showTpl = tplOpen ?? empty
+  const allSized = panels.every(p => numOr(p.w) >= 50 && numOr(p.h) >= 50)
+  const [glassOpen, setGlassOpen] = useState<boolean | null>(null)
+  const showGlass = glassOpen ?? !allSized
+  const [termsOpen, setTermsOpen] = useState(false)
+  const [shut, setShut] = useState<Set<string>>(() => new Set())
+  const groupLabel = new Map((catalog?.groups ?? []).map(g => [g.id, g.label] as const))
+  const groupOfRow = (h: HwRow): CatalogGroupId => byBase.get(rowKeyOf(h))?.group ?? GROUP_OF[h.role] ?? (catalog?.groups.some(g => g.id === h.role) ? h.role as CatalogGroupId : 'other')
+  const grouped = (catalog?.groups ?? [{ id: 'other' as CatalogGroupId, label: 'Детали' }])
+    .map(g => ({ ...g, rows: hardware.filter(h => groupOfRow(h) === g.id) }))
+    .filter(g => g.rows.length)
+  const glassSummary = okPanels.map(p => {
+    const lp = layout.elevation.panels.find(x => x.id === p.id)
+    return `${p.label || 'Стекло'} ${numOr(p.w)}×${numOr(p.h)}${p.kind === 'door' ? ' · дверь' : p.kind === 'slide' ? ' · раздвижная' : ''}${shape === 'corner' && (lp?.run ?? p.run) === 'side' ? ' · сбоку' : ''}`
+  }).join(' · ')
+  const openPickerAt = (g: CatalogGroupId) => { setPickerGroup(g); setPicker(true) }
 
-        <section ref={schemeRef} className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3 scroll-mt-4">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[15px] font-semibold text-[#111110]">Вид</h2>
-              <div className="flex rounded-lg border border-[#e4e4e0] p-0.5 bg-[#f5f5f3]">
-                {([['scheme', 'Схема'], ['3d', '3D']] as const).map(([id, name]) => (
-                  <button key={id} onClick={() => setView(id)} className={`px-3 py-1 rounded-md text-[12px] font-medium ${view === id ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>{name}</button>
-                ))}
-              </div>
-              {view === '3d' && layout.elevation.panels.some(p => p.kind !== 'fixed') && (
-                <button onClick={() => setDoorOpen(o => !o)} className={miniChip(false)}>{doorOpen ? 'Закрыть двери' : 'Открыть двери'}</button>
-              )}
-            </div>
-            {layout.elevation.panels.length > 0 && !selRow && <span className="text-[11px] text-[#9a9a95] text-right">коснитесь детали — откроется её строка</span>}
+  const seg = (on: boolean) => `px-2.5 py-1.5 text-[12.5px] rounded-md transition-colors ${on ? 'bg-white text-[#111110] shadow-sm font-semibold' : 'text-[#6b6b66] hover:text-[#111110]'}`
+  const segWrap = 'flex rounded-lg border border-[#e4e4e0] p-0.5 bg-[#f5f5f3]'
+  const dot = (on: boolean) => `w-7 h-7 rounded-full border-2 transition-all ${on ? 'border-[#111110] scale-105' : 'border-white ring-1 ring-[#e4e4e0] hover:ring-[#111110]'}`
+
+  const inspector = selRow && (() => {
+    const num = hardware.findIndex(h => h.id === selRow.id) + 1
+    const mdl = byBase.get(rowKeyOf(selRow))
+    const lin = selRow.stockMm != null
+    const line = hwLineOf(selRow.id)
+    const waiting = lin ? !piecesOf(selRow).length : !(numOr(selRow.qty) > 0)
+    const alts = mdl ? alternativesOf(mdl, catalog?.models ?? [], finishId) : []
+    const unbind = (pieces: string) => setHw(selRow.id, { pieces, auto: undefined, ...(selRow.at === undefined ? { at: spotsOf(selRow) } : {}) })
+    return (
+      <div id="sel-card" className="space-y-2.5 scroll-mt-4">
+        <div className="flex items-start gap-2.5">
+          <Thumb src={mdl?.variants[finishId]?.image ?? mdl?.image} alt={selRow.label} size="w-16 h-16" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-[#9a9a95]">{num}. {groupLabel.get(groupOfRow(selRow)) ?? 'Деталь'}{mdl ? ` · ${kindOf(mdl).label}` : ''}</div>
+            <div className="text-[13.5px] font-semibold text-[#111110] leading-snug">{selRow.label}</div>
+            <div className="text-[11px] text-[#9a9a95] font-mono truncate">{line?.article ?? selRow.base}<span className="font-sans"> · {SUPPLIER_RU[selRow.supplier ?? 'av24']}{materialOf(selRow.base) && ` · ${materialOf(selRow.base)}`}{lin && ` · полоса ${(selRow.stockMm! / 1000).toLocaleString('ru-RU')} м`}</span></div>
           </div>
-          {!layout.elevation.panels.length
-            ? <p className="text-[13px] text-[#9a9a95]">Впишите размеры стёкол — здесь появится вид снаружи и план сверху.</p>
-            : view === '3d'
-              ? (
-                <div className="space-y-1">
+          <button onClick={() => setPicked(null)} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold shrink-0">Готово</button>
+        </div>
+        {lin ? (
+          <div className="space-y-1.5">
+            <input className={fld} value={selRow.auto ? piecesOf(selRow).join(', ') : selRow.pieces} onChange={e => unbind(e.target.value)} placeholder="куски, мм: 2004, 2004" />
+            {selRow.auto && <p className="text-[11px] text-[#9a9a95]">Длины от размеров стёкол — меняются вместе с ними. Правка руками отвяжет.</p>}
+            {!!dimChips.length && (
+              <div className="flex flex-wrap gap-1.5">
+                {dimChips.map(v => <button key={v} onClick={() => unbind([...piecesOf(selRow), v].join(', '))} className="px-2 py-0.5 rounded-md border border-[#e4e4e0] text-[12px] font-mono text-[#4b4b47] hover:border-[#111110]">+{v}</button>)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setHw(selRow.id, { qty: String(Math.max(0, numOr(selRow.qty) - 1)) })} className="w-8 h-8 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">−</button>
+            <input inputMode="numeric" className={qtyFld} value={selRow.qty} onChange={e => setHw(selRow.id, { qty: e.target.value })} />
+            <button onClick={() => setHw(selRow.id, { qty: String(numOr(selRow.qty) + 1) })} className="w-8 h-8 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">+</button>
+            <span className="text-[12px] text-[#9a9a95]">шт</span>
+          </div>
+        )}
+        <div className="text-[12px]">
+          {waiting ? <span className="text-[#c2410c]">{lin ? 'Впишите длины кусков или нажмите размер' : 'Укажите количество'}</span>
+            : line?.total != null ? (
+              <span className="text-[#4b4b47]">
+                Закупка: {RUBk(line.unit!)} × {line.qty}{lin ? ` ${line.qty === 1 ? 'полоса' : 'полосы'}` : ' шт'} = <b className="font-mono">{RUBk(line.total)}</b>
+                {lin && line.layout && <span className="text-[#9a9a95]"> · раскрой {line.layout.map(s => s.join('+')).join(' | ')}</span>}
+              </span>
+            ) : fresh ? <span className="text-[#c2410c]">не посчитано — см. итог</span> : <span className="text-[#9a9a95]">считаю…</span>}
+        </div>
+        <div className="text-[12px] text-[#4b4b47] rounded-lg bg-[#f5f8ff] border border-[#dfe6f5] px-2.5 py-1.5">
+          <span className="text-[#111110]">{selSpots.length ? whereText(selRow) : 'На схеме её нет.'}</span>
+          {selRow.at === undefined && selSpots.length > 0 && <span className="text-[#9a9a95]"> · по умолчанию</span>}
+          <span className="block text-[11px] text-[#6b6b66] mt-0.5">Коснитесь кромки стекла на схеме — деталь встанет туда, ещё раз — уберётся.{selRow.at !== undefined && <> <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button></>}</span>
+        </div>
+        {mdl && alts.length > 0 && (
+          <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label} cols="grid-cols-4 md:grid-cols-8 lg:grid-cols-4"
+            inUse={inUseElsewhere(selRow.id)} onSwap={m => swapRow(selRow.id, m)}
+            onAll={() => { setReplaceFor(selRow.id); setPicker(true) }} />
+        )}
+        <button onClick={() => { set({ hardware: hardware.filter(x => x.id !== selRow.id) }); setPicked(null) }} className="text-[12px] text-[#9a9a95] hover:text-[#c2410c]">Убрать из состава</button>
+      </div>
+    )
+  })()
+
+  const composition = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[15px] font-semibold text-[#111110]">Состав{hardware.length ? ` · ${hardware.length}` : ''}</h2>
+        <button onClick={() => setPicker(true)} disabled={!catalog} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12.5px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40">+ Из каталога</button>
+      </div>
+      {catalogErr && <p className="text-[12px] text-[#c2410c]">{catalogErr}</p>}
+      {pending.length > 0 && (
+        <div className="rounded-xl border border-[#f1d3bf] bg-[#fdf6f1] p-2.5 space-y-1">
+          <p className="text-[12px] text-[#c2410c]"><b>Из чертежа{draft.step?.file ? ` «${draft.step.file}»` : ''} — нет в каталоге · {pending.length}.</b> На схеме стоят, в цену не вошли.</p>
+          {pending.map((p, j) => (
+            <div key={p.id} id={`pend-${p.id}`} className={`flex items-start gap-2 rounded-lg p-1.5 -mx-1 scroll-mt-24 ${pendFocus === p.id ? 'bg-white ring-1 ring-[#f1d3bf]' : ''}`}>
+              <span className="min-w-[20px] h-5 px-1 mt-0.5 rounded-full border border-[#c2410c] text-[11px] font-semibold text-[#c2410c] grid place-items-center shrink-0">{hardware.length + j + 1}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12.5px] text-[#111110] leading-snug">{p.name}</div>
+                <div className="text-[11px] text-[#6b6b66]">{p.pieces?.length ? `куски ${p.pieces.join(', ')} мм` : `${p.qty} шт`}{p.at.length ? ` · ${p.at.map(spotText).join('; ')}` : ' · место в чертеже не нашёл'}</div>
+                <button onClick={() => { setPickFor(p.id); setPicker(true) }} disabled={!catalog} className="text-[12px] text-[#2563eb] hover:underline disabled:opacity-40">Подобрать из каталога</button>
+              </div>
+              <button onClick={() => dropPending(p.id)} className="text-[#9a9a95] hover:text-[#c2410c] px-1" aria-label="Убрать">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {!hardware.length && !pending.length && <p className="text-[12.5px] text-[#9a9a95]">Петли, ручки, коннекторы, уплотнители — из каталогов АВ24 и Ветро, цена в выбранном цвете. Добавьте кнопкой выше или типом под видом.</p>}
+      {grouped.map(g => {
+        const open = !shut.has(g.id)
+        const sum = g.rows.reduce((s, h) => s + (hwLineOf(h.id)?.total ?? 0), 0)
+        return (
+          <div key={g.id} className="border-t border-[#efefeb] first:border-t-0">
+            <button onClick={() => setShut(s => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n })}
+              className="w-full flex items-center justify-between gap-2 py-1.5 text-left">
+              <span className="text-[12.5px] font-semibold text-[#111110]">{g.label} <span className="font-normal text-[#9a9a95]">· {g.rows.length}</span></span>
+              <span className="text-[12px] font-mono text-[#4b4b47]">{sum > 0 && RUBk(sum)} <span className="text-[#9a9a95] font-sans">{open ? '▾' : '▸'}</span></span>
+            </button>
+            {open && g.rows.map(h => {
+              const idx = hardware.indexOf(h)
+              const mdl = byBase.get(rowKeyOf(h))
+              const line = hwLineOf(h.id)
+              const lin = isLinear(h)
+              const waiting = lin ? !piecesOf(h).length : !(numOr(h.qty) > 0)
+              const placed = spotsOf(h).length > 0
+              return (
+                <button key={h.id} id={`hw-${h.id}`} onClick={() => pickRow(h.id, 'card')}
+                  className="w-full flex items-center gap-2 py-1.5 px-1 -mx-1 rounded-lg text-left hover:bg-[#f5f5f3] scroll-mt-24">
+                  <span className="relative shrink-0">
+                    <Thumb src={mdl?.variants[finishId]?.image ?? mdl?.image} alt={h.label} size="w-10 h-10" />
+                    <span className="absolute -top-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full border border-[#111110] bg-white text-[10px] font-semibold text-[#111110] grid place-items-center">{idx + 1}</span>
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[12.5px] text-[#111110] leading-tight truncate">{h.label}</span>
+                    <span className={`block text-[11px] truncate ${waiting ? 'text-[#c2410c]' : 'text-[#9a9a95]'}`}>
+                      {waiting ? (lin ? 'впишите длины' : 'укажите количество') : lin ? `${piecesOf(h).join(' + ')} мм` : `${numOr(h.qty)} шт`}
+                      {' · '}{SUPPLIER_RU[h.supplier ?? 'av24']}{!placed && ' · нет на схеме'}
+                    </span>
+                  </span>
+                  <span className="text-[12px] font-mono text-[#111110] shrink-0">{line?.total != null ? RUBk(line.total) : ''}</span>
+                </button>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  return (
+    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_auto_1fr] lg:items-start pb-44 lg:pb-0">
+      <section className="order-1 lg:col-start-1 lg:row-start-1 bg-white border border-[#e4e4e0] rounded-2xl px-3 py-2.5 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setTplOpen(!showTpl)} disabled={!catalog}
+            className={`px-3 py-1.5 rounded-lg border text-[12.5px] disabled:opacity-40 ${showTpl ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
+            Шаблон{draft.kind ? `: ${draft.kind}` : ''} <span className="text-[#9a9a95]">{showTpl ? '▴' : '▾'}</span>
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={!catalog} title="Сборка душевой из SolidWorks: стёкла, форма и места петель, ручки, держателей — как начерчено"
+            className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[12.5px] text-[#111110] hover:border-[#111110] disabled:opacity-40">
+            Из SolidWorks (STEP)
+          </button>
+          <input ref={fileRef} type="file" accept=".step,.stp" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importStep(f) }} />
+          <div className={segWrap}>{SHAPES.map(s => <button key={s.id} onClick={() => set({ shape: s.id })} className={seg(shape === s.id)}>{s.label}</button>)}</div>
+          <div className={segWrap}>{THICKNESSES.map(t => <button key={t} onClick={() => set({ thickness: t })} className={seg(thickness === t)}>{t} мм</button>)}</div>
+          <button onClick={clearAll} className="ml-auto text-[12px] text-[#9a9a95] hover:text-[#c2410c]">Очистить</button>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11.5px] text-[#6e6e73] w-12">Стекло</span>
+            {GLASS.map(g => <button key={g.id} onClick={() => set({ glassId: g.id })} title={g.label} aria-label={g.label} className={dot(glassId === g.id)} style={{ background: g.swatch }} />)}
+            <span className="text-[12px] text-[#111110] ml-1">{glassLabel}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11.5px] text-[#6e6e73]">Фурнитура</span>
+            {FINISHES.map(f => <button key={f.id} onClick={() => set({ finishId: f.id })} title={f.label} aria-label={f.label} className={dot(finishId === f.id)} style={{ background: f.hex }} />)}
+            <span className="text-[12px] text-[#111110] ml-1">{finish.label}</span>
+          </div>
+        </div>
+        {showTpl && (
+          <div className="space-y-1.5 pt-1">
+            <p className="text-[11px] text-[#9a9a95]">Типовые душевые по 961 монтажу 2022–2026: стёкла и фурнитура одним касанием, дальше впишите размеры. Доля — среди всех установленных душевых.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {COMPOSE_TEMPLATES.map(t => (
+                <button key={t.id} onClick={() => { pickTemplate(t); setTplOpen(false) }} disabled={!catalog}
+                  className={`text-left rounded-xl border px-2.5 py-2 transition-colors disabled:opacity-40 ${draft.kind === t.label ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] bg-white hover:border-[#111110]'}`}>
+                  <span className="block text-[12.5px] font-semibold text-[#111110] leading-snug">{t.label}</span>
+                  <span className="block text-[11px] text-[#6b6b66]">{t.share} · {t.source}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {tplMissing.length > 0 && <p className="text-[12px] text-[#c2410c]">Нет в каталоге АВ24, строка не добавлена: {tplMissing.join(', ')}.</p>}
+        {stepMsg && (
+          <div className={`text-[12px] ${stepMsg.ok ? 'text-[#4b4b47]' : 'text-[#c2410c]'}`}>
+            {stepMsg.text}
+            {stepMsg.notes.length > 0 && <ul className="list-disc pl-4 mt-0.5 text-[#6b6b66]">{stepMsg.notes.map(n => <li key={n}>{n}</li>)}</ul>}
+          </div>
+        )}
+        {shape === 'corner' && !panels.some(p => p.run === 'side') && (
+          <p className="text-[11px] text-[#c2410c]">Угловая: отметьте у бокового стекла «сбоку» в «Стёклах» — иначе схема покажет все стёкла в один ряд.</p>
+        )}
+      </section>
+
+      <section ref={schemeRef} className="order-2 lg:col-start-1 lg:row-start-2 bg-white border border-[#e4e4e0] rounded-2xl p-3 space-y-2 scroll-mt-4">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className={segWrap}>
+              {([['scheme', 'Схема'], ['3d', '3D']] as const).map(([id, name]) => <button key={id} onClick={() => setView(id)} className={seg(view === id)}>{name}</button>)}
+            </div>
+            {view === '3d' && layout.elevation.panels.some(p => p.kind !== 'fixed') && (
+              <button onClick={() => setDoorOpen(o => !o)} className={miniChip(false)}>{doorOpen ? 'Закрыть двери' : 'Открыть двери'}</button>
+            )}
+          </div>
+          {layout.elevation.panels.length > 0 && !selRow && <span className="text-[11px] text-[#9a9a95] text-right">коснитесь детали — справа её варианты</span>}
+        </div>
+        {!layout.elevation.panels.length
+          ? <p className="text-[13px] text-[#9a9a95] py-6 text-center">Выберите шаблон или впишите размеры стёкол — здесь появится вид снаружи и план сверху.</p>
+          : view === '3d'
+            ? (
+              <div className="space-y-1">
+                <div className="[&>div]:!h-[360px] md:[&>div]:!h-[400px]">
                   <Partition3DView model={SCENE_MODEL} dims={sceneDims} thickness={thickness} assembly={asm}
                     finishHex={finish.hex} finishId={finish.id} glassTint={GLASS.find(g => g.id === glassId)?.tint ?? GLASS[0].tint} doorOpen={doorOpen}
-                    onPick={n => { const id = rowOfKey(n.key); if (id) pickRow(id, null) }} pickedPrefix={selected ? `row:${selected}:` : null} />
-                  <p className="text-[11px] text-[#9a9a95]">Крутите пальцем или мышью. Уплотнители на сцене не показаны; место детали меняется на схеме.</p>
+                    onPick={n => { const id = rowOfKey(n.key); if (id) pickRow(id, 'card') }} pickedPrefix={selected ? `row:${selected}:` : null} />
                 </div>
-              )
-              : <ComposeScheme elevation={layout.elevation} plan={layout.plan} selected={selected} activeSpots={selSpots}
-                  onSelect={id => pickRow(id, null)} onEdge={toggleSpot}
-                  glassSwatch={GLASS.find(g => g.id === glassId)?.swatch ?? '#dfeaf6'} finishHex={finish.hex} />}
-          {selRow && (() => {
-            const num = hardware.findIndex(h => h.id === selRow.id) + 1
-            const mdl = byBase.get(rowKeyOf(selRow))
-            const lin = selRow.stockMm != null
-            return (
-              <div id="sel-card" className="rounded-xl border border-[#bfd0f5] bg-[#f5f8ff] p-3 flex gap-3 scroll-mt-4">
-                <Thumb src={mdl?.variants[finishId]?.image ?? mdl?.image} alt={selRow.label} size="w-14 h-14" />
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[13px] text-[#111110] leading-snug"><b>{num}.</b> {selRow.label}</div>
-                      <div className="text-[11px] text-[#9a9a95] font-mono">{selRow.base}</div>
-                    </div>
-                    <button onClick={() => setPicked(null)} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold shrink-0">Готово</button>
-                  </div>
-                  <p className="text-[12px] text-[#4b4b47]">Коснитесь кромки стекла на схеме — деталь встанет туда, ещё раз — уберётся.</p>
-                  <p className="text-[12px] text-[#111110]">
-                    {selSpots.length ? whereText(selRow) : 'Сейчас на схеме её нет.'}
-                    {selRow.at === undefined && selSpots.length > 0 && <span className="text-[#9a9a95]"> · по умолчанию</span>}
-                  </p>
-                  {!lin && (
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => setHw(selRow.id, { qty: String(Math.max(0, numOr(selRow.qty) - 1)) })} className="w-9 h-9 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">−</button>
-                      <input inputMode="numeric" className={qtyFld} value={selRow.qty} onChange={e => setHw(selRow.id, { qty: e.target.value })} />
-                      <button onClick={() => setHw(selRow.id, { qty: String(numOr(selRow.qty) + 1) })} className="w-9 h-9 rounded-lg border border-[#e4e4e0] bg-white text-[16px]">+</button>
-                      <span className="text-[12px] text-[#9a9a95] ml-1">шт</span>
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
-                    {selRow.at !== undefined && <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button>}
-                    <button onClick={() => pickRow(selRow.id, 'row')} className="text-[#2563eb] hover:underline">К строке ↓</button>
-                  </div>
-                  {mdl && (() => {
-                    const alts = alternativesOf(mdl, catalog?.models ?? [], finishId)
-                    return alts.length > 0 && (
-                      <div className="pt-1.5 border-t border-[#dfe6f5]">
-                        <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label}
-                          inUse={inUseElsewhere(selRow.id)} onSwap={m => swapRow(selRow.id, m)}
-                          onAll={() => { setReplaceFor(selRow.id); setPicker(true) }} />
-                      </div>
-                    )
-                  })()}
-                </div>
+                <p className="text-[11px] text-[#9a9a95]">Крутите пальцем или мышью. Уплотнители на сцене не показаны; место детали меняется на схеме.</p>
               </div>
             )
-          })()}
-          {unplacedHw.length > 0 && !selRow && (
-            <p className="text-[12px] text-[#6b6b66]">
-              Не на схеме:{' '}
-              {unplacedHw.map((id, i) => {
-                const h = hardware.find(x => x.id === id)!
-                return (
-                  <span key={id}>{i > 0 && ', '}
-                    <button onClick={() => pickRow(id, null)} className="text-[#2563eb] hover:underline">{hardware.indexOf(h) + 1}. {h.label}</button>
-                  </span>
-                )
-              })}
-              <span className="text-[#9a9a95]"> — выберите и коснитесь кромки.</span>
-            </p>
-          )}
-        </section>
+            : <ComposeScheme elevation={layout.elevation} plan={layout.plan} selected={selected} activeSpots={selSpots}
+                onSelect={id => pickRow(id, 'card')} onEdge={toggleSpot}
+                glassSwatch={GLASS.find(g => g.id === glassId)?.swatch ?? '#dfeaf6'} finishHex={finish.hex} />}
+        {unplacedHw.length > 0 && !selRow && (
+          <p className="text-[12px] text-[#6b6b66]">
+            Не на схеме:{' '}
+            {unplacedHw.map((id, i) => {
+              const h = hardware.find(x => x.id === id)!
+              return <span key={id}>{i > 0 && ', '}<button onClick={() => pickRow(id, 'card')} className="text-[#2563eb] hover:underline">{hardware.indexOf(h) + 1}. {h.label}</button></span>
+            })}
+            <span className="text-[#9a9a95]"> — выберите и коснитесь кромки.</span>
+          </p>
+        )}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-1 -mx-1 px-1 border-t border-[#efefeb]">
+          <span className="text-[11.5px] text-[#6e6e73] shrink-0 pr-0.5">Добавить:</span>
+          {(catalog?.groups ?? []).map(g => (
+            <button key={g.id} onClick={() => openPickerAt(g.id)} className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-[#f5f5f3] text-[12px] text-[#4b4b47] hover:bg-[#ebebe7] hover:text-[#111110]">+ {g.label}</button>
+          ))}
+        </div>
+      </section>
 
-        <section className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-[15px] font-semibold text-[#111110]">Стекло</h2>
-            <button onClick={clearAll} className="text-[12px] text-[#9a9a95] hover:text-[#c2410c]">Очистить состав</button>
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-[12px] text-[#6e6e73] mr-1">Форма</span>
-            {SHAPES.map(s => <button key={s.id} onClick={() => set({ shape: s.id })} className={chip(shape === s.id)}>{s.label}</button>)}
-          </div>
-          {shape === 'corner' && !panels.some(p => p.run === 'side') && (
-            <p className="text-[11px] text-[#c2410c] -mt-1">Отметьте у бокового стекла «сбоку» — иначе схема покажет все стёкла в один ряд.</p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {GLASS.map(g => (
-              <button key={g.id} onClick={() => set({ glassId: g.id })} className={`${chip(glassId === g.id)} flex items-center gap-2`}>
-                <span className="w-3.5 h-3.5 rounded-full border border-black/10" style={{ background: g.swatch }} />{g.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-[12px] text-[#6e6e73] mr-1">Толщина</span>
-            {THICKNESSES.map(t => <button key={t} onClick={() => set({ thickness: t })} className={chip(thickness === t)}>{t} мм</button>)}
-          </div>
-
-          <div className="space-y-2 pt-1">
+      <section className="order-4 lg:col-start-1 lg:row-start-3 bg-white border border-[#e4e4e0] rounded-2xl px-3 py-2.5 space-y-2">
+        <button onClick={() => setGlassOpen(!showGlass)} className="w-full flex items-center justify-between gap-2 text-left">
+          <span className="min-w-0">
+            <span className="text-[14px] font-semibold text-[#111110]">Стёкла · {panels.length}</span>
+            {!showGlass && glassSummary && <span className="text-[12px] text-[#6b6b66]"> — {glassSummary}</span>}
+          </span>
+          <span className="text-[12px] text-[#2563eb] shrink-0">{showGlass ? 'Свернуть ▴' : 'Изменить ▾'}</span>
+        </button>
+        {showGlass && (
+          <div className="space-y-2">
             {panels.map((p, i) => {
               const line = fresh?.glass.lines[okPanels.findIndex(x => x.id === p.id)]
               const half = !!(p.w || p.h) && !(numOr(p.w) >= 50 && numOr(p.h) >= 50)
               return (
                 <div key={p.id} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-end">
-                  <div><label className={lbl}>{i === 0 ? 'Название' : ' '}</label><input className={`${fld} font-sans`} value={p.label} onChange={e => setPanel(p.id, { label: e.target.value })} /></div>
-                  <div><label className={lbl}>{i === 0 ? 'Ширина, мм' : ' '}</label><input inputMode="numeric" className={fld} value={p.w} onChange={e => setPanel(p.id, { w: e.target.value })} placeholder="900" /></div>
-                  <div><label className={lbl}>{i === 0 ? 'Высота, мм' : ' '}</label><input inputMode="numeric" className={fld} value={p.h} onChange={e => setPanel(p.id, { h: e.target.value })} placeholder="2000" /></div>
+                  <div><label className={lbl}>{i === 0 ? 'Название' : ' '}</label><input className={`${fld} font-sans`} value={p.label} onChange={e => setPanel(p.id, { label: e.target.value })} /></div>
+                  <div><label className={lbl}>{i === 0 ? 'Ширина, мм' : ' '}</label><input inputMode="numeric" className={fld} value={p.w} onChange={e => setPanel(p.id, { w: e.target.value })} placeholder="900" /></div>
+                  <div><label className={lbl}>{i === 0 ? 'Высота, мм' : ' '}</label><input inputMode="numeric" className={fld} value={p.h} onChange={e => setPanel(p.id, { h: e.target.value })} placeholder="2000" /></div>
                   <button onClick={() => set({ panels: panels.filter(x => x.id !== p.id) })} disabled={panels.length === 1}
                     className="h-[38px] w-[38px] rounded-lg border border-[#e4e4e0] text-[#9a9a95] hover:text-[#c2410c] disabled:opacity-30" aria-label="Убрать стекло">✕</button>
                   <div className="col-span-4 flex flex-wrap items-center gap-1.5">
@@ -532,9 +645,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                       return (
                         <>
                           <span className="text-[11px] text-[#9a9a95] ml-1.5">петли</span>
-                          {(['left', 'right'] as const).map(sd => (
-                            <button key={sd} onClick={() => setPanel(p.id, { hinge: sd })} className={miniChip(hinge === sd)}>{sd === 'left' ? 'слева' : 'справа'}</button>
-                          ))}
+                          {(['left', 'right'] as const).map(sd => <button key={sd} onClick={() => setPanel(p.id, { hinge: sd })} className={miniChip(hinge === sd)}>{sd === 'left' ? 'слева' : 'справа'}</button>)}
                         </>
                       )
                     })()}
@@ -545,12 +656,12 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                         <button onClick={() => setPanel(p.id, { run: 'side' })} className={miniChip(p.run === 'side')}>сбоку</button>
                       </>
                     )}
+                    {(line || half) && (
+                      <span className={`text-[11px] ml-auto ${half ? 'text-[#c2410c]' : 'text-[#9a9a95]'}`}>
+                        {half ? 'Впишите оба размера от 50 мм' : `${line!.areaM2.toLocaleString('ru-RU')} м² × ${RUB(line!.pricePerM2)} → ${RUB(line!.total)}`}
+                      </span>
+                    )}
                   </div>
-                  {(line || half) && (
-                    <p className={`col-span-4 -mt-1 text-[11px] ${half ? 'text-[#c2410c]' : 'text-[#9a9a95]'}`}>
-                      {half ? 'Впишите оба размера от 50 мм' : `${line!.areaM2.toLocaleString('ru-RU')} м² × ${RUB(line!.pricePerM2)} → ${RUB(line!.total)} со скидкой M GLASS`}
-                    </p>
-                  )}
                 </div>
               )
             })}
@@ -558,171 +669,35 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               {([['Дверь', 'door'], ['Неподвижное', 'fixed']] as const).map(([name, kind]) => (
                 <button key={kind} disabled={panels.length >= 12}
                   onClick={() => set({ panels: [...panels, { id: uid(), label: `${name} ${panels.filter(p => p.label.startsWith(name)).length + 1}`, w: '', h: '', kind }] })}
-                  className="px-3 py-2 rounded-lg border border-dashed border-[#c9c9c4] text-[13px] text-[#4b4b47] hover:border-[#111110] disabled:opacity-40">
+                  className="px-3 py-1.5 rounded-lg border border-dashed border-[#c9c9c4] text-[12.5px] text-[#4b4b47] hover:border-[#111110] disabled:opacity-40">
                   + {name.toLowerCase()}
                 </button>
               ))}
+              <span className="text-[11px] text-[#9a9a95] self-center">Цена стекла — со скидкой M GLASS.</span>
             </div>
           </div>
-        </section>
-
-        <section className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3">
-          <h2 className="text-[15px] font-semibold text-[#111110]">Цвет фурнитуры</h2>
-          <div className="flex flex-wrap gap-2">
-            {FINISHES.map(f => (
-              <button key={f.id} onClick={() => set({ finishId: f.id })} className={`${chip(finishId === f.id)} flex items-center gap-2`}>
-                <span className="w-3.5 h-3.5 rounded-full border border-black/10" style={{ background: f.hex }} />{f.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-[15px] font-semibold text-[#111110]">Фурнитура{hardware.length ? ` · ${hardware.length}` : ''}</h2>
-            <button onClick={() => setPicker(true)} disabled={!catalog}
-              className="px-4 py-2 rounded-lg bg-[#111110] text-white text-[13px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40">
-              + Добавить из каталога
-            </button>
-          </div>
-          {catalogErr && <p className="text-[12px] text-[#c2410c]">{catalogErr}</p>}
-          {pending.length > 0 && (
-            <div className="rounded-xl border border-[#f1d3bf] bg-[#fdf6f1] p-3 space-y-1">
-              <p className="text-[12.5px] text-[#c2410c]">
-                <b>Из чертежа{draft.step?.file ? ` «${draft.step.file}»` : ''} — нет в каталоге · {pending.length}.</b>{' '}
-                На схеме и в 3D стоят на своих местах, в цену не вошли — подберите позицию из каталога.
-              </p>
-              {pending.map((p, j) => (
-                <div key={p.id} id={`pend-${p.id}`} className={`flex items-start gap-2 rounded-lg p-2 -mx-1 scroll-mt-24 ${pendFocus === p.id ? 'bg-white ring-1 ring-[#f1d3bf]' : ''}`}>
-                  <span className="min-w-[20px] h-5 px-1 mt-0.5 rounded-full border border-[#c2410c] text-[11px] font-semibold text-[#c2410c] grid place-items-center shrink-0">{hardware.length + j + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] text-[#111110] leading-snug">{p.name}</div>
-                    <div className="text-[11.5px] text-[#6b6b66]">
-                      {p.pieces?.length ? `куски ${p.pieces.join(', ')} мм` : `${p.qty} шт`}
-                      {p.at.length ? ` · ${p.at.map(spotText).join('; ')}` : ' · место в чертеже не нашёл'}
-                    </div>
-                    <button onClick={() => { setPickFor(p.id); setPicker(true) }} disabled={!catalog} className="text-[12px] text-[#2563eb] hover:underline mt-0.5 disabled:opacity-40">
-                      Подобрать из каталога
-                    </button>
-                  </div>
-                  <button onClick={() => dropPending(p.id)} className="text-[#9a9a95] hover:text-[#c2410c] px-1" aria-label="Убрать">✕</button>
-                </div>
-              ))}
-            </div>
-          )}
-          {!hardware.length && !pending.length && <p className="text-[13px] text-[#9a9a95]">Петли, коннекторы, ручки, уплотнители — из каталогов АВ24 и Ветро. Цена берётся в выбранном цвете.</p>}
-          <div className="divide-y divide-[#efefeb]">
-            {hardware.map((h, idx) => {
-              const mdl = byBase.get(rowKeyOf(h))
-              const img = mdl?.variants[finishId]?.image ?? mdl?.image
-              const altCount = mdl ? alternativesOf(mdl, catalog?.models ?? [], finishId).length : 0
-              const line = hwLineOf(h.id)
-              const lin = isLinear(h)
-              const waiting = lin ? !piecesOf(h).length : !(numOr(h.qty) > 0)
-              const where = whereText(h)
-              const on = selected === h.id
-              // Длины отвязываются от стёкол — место на схеме, выведенное из них, фиксируем.
-              const unbind = (pieces: string) => setHw(h.id, { pieces, auto: undefined, ...(h.at === undefined ? { at: spotsOf(h) } : {}) })
-              return (
-                <div key={h.id} id={`hw-${h.id}`} className={`py-3 flex gap-3 scroll-mt-24 ${on ? 'bg-[#f5f8ff] -mx-2 px-2 rounded-xl' : ''}`}>
-                  <div className="relative shrink-0">
-                    <Thumb src={img} alt={h.label} size="w-14 h-14" />
-                    <span className={`absolute -top-1.5 -left-1.5 min-w-[20px] h-5 px-1 rounded-full border text-[11px] font-semibold grid place-items-center ${on ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#111110] border-[#111110]'}`}>{idx + 1}</span>
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-[13px] text-[#111110] leading-snug">{h.label}</div>
-                        <div className="text-[11px] text-[#9a9a95] font-mono">{line?.article ?? h.base}<span className="font-sans"> · {SUPPLIER_RU[h.supplier ?? 'av24']}</span>{materialOf(h.base) && <span className="font-sans"> · {materialOf(h.base)}</span>}{lin && <span className="font-sans"> · полоса {(h.stockMm! / 1000).toLocaleString('ru-RU')} м</span>}</div>
-                        <button onClick={() => (on ? setPicked(null) : pickRow(h.id, 'scheme'))} className="text-left text-[11.5px] text-[#2563eb] hover:underline mt-0.5">
-                          {on ? 'Выбрана на схеме — готово' : where ? `На схеме: ${where}` : 'Нет на схеме — указать'}
-                        </button>
-                        {altCount > 0 && (
-                          <button onClick={() => pickRow(h.id, 'card')} className="block text-left text-[11.5px] text-[#2563eb] hover:underline">
-                            Заменить · {kindOf(mdl!).label} · {altCount} вариантов
-                          </button>
-                        )}
-                      </div>
-                      <button onClick={() => set({ hardware: hardware.filter(x => x.id !== h.id) })} className="text-[#9a9a95] hover:text-[#c2410c] px-1" aria-label="Убрать">✕</button>
-                    </div>
-                    {lin ? (
-                      <div className="space-y-1.5">
-                        <input className={fld} value={h.auto ? piecesOf(h).join(', ') : h.pieces} onChange={e => unbind(e.target.value)} placeholder="куски, мм: 2004, 2004" />
-                        {h.auto && <p className="text-[11px] text-[#9a9a95]">Длины от размеров стёкол — меняются вместе с ними. Правка руками отвяжет.</p>}
-                        {!!dimChips.length && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {dimChips.map(v => (
-                              <button key={v} onClick={() => unbind([...piecesOf(h), v].join(', '))}
-                                className="px-2.5 py-1 rounded-md border border-[#e4e4e0] text-[12px] font-mono text-[#4b4b47] hover:border-[#111110]">+{v}</button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => setHw(h.id, { qty: String(Math.max(0, numOr(h.qty) - 1)) })} className="w-9 h-9 rounded-lg border border-[#e4e4e0] text-[16px]">−</button>
-                        <input inputMode="numeric" className={qtyFld} value={h.qty} onChange={e => setHw(h.id, { qty: e.target.value })} />
-                        <button onClick={() => setHw(h.id, { qty: String(numOr(h.qty) + 1) })} className="w-9 h-9 rounded-lg border border-[#e4e4e0] text-[16px]">+</button>
-                        <span className="text-[12px] text-[#9a9a95] ml-1">шт</span>
-                      </div>
-                    )}
-                    <div className="text-[12px]">
-                      {waiting ? <span className="text-[#c2410c]">{lin ? 'Впишите длины кусков или нажмите размер' : 'Укажите количество'}</span>
-                        : line?.total != null ? (
-                          <span className="text-[#4b4b47]">
-                            {RUBk(line.unit!)} × {line.qty}{lin ? ` ${line.qty === 1 ? 'полоса' : 'полосы'}` : ' шт'} = <b className="font-mono">{RUBk(line.total)}</b>
-                            {lin && line.layout && <span className="text-[#9a9a95]"> · раскрой {line.layout.map(s => s.join('+')).join(' | ')}</span>}
-                          </span>
-                        ) : fresh ? <span className="text-[#c2410c]">не посчитано — см. ниже</span> : <span className="text-[#9a9a95]">считаю…</span>}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      </div>
-
-      <aside className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3 text-[13px] lg:sticky lg:top-4">
-        <h2 className="text-[15px] font-semibold text-[#111110]">Цена</h2>
-        <div className="space-y-1">
-          <div className="flex justify-between"><span className="text-[#6b6b66]">Стекло{res?.glass.material ? ` · ${res.glass.material} ${thickness} мм` : ''}</span><span className="font-mono">{RUB(glassCost)}</span></div>
-          <div className="flex justify-between"><span className="text-[#6b6b66]">Фурнитура · закупка</span><span className="font-mono">{RUB(hwCost)}</span></div>
-          <div className="flex justify-between font-semibold"><span>Себестоимость</span><span className="font-mono">{RUB(cost)}</span></div>
-        </div>
-        {fresh && fresh.stops.length > 0 && (
-          <ul className="text-[12px] text-[#c2410c] space-y-0.5 list-disc pl-4">{fresh.stops.map(s => <li key={s}>{s}</li>)}</ul>
         )}
-        {fresh && fresh.notes.length > 0 && (
-          <ul className="text-[11px] text-[#9a9a95] space-y-0.5 list-disc pl-4">{fresh.notes.map(s => <li key={s}>{s}</li>)}</ul>
-        )}
-        {pending.length > 0 && <p className="text-[12px] text-[#c2410c]">Не в расчёте: {pending.length} из чертежа ждут подбора из каталога.</p>}
-        {state === 'error' && err && <p className="text-[12px] text-[#c2410c]">Расчёт не выполнен: {err}</p>}
-        {!okPanels.length && <p className="text-[12px] text-[#9a9a95]">Впишите размер хотя бы одного стекла — расчёт начнётся сам.</p>}
+      </section>
 
-        <div className="grid grid-cols-3 gap-2 pt-1">
-          <div><label className={lbl}>Маржа, %</label><input inputMode="decimal" className={fld} value={margin} onChange={e => { marginTouched.current = true; setMargin(e.target.value) }} /></div>
-          <div><label className={lbl}>Налог, %</label><input inputMode="decimal" className={fld} value={tax} onChange={e => { taxTouched.current = true; setTax(e.target.value) }} /></div>
-          <div><label className={lbl}>Монтаж/секц.</label><input inputMode="numeric" className={fld} value={perSection} onChange={e => setPerSection(e.target.value)} /></div>
-          <div><label className={lbl}>Секций</label><input inputMode="numeric" className={fld} value={sectionsOver} onChange={e => setSectionsOver(e.target.value)} placeholder={String(okPanels.length || 1)} /></div>
-          <div><label className={lbl}>Доставка</label><input inputMode="numeric" className={fld} value={delivery} onChange={e => setDelivery(e.target.value)} /></div>
-          <div><label className={lbl}>Подъём</label><input inputMode="numeric" className={fld} value={lift} onChange={e => setLift(e.target.value)} placeholder="0" /></div>
-          <div><label className={lbl}>Скидка, %</label><input inputMode="decimal" className={fld} value={discount} onChange={e => setDiscount(e.target.value)} /></div>
-        </div>
-        <div className="text-[11px] text-[#9a9a95]">Маржа и налог по умолчанию: {financeSource}. Секций по умолчанию — по числу стёкол.</div>
+      <aside className="order-3 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-3 lg:h-[calc(100dvh-1.5rem)] lg:max-h-[860px] flex flex-col gap-3 min-h-0">
+        <section className="bg-white border border-[#e4e4e0] rounded-2xl p-3 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
+          {inspector || composition}
+        </section>
 
-        <div className="space-y-1">
-          {usable && <div className="flex justify-between"><span className="text-[#6b6b66]">Цена изделия</span><span className="font-mono font-semibold">{RUB(productPrice)}</span></div>}
-          {install > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Монтаж · {sections} × {RUB(numOr(perSection))}</span><span className="font-mono">{RUB(install)}</span></div>}
-          {deliveryN > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Доставка</span><span className="font-mono">{RUB(deliveryN)}</span></div>}
-          {liftN > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Подъём</span><span className="font-mono">{RUB(liftN)}</span></div>}
-          {discPct > 0 && <div className="flex justify-between text-emerald-700"><span>Скидка {discPct}%</span><span className="font-mono">−{RUB(Math.round(beforeDisc * discPct / 100))}</span></div>}
-        </div>
-
-        {clientSlot}
-
-        <div className="pt-2 border-t border-[#e4e4e0] space-y-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:bg-white max-lg:px-4 max-lg:pb-4 max-lg:shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center justify-between">
+        <section className="bg-white border border-[#e4e4e0] rounded-2xl p-3 space-y-2 text-[13px] shrink-0 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:rounded-none max-lg:border-x-0 max-lg:border-b-0 max-lg:shadow-[0_-4px_16px_rgba(0,0,0,0.06)] max-lg:max-h-[70dvh] max-lg:overflow-y-auto">
+          <div className="space-y-0.5">
+            <div className="flex justify-between"><span className="text-[#6b6b66]">Себестоимость</span><span className="font-mono font-semibold">{RUB(cost)}</span></div>
+            <div className="text-[11px] text-[#9a9a95]">стекло{res?.glass.material ? ` ${res.glass.material} ${thickness} мм` : ''} {RUB(glassCost)} + фурнитура · закупка {RUB(hwCost)}</div>
+            {usable && (
+              <div className="text-[11.5px] text-[#6b6b66]">
+                Изделие {RUB(productPrice)}{install > 0 && ` · монтаж ${sections} × ${RUB(numOr(perSection))}`}{deliveryN > 0 && ` · доставка ${RUB(deliveryN)}`}{liftN > 0 && ` · подъём ${RUB(liftN)}`}{discPct > 0 && ` · скидка ${discPct}%`}
+              </div>
+            )}
+          </div>
+          {fresh && fresh.stops.length > 0 && <ul className="text-[12px] text-[#c2410c] space-y-0.5 list-disc pl-4">{fresh.stops.map(s => <li key={s}>{s}</li>)}</ul>}
+          {state === 'error' && err && <p className="text-[12px] text-[#c2410c]">Расчёт не выполнен: {err}</p>}
+          {!okPanels.length && <p className="text-[12px] text-[#9a9a95]">Впишите размер хотя бы одного стекла — расчёт начнётся сам.</p>}
+          <div className="flex items-center justify-between pt-1.5 border-t border-[#e4e4e0]">
             <span className="text-[14px] font-semibold text-[#111110]">К оплате{cartCount ? ` (изделие ${cartCount + 1})` : ''}</span>
             <span className="text-[22px] font-bold font-mono text-[#111110]">{usable ? RUB(grand) : '—'}</span>
           </div>
@@ -731,16 +706,35 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           {added && <p className="text-[11px] text-emerald-700">✓ {added}</p>}
           <div className="grid grid-cols-2 gap-2">
             <button onClick={add} disabled={!usable || grand <= 0 || dirty}
-              className="px-4 py-3 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-40">
-              + В КП
-            </button>
+              className="px-4 py-2.5 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-40">+ В КП</button>
             <button onClick={onSave} disabled={saving || cartCount === 0}
-              className="px-4 py-3 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
+              className="px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
               {saving ? 'Сохраняю…' : `Сохранить${cartCount ? ` (${cartCount})` : ''} → КП`}
             </button>
           </div>
-          {cartCount === 0 && <p className="text-[11px] text-[#9a9a95]">«+ В КП» кладёт изделие в корзину расчёта; «Сохранить» делает из корзины расчёт и КП.</p>}
-        </div>
+          {noteSlot}
+          <button onClick={() => setTermsOpen(o => !o)} className="w-full flex items-center justify-between text-[12px] text-[#2563eb]">
+            <span>Условия и клиент{!clientOk ? <span className="text-[#9a9a95]"> · клиент нужен для сохранения</span> : ''}</span>
+            <span>{termsOpen ? '▴' : '▾'}</span>
+          </button>
+          {termsOpen && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div><label className={lbl}>Маржа, %</label><input inputMode="decimal" className={fld} value={margin} onChange={e => { marginTouched.current = true; setMargin(e.target.value) }} /></div>
+                <div><label className={lbl}>Налог, %</label><input inputMode="decimal" className={fld} value={tax} onChange={e => { taxTouched.current = true; setTax(e.target.value) }} /></div>
+                <div><label className={lbl}>Монтаж/секц.</label><input inputMode="numeric" className={fld} value={perSection} onChange={e => setPerSection(e.target.value)} /></div>
+                <div><label className={lbl}>Секций</label><input inputMode="numeric" className={fld} value={sectionsOver} onChange={e => setSectionsOver(e.target.value)} placeholder={String(okPanels.length || 1)} /></div>
+                <div><label className={lbl}>Доставка</label><input inputMode="numeric" className={fld} value={delivery} onChange={e => setDelivery(e.target.value)} /></div>
+                <div><label className={lbl}>Подъём</label><input inputMode="numeric" className={fld} value={lift} onChange={e => setLift(e.target.value)} placeholder="0" /></div>
+                <div><label className={lbl}>Скидка, %</label><input inputMode="decimal" className={fld} value={discount} onChange={e => setDiscount(e.target.value)} /></div>
+              </div>
+              <div className="text-[11px] text-[#9a9a95]">Маржа и налог по умолчанию: {financeSource}. Секций по умолчанию — по числу стёкол.</div>
+              {fresh && fresh.notes.length > 0 && <ul className="text-[11px] text-[#9a9a95] space-y-0.5 list-disc pl-4">{fresh.notes.map(s => <li key={s}>{s}</li>)}</ul>}
+              {clientSlot}
+            </div>
+          )}
+          {cartCount === 0 && !termsOpen && <p className="text-[11px] text-[#9a9a95]">«+ В КП» кладёт изделие в корзину расчёта; «Сохранить» делает из корзины расчёт и КП.</p>}
+        </section>
       </aside>
 
       {picker && catalog && (
@@ -748,7 +742,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           onPick={pickForRow ? resolvePending : replaceRow ? m => { swapRow(replaceRow.id, m); closePicker() } : addModel} onClose={closePicker}
           full={!pickForRow && !replaceRow && hardware.length >= 30} forName={pickForRow?.name ?? replaceRow?.label}
           replacing={!!replaceRow} kind={replaceKind} linear={replaceRow ? replaceRow.stockMm != null : undefined}
-          initialGroup={pickForRow ? GROUP_OF[pickForRow.role] ?? (pickForRow.role as CatalogGroupId) : replaceRow ? byBase.get(rowKeyOf(replaceRow))?.group : undefined} />
+          initialGroup={pickForRow ? GROUP_OF[pickForRow.role] ?? (pickForRow.role as CatalogGroupId) : replaceRow ? byBase.get(rowKeyOf(replaceRow))?.group : pickerGroup ?? undefined} />
       )}
     </div>
   )

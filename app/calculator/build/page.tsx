@@ -596,23 +596,40 @@ export default function BuildCalcPage() {
   )
   const saveNote = saveMsg && <p className={`text-center text-[13px] font-semibold rounded-lg px-3 py-1.5 ${saveMsg.includes('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{saveMsg}</p>
 
+  // Подменю продукта (маршрут З1). Лофт ведёт на свой калькулятор — пока
+  // он живой, честнее отправить туда, чем рисовать вкладку «скоро».
+  const productTabs = (
+    <div className="flex items-center gap-1 bg-white border border-[#e4e4e0] rounded-xl p-1 w-fit">
+      {([['shower', 'Душевые'], ['compose', 'Из деталей'], ['mirror', 'Зеркала']] as const).map(([k, label]) => (
+        <button key={k} onClick={() => setProduct(k)}
+          className={`text-[13px] font-medium px-4 py-1.5 rounded-lg transition-colors ${product === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
+          {label}
+        </button>
+      ))}
+      <a href="/calculator/loft" className="text-[13px] font-medium px-4 py-1.5 rounded-lg text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Лофт ↗</a>
+    </div>
+  )
+
   // ── Экран 1: только выбор модели ─────────────────────────────────────────────
   if (screen === 'models') {
     return (
-      <div className="min-h-screen bg-[#f5f5f3] p-4 sm:p-6">
-        <div className={`${product === 'compose' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto`}>
+      <div className={`min-h-screen bg-[#f5f5f3] ${product === 'compose' ? 'p-3 sm:px-5 sm:py-4' : 'p-4 sm:p-6'}`}>
+        <div className={`${product === 'compose' ? 'max-w-[1400px]' : 'max-w-4xl'} mx-auto`}>
           <AmoLeadBanner state={amo} />
           {dealId && (
             <p className="mb-3 text-[12px] text-[#4b4b47] bg-[#eef3ee] border border-[#cfe0d3] rounded-xl px-3 py-2">
               Расчёт пойдёт в сделку <b className="font-semibold">{dealTitle || `#${dealId}`}</b> — после сохранения он появится в её карточке.
             </p>
           )}
-          <div className="mb-5 flex items-end justify-between gap-4 flex-wrap">
+          {/* «Из деталей» — экран-конструктор на всю высоту (К9 В2): заголовок и вкладки в одну строку. */}
+          <div className={`${product === 'compose' ? 'mb-3' : 'mb-5'} flex items-end justify-between gap-4 flex-wrap`}>
             <div>
               <h1 className="text-[18px] font-semibold text-[#111110]">Расчёт{cart.length ? ` · в корзине ${cart.length}` : ''}</h1>
-              <p className="text-[12px] text-[#9a9a95] mt-0.5">
-                {product === 'shower' ? 'Выберите модель душевой перегородки.' : product === 'mirror' ? 'Выберите модель зеркала.' : 'Соберите душевую из стёкол и фурнитуры каталога — себестоимость и цена считаются сразу.'}
-              </p>
+              {product !== 'compose' && (
+                <p className="text-[12px] text-[#9a9a95] mt-0.5">
+                  {product === 'shower' ? 'Выберите модель душевой перегородки.' : 'Выберите модель зеркала.'}
+                </p>
+              )}
             </div>
             {product === 'shower' && (
               <div className="flex flex-col items-end gap-1">
@@ -620,24 +637,15 @@ export default function BuildCalcPage() {
                 {drawingState === 'error' && drawingErr && <span className="text-[11px] text-[#c2410c]">{drawingErr}</span>}
               </div>
             )}
-            {cart.length > 0 && (
+            {product === 'compose' && productTabs}
+            {cart.length > 0 && product !== 'compose' && (
               <button onClick={save} disabled={saving}
                 className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
                 {saving ? 'Сохраняю…' : `Сохранить (${cart.length}) → КП`}
               </button>
             )}
           </div>
-          {/* Подменю продукта (маршрут З1). Лофт ведёт на свой калькулятор — пока
-              он живой, честнее отправить туда, чем рисовать вкладку «скоро». */}
-          <div className="flex items-center gap-1 mb-4 bg-white border border-[#e4e4e0] rounded-xl p-1 w-fit">
-            {([['shower', 'Душевые'], ['compose', 'Из деталей'], ['mirror', 'Зеркала']] as const).map(([k, label]) => (
-              <button key={k} onClick={() => setProduct(k)}
-                className={`text-[13px] font-medium px-4 py-1.5 rounded-lg transition-colors ${product === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
-                {label}
-              </button>
-            ))}
-            <a href="/calculator/loft" className="text-[13px] font-medium px-4 py-1.5 rounded-lg text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Лофт ↗</a>
-          </div>
+          {product !== 'compose' && <div className="mb-4">{productTabs}</div>}
 
           {product !== 'compose' && (cart.length > 0 || (product === 'mirror' && mirrorPick)) && (
             <div className="mb-4 space-y-2">{clientBlock}{saveNote}</div>
@@ -648,7 +656,7 @@ export default function BuildCalcPage() {
               cartCount={cart.length}
               onSave={save} saving={saving}
               deliveryTaken={cart.some(i => i.delivery > 0)}
-              clientSlot={<>{clientBlock}{saveNote}</>}
+              clientSlot={clientBlock} noteSlot={saveNote} clientOk={clientOk}
             />
           ) : product === 'mirror' && mirrorPick ? (
             <MirrorPanel

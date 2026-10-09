@@ -11,7 +11,7 @@ import { Thumb } from './ComposeThumb'
 
 const RUBk = (n: number) => `${n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽`
 
-export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, onAll, limit = 7 }: {
+export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, onAll, limit = 7, cols = 'grid-cols-4 md:grid-cols-8' }: {
   current: CatalogModel
   alts: CatalogModel[]
   finishId: FinishId
@@ -20,6 +20,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
   onSwap: (m: CatalogModel) => void
   onAll: () => void
   limit?: number
+  cols?: string                            // сетка зависит от того, где стоит панель: узкая колонка или во всю ширину
 }) {
   const shown = [current, ...alts.slice(0, limit)]
   return (
@@ -28,7 +29,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
         <span className="text-[12px] text-[#4b4b47]"><b className="text-[#111110]">Заменить на</b> · {kindLabel}</span>
         <button onClick={onAll} className="text-[12px] text-[#2563eb] hover:underline shrink-0">Все {alts.length} →</button>
       </div>
-      <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
+      <div className={`grid ${cols} gap-1.5`}>
         {shown.map(m => {
           const v = m.variants[finishId]
           const now = m === current
