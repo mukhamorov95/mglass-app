@@ -130,20 +130,22 @@ export function effectiveSpots(row: LayoutHwIn, panels: LPanel[]): Spot[] {
 const MARK: Partial<Record<CompositionRole, MarkType>> = { hinge: 'hinge', handle: 'handle', connector: 'connector', stabilizer: 'mount' }
 
 // Штуки строки по её кромкам поровну, остаток — первым. Точки на кромке — по монтажу:
-// петли и коннекторы от краёв, ручка на 950 мм, крепления трубы у верха.
-function pointsOn(p: LPanel, edge: Edge, type: MarkType, n: number, slot: number): [number, number][] {
+// петли и коннекторы от краёв, ручка на 950 мм, крепления трубы у верха. Точные места
+// из чертежа (pos) — как есть.
+function pointsOn(p: LPanel, edge: Edge, type: MarkType, n: number, slot: number, pos?: number[]): [number, number][] {
   if (edge === 'left' || edge === 'right') {
     const inward = edge === 'left' ? 1 : -1
     const ex = edge === 'left' ? p.x0 : p.x0 + p.w
     const m = Math.min(250, p.h * 0.15)
-    const ys = type === 'hinge' || type === 'connector' ? along(n, m, p.h - m)
+    const ys = pos ? pos.map(y => clamp(y, 0, p.h))
+      : type === 'hinge' || type === 'connector' ? along(n, m, p.h - m)
       : type === 'handle' ? (n === 1 ? [clamp(HANDLE_Y, 300, p.h - 300)] : along(n, clamp(HANDLE_Y - 250, 300, p.h - 300), clamp(HANDLE_Y + 250, 300, p.h - 300)))
       : type === 'mount' ? Array.from({ length: n }, (_, i) => p.h - 70 - 110 * i)
       : along(n, p.h * 0.3, p.h * 0.7)
     const inset = type === 'hinge' ? 0 : type === 'connector' ? slot * 60 : (type === 'handle' ? 70 : 45) + slot * 60
     return ys.map(y => [ex + inward * inset, y])
   }
-  const xs = along(n, p.x0 + p.w * (n === 1 ? 0 : 0.15), p.x0 + p.w * (n === 1 ? 1 : 0.85))
+  const xs = pos ? pos.map(x => p.x0 + clamp(x, 0, p.w)) : along(n, p.x0 + p.w * (n === 1 ? 0 : 0.15), p.x0 + p.w * (n === 1 ? 1 : 0.85))
   const inset = 35 + slot * 60
   return xs.map(x => [x, edge === 'top' ? p.h - inset : inset])
 }
@@ -181,14 +183,16 @@ export function composeLayout(shape: Shape, panelsIn: LayoutPanelIn[], hardware:
     if (!qty) return
     if (!spots.length) { unplaced.push(row.id); return }
     const type = MARK[row.role] ?? 'point'
+    // Места из чертежа держатся, пока штук столько же, сколько мест; поменяли количество — по правилу.
+    const exact = spots.every(s => s.pos?.length) && spots.reduce((a, s) => a + s.pos!.length, 0) === qty
     spots.forEach((s, j) => {
-      const n = Math.floor(qty / spots.length) + (j < qty % spots.length ? 1 : 0)
+      const n = exact ? s.pos!.length : Math.floor(qty / spots.length) + (j < qty % spots.length ? 1 : 0)
       if (!n) return
       const p = byId.get(s.panelId)!
       const k = `${s.panelId}:${s.edge}`
       const slot = type === 'hinge' ? 0 : markSlots.get(k) ?? 0
       if (type !== 'hinge') markSlots.set(k, slot + 1)
-      for (const [x, y] of pointsOn(p, s.edge, type, n, slot)) marks.push({ rowId: row.id, num, type, x, y, panelId: p.id, edge: s.edge })
+      for (const [x, y] of pointsOn(p, s.edge, type, n, slot, exact ? s.pos : undefined)) marks.push({ rowId: row.id, num, type, x, y, panelId: p.id, edge: s.edge })
     })
   })
   const last = panels[panels.length - 1]

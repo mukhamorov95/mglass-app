@@ -13,7 +13,9 @@ export type Side = 'left' | 'right'
 export type Edge = 'left' | 'right' | 'top' | 'bottom'
 // niche — между стенами, corner — угловая (бок справа), walkin — открытая с одной стены.
 export type Shape = 'niche' | 'corner' | 'walkin'
-export type Spot = { panelId: string; edge: Edge }
+// pos — точные места деталей на кромке, мм (из чертежа SolidWorks, К8): у боковой кромки от низа
+// стекла, у верха и низа от левой кромки (у бокового ряда — от угла). Нет — места по правилу.
+export type Spot = { panelId: string; edge: Edge; pos?: number[] }
 
 export type PanelRow = { id: string; label: string; w: string; h: string; run?: Run; kind: PanelKind; hinge?: Side }
 // auto — длины кусков от размеров стёкол (из шаблона); правка длин руками его снимает.
@@ -22,9 +24,12 @@ export type HwRow = {
   id: string; base: string; role: CompositionRole; label: string; stockMm: number | null
   qty: string; pieces: string; auto?: AutoLen[]; at?: Spot[]
 }
+// Деталь из чертежа, которой нет в каталоге: ждёт подбора, в расчёт не идёт (К8).
+export type StepPending = { id: string; name: string; role: CompositionRole; qty: number; pieces?: number[]; at: Spot[] }
 export type Draft = {
   v: 2; glassId: string; thickness: number; finishId: FinishId; shape: Shape
   panels: PanelRow[]; hardware: HwRow[]; kind?: string
+  step?: { file: string; pending: StepPending[] }
 }
 
 export const DRAFT_KEY = 'mglass_compose_draft_v2'
@@ -48,10 +53,28 @@ export function shapeFrom(panels: { run?: Run }[], draftKind?: string): Shape {
 const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v))
 const run = (v: unknown): Run | undefined => (v === 'front' || v === 'side' ? v : undefined)
 const side = (v: unknown): Side | undefined => (v === 'left' || v === 'right' ? v : undefined)
+const nums = (v: unknown): number[] | undefined => {
+  if (!Array.isArray(v)) return undefined
+  const n = v.filter((x): x is number => typeof x === 'number' && isFinite(x))
+  return n.length ? n : undefined
+}
 const spots = (v: unknown): Spot[] | undefined =>
   Array.isArray(v)
-    ? v.filter((s): s is Spot => !!s && typeof s.panelId === 'string' && EDGES.includes(s.edge)).map(s => ({ panelId: s.panelId, edge: s.edge }))
+    ? v.filter((s): s is Spot => !!s && typeof s.panelId === 'string' && EDGES.includes(s.edge)).map(s => {
+      const pos = nums(s.pos)
+      return { panelId: s.panelId, edge: s.edge, ...(pos ? { pos } : {}) }
+    })
     : undefined
+function stepOf(v: unknown): Draft['step'] {
+  if (!v || typeof v !== 'object') return undefined
+  const s = v as Raw
+  if (!Array.isArray(s.pending)) return undefined
+  const pending = (s.pending as Raw[]).filter(p => p && typeof p.id === 'string' && typeof p.name === 'string').map(p => {
+    const pieces = nums(p.pieces)
+    return { id: p.id as string, name: p.name as string, role: p.role as CompositionRole, qty: typeof p.qty === 'number' ? p.qty : 1, ...(pieces ? { pieces } : {}), at: spots(p.at) ?? [] }
+  })
+  return { file: str(s.file), pending }
+}
 
 type Raw = Record<string, unknown>
 
@@ -77,6 +100,8 @@ export function migrateDraft(input: unknown): Draft | null {
     v: 2, glassId: str(d.glassId) || 'clear', thickness: typeof d.thickness === 'number' ? d.thickness : 8,
     finishId: (str(d.finishId) || 'chrome') as FinishId, shape, panels, hardware, ...(draftKind ? { kind: draftKind } : {}),
   }
+  const step = stepOf(d.step)
+  if (step) out.step = step
   // Черновик v1 из шаблона: привязку берём из того же шаблона — стёкла узнаём по подписи.
   if (d.v === 1) {
     const tpl = COMPOSE_TEMPLATES.find(t => t.label === draftKind)

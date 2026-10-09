@@ -11,6 +11,7 @@ import { COMPOSE_TEMPLATES, applyTemplate, resolvePieces, type ComposeTemplate }
 import { DRAFT_KEY, DRAFT_KEY_V1, migrateDraft, type Draft, type Edge, type HwRow, type PanelKind, type PanelRow, type Shape, type Spot } from '@/lib/calc/composeDraft'
 import { composeLayout, effectiveSpots, sameSpot } from '@/lib/calc/composeLayout'
 import { composeAssembly, rowOfKey } from '@/lib/calc/composeAssembly'
+import { hwRowOf, interpretStep, readStep, stepToDraft, type StepImport } from '@/lib/calc/stepImport'
 import { confirmDialog } from '@/lib/dialog'
 import { getModel } from '@/lib/configurator/arrangement'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
@@ -23,6 +24,7 @@ import { ComposeScheme } from './ComposeScheme'
 // цена клиенту — той же формулой, что у моделей. Корзина общая с родителем.
 // Черновик живёт в localStorage до «+ В КП» или явной очистки: собранное руками не теряется.
 // Схема (К3) и 3D (К4) рисуют состав и привязку деталей к кромкам; в цену они не входят.
+// Чертёж SolidWorks (STEP, К8) раскладывается в тот же черновик: стёкла, форма, места деталей.
 
 export type ComposeCartItem = {
   title: string; cost: number; productPrice: number; install: number
@@ -49,6 +51,9 @@ const SCENE_MODEL = getModel('М2')
 const THICKNESSES = [6, 8, 10]
 const MATERIAL: Record<string, string> = { SUS304: 'нерж.', SUS316: 'нерж. 316', BR: 'латунь', ZN: 'цинк', AL: 'алюминий', PVC: 'ПВХ' }
 const DEFAULT_QTY: Partial<Record<CompositionRole, number>> = { hinge: 2, connector: 2 }
+const GROUP_OF: Partial<Record<CompositionRole, CatalogGroupId>> = { 'seal-hinge': 'seal', 'seal-magnet': 'seal', 'seal-bottom': 'seal' }
+// Строка «ждёт подбора» на схеме и в 3D; без двоеточия — ключ детали сцены режет id по нему.
+const PENDING = 'pend_'
 
 const RUB = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const RUBk = (n: number) => `${n.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`
@@ -99,6 +104,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch { /* черновик не сохранится — расчёт работает */ }
   }, [draft, loaded])
   const { glassId, thickness, finishId, shape, panels, hardware } = draft
+  const pending = useMemo(() => draft.step?.pending ?? [], [draft.step])
   const set = (patch: Partial<Draft>) => setDraft(d => ({ ...d, ...patch }))
   const setPanel = (id: string, patch: Partial<PanelRow>) => setDraft(d => ({ ...d, panels: d.panels.map(p => (p.id === id ? { ...p, ...patch } : p)) }))
   const setHw = (id: string, patch: Partial<HwRow>) => setDraft(d => ({ ...d, hardware: d.hardware.map(h => (h.id === id ? { ...h, ...patch } : h)) }))
@@ -108,8 +114,12 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   const layout = useMemo(() => composeLayout(
     shape,
     panels.map(p => ({ id: p.id, label: p.label || 'Стекло', w: numOr(p.w), h: numOr(p.h), run: p.run, kind: p.kind, hinge: p.hinge })),
-    hardware.map(h => ({ id: h.id, role: h.role, stockMm: h.stockMm, qty: numOr(h.qty), at: h.at, auto: h.auto })),
-  ), [shape, panels, hardware])
+    [
+      ...hardware.map(h => ({ id: h.id, role: h.role, stockMm: h.stockMm, qty: numOr(h.qty), at: h.at, auto: h.auto })),
+      // Детали чертежа без позиции каталога — на схеме и в 3D на своих местах, в цене их нет.
+      ...pending.map(p => ({ id: PENDING + p.id, role: p.role, stockMm: p.pieces?.length ? Math.max(...p.pieces) : null, qty: p.qty, at: p.at })),
+    ],
+  ), [shape, panels, hardware, pending])
   const [picked, setPicked] = useState<string | null>(null)
   const selected = hardware.some(h => h.id === picked) ? picked : null
   const selRow = hardware.find(h => h.id === selected) ?? null
@@ -121,7 +131,16 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     const cur = spotsOf(selRow)
     setHw(selRow.id, { at: cur.some(x => sameSpot(x, s)) ? cur.filter(x => !sameSpot(x, s)) : [...cur, s] })
   }
+  const [pendFocus, setPendFocus] = useState<string | null>(null)
+  const unplacedHw = layout.elevation.unplaced.filter(id => !id.startsWith(PENDING))
   function pickRow(id: string, scroll: 'scheme' | 'row' | null) {
+    if (id.startsWith(PENDING)) {
+      const pid = id.slice(PENDING.length)
+      setPicked(null); setPendFocus(pid)
+      document.getElementById(`pend-${pid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    setPendFocus(null)
     setPicked(id)
     if (scroll === 'scheme') schemeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     if (scroll === 'row') document.getElementById(`hw-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -129,8 +148,11 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   // 3D из той же раскладки: касание детали на сцене выбирает её строку, как на схеме.
   const [view, setView] = useState<'scheme' | '3d'>('scheme')
   const [doorOpen, setDoorOpen] = useState(true)
-  const asm = useMemo(() => composeAssembly(shape, layout.elevation, hardware.map(h => ({ id: h.id, role: h.role, label: h.label, stockMm: h.stockMm })), thickness, doorOpen),
-    [shape, layout, hardware, thickness, doorOpen])
+  const asm = useMemo(() => composeAssembly(shape, layout.elevation, [
+    ...hardware.map(h => ({ id: h.id, role: h.role, label: h.label, stockMm: h.stockMm })),
+    ...pending.map(p => ({ id: PENDING + p.id, role: p.role, label: p.name, stockMm: p.pieces?.length ? Math.max(...p.pieces) : null })),
+  ], thickness, doorOpen),
+    [shape, layout, hardware, pending, thickness, doorOpen])
   const sceneDims = useMemo(() => ({ width: Math.round(asm.bounds.w * 1000), height: Math.round(asm.bounds.h * 1000) }), [asm])
   const panelName = (id: string) => layout.elevation.panels.find(p => p.id === id)?.label ?? 'стекло'
   const whereText = (h: HwRow) => spotsOf(h).map(s => `${panelName(s.panelId)} — ${EDGE_RU[s.edge]}`).join('; ')
@@ -203,7 +225,8 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   const hwCost = fresh?.hardware.cost ?? 0
   const cost = glassCost + hwCost
   // Недописанная строка не входит в запрос, значит и в цену: пока она есть, цена занижена.
-  const halfDone = okPanels.length < panels.length || okHw.length < hardware.length
+  // Деталь чертежа без позиции каталога — тоже недописанная строка: без неё цена занижена.
+  const halfDone = okPanels.length < panels.length || okHw.length < hardware.length || pending.length > 0
   const usable = !!fresh && fresh.complete && !halfDone
   const sections = numOr(sectionsOver) > 0 ? numOr(sectionsOver) : okPanels.length || 1
   const m = numOr(margin), tx = numOr(tax)
@@ -241,6 +264,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     if (!ok) return
     setDraft(d => ({ ...emptyDraft(), glassId: d.glassId, thickness: d.thickness, finishId: d.finishId }))
     setTplMissing([])
+    setStepMsg(null)
   }
 
   // Шаблон заменяет стёкла и фурнитуру; стекло, толщина и цвет остаются выбранными.
@@ -258,10 +282,48 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       const linear = m.stockMm != null
       rows.push({ id: uid(), base: m.base, role: m.role, label: m.name, stockMm: m.stockMm, qty: String(h.qty ?? h.auto?.length ?? 1), pieces: '', ...(linear && h.auto ? { auto: h.auto } : {}), at: h.at })
     }
-    setDraft(d => ({ ...d, shape: a.shape, panels: a.panels, hardware: rows, kind: t.label }))
+    setDraft(d => ({ ...d, shape: a.shape, panels: a.panels, hardware: rows, kind: t.label, step: undefined }))
     setTplMissing(missing)
     setPicked(null)
+    setStepMsg(null)
   }
+
+  // Чертёж SolidWorks: состав и места деталей из файла. Что есть в каталоге — строкой с ценой,
+  // остальное ждёт подбора (pending) и в расчёт не идёт. Разбор в браузере, файл никуда не уходит.
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [stepMsg, setStepMsg] = useState<{ ok: boolean; text: string; notes: string[] } | null>(null)
+  async function importStep(file: File) {
+    if (!catalog) return
+    if (file.size > 40 * 1024 * 1024) { setStepMsg({ ok: false, text: `«${file.name}» больше 40 МБ — выгрузите сборку душевой без лишних деталей.`, notes: [] }); return }
+    let imp: StepImport
+    try { imp = interpretStep(readStep(await file.text())) } catch (e) {
+      setStepMsg({ ok: false, text: `Не прочитал «${file.name}»: ${(e as Error).message}`, notes: [] }); return
+    }
+    if (!imp.panels.length) { setStepMsg({ ok: false, text: `В «${file.name}» не нашёл стёкол — это сборка душевой в STEP?`, notes: imp.notes }); return }
+    const filled = hardware.length > 0 || panels.some(p => p.w || p.h)
+    if (filled && !(await confirmDialog({ title: `Заменить состав чертежом «${file.name}»?`, text: 'Стёкла и фурнитура этого изделия будут заменены.', confirmLabel: 'Заменить' }))) return
+    const d = stepToDraft(imp, catalog.models, uid)
+    const tOk = THICKNESSES.includes(d.thickness)
+    setDraft(cur => ({
+      ...cur, shape: d.shape, thickness: tOk ? d.thickness : cur.thickness, finishId: d.finishId ?? cur.finishId,
+      panels: d.panels, hardware: d.hardware, kind: d.kind, step: { file: file.name, pending: d.pending },
+    }))
+    setTplMissing([]); setPicked(null); setPendFocus(null)
+    const notes = [...imp.notes]
+    if (!tOk) notes.push(`Стекло в чертеже ${d.thickness} мм — такой толщины в расчёте нет, оставлена выбранная.`)
+    setStepMsg({ ok: true, text: `«${file.name}»: стёкол ${d.panels.length}, из каталога ${d.hardware.length}, ждут подбора ${d.pending.length}.`, notes })
+  }
+
+  const [pickFor, setPickFor] = useState<string | null>(null)
+  const pickForRow = pending.find(p => p.id === pickFor) ?? null
+  function resolvePending(mdl: CatalogModel) {
+    const p = pickForRow
+    if (!p) return
+    setDraft(d => (d.step ? { ...d, hardware: [...d.hardware, hwRowOf(p, mdl, uid())], step: { ...d.step, pending: d.step.pending.filter(x => x.id !== p.id) } } : d))
+    setPicker(false); setPickFor(null); setPendFocus(null)
+  }
+  const dropPending = (id: string) => setDraft(d => (d.step ? { ...d, step: { ...d.step, pending: d.step.pending.filter(x => x.id !== id) } } : d))
+  const spotText = (s: Spot) => `${panelName(s.panelId)} — ${EDGE_RU[s.edge]}${s.pos?.length ? `: ${s.pos.join(' / ')} мм` : ''}`
 
   function addModel(mdl: CatalogModel) {
     setDraft(d => {
@@ -294,6 +356,21 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             ))}
           </div>
           {tplMissing.length > 0 && <p className="text-[12px] text-[#c2410c]">Нет в каталоге АВ24, строка не добавлена: {tplMissing.join(', ')}.</p>}
+          <div className="flex items-center gap-x-3 gap-y-1 flex-wrap pt-1">
+            <button onClick={() => fileRef.current?.click()} disabled={!catalog}
+              className="px-3 py-2 rounded-lg border border-[#111110] text-[#111110] text-[13px] font-semibold hover:bg-[#f0f0ec] disabled:opacity-40">
+              Из SolidWorks (STEP)
+            </button>
+            <span className="text-[11px] text-[#9a9a95] flex-1 min-w-[180px]">Сборка душевой из SolidWorks: стёкла, форма и места петель, ручки, держателей — как начерчено.</span>
+            <input ref={fileRef} type="file" accept=".step,.stp" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importStep(f) }} />
+          </div>
+          {stepMsg && (
+            <div className={`text-[12px] ${stepMsg.ok ? 'text-[#4b4b47]' : 'text-[#c2410c]'}`}>
+              {stepMsg.text}
+              {stepMsg.notes.length > 0 && <ul className="list-disc pl-4 mt-0.5 text-[#6b6b66]">{stepMsg.notes.map(n => <li key={n}>{n}</li>)}</ul>}
+            </div>
+          )}
         </section>
 
         <section ref={schemeRef} className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3 scroll-mt-4">
@@ -361,10 +438,10 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               </div>
             )
           })()}
-          {layout.elevation.unplaced.length > 0 && !selRow && (
+          {unplacedHw.length > 0 && !selRow && (
             <p className="text-[12px] text-[#6b6b66]">
               Не на схеме:{' '}
-              {layout.elevation.unplaced.map((id, i) => {
+              {unplacedHw.map((id, i) => {
                 const h = hardware.find(x => x.id === id)!
                 return (
                   <span key={id}>{i > 0 && ', '}
@@ -473,7 +550,31 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             </button>
           </div>
           {catalogErr && <p className="text-[12px] text-[#c2410c]">{catalogErr}</p>}
-          {!hardware.length && <p className="text-[13px] text-[#9a9a95]">Петли, коннекторы, ручки, уплотнители — из каталога АВ24 с фото. Цена берётся в выбранном цвете.</p>}
+          {pending.length > 0 && (
+            <div className="rounded-xl border border-[#f1d3bf] bg-[#fdf6f1] p-3 space-y-1">
+              <p className="text-[12.5px] text-[#c2410c]">
+                <b>Из чертежа{draft.step?.file ? ` «${draft.step.file}»` : ''} — нет в каталоге АВ24 · {pending.length}.</b>{' '}
+                На схеме и в 3D стоят на своих местах, в цену не вошли — подберите позицию из каталога.
+              </p>
+              {pending.map((p, j) => (
+                <div key={p.id} id={`pend-${p.id}`} className={`flex items-start gap-2 rounded-lg p-2 -mx-1 scroll-mt-24 ${pendFocus === p.id ? 'bg-white ring-1 ring-[#f1d3bf]' : ''}`}>
+                  <span className="min-w-[20px] h-5 px-1 mt-0.5 rounded-full border border-[#c2410c] text-[11px] font-semibold text-[#c2410c] grid place-items-center shrink-0">{hardware.length + j + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] text-[#111110] leading-snug">{p.name}</div>
+                    <div className="text-[11.5px] text-[#6b6b66]">
+                      {p.pieces?.length ? `куски ${p.pieces.join(', ')} мм` : `${p.qty} шт`}
+                      {p.at.length ? ` · ${p.at.map(spotText).join('; ')}` : ' · место в чертеже не нашёл'}
+                    </div>
+                    <button onClick={() => { setPickFor(p.id); setPicker(true) }} disabled={!catalog} className="text-[12px] text-[#2563eb] hover:underline mt-0.5 disabled:opacity-40">
+                      Подобрать из каталога
+                    </button>
+                  </div>
+                  <button onClick={() => dropPending(p.id)} className="text-[#9a9a95] hover:text-[#c2410c] px-1" aria-label="Убрать">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {!hardware.length && !pending.length && <p className="text-[13px] text-[#9a9a95]">Петли, коннекторы, ручки, уплотнители — из каталога АВ24 с фото. Цена берётся в выбранном цвете.</p>}
           <div className="divide-y divide-[#efefeb]">
             {hardware.map((h, idx) => {
               const mdl = byBase.get(h.base)
@@ -553,6 +654,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         {fresh && fresh.notes.length > 0 && (
           <ul className="text-[11px] text-[#9a9a95] space-y-0.5 list-disc pl-4">{fresh.notes.map(s => <li key={s}>{s}</li>)}</ul>
         )}
+        {pending.length > 0 && <p className="text-[12px] text-[#c2410c]">Не в расчёте: {pending.length} из чертежа ждут подбора из каталога.</p>}
         {state === 'error' && err && <p className="text-[12px] text-[#c2410c]">Расчёт не выполнен: {err}</p>}
         {!okPanels.length && <p className="text-[12px] text-[#9a9a95]">Впишите размер хотя бы одного стекла — расчёт начнётся сам.</p>}
 
@@ -583,7 +685,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             <span className="text-[22px] font-bold font-mono text-[#111110]">{usable ? RUB(grand) : '—'}</span>
           </div>
           {dirty && okPanels.length > 0 && state !== 'error' && <p className="text-[11px] text-[#9a9a95]">пересчёт цены…</p>}
-          {!dirty && !usable && okPanels.length > 0 && <p className="text-[11px] text-[#c2410c]">Расчёт неполный — {halfDone ? 'не у всех строк есть размер, количество или длины' : 'причины выше'}. В КП не добавляю.</p>}
+          {!dirty && !usable && okPanels.length > 0 && <p className="text-[11px] text-[#c2410c]">Расчёт неполный — {pending.length ? 'детали из чертежа ждут подбора из каталога' : halfDone ? 'не у всех строк есть размер, количество или длины' : 'причины выше'}. В КП не добавляю.</p>}
           {added && <p className="text-[11px] text-emerald-700">✓ {added}</p>}
           <div className="grid grid-cols-2 gap-2">
             <button onClick={add} disabled={!usable || grand <= 0 || dirty}
@@ -600,8 +702,10 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       </aside>
 
       {picker && catalog && (
-        <Picker catalog={catalog} finishId={finishId} finishLabel={finish.label} countIn={countIn} onPick={addModel}
-          onClose={() => setPicker(false)} full={hardware.length >= 30} />
+        <Picker catalog={catalog} finishId={finishId} finishLabel={finish.label} countIn={countIn}
+          onPick={pickForRow ? resolvePending : addModel} onClose={() => { setPicker(false); setPickFor(null) }}
+          full={!pickForRow && hardware.length >= 30} forName={pickForRow?.name}
+          initialGroup={pickForRow ? GROUP_OF[pickForRow.role] ?? (pickForRow.role as CatalogGroupId) : undefined} />
       )}
     </div>
   )
@@ -619,7 +723,7 @@ function Thumb({ src, alt, size }: { src?: string | null; alt: string; size: str
   )
 }
 
-function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full }: {
+function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full, forName, initialGroup }: {
   catalog: Catalog
   finishId: FinishId
   finishLabel: string
@@ -627,8 +731,10 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
   onPick: (m: CatalogModel) => void
   onClose: () => void
   full: boolean
+  forName?: string                // подбор позиции для детали из чертежа: выбор закрывает окно
+  initialGroup?: CatalogGroupId
 }) {
-  const [group, setGroup] = useState<CatalogGroupId>('hinge')
+  const [group, setGroup] = useState<CatalogGroupId>(initialGroup && catalog.groups.some(g => g.id === initialGroup) ? initialGroup : 'hinge')
   const [q, setQ] = useState('')
   const [onlyFinish, setOnlyFinish] = useState(true)
   const needle = q.trim().toLowerCase().replace(/x/g, 'х')
@@ -652,6 +758,7 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
     <div className="fixed inset-0 z-50 bg-black/30 flex md:p-6" onClick={onClose}>
       <div className="bg-[#f5f5f3] flex-1 flex flex-col md:rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="bg-white border-b border-[#e4e4e0] p-3 space-y-2">
+          {forName && <p className="text-[12.5px] text-[#4b4b47]">Позиция каталога для детали из чертежа: <b className="text-[#111110]">{forName}</b>. Количество и места останутся как в чертеже.</p>}
           <div className="flex items-center gap-2">
             <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: FDP-230, петля 90, коннектор стекло-стекло…"
               className="flex-1 bg-[#f5f5f3] border border-[#e4e4e0] rounded-lg px-3 py-2.5 text-[14px] outline-none focus:border-[#111110]" />
