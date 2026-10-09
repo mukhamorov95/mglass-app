@@ -354,6 +354,21 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         : h)),
     }))
   }
+  // Сменили цвет — часть деталей в нём не продаётся: строка подсвечена, а одной кнопкой каждая
+  // меняется на ближайший вариант той же разновидности, который в этом цвете есть.
+  const noFinish = hardware.filter(h => { const m = byBase.get(rowKeyOf(h)); return !!m && !m.variants[finishId] })
+  const finishSwaps = (() => {
+    const taken = new Set(hardware.map(rowKeyOf))
+    const out: { id: string; to: CatalogModel }[] = []
+    for (const h of noFinish) {
+      const m = byBase.get(rowKeyOf(h))
+      const alt = m && alternativesOf(m, catalog?.models ?? [], finishId).find(a => !taken.has(keyOf(a.supplier, a.base)))
+      if (!alt) continue
+      taken.add(keyOf(alt.supplier, alt.base))
+      out.push({ id: h.id, to: alt })
+    }
+    return out
+  })()
   const [replaceFor, setReplaceFor] = useState<string | null>(null)
   const replaceRow = hardware.find(h => h.id === replaceFor) ?? null
   const replaceKind = useMemo(() => {
@@ -462,6 +477,9 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           {selRow.at === undefined && selSpots.length > 0 && <span className="text-[#9a9a95]"> · по умолчанию</span>}
           <span className="block text-[11px] text-[#6b6b66]">Касание кромки на схеме ставит или убирает деталь.{selRow.at !== undefined && <> <button onClick={() => setHw(selRow.id, { at: undefined })} className="text-[#2563eb] hover:underline">Как по умолчанию</button></>}</span>
         </div>
+        {mdl && !mdl.variants[finishId] && (
+          <p className="text-[12px] text-[#c2410c]">В цвете «{finish.label}» этой детали нет — выберите замену: варианты ниже в этом цвете есть.</p>
+        )}
         {mdl && alts.length > 0 && (
           <Variants current={mdl} alts={alts} finishId={finishId} kindLabel={kindOf(mdl).label} cols="grid-cols-4 md:grid-cols-8 lg:grid-cols-4"
             inUse={inUseElsewhere(selRow.id)} onSwap={m => swapRow(selRow.id, m)}
@@ -479,6 +497,19 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         <button onClick={() => setPicker(true)} disabled={!catalog} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12.5px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40">+ Из каталога</button>
       </div>
       {catalogErr && <p className="text-[12px] text-[#c2410c]">{catalogErr}</p>}
+      {noFinish.length > 0 && (
+        <div className="rounded-xl border border-[#f1d3bf] bg-[#fdf6f1] p-2.5 space-y-1.5">
+          <p className="text-[12px] text-[#c2410c]">В цвете «{finish.label}» нет: {noFinish.map(h => h.base).join(', ')}. Цена без них не считается.</p>
+          {finishSwaps.length > 0
+            ? <>
+                <button onClick={() => finishSwaps.forEach(x => swapRow(x.id, x.to))} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold">
+                  Заменить {finishSwaps.length === noFinish.length ? '' : `${finishSwaps.length} из ${noFinish.length} `}на похожие в этом цвете
+                </button>
+                <p className="text-[11px] text-[#9a9a95]">Та же разновидность, ближе по цене; не подойдёт — коснитесь строки и выберите другую.</p>
+              </>
+            : <p className="text-[11px] text-[#9a9a95]">Похожих в этом цвете в каталоге нет — верните цвет или подберите деталь вручную.</p>}
+        </div>
+      )}
       {pending.length > 0 && (
         <div className="rounded-xl border border-[#f1d3bf] bg-[#fdf6f1] p-2.5 space-y-1">
           <p className="text-[12px] text-[#c2410c]"><b>Из чертежа{draft.step?.file ? ` «${draft.step.file}»` : ''} — нет в каталоге · {pending.length}.</b> На схеме стоят, в цену не вошли.</p>
@@ -513,6 +544,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               const lin = isLinear(h)
               const waiting = lin ? !piecesOf(h).length : !(numOr(h.qty) > 0)
               const placed = spotsOf(h).length > 0
+              const absent = !!mdl && !mdl.variants[finishId]
               return (
                 <button key={h.id} id={`hw-${h.id}`} onClick={() => pickRow(h.id, 'card')}
                   className="w-full flex items-center gap-2 py-1.5 px-1 -mx-1 rounded-lg text-left hover:bg-[#f5f5f3] scroll-mt-24">
@@ -522,9 +554,10 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-[12.5px] text-[#111110] leading-tight truncate">{h.label}</span>
-                    <span className={`block text-[11px] truncate ${waiting ? 'text-[#c2410c]' : 'text-[#9a9a95]'}`}>
-                      {waiting ? (lin ? 'впишите длины' : 'укажите количество') : lin ? `${piecesOf(h).join(' + ')} мм` : `${numOr(h.qty)} шт`}
-                      {' · '}{SUPPLIER_RU[h.supplier ?? 'av24']}{!placed && ' · нет на схеме'}
+                    <span className={`block text-[11px] truncate ${waiting || absent ? 'text-[#c2410c]' : 'text-[#9a9a95]'}`}>
+                      {absent ? `нет в цвете «${finish.label}» — замените`
+                        : <>{waiting ? (lin ? 'впишите длины' : 'укажите количество') : lin ? `${piecesOf(h).join(' + ')} мм` : `${numOr(h.qty)} шт`}
+                          {' · '}{SUPPLIER_RU[h.supplier ?? 'av24']}{!placed && ' · нет на схеме'}</>}
                     </span>
                   </span>
                   <span className="text-[12px] font-mono text-[#111110] shrink-0">{line?.total != null ? RUB(line.total) : ''}</span>

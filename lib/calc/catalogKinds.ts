@@ -153,7 +153,8 @@ export function sameKind(a: Kind, b: Kind): boolean {
 export function alternativesOf(cur: CatalogModel, models: CatalogModel[], finishId: FinishId): CatalogModel[] {
   const ck = kindOf(cur)
   const linear = cur.stockMm != null
-  const base = cur.variants[finishId]?.cost
+  // Детали нет в цвете изделия — меряем от её цены в любом другом цвете: класс тот же.
+  const base = cur.variants[finishId]?.cost ?? Object.values(cur.variants).find(v => v?.cost)?.cost
   const dist = (m: CatalogModel) => {
     const c = m.variants[finishId]!.cost
     return base && c > 0 ? Math.abs(Math.log(c / base)) : c
