@@ -13,6 +13,7 @@ import { ROLE_META, type KitChoices, type RoleId } from '@/lib/configurator/kit'
 import { calcFinancialModel, savedProfit } from '@/lib/pricing/financialModel'
 import { FINANCE_FALLBACK } from '@/lib/pricing/pickFinance'
 import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
+import { ComposePanel } from './ComposePanel'
 import { kpSectionsFromBom, type BomItem } from '@/lib/kp/bomSections'
 import { drawingToRequest, type DrawingApply, type ShowerDrawingParse } from '@/lib/calc/drawingParse'
 import { targetLight, type TargetLight } from '@/lib/pricing/orderFunds'
@@ -192,7 +193,8 @@ export default function BuildCalcPage() {
   // Какой продукт считаем. Душевые — как было; зеркала строятся по маршруту
   // docs/MIRROR_CALC_ROUTE.md (сейчас готовы З1 подменю и З2 модели); лофт пока
   // ведёт на свой старый калькулятор — врать вкладкой «скоро» не нужно.
-  const [product, setProduct] = useState<'shower' | 'mirror'>('shower')
+  // «Из деталей» — конструктор (docs/configurator/CONSTRUCTOR_ROUTE.md, К1): душевая не из моделей.
+  const [product, setProduct] = useState<'shower' | 'mirror' | 'compose'>('shower')
   const [mirrorModels, setMirrorModels] = useState<MirrorModel[] | null>(null)
   const [mirrorMats, setMirrorMats] = useState<MirrorMaterial[]>([])
   const [mirrorPick, setMirrorPick] = useState<MirrorModel | null>(null)
@@ -575,11 +577,30 @@ export default function BuildCalcPage() {
     } finally { setSaving(false); setTimeout(() => setSaveMsg(null), 4000) }
   }
 
+  // Клиент. Обязателен для сохранения: расчёт без имени и телефона не превращается в сделку
+  // и теряется — так ушли в никуда все просчёты первых дней. Прикидывать цену можно и без него.
+  // Нужен и на первом экране: «Из деталей» и зеркала сохраняют оттуда, и без поля отказ
+  // «впишите имя» было негде ни показать, ни исправить.
+  const clientBlock = (
+    <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4 grid grid-cols-1 gap-2">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[12px] font-semibold text-[#111110]">Кому считаем</span>
+        {!dealId && !clientOk && <span className="text-[11px] text-[#9a9a95]">нужно для сохранения</span>}
+      </div>
+      <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Имя клиента" className={`${fld} font-sans`} />
+      <div className="grid grid-cols-2 gap-2">
+        <input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="Телефон" inputMode="tel" className={`${fld} font-sans`} />
+        <input value={objectAddress} onChange={e => setObjectAddress(e.target.value)} placeholder="Адрес объекта (необязательно)" className={`${fld} font-sans`} />
+      </div>
+    </div>
+  )
+  const saveNote = saveMsg && <p className={`text-center text-[13px] font-semibold rounded-lg px-3 py-1.5 ${saveMsg.includes('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{saveMsg}</p>
+
   // ── Экран 1: только выбор модели ─────────────────────────────────────────────
   if (screen === 'models') {
     return (
-      <div className="min-h-screen bg-[#f5f5f3] p-6">
-        <div className="max-w-4xl mx-auto">
+      <div className="min-h-screen bg-[#f5f5f3] p-4 sm:p-6">
+        <div className={`${product === 'compose' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto`}>
           <AmoLeadBanner state={amo} />
           {dealId && (
             <p className="mb-3 text-[12px] text-[#4b4b47] bg-[#eef3ee] border border-[#cfe0d3] rounded-xl px-3 py-2">
@@ -590,7 +611,7 @@ export default function BuildCalcPage() {
             <div>
               <h1 className="text-[18px] font-semibold text-[#111110]">Расчёт{cart.length ? ` · в корзине ${cart.length}` : ''}</h1>
               <p className="text-[12px] text-[#9a9a95] mt-0.5">
-                {product === 'shower' ? 'Выберите модель душевой перегородки.' : 'Выберите модель зеркала.'}
+                {product === 'shower' ? 'Выберите модель душевой перегородки.' : product === 'mirror' ? 'Выберите модель зеркала.' : 'Соберите душевую из стёкол и фурнитуры каталога — себестоимость и цена считаются сразу.'}
               </p>
             </div>
             {product === 'shower' && (
@@ -609,7 +630,7 @@ export default function BuildCalcPage() {
           {/* Подменю продукта (маршрут З1). Лофт ведёт на свой калькулятор — пока
               он живой, честнее отправить туда, чем рисовать вкладку «скоро». */}
           <div className="flex items-center gap-1 mb-4 bg-white border border-[#e4e4e0] rounded-xl p-1 w-fit">
-            {([['shower', 'Душевые'], ['mirror', 'Зеркала']] as const).map(([k, label]) => (
+            {([['shower', 'Душевые'], ['compose', 'Из деталей'], ['mirror', 'Зеркала']] as const).map(([k, label]) => (
               <button key={k} onClick={() => setProduct(k)}
                 className={`text-[13px] font-medium px-4 py-1.5 rounded-lg transition-colors ${product === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
                 {label}
@@ -618,7 +639,18 @@ export default function BuildCalcPage() {
             <a href="/calculator/loft" className="text-[13px] font-medium px-4 py-1.5 rounded-lg text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Лофт ↗</a>
           </div>
 
-          {product === 'mirror' && mirrorPick ? (
+          {product !== 'compose' && (cart.length > 0 || (product === 'mirror' && mirrorPick)) && (
+            <div className="mb-4 space-y-2">{clientBlock}{saveNote}</div>
+          )}
+          {product === 'compose' ? (
+            <ComposePanel
+              onAdd={item => setCart(c => [...c, item])}
+              cartCount={cart.length}
+              onSave={save} saving={saving}
+              deliveryTaken={cart.some(i => i.delivery > 0)}
+              clientSlot={<>{clientBlock}{saveNote}</>}
+            />
+          ) : product === 'mirror' && mirrorPick ? (
             <MirrorPanel
               model={mirrorPick} materials={mirrorMats}
               onBack={() => setMirrorPick(null)}
@@ -951,20 +983,7 @@ export default function BuildCalcPage() {
               {discPct > 0 && <div className="flex justify-between text-emerald-700"><span>Скидка {discPct}%</span><span className="font-mono">−{RUB(Math.round(beforeDisc * discPct / 100))}</span></div>}
             </div>
 
-            {/* Клиент. Обязателен для сохранения: расчёт без имени и телефона
-                не превращается в сделку и теряется — так ушли в никуда все
-                просчёты первых дней. Прикидывать цену можно и без него. */}
-            <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4 grid grid-cols-1 gap-2">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[12px] font-semibold text-[#111110]">Кому считаем</span>
-                {!dealId && !clientOk && <span className="text-[11px] text-[#9a9a95]">нужно для сохранения</span>}
-              </div>
-              <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Имя клиента" className={`${fld} font-sans`} />
-              <div className="grid grid-cols-2 gap-2">
-                <input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="Телефон" inputMode="tel" className={`${fld} font-sans`} />
-                <input value={objectAddress} onChange={e => setObjectAddress(e.target.value)} placeholder="Адрес объекта (необязательно)" className={`${fld} font-sans`} />
-              </div>
-            </div>
+            {clientBlock}
           </div>
 
           {/* Закреплённый низ — итог и кнопки всегда видны (самое частое действие). */}
@@ -1004,7 +1023,7 @@ export default function BuildCalcPage() {
                 Впишите имя и телефон — расчёт станет сделкой и попадёт в воронку.
               </p>
             )}
-            {saveMsg && <p className={`text-center text-[13px] font-semibold rounded-lg px-3 py-1.5 ${saveMsg.includes('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{saveMsg}</p>}
+            {saveNote}
             {cart.length > 0 && <p className="text-[11px] text-[#9a9a95] text-center">В корзине {cart.length}. «Сохранить» соберёт КП из всех.</p>}
             {orderCut && (
               <div className="text-[11px] text-[#6b6b66] bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 space-y-0.5">
