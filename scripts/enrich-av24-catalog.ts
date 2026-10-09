@@ -50,16 +50,27 @@ async function main() {
   console.log(`в разделах конструктора ${inCatalog.length} строк, без фото к обходу ${todo.length} (моделей ${first.length}), берём ${queue.length}`)
   if (arg('--dry')) return
 
-  let found = 0, missed = 0
+  let found = 0, missed = 0, failed = 0
   for (const [i, r] of queue.entries()) {
     const info = await fetchProductInfo({ supplier: r.supplier, article: r.article, name: r.name, url: r.url ?? '' })
     const patch = info
       ? { url: info.url, image_url: info.imageUrl, specs: info.specs, enriched_at: new Date().toISOString() }
       : { enriched_at: new Date().toISOString() }
-    const { error } = await svc.from('supplier_price_rows').update(patch).eq('id', r.id)
-    if (error) throw new Error(`${r.article}: ${error.message}`)
-    if (info?.imageUrl) found++; else missed++
-    if ((i + 1) % 25 === 0 || i === queue.length - 1) console.log(`${i + 1}/${queue.length}: с фото ${found}, без ${missed}`)
+    // Сетевой сбой записи — повтор с паузой; не вышло — строка остаётся необойдённой до следующего
+    // запуска, а прогон идёт дальше (09.10 один «fetch failed» остановил обход на сотой строке).
+    let saved = false
+    for (let attempt = 1; attempt <= 3 && !saved; attempt++) {
+      try {
+        const { error } = await svc.from('supplier_price_rows').update(patch).eq('id', r.id)
+        if (error) throw new Error(error.message)
+        saved = true
+      } catch (e) {
+        if (attempt === 3) { failed++; console.error(`${r.article}: не записано — ${(e as Error).message}`) }
+        else await new Promise(res => setTimeout(res, 2000 * attempt))
+      }
+    }
+    if (saved) { if (info?.imageUrl) found++; else missed++ }
+    if ((i + 1) % 25 === 0 || i === queue.length - 1) console.log(`${i + 1}/${queue.length}: с фото ${found}, без ${missed}${failed ? `, не записано ${failed}` : ''}`)
     await new Promise(res => setTimeout(res, PAUSE_MS))
   }
 }
