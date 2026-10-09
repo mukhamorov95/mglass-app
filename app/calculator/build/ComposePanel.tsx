@@ -387,6 +387,22 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     return `${p.label || 'Стекло'} ${numOr(p.w)}×${numOr(p.h)}${p.kind === 'door' ? ' · дверь' : p.kind === 'slide' ? ' · раздвижная' : ''}${shape === 'corner' && (lp?.run ?? p.run) === 'side' ? ' · сбоку' : ''}`
   }).join(' · ')
   const openPickerAt = (g: CatalogGroupId) => { setPickerGroup(g); setPicker(true) }
+  // Лицо раздела в строке «Добавить» — фото детали самой частой разновидности в цвете изделия.
+  const typeFace = useMemo(() => {
+    const out = new Map<CatalogGroupId, string>()
+    const tally = new Map<string, number>()
+    for (const m of catalog?.models ?? []) { const k = `${m.group}|${kindOf(m).label}`; tally.set(k, (tally.get(k) ?? 0) + 1) }
+    const best = new Map<CatalogGroupId, { n: number; img: string }>()
+    for (const m of catalog?.models ?? []) {
+      const img = m.variants[finishId]?.image
+      if (!img) continue
+      const n = tally.get(`${m.group}|${kindOf(m).label}`) ?? 0
+      const cur = best.get(m.group)
+      if (!cur || n > cur.n) best.set(m.group, { n, img })
+    }
+    for (const [g, v] of best) out.set(g, v.img)
+    return out
+  }, [catalog, finishId])
 
   const seg = (on: boolean) => `px-2.5 py-1.5 text-[12.5px] rounded-md transition-colors ${on ? 'bg-white text-[#111110] shadow-sm font-semibold' : 'text-[#6b6b66] hover:text-[#111110]'}`
   const segWrap = 'flex rounded-lg border border-[#e4e4e0] p-0.5 bg-[#f5f5f3]'
@@ -586,19 +602,23 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               <button onClick={() => setDoorOpen(o => !o)} className={miniChip(false)}>{doorOpen ? 'Закрыть двери' : 'Открыть двери'}</button>
             )}
           </div>
-          {layout.elevation.panels.length > 0 && !selRow && <span className="text-[11px] text-[#9a9a95] text-right">коснитесь детали — откроются её варианты</span>}
+          {layout.elevation.panels.length > 0 && !selRow && (
+            <span className="text-[11px] text-[#9a9a95] text-right">
+              {view === '3d' ? 'крутите пальцем или мышью · касание детали — её варианты' : 'коснитесь детали — откроются её варианты'}
+            </span>
+          )}
         </div>
         {!layout.elevation.panels.length
           ? <p className="text-[13px] text-[#9a9a95] py-6 text-center">Выберите шаблон или впишите размеры стёкол — здесь появится вид снаружи и план сверху.</p>
           : view === '3d'
             ? (
               <div className="space-y-1">
-                <div className="[&>div]:!h-[360px] md:[&>div]:!h-[400px]">
+                <div className="[&>div]:!h-[360px] md:[&>div]:!h-[400px] lg:[&>div]:!h-[330px]">
                   <Partition3DView model={SCENE_MODEL} dims={sceneDims} thickness={thickness} assembly={asm}
                     finishHex={finish.hex} finishId={finish.id} glassTint={GLASS.find(g => g.id === glassId)?.tint ?? GLASS[0].tint} doorOpen={doorOpen}
                     onPick={n => { const id = rowOfKey(n.key); if (id) pickRow(id, 'card') }} pickedPrefix={selected ? `row:${selected}:` : null} />
                 </div>
-                <p className="text-[11px] text-[#9a9a95]">Крутите пальцем или мышью. Уплотнители на сцене не показаны; место детали меняется на схеме.</p>
+                <p className="text-[11px] text-[#9a9a95]">Уплотнители на сцене не показаны; место детали меняется на схеме.</p>
               </div>
             )
             : <ComposeScheme elevation={layout.elevation} plan={layout.plan} selected={selected} activeSpots={selSpots}
@@ -617,7 +637,9 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         <div className="flex items-center gap-1.5 overflow-x-auto pt-1 -mx-1 px-1 border-t border-[#efefeb]">
           <span className="text-[11.5px] text-[#6e6e73] shrink-0 pr-0.5">Добавить:</span>
           {(catalog?.groups ?? []).map(g => (
-            <button key={g.id} onClick={() => openPickerAt(g.id)} className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-[#f5f5f3] text-[12px] text-[#4b4b47] hover:bg-[#ebebe7] hover:text-[#111110]">+ {g.label}</button>
+            <button key={g.id} onClick={() => openPickerAt(g.id)} className="shrink-0 flex items-center gap-1.5 whitespace-nowrap pl-1 pr-2.5 py-1 rounded-lg bg-[#f5f5f3] text-[12px] text-[#4b4b47] hover:bg-[#ebebe7] hover:text-[#111110]">
+              <Thumb src={typeFace.get(g.id)} alt={g.label} size="w-7 h-7" />+ {g.label}
+            </button>
           ))}
         </div>
       </section>
@@ -750,13 +772,14 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           onPick={pickForRow ? resolvePending : replaceRow ? m => { swapRow(replaceRow.id, m); closePicker() } : addModel} onClose={closePicker}
           full={!pickForRow && !replaceRow && hardware.length >= 30} forName={pickForRow?.name ?? replaceRow?.label}
           replacing={!!replaceRow} kind={replaceKind} linear={replaceRow ? replaceRow.stockMm != null : undefined}
+          current={replaceRow ? byBase.get(rowKeyOf(replaceRow)) : undefined}
           initialGroup={pickForRow ? GROUP_OF[pickForRow.role] ?? (pickForRow.role as CatalogGroupId) : replaceRow ? byBase.get(rowKeyOf(replaceRow))?.group : pickerGroup ?? undefined} />
       )}
     </div>
   )
 }
 
-function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full, forName, initialGroup, replacing, kind, linear }: {
+function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full, forName, initialGroup, replacing, kind, linear, current }: {
   catalog: Catalog
   finishId: FinishId
   finishLabel: string
@@ -769,6 +792,7 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
   replacing?: boolean
   kind?: Kind                     // замена: только эта разновидность, пока фишку не сняли
   linear?: boolean                // замена: погонную — только на погонную
+  current?: CatalogModel          // замена: от неё меряется «ближе по цене»
 }) {
   const [group, setGroup] = useState<CatalogGroupId>(initialGroup && catalog.groups.some(g => g.id === initialGroup) ? initialGroup : 'hinge')
   const [q, setQ] = useState('')
@@ -793,7 +817,11 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
   }, [catalog, group, finishId, onlyFinish, linear])
   // В «Все» частые разновидности впереди: кнобы и скобы, а не заглушки и ручки для саун по алфавиту.
   const rank = new Map(subs.map(([l], i) => [l, i]))
-  const shown = needle ? list : [...list].sort((a, b) => (rank.get(kindOf(a).label) ?? 99) - (rank.get(kindOf(b).label) ?? 99))
+  // Замена — ближе по закупке к текущей детали выше, как в «Заменить на».
+  const near = (m: CatalogModel) => { const c = m.variants[finishId]?.cost; return current?.variants[finishId] && c ? Math.abs(Math.log(c / current.variants[finishId]!.cost)) : 99 }
+  const shown = needle ? list
+    : current && kind && onlyKind ? [...list].sort((a, b) => near(a) - near(b))
+    : [...list].sort((a, b) => (rank.get(kindOf(a).label) ?? 99) - (rank.get(kindOf(b).label) ?? 99))
   const counts = useMemo(() => {
     const c: Partial<Record<CatalogGroupId, number>> = {}
     for (const m of catalog.models) if (avail(m)) c[m.group] = (c[m.group] ?? 0) + 1
@@ -825,7 +853,7 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
               </button>
             ))}
           </div>
-          {!needle && subs.length > 1 && (
+          {!needle && subs.length > 1 && !(kind && onlyKind) && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1">
               <button onClick={() => setSub(null)} className={`${miniChip(!sub)} whitespace-nowrap`}>Все</button>
               {subs.map(([l, n]) => (
