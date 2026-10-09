@@ -2,6 +2,8 @@
 // Used by /production-app/orders/[id] and /p/o/{id}.
 // Do not import Supabase or React here — pure logic only.
 
+import { needsSandblast } from './b2b/itemTreatments'
+
 export type DetailStageKey =
   | 'cutting'
   | 'curved'
@@ -98,17 +100,18 @@ export const STAGE_LABELS: Record<DetailStageKey, string> = {
 // - curved: только явно криволинейные изделия (shape === 'curved'); по умолчанию НЕ применяется.
 // - facet: только если у детали есть фацет (hasFacet === true).
 // - sandblast: песочка. Отдельная работа со своей оснасткой (макет → оракал → наклейка
-//   → пескоструй), идёт ДО закалки: закалённое стекло не пескоструят.
+//   → пескоструй), идёт ДО закалки: закалённое стекло не пескоструят. Признак ИЛИ услуга
+//   пескоструя/матирования (lib/b2b/itemTreatments.ts): признак менеджеры не ставят.
 // - triplex: только если деталь триплексная (hasTriplex === true).
 export function getApplicableStages(
-  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; hasCutouts?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean; hasSandblast?: boolean },
+  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; hasCutouts?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean; hasSandblast?: boolean; services?: { name?: string | null }[] | null },
 ) {
   return PRODUCTION_STAGES.filter(s => {
     if (s.key === 'tempering') return itemNeedsTempering(item)
     if (s.key === 'drilling')  return item.hasHoles !== false || item.hasCutouts === true
     if (s.key === 'curved')    return item.shape === 'curved'
     if (s.key === 'facet')     return item.hasFacet === true
-    if (s.key === 'sandblast') return item.hasSandblast === true
+    if (s.key === 'sandblast') return needsSandblast(item)
     if (s.key === 'triplex')   return item.hasTriplex === true
     return true
   })

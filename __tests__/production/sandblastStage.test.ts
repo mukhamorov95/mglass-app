@@ -14,6 +14,16 @@ describe('песочка как этап маршрута', () => {
     expect(keys({ hasHoles: false, hasSandblast: true })).toContain('sandblast')
   })
 
+  it('услуга пескоструя ставит этап и без признака (05669, 09.10)', () => {
+    const sand = (name: string) => keys({ hasHoles: false, hasSandblast: false, services: [{ name }] })
+    expect(sand('Пескоструй по трафарету (рисунок/частичное)')).toContain('sandblast')
+    expect(sand('Пескоструй — полное матирование (весь лист)')).toContain('sandblast')
+    expect(sand('Матовка под сенсорную кнопку')).toContain('sandblast')
+    expect(sand('Разработка макета в электронном виде (вектор)')).not.toContain('sandblast')
+    expect(buildItemRoute({ hasHoles: false, services: [{ name: 'Пескоструй по трафарету (рисунок/частичное)' }] }).map(r => r.stageKey))
+      .toEqual(['cutting', 'polishing', 'sandblast', 'packaging'])
+  })
+
   it('идёт до закалки: калёное стекло не пескоструят', () => {
     const r = keys({ hasSandblast: true, hasTempering: true, materialName: 'Стекло 8мм' })
     expect(r.indexOf('sandblast')).toBeLessThan(r.indexOf('tempering'))
