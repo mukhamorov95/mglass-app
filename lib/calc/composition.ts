@@ -16,13 +16,20 @@ import { articleBase, isDefectRow, rowCost, rowFinish, splitAv24Article, type Co
 
 type FinishId = typeof FINISH_IDS[number]
 
-export const COMPOSITION_ROLES = ['hinge', 'handle', 'seal-hinge', 'seal-magnet', 'seal-bottom', 'threshold', 'other'] as const
+// seal, profile, connector, stabilizer — из конструктора (CONSTRUCTOR_ROUTE.md, К1): там
+// артикул выбран из каталога всегда, роль задаёт ось цвета, погонный счёт и раздел сметы.
+export const COMPOSITION_ROLES = ['hinge', 'handle', 'seal-hinge', 'seal-magnet', 'seal-bottom', 'threshold', 'seal', 'profile', 'connector', 'stabilizer', 'other'] as const
 export type CompositionRole = typeof COMPOSITION_ROLES[number]
 
-const LINEAR = new Set<CompositionRole>(['seal-hinge', 'seal-magnet', 'seal-bottom', 'threshold'])
+const LINEAR = new Set<CompositionRole>(['seal-hinge', 'seal-magnet', 'seal-bottom', 'threshold', 'seal', 'profile'])
 export const isLinearRole = (r: CompositionRole) => LINEAR.has(r)
 // Уплотнители и акриловый порог — расходники: «CL» (прозрачный) подходит к любой фурнитуре.
-const axisOf = (r: CompositionRole): ColorAxis => (LINEAR.has(r) ? 'consumable' : 'hardware')
+// Профиль и труба погонные, но цвет у них как у фурнитуры.
+const CONSUMABLE = new Set<CompositionRole>(['seal-hinge', 'seal-magnet', 'seal-bottom', 'threshold', 'seal'])
+export const axisOf = (r: CompositionRole): ColorAxis => (CONSUMABLE.has(r) ? 'consumable' : 'hardware')
+
+// Артикул или база артикула АВ24: «FDP-230», «FDP-230 BR», «TUB 2.2».
+export const ARTICLE_RE = /^[A-Za-z0-9][A-Za-z0-9.\- /]{1,40}$/
 
 export type CompositionPanel = { label: string; w: number; h: number; derived?: boolean; evidence?: string }
 export type CompositionHardware = {
@@ -116,7 +123,10 @@ export function pickRow(rows: SupplierRowLike[], axis: ColorAxis, finish: Finish
     .filter(r => !isDefectRow(r) && rowCost(r) > 0)
     .sort((a, b) => Number(!!splitAv24Article(a.article)?.alt) - Number(!!splitAv24Article(b.article)?.alt))
   const own = usable.find(r => rowFinish('av24', r, axis) === finish)
-  if (own || axis !== 'consumable') return own ?? null
+  if (own) return own
+  // Позиция без кода цвета в артикуле (тубус, образцы, монтажные мелочи) — одна цена на любой цвет.
+  if (usable.length && usable.every(r => !splitAv24Article(r.article))) return usable[0]
+  if (axis !== 'consumable') return null
   for (const c of CLEAR_ORDER[finish] ?? ['clear', 'clear-white', 'clear-black']) {
     const r = usable.find(x => rowFinish('av24', x, axis) === c)
     if (r) return r

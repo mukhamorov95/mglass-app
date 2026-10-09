@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
-import { requirePageAccess } from '@/lib/apiAuth'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
 import { FINISH_IDS } from '@/lib/configurator/pricing'
-import { COMPOSITION_ROLES, type CompositionHardware, type CompositionPanel } from '@/lib/calc/composition'
+import { ARTICLE_RE, COMPOSITION_ROLES, type CompositionHardware, type CompositionPanel } from '@/lib/calc/composition'
 import { GLASS_B2B_NAME, loadComposition, type CompositionRequest } from '@/lib/calc/compositionServer'
+import { getFinance } from '@/lib/configurator/financeStore'
 
 export const dynamic = 'force-dynamic'
 
 // Расчёт душевой по составу чертежа (SHOWROOM_COST_ROUTE.md, Ч3) — логика в lib/calc/composition.ts.
 // Ответ — себестоимость стекла и закупка фурнитуры, поэтому пускаем тех же, кому открыт
-// «Быстрый расчёт»: там менеджер и так вписывает себестоимость руками.
+// «Быстрый расчёт» или «Расчёт» (конструктор, CONSTRUCTOR_ROUTE.md К1): там менеджер
+// и так видит себестоимость. Маржа и налог — душевые «Бюджет», как в «Расчёте».
 
-const ARTICLE = /^[A-Za-z0-9][A-Za-z0-9.\- /]{1,40}$/
 const int = (v: unknown, lo: number, hi: number) => {
   const n = Math.round(Number(v))
   return Number.isFinite(n) && n >= lo && n <= hi ? n : null
@@ -37,7 +38,7 @@ function parse(body: unknown): CompositionRequest | string {
   for (const [i, x] of (b.hardware as Record<string, unknown>[]).entries()) {
     if (!(COMPOSITION_ROLES as readonly string[]).includes(String(x?.role))) return `фурнитура ${i + 1}: неизвестная роль`
     const article = x.article == null || x.article === '' ? null : String(x.article).trim()
-    if (article && !ARTICLE.test(article)) return `фурнитура ${i + 1}: артикул не похож на артикул`
+    if (article && !ARTICLE_RE.test(article)) return `фурнитура ${i + 1}: артикул не похож на артикул`
     const pieces = Array.isArray(x.pieces_mm) ? (x.pieces_mm as unknown[]).slice(0, 20).map(v => int(v, 1, 4000)) : []
     if (pieces.some(v => v == null)) return `фурнитура ${i + 1}: длина куска 1–4000 мм`
     const qty = x.qty == null ? undefined : int(x.qty, 0, 50)
@@ -48,14 +49,14 @@ function parse(body: unknown): CompositionRequest | string {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requirePageAccess('/calculator/quick')
+  const guard = await requireAnyPageAccess(['/calculator/build', '/calculator/quick'])
   if (guard instanceof NextResponse) return guard
 
   const parsed = parse(await req.json().catch(() => null))
   if (typeof parsed === 'string') return NextResponse.json({ error: parsed }, { status: 400 })
   try {
-    const result = await loadComposition(createServiceClient(), parsed)
-    return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } })
+    const [result, finance] = await Promise.all([loadComposition(createServiceClient(), parsed), getFinance('budget')])
+    return NextResponse.json({ ...result, finance }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'расчёт не выполнен' }, { status: 500 })
   }

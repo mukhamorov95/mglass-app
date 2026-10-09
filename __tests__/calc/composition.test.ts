@@ -71,6 +71,27 @@ describe('priceComposition — эталон 0014-6', () => {
   })
 })
 
+describe('конструктор «Из деталей» (CONSTRUCTOR_ROUTE.md, К1)', () => {
+  it('0014-6 собранный из каталога — те же 8 972 и 18 203, что разбор чертежа', () => {
+    const r = priceComposition({
+      finishId: 'satin',
+      panels: [{ label: 'Дверь 1', w: 424, h: 2004 }, { label: 'Дверь 2', w: 424, h: 2004 }],
+      hardware: [
+        { role: 'hinge', label: 'Петля Афродита FDP-230', article: 'FDP-230 BR', qty: 4 },
+        { role: 'handle', label: 'Ручка скоба FDR-90', article: 'FDR-90 SUS304', qty: 2 },
+        { role: 'seal', label: 'Уплотнитель FDPP-404.8', article: 'FDPP-404.8 PVC', pieces_mm: [2004, 2004] },
+        { role: 'seal', label: 'Уплотнитель магнитный FDPP-503.8', article: 'FDPP-503.8 PVC', pieces_mm: [2004] },
+        { role: 'seal', label: 'Уплотнитель FDPP-402.8', article: 'FDPP-402.8 PVC', pieces_mm: [424, 424] },
+        { role: 'threshold', label: 'Порог акриловый FDPP-16.1', article: 'FDPP-16.1 PVC', pieces_mm: [888] },
+      ],
+    }, ctx())
+    expect(r.stops).toEqual([])
+    expect(r.notes).toEqual([])
+    expect(r.glass.cost).toBe(8972)
+    expect(r.hardware.cost).toBe(18203)
+  })
+})
+
 describe('остановка, а не догадка', () => {
   it('артикула нет в справочнике', () => {
     const r = priceComposition({ ...D, hardware: [{ role: 'hinge', label: 'Петля', article: 'FDP-999', qty: 2 }] }, ctx())
