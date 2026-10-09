@@ -38,12 +38,14 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
             <button key={`${m.supplier}|${m.base}`} onClick={() => !now && !busy && onSwap(m)} disabled={busy}
               title={`${m.name} · ${SUPPLIER_RU[m.supplier]}`}
               className={`relative text-left bg-white rounded-lg border p-1 flex flex-col gap-0.5 transition-colors disabled:opacity-40 ${now ? 'border-[#111110] ring-1 ring-[#111110]' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
-              <Thumb src={v?.image ?? m.image} alt={m.name} size="w-full aspect-square" />
+              <span className="relative block">
+                <Thumb src={v?.image ?? m.image} alt={m.name} size="w-full aspect-square" />
+                <span className="absolute bottom-0.5 right-0.5 bg-white/90 text-[#6b6b66] text-[9px] rounded px-1 leading-tight">{SUPPLIER_RU[m.supplier]}</span>
+              </span>
               {now && <span className="absolute top-1.5 left-1.5 bg-[#111110] text-white text-[9.5px] font-semibold rounded px-1">сейчас</span>}
               {busy && <span className="absolute top-1.5 left-1.5 bg-white text-[#6b6b66] border border-[#e4e4e0] text-[9.5px] rounded px-1">в составе</span>}
               <span className="text-[10.5px] font-mono text-[#111110] leading-tight truncate">{m.base}</span>
-              <span className="text-[10px] text-[#9a9a95] leading-tight truncate">{SUPPLIER_RU[m.supplier]}</span>
-              <span className="text-[11.5px] font-mono font-semibold text-[#111110]">{v ? RUBk(v.cost) : '—'}</span>
+              <span className="text-[11.5px] font-mono font-semibold text-[#111110] leading-tight">{v ? RUBk(v.cost) : '—'}</span>
             </button>
           )
         })}
