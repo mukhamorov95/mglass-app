@@ -96,8 +96,9 @@ export async function parseShowerDrawing(anthropic: Anthropic, media: Media): Pr
       max_tokens: 8000,
       system: SYS,
       tools: [{ name: 'shower_drawing', description: 'Прочитанные с чертежа параметры душевых', input_schema: SCHEMA as Anthropic.Tool.InputSchema }],
-      tool_choice: { type: 'tool', name: 'shower_drawing' },
-      messages: [{ role: 'user', content: [media, { type: 'text', text: 'Прочитай чертёж: все листы, каждую душевую.' }] }],
+      // Модели 5.5 отвечают 400 на tool_choice «tool»/«any» — только auto, вызов просим текстом.
+      tool_choice: { type: 'auto' },
+      messages: [{ role: 'user', content: [media, { type: 'text', text: 'Прочитай чертёж: все листы, каждую душевую. Ответ — один вызов shower_drawing.' }] }],
     })
     const tool = msg.content.find(c => c.type === 'tool_use')
     const parsed = tool && tool.type === 'tool_use' ? tool.input as ShowerDrawingParse : null
