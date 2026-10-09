@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   analyzeBreakeven, computeBreakeven, combineUnits, withoutDebt, revenueToCover, isDebtRow,
   splitFixed, suggestKind, kindOf, costKey, totalFromName, allocationCheck, companyLevelCosts, companyFixed, factVars,
+  applyFactEdits, factEditsFrom, type FactEdits,
   BREAKEVEN_LABELS, type BreakevenModel,
 } from '@/lib/breakeven'
 import { computeBe } from '@/lib/cfo/factModel'
@@ -228,5 +229,41 @@ describe('factVars — переменные M-Glass по книге «Маржа
   it('нет закрытых — пусто; нулевые статьи не показываются', () => {
     expect(factVars(byCost, 0, labels)).toEqual([])
     expect(factVars({ glass: 100, claims: 0 }, 1000, labels).map(x => x.key)).toEqual(['glass'])
+  })
+})
+
+describe('правки на вкладке факта — поверх исходного', () => {
+  const base: BreakevenModel = {
+    incomes: [{ name: 'M-Glass', plan: 10_000_000, vars: [{ name: 'Стекло', pct: 14.94 }, { name: 'Налог', pct: 10.25 }] }],
+    funds: { invest: 5, training: 2.3, reserve: 3, prodBonus: 0 },
+    ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
+    fixed: [{ name: 'Аренда', amount: 250_000 }, { name: 'ЗП оклады', amount: 500_000 }],
+  }
+
+  it('без правок — исходное как есть', () => {
+    expect(applyFactEdits(base, null)).toEqual(base)
+    expect(factEditsFrom(base, base)).toEqual({})
+  })
+
+  it('держится только внесённое: число, своя строка, постоянная, фонд, доход', () => {
+    const edits: FactEdits = { plan: { 'M-Glass': 4_400_000 }, vars: { Налог: 6 }, extra: [{ name: 'ГСМ', pct: 3 }], fixed: { Аренда: 300_000 }, funds: { reserve: 0 } }
+    const m = applyFactEdits(base, edits)
+    expect(m.incomes[0].plan).toBe(4_400_000)
+    expect(m.incomes[0].vars).toEqual([{ name: 'Стекло', pct: 14.94 }, { name: 'Налог', pct: 6 }, { name: 'ГСМ', pct: 3 }])
+    expect(m.fixed.map(f => f.amount)).toEqual([300_000, 500_000])
+    expect(m.funds.reserve).toBe(0)
+    expect(factEditsFrom(base, m)).toEqual(edits)
+  })
+
+  it('исходное обновилось («Маржа» пересчиталась) — неправленое следует за ним, правка остаётся', () => {
+    const next = { ...base, incomes: [{ ...base.incomes[0], vars: [{ name: 'Стекло', pct: 15.1 }, { name: 'Налог', pct: 10.3 }] }] }
+    const m = applyFactEdits(next, { vars: { Налог: 6 } })
+    expect(m.incomes[0].vars).toEqual([{ name: 'Стекло', pct: 15.1 }, { name: 'Налог', pct: 6 }])
+  })
+
+  it('вернул исходное число — правка исчезает', () => {
+    const m = applyFactEdits(base, { vars: { Налог: 6 } })
+    m.incomes[0].vars[1].pct = 10.25
+    expect(factEditsFrom(base, m)).toEqual({})
   })
 })

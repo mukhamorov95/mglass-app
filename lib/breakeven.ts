@@ -311,3 +311,52 @@ export function factVars(byCost: Record<string, number>, closedSales: number, la
   }
   return keys.map((k, i) => ({ key: k, name: labels[k] ?? k, rub: byCost[k], pct: cents[i] / 100 }))
 }
+
+// Правки владельца на вкладке факта — поверх исходного, а не копия модели: исходное (доли
+// «Маржи», доходы/постоянные/фонды вкладки M-Glass) продолжает обновляться, правка держится
+// только там, где её внесли. Ключ — название статьи. Хранится в строке total (mglassFact).
+type Funds = BreakevenModel['funds']
+export type FactEdits = {
+  plan?: Record<string, number>     // доход по названию → ₽/мес
+  vars?: Record<string, number>     // статья «Маржи» по названию → %
+  extra?: { name: string; pct: number }[]   // свои строки переменных (ГСМ и т.п.)
+  fixed?: Record<string, number>    // постоянная статья M-Glass по названию → ₽/мес
+  funds?: Partial<Funds>
+}
+
+export function applyFactEdits(base: BreakevenModel, e: FactEdits | null | undefined): BreakevenModel {
+  const ed = e ?? {}
+  return {
+    ...base,
+    incomes: base.incomes.map(i => ({
+      ...i,
+      plan: ed.plan?.[i.name] ?? i.plan,
+      vars: [...i.vars.map(v => ({ ...v, pct: ed.vars?.[v.name] ?? v.pct })), ...(ed.extra ?? []).map(v => ({ ...v }))],
+    })),
+    fixed: base.fixed.map(f => ({ ...f, amount: ed.fixed?.[f.name] ?? f.amount })),
+    funds: { ...base.funds, ...(ed.funds ?? {}) },
+  }
+}
+
+// Обратное: что отличается от исходного. Структура (названия, типы, состав постоянных) на
+// вкладке факта не меняется — меняются числа; переменные сверх исходных — свои строки.
+export function factEditsFrom(base: BreakevenModel, edited: BreakevenModel): FactEdits {
+  const out: FactEdits = {}
+  base.incomes.forEach((b, i) => {
+    const plan = edited.incomes[i]?.plan ?? b.plan
+    if (plan !== b.plan) (out.plan ??= {})[b.name] = plan
+  })
+  const baseVars = new Map((base.incomes[0]?.vars ?? []).map(v => [v.name, v.pct]))
+  for (const v of edited.incomes[0]?.vars ?? []) {
+    if (baseVars.has(v.name)) { if (v.pct !== baseVars.get(v.name)) (out.vars ??= {})[v.name] = v.pct }
+    else (out.extra ??= []).push({ name: v.name, pct: v.pct })
+  }
+  base.fixed.forEach((b, i) => {
+    const amount = edited.fixed[i]?.amount ?? b.amount
+    if (amount !== b.amount) (out.fixed ??= {})[b.name] = amount
+  })
+  for (const k of Object.keys(base.funds) as (keyof Funds)[]) {
+    if (edited.funds[k] !== base.funds[k]) (out.funds ??= {})[k] = edited.funds[k]
+  }
+  return out
+}
