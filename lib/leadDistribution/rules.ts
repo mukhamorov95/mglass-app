@@ -124,6 +124,14 @@ export function phoneFromLeadName(name: string): string | null {
   return m ? m[1] : null
 }
 
+// Сделку «Исходящий 7…» АТС заводит на звонок менеджера клиенту без открытой сделки — это не заявка,
+// звонящий и есть ответственный (с 30.09, галочка «новая сделка, если прошлая закрыта»)
+export const OUTGOING_REASON = 'исходящий звонок менеджера — не заявка'
+
+export function isOutgoingCallLead(name: string): boolean {
+  return /^исходящий\s+7\d{10}\b/i.test(name.trim())
+}
+
 export function normalizePhone(raw: string): string | null {
   const d = raw.replace(/\D/g, '')
   if (d.length === 11 && (d.startsWith('7') || d.startsWith('8'))) return '7' + d.slice(1)

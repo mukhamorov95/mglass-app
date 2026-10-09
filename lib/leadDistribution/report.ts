@@ -4,6 +4,7 @@ import { amoGetAll } from '@/lib/amocrm'
 import { getAmoUserNames } from '@/lib/amoPeople'
 import { median } from '@/lib/amoActivity'
 import { escapeHtml } from '@/lib/security/accessAudit'
+import { OUTGOING_REASON } from '@/lib/leadDistribution/rules'
 
 // Вечерний блок тени для владельца: кому отдал бы алгоритм против того, у кого заявка сейчас,
 // и сколько ждала ручного назначения. Только GET к amo; журнал — lead_distribution.
@@ -21,9 +22,12 @@ export async function distributionSummary(sb: SupabaseClient, from: number, now:
     .select('lead_id, lead_created_at, status, chosen_user_id, chosen_name, decided_at, reason, rule')
     .gte('lead_created_at', new Date(from * 1000).toISOString()).lt('lead_created_at', new Date(now * 1000).toISOString())
   if (error) throw new Error(`Не прочитать журнал распределения: ${error.message}`)
-  const rows = (data ?? []) as Row[]
+  const all = (data ?? []) as Row[]
+  const outgoing = all.filter(r => r.status === 'skipped' && r.reason === OUTGOING_REASON).length
+  const rows = all.filter(r => !(r.status === 'skipped' && r.reason === OUTGOING_REASON))
   const decided = rows.filter(r => r.status === 'decided' && r.chosen_user_id)
   const lines = [`🧭 <b>Распределение — тень</b>: заявок ${rows.length}, в amo ничего не менялось`]
+  if (outgoing) lines.push(`Исходящих звонков менеджеров (сделки АТС, не заявки): ${outgoing}`)
   if (decided.length === 0) return [...lines, rows.length ? `Ждут начала смены: ${rows.filter(r => r.status === 'deferred').length}` : ''].filter(Boolean).join('\n')
 
   const names = new Map((await getAmoUserNames()).map(u => [u.id, u.name]))
