@@ -776,9 +776,12 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       </section>
 
       <aside className="order-3 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-3 lg:h-[calc(100dvh-5.5rem)] lg:max-h-[860px] flex flex-col gap-3 min-h-0">
-        <section className="bg-white border border-[#e4e4e0] rounded-2xl p-3 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
+        {/* На телефоне выбранная деталь выезжает снизу поверх итога: схема остаётся над ней, состав — на месте в странице. */}
+        <section className={`bg-white border border-[#e4e4e0] rounded-2xl p-3 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${inspector ? 'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:max-h-[62dvh] max-md:overflow-y-auto max-md:rounded-b-none max-md:border-x-0 max-md:border-b-0 max-md:pt-2 max-md:shadow-[0_-8px_24px_rgba(0,0,0,0.14)]' : ''}`}>
+          {inspector && <div className="md:hidden mx-auto mb-2 h-1 w-10 rounded-full bg-[#e4e4e0]" />}
           {inspector || composition}
         </section>
+        {inspector && <section className="md:hidden bg-white border border-[#e4e4e0] rounded-2xl p-3">{composition}</section>}
 
         <section className="bg-white border border-[#e4e4e0] rounded-2xl p-3 space-y-2 text-[13px] shrink-0 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:rounded-none max-lg:border-x-0 max-lg:border-b-0 max-lg:shadow-[0_-4px_16px_rgba(0,0,0,0.06)] max-lg:max-h-[70dvh] max-lg:overflow-y-auto">
           {/* На планшете и телефоне итог закреплён внизу: видны «К оплате» и кнопки, разбивка — по «Подробнее». */}
