@@ -54,7 +54,7 @@ async function main() {
   for (const [i, r] of queue.entries()) {
     const info = await fetchProductInfo({ supplier: r.supplier, article: r.article, name: r.name, url: r.url ?? '' })
     const patch = info
-      ? { url: info.url, image_url: info.imageUrl || null, specs: info.specs, enriched_at: new Date().toISOString() }
+      ? { url: info.url, image_url: info.imageUrl, specs: info.specs, enriched_at: new Date().toISOString() }
       : { enriched_at: new Date().toISOString() }
     const { error } = await svc.from('supplier_price_rows').update(patch).eq('id', r.id)
     if (error) throw new Error(`${r.article}: ${error.message}`)

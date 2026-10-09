@@ -74,7 +74,6 @@ export function pickSpecs(html: string, name: string): Record<string, string> {
 }
 
 // АВ24 не даёт ссылок в прайсе: ищем карточку по артикулу на сайте.
-// Берём первую ссылку каталога, в тексте которой встречается артикул без цветового суффикса.
 export async function findAv24Url(article: string): Promise<string> {
   const base = article.split('/')[0].trim()          // «FDC-30 SUS304/PSS» → «FDC-30 SUS304»
   const code = base.split(/\s+/)[0]                  // → «FDC-30»
@@ -84,18 +83,33 @@ export async function findAv24Url(article: string): Promise<string> {
   const html = (await getHtml(`https://av24.su/search/${encodeURIComponent(code)}/`))
     || (await getHtml(`https://av24.su/search/${encodeURIComponent(base)}/`))
   if (!html) return ''
+  const href = pickAv24Href(html, article)
+  return href ? abs(href, 'https://av24.su') : ''
+}
+
+// Ссылка на карточку из страницы поиска АВ24. Код в слаге не продолжается цифрой: «fdp-10» не
+// берёт «fdp-102» (другая петля), а сама страница поиска (/search/FDP-10/) — не карточка: 09.10 она
+// попала в 16 строк вместе с чужим фото. Точку кода слаг теряет или меняет на дефис («fdpp-4048»,
+// «fdpa-57-3»), букву исполнения отделяет («fdr-92-e»), материал с цветом бывает вплотную
+// («fdp-1301brtp»). Брак (def) не берём.
+export function pickAv24Href(html: string, article: string): string {
+  const base = article.split('/')[0].trim()
+  const code = base.split(/\s+/)[0]
+  if (!code) return ''
   const norm = (s: string) => s.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '')
-  const needle = norm(code)
+  const esc = code.toLowerCase().replace(/(\d)([a-z])/g, '$1.$2').split('.').map(p => p.replace(/[-]/g, '\\-')).join('[-.]?')
+  const word = new RegExp(`(^|[^a-z0-9])${esc}(?![0-9])`)
   const colour = norm(article.split('/').slice(1).join(''))   // «PSS» → «pss»
   const material = norm(base.split(/\s+/)[1] ?? '')            // «SUS304» / «AL»
   const hrefs = [...html.matchAll(/href=["'](\/[a-z0-9\-%_/]+\/?)["']/gi)].map(m => m[1])
-  const hits = [...new Set(hrefs)].filter(h => norm(h).includes(needle) && !norm(h).includes('def'))
+  const hits = [...new Set(hrefs)].filter(h =>
+    !/^\/search\//i.test(h) && word.test(h.toLowerCase()) && !norm(h).includes('def'))
   if (hits.length === 0) return ''
-  // Тот же цвет, что в артикуле, иначе первый подходящий.
-  // Цвет в слаге идёт вплотную к материалу: …-sus304pss, …-albtp. Ищем эту пару,
-  // иначе взяли бы карточку другого цвета — с другой ценой и другим фото.
+  // Тот же цвет, что в артикуле. Цвет в слаге идёт вплотную к материалу: …-sus304pss, …-albtp.
+  // Иначе — та же модель того же материала другого цвета: фото модели, а не чужой петли.
   const exact = colour ? hits.find(h => norm(h).includes(material + colour)) ?? hits.find(h => norm(h).endsWith(colour)) : undefined
-  return abs(exact ?? hits[0], 'https://av24.su')
+  const sameMaterial = material ? hits.find(h => norm(h).includes(material)) : undefined
+  return exact ?? sameMaterial ?? hits[0]
 }
 
 export async function fetchProductInfo(row: { supplier: string; article: string; name: string; url: string }): Promise<ProductInfo | null> {
