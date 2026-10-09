@@ -420,9 +420,9 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     return out
   }, [catalog, finishId])
 
-  const seg = (on: boolean) => `px-2.5 py-1.5 text-[12.5px] rounded-md transition-colors ${on ? 'bg-white text-[#111110] shadow-sm font-semibold' : 'text-[#6b6b66] hover:text-[#111110]'}`
+  const seg = (on: boolean) => `px-2 sm:px-2.5 py-1.5 text-[12.5px] rounded-md transition-colors ${on ? 'bg-white text-[#111110] shadow-sm font-semibold' : 'text-[#6b6b66] hover:text-[#111110]'}`
   const segWrap = 'flex rounded-lg border border-[#e4e4e0] p-0.5 bg-[#f5f5f3]'
-  const dot = (on: boolean) => `w-7 h-7 rounded-full border-2 transition-all ${on ? 'border-[#111110] scale-105' : 'border-white ring-1 ring-[#e4e4e0] hover:ring-[#111110]'}`
+  const dot = (on: boolean) => `w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 transition-all ${on ? 'border-[#111110] scale-105' : 'border-white ring-1 ring-[#e4e4e0] hover:ring-[#111110]'}`
 
   const inspector = selRow && (() => {
     const num = hardware.findIndex(h => h.id === selRow.id) + 1
@@ -576,16 +576,16 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       <section className="order-1 lg:col-start-1 lg:row-start-1 bg-white border border-[#e4e4e0] rounded-2xl px-3 py-2.5 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setTplOpen(!showTpl)} disabled={!catalog}
-            className={`px-3 py-1.5 rounded-lg border text-[12.5px] disabled:opacity-40 ${showTpl ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
+            className={`max-w-full truncate px-3 py-1.5 rounded-lg border text-[12.5px] disabled:opacity-40 ${showTpl ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
             Шаблон{draft.kind ? `: ${draft.kind}` : ''} <span className="text-[#9a9a95]">{showTpl ? '▴' : '▾'}</span>
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={!catalog} title="Сборка душевой из SolidWorks: стёкла, форма и места петель, ручки, держателей — как начерчено"
             className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[12.5px] text-[#111110] hover:border-[#111110] disabled:opacity-40">
-            Из SolidWorks (STEP)
+            <span className="sm:hidden">STEP</span><span className="hidden sm:inline">Из SolidWorks (STEP)</span>
           </button>
           <input ref={fileRef} type="file" accept=".step,.stp" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importStep(f) }} />
           <div className={segWrap}>{SHAPES.map(s => <button key={s.id} onClick={() => set({ shape: s.id })} className={seg(shape === s.id)}>{s.label}</button>)}</div>
-          <div className={segWrap}>{THICKNESSES.map(t => <button key={t} onClick={() => set({ thickness: t })} className={seg(thickness === t)}>{t} мм</button>)}</div>
+          <div className={segWrap}>{THICKNESSES.map((t, i) => <button key={t} onClick={() => set({ thickness: t })} className={seg(thickness === t)}>{t}<span className={i === THICKNESSES.length - 1 ? '' : 'hidden sm:inline'}> мм</span></button>)}</div>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <div className="flex items-center gap-1.5">
@@ -593,10 +593,12 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             {GLASS.map(g => <button key={g.id} onClick={() => set({ glassId: g.id })} title={g.label} aria-label={g.label} className={dot(glassId === g.id)} style={{ background: g.swatch }} />)}
             <span className="text-[12px] text-[#111110] ml-1">{glassLabel}</span>
           </div>
-          <div className="flex items-center gap-1.5">
+          {/* На телефоне десять кружков не встают рядом с подписью — название сверху, кружки строкой ниже. */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
             <span className="text-[11.5px] text-[#6e6e73]">Фурнитура</span>
+            <span className="text-[12px] text-[#111110] ml-1 sm:order-last">{finish.label}</span>
+            <span className="basis-full h-0 sm:hidden" />
             {FINISHES.map(f => <button key={f.id} onClick={() => set({ finishId: f.id })} title={f.label} aria-label={f.label} className={dot(finishId === f.id)} style={{ background: f.hex }} />)}
-            <span className="text-[12px] text-[#111110] ml-1">{finish.label}</span>
           </div>
           <button onClick={clearAll} className="ml-auto text-[12px] text-[#9a9a95] hover:text-[#c2410c]">Очистить состав</button>
         </div>
@@ -605,12 +607,12 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             <p className="text-[11px] text-[#9a9a95]">Типовые душевые по 961 монтажу 2022–2026: стёкла и фурнитура одним касанием, дальше впишите размеры. Доля — среди всех установленных душевых.</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {COMPOSE_TEMPLATES.map(t => (
-                <button key={t.id} onClick={() => { pickTemplate(t); setTplOpen(false) }} disabled={!catalog}
+                <button key={t.id} onClick={() => { pickTemplate(t); setTplOpen(false) }} disabled={!catalog} title={`${t.label}: ${t.share}, ${t.source}`}
                   className={`flex items-center gap-2 text-left rounded-xl border px-2 py-1.5 transition-colors disabled:opacity-40 ${draft.kind === t.label ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] bg-white hover:border-[#111110]'}`}>
                   <span className="shrink-0 rounded-lg bg-white border border-[#efefeb] p-0.5"><TplIcon t={t} /></span>
                   <span className="min-w-0">
                     <span className="block text-[12.5px] font-semibold text-[#111110] leading-snug">{t.label}</span>
-                    <span className="block text-[11px] text-[#6b6b66] leading-snug">{t.share} · {t.source}</span>
+                    <span className="block text-[11px] text-[#6b6b66] leading-snug">{t.share}</span>
                   </span>
                 </button>
               ))}

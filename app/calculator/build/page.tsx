@@ -602,11 +602,11 @@ export default function BuildCalcPage() {
     <div className="flex items-center gap-1 bg-white border border-[#e4e4e0] rounded-xl p-1 w-fit">
       {([['shower', 'Душевые'], ['compose', 'Из деталей'], ['mirror', 'Зеркала']] as const).map(([k, label]) => (
         <button key={k} onClick={() => setProduct(k)}
-          className={`text-[13px] font-medium px-4 py-1.5 rounded-lg transition-colors ${product === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
+          className={`text-[13px] font-medium px-2.5 sm:px-4 py-1.5 rounded-lg whitespace-nowrap transition-colors ${product === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
           {label}
         </button>
       ))}
-      <a href="/calculator/loft" className="text-[13px] font-medium px-4 py-1.5 rounded-lg text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Лофт ↗</a>
+      <a href="/calculator/loft" className="text-[13px] font-medium px-2.5 sm:px-4 py-1.5 rounded-lg whitespace-nowrap text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Лофт ↗</a>
     </div>
   )
 
