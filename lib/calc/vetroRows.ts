@@ -58,11 +58,19 @@ export const vetroRowsFor = (base: string, rows: SupplierRowLike[]) =>
 // «Dessau-103/CP. Петля стекло-стекло 180°» → «Петля стекло-стекло 180° Dessau-103»: описание
 // после артикула (первое слово с «/» или сама модель — бывает кириллицей, «КП-001/Black.») с первой
 // русской буквы, без хвоста-цвета в скобках, артикул модели — в конце.
+// Артикул отделён точкой, бывает без пробела («SD-20-2000/Cp.Ручка») и сам с пробелом и точкой
+// («Ш-002/1.5 метра/BrGold. Штанга») — режем по точке перед русским словом, пока до неё артикул.
+// Описание бывает с латинской буквы («T-образное крепление»), размер в скобках перед ним — часть артикула.
+const DESC_START = /[A-ZА-ЯЁ]-[а-яё]|[А-Яа-яЁё]/
 export function vetroModelName(name: string, base: string): string {
-  const first = (name || '').trim().split(/\s+/)[0] ?? ''
-  const rest = first.includes('/') || first.replace(/\.+$/, '') === base.split('/')[0] ? name.trim().slice(first.length) : name || ''
-  const i = rest.search(/[А-Яа-яЁё]/)
+  const src = (name || '').trim()
+  const first = src.split(/\s+/)[0] ?? ''
+  const dot = /\d/.test(first) ? src.search(/\.\s*(?:[А-Яа-яЁё]|[A-Z]-[а-яё])/) : -1
+  const head = dot > 0 ? src.slice(0, dot) : ''
+  const rest = dot > 0 && !(head.match(/[А-Яа-яЁё]{4,}/g) ?? []).some(w => !/^метр/i.test(w)) ? src.slice(dot + 1)
+    : first.includes('/') || first.replace(/\.+$/, '') === base.split('/')[0] ? src.slice(first.length).replace(/^\s*\([^)]*\)/, '') : name || ''
+  const i = rest.search(DESC_START)
   if (i < 0) return name || base
   const desc = rest.slice(i).replace(/\s*\([^)]*\)\s*$/, m => (supplierColorToFinish(m) || /прозрачн|чист|кристал/i.test(m) ? '' : m)).replace(/[\s.]+$/, '').trim()
-  return `${desc} ${base}`.replace(/\s+/g, ' ').trim()
+  return `${desc.charAt(0).toUpperCase()}${desc.slice(1)} ${base}`.replace(/\s+/g, ' ').trim()
 }
