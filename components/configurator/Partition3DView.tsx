@@ -3,7 +3,7 @@
 import type React from 'react'
 import dynamic from 'next/dynamic'
 import type { MModel } from '@/lib/configurator/arrangement'
-import type { MDims, GlassTint, HardwareChoice, MVariant } from './scene/assembly'
+import type { Assembly, MDims, GlassTint, HardwareChoice, MVariant } from './scene/assembly'
 import type { PickedNode, CaptureFn } from './Partition3D'
 
 export type { PickedNode, CaptureFn }
@@ -20,8 +20,9 @@ const Partition3D = dynamic(() => import('./Partition3D'), {
 
 export function Partition3DView(props: {
   model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant
-  onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null
+  onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null; pickedPrefix?: string | null
   onCapture?: (fn: CaptureFn | null) => void
+  assembly?: Assembly
 }) {
   return <Partition3D {...props} />
 }
