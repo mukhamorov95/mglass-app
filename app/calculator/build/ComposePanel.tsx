@@ -401,9 +401,9 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     const alts = mdl ? alternativesOf(mdl, catalog?.models ?? [], finishId) : []
     const unbind = (pieces: string) => setHw(selRow.id, { pieces, auto: undefined, ...(selRow.at === undefined ? { at: spotsOf(selRow) } : {}) })
     return (
-      <div id="sel-card" className="space-y-2.5 scroll-mt-4">
+      <div id="sel-card" className="space-y-2 scroll-mt-4">
         <div className="flex items-start gap-2.5">
-          <Thumb src={mdl?.variants[finishId]?.image ?? mdl?.image} alt={selRow.label} size="w-16 h-16" />
+          <Thumb src={mdl?.variants[finishId]?.image ?? mdl?.image} alt={selRow.label} size="w-14 h-14" />
           <div className="flex-1 min-w-0">
             <div className="text-[11px] text-[#9a9a95]">{num}. {groupLabel.get(groupOfRow(selRow)) ?? 'Деталь'}{mdl ? ` · ${kindOf(mdl).label}` : ''}</div>
             <div className="text-[13.5px] font-semibold text-[#111110] leading-snug">{selRow.label}</div>
@@ -522,7 +522,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   )
 
   return (
-    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_auto_1fr] lg:items-start pb-44 lg:pb-0">
+    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_auto_1fr] lg:items-start pb-28 lg:pb-0">
       <section className="order-1 lg:col-start-1 lg:row-start-1 bg-white border border-[#e4e4e0] rounded-2xl px-3 py-2.5 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setTplOpen(!showTpl)} disabled={!catalog}
@@ -586,7 +586,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               <button onClick={() => setDoorOpen(o => !o)} className={miniChip(false)}>{doorOpen ? 'Закрыть двери' : 'Открыть двери'}</button>
             )}
           </div>
-          {layout.elevation.panels.length > 0 && !selRow && <span className="text-[11px] text-[#9a9a95] text-right">коснитесь детали — справа её варианты</span>}
+          {layout.elevation.panels.length > 0 && !selRow && <span className="text-[11px] text-[#9a9a95] text-right">коснитесь детали — откроются её варианты</span>}
         </div>
         {!layout.elevation.panels.length
           ? <p className="text-[13px] text-[#9a9a95] py-6 text-center">Выберите шаблон или впишите размеры стёкол — здесь появится вид снаружи и план сверху.</p>
@@ -689,7 +689,8 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         </section>
 
         <section className="bg-white border border-[#e4e4e0] rounded-2xl p-3 space-y-2 text-[13px] shrink-0 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:rounded-none max-lg:border-x-0 max-lg:border-b-0 max-lg:shadow-[0_-4px_16px_rgba(0,0,0,0.06)] max-lg:max-h-[70dvh] max-lg:overflow-y-auto">
-          <div className="space-y-0.5">
+          {/* На планшете и телефоне итог закреплён внизу: видны «К оплате» и кнопки, разбивка — по «Подробнее». */}
+          <div className={`space-y-0.5 ${termsOpen ? '' : 'max-lg:hidden'}`}>
             <div className="flex justify-between"><span className="text-[#6b6b66]">Себестоимость</span><span className="font-mono font-semibold">{RUB(cost)}</span></div>
             {/* Фурнитура — вычитанием из округлённых: стекло + фурнитура = себестоимость и на экране. */}
             <div className="text-[11px] text-[#9a9a95]">стекло {RUB(glassCost)} + фурнитура (закупка) {RUB(Math.round(cost) - Math.round(glassCost))}</div>
@@ -702,24 +703,26 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           {fresh && fresh.stops.length > 0 && <ul className="text-[12px] text-[#c2410c] space-y-0.5 list-disc pl-4">{fresh.stops.map(s => <li key={s}>{s}</li>)}</ul>}
           {state === 'error' && err && <p className="text-[12px] text-[#c2410c]">Расчёт не выполнен: {err}</p>}
           {!okPanels.length && <p className="text-[12px] text-[#9a9a95]">Впишите размер хотя бы одного стекла — расчёт начнётся сам.</p>}
-          <div className="flex items-center justify-between pt-1.5 border-t border-[#e4e4e0]">
-            <span className="text-[14px] font-semibold text-[#111110]">К оплате{cartCount ? ` (изделие ${cartCount + 1})` : ''}</span>
-            <span className="text-[22px] font-bold font-mono text-[#111110]">{usable ? RUB(grand) : '—'}</span>
+          <div className="flex flex-col gap-2 md:max-lg:flex-row md:max-lg:items-center">
+            <div className={`flex items-center justify-between md:max-lg:flex-1 md:max-lg:justify-start md:max-lg:gap-3 ${termsOpen ? 'pt-1.5 border-t border-[#e4e4e0]' : 'lg:pt-1.5 lg:border-t lg:border-[#e4e4e0]'}`}>
+              <span className="text-[14px] font-semibold text-[#111110]">К оплате{cartCount ? ` (изделие ${cartCount + 1})` : ''}</span>
+              <span className="text-[22px] font-bold font-mono text-[#111110]">{usable ? RUB(grand) : '—'}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:max-lg:w-[400px] md:max-lg:shrink-0">
+              <button onClick={add} disabled={!usable || grand <= 0 || dirty}
+                className="px-4 py-2.5 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-40">+ В КП</button>
+              <button onClick={onSave} disabled={saving || cartCount === 0}
+                className="px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
+                {saving ? 'Сохраняю…' : `Сохранить${cartCount ? ` (${cartCount})` : ''} → КП`}
+              </button>
+            </div>
           </div>
           {dirty && okPanels.length > 0 && state !== 'error' && <p className="text-[11px] text-[#9a9a95]">пересчёт цены…</p>}
           {!dirty && !usable && okPanels.length > 0 && <p className="text-[11px] text-[#c2410c]">Расчёт неполный — {pending.length ? 'детали из чертежа ждут подбора из каталога' : halfDone ? 'не у всех строк есть размер, количество или длины' : 'причины выше'}. В КП не добавляю.</p>}
           {added && <p className="text-[11px] text-emerald-700">✓ {added}</p>}
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={add} disabled={!usable || grand <= 0 || dirty}
-              className="px-4 py-2.5 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-40">+ В КП</button>
-            <button onClick={onSave} disabled={saving || cartCount === 0}
-              className="px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
-              {saving ? 'Сохраняю…' : `Сохранить${cartCount ? ` (${cartCount})` : ''} → КП`}
-            </button>
-          </div>
           {noteSlot}
           <button onClick={() => setTermsOpen(o => !o)} className="w-full flex items-center justify-between text-[12px] text-[#2563eb]">
-            <span>Условия и клиент{!clientOk ? <span className="text-[#9a9a95]"> · клиент нужен для сохранения</span> : ''}</span>
+            <span><span className="lg:hidden">Подробнее, условия и клиент</span><span className="max-lg:hidden">Условия и клиент</span>{!clientOk ? <span className="text-[#9a9a95]"> · клиент нужен для сохранения</span> : ''}</span>
             <span>{termsOpen ? '▴' : '▾'}</span>
           </button>
           {termsOpen && (
@@ -738,7 +741,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
               {clientSlot}
             </div>
           )}
-          {cartCount === 0 && !termsOpen && <p className="text-[11px] text-[#9a9a95]">«+ В КП» кладёт изделие в корзину расчёта; «Сохранить» делает из корзины расчёт и КП.</p>}
+          {cartCount === 0 && termsOpen && <p className="text-[11px] text-[#9a9a95]">«+ В КП» кладёт изделие в корзину расчёта; «Сохранить» делает из корзины расчёт и КП.</p>}
         </section>
       </aside>
 
@@ -788,6 +791,9 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
     }
     return [...c].sort((a, b) => b[1] - a[1])
   }, [catalog, group, finishId, onlyFinish, linear])
+  // В «Все» частые разновидности впереди: кнобы и скобы, а не заглушки и ручки для саун по алфавиту.
+  const rank = new Map(subs.map(([l], i) => [l, i]))
+  const shown = needle ? list : [...list].sort((a, b) => (rank.get(kindOf(a).label) ?? 99) - (rank.get(kindOf(b).label) ?? 99))
   const counts = useMemo(() => {
     const c: Partial<Record<CatalogGroupId, number>> = {}
     for (const m of catalog.models) if (avail(m)) c[m.group] = (c[m.group] ?? 0) + 1
@@ -846,7 +852,7 @@ function Picker({ catalog, finishId, finishLabel, countIn, onPick, onClose, full
         <div className="flex-1 overflow-y-auto p-3">
           {!list.length && <p className="text-[13px] text-[#9a9a95] p-2">Ничего не нашлось{onlyFinish ? ` в цвете «${finishLabel}» — снимите галочку, чтобы увидеть остальные цвета` : ''}.</p>}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-            {list.map(m => {
+            {shown.map(m => {
               const v = m.variants[finishId]
               const n = countIn(m)
               return (

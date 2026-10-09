@@ -39,7 +39,7 @@ export function Variants({ current, alts, finishId, kindLabel, inUse, onSwap, on
               title={`${m.name} · ${SUPPLIER_RU[m.supplier]}`}
               className={`relative text-left bg-white rounded-lg border p-1 flex flex-col gap-0.5 transition-colors disabled:opacity-40 ${now ? 'border-[#111110] ring-1 ring-[#111110]' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
               <span className="relative block">
-                <Thumb src={v?.image ?? m.image} alt={m.name} size="w-full aspect-square" />
+                <Thumb src={v?.image ?? m.image} alt={m.name} size="w-full aspect-[5/4]" />
                 <span className="absolute bottom-0.5 right-0.5 bg-white/90 text-[#6b6b66] text-[9px] rounded px-1 leading-tight">{SUPPLIER_RU[m.supplier]}</span>
               </span>
               {now && <span className="absolute top-1.5 left-1.5 bg-[#111110] text-white text-[9.5px] font-semibold rounded px-1">сейчас</span>}
