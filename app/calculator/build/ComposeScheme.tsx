@@ -19,6 +19,8 @@ function useWidth<T extends HTMLElement>() {
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    // Сразу, а не ждать наблюдателя: в скрытой вкладке он молчит до показа, и схема пустая.
+    setW(el.getBoundingClientRect().width)
     const ro = new ResizeObserver(e => setW(e[0].contentRect.width))
     ro.observe(el)
     return () => ro.disconnect()
