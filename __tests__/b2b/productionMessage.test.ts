@@ -49,6 +49,23 @@ describe('производственное сообщение', () => {
     expect(orderNumberOf({ id: 7, custom_number: null })).toBe('007')
   })
 
+  it('обработка — к детали: песочка из услуги, фацет, отверстия, вырезы, комментарий без повтора размера', () => {
+    const msg = sp(buildProductionMessage({
+      id: 5669, custom_number: '05669', client_name: 'Клиент', total_after_discount: 16_868,
+      items: [
+        // 05669: пескоструй выбран услугой, признак «Песочка» не стоит — так было у всех таких деталей.
+        { materialName: 'Осветлённое', category: 'зеркало', thickness: 4, width: 1158, height: 2322, quantity: 1, totalAreaNet: 2.6889,
+          hasSandblast: false, hasHoles: false, services: [{ id: 28, name: 'Пескоструй по трафарету (рисунок/частичное)' }, { id: 15, name: 'Разработка макета в электронном виде (вектор)' }, { id: -1000002, name: 'Крупногабарит: высота 2600–2900 мм (+20%)' }] },
+        { materialName: 'Осветлённое', category: 'зеркало', thickness: 4, width: 750, height: 1900, quantity: 1, totalAreaNet: 1.43,
+          hasFacet: true, facetTypeMm: 10, holes: [{ d: 12, n: 4 }, { d: 20, n: 2 }], hasCutouts: true, cutouts: 1,
+          comment: '750×1900 мм · лента: LUX 120 led 9,6W 4500K 12V · БП КАРАНДАШ 100W' },
+      ],
+    }))
+    expect(msg).toContain('  1158×2322 мм — 1 шт · песочка по трафарету, макет\n')
+    expect(msg).toContain('  750×1900 мм — 1 шт · фацет 10 мм, отв. 4×⌀12, 2×⌀20, вырезы ×1 · лента: LUX 120 led 9,6W 4500K 12V · БП КАРАНДАШ 100W\n')
+    expect(msg).not.toContain('Крупногабарит')
+  })
+
   it('подпись для тоста: номер, клиент, штуки и площадь всего заказа', () => {
     expect(sp(productionMessageSummary(order))).toBe('05648 · M GLASS · 6 шт · 4,8 м²')
   })

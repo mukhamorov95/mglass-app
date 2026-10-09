@@ -4,6 +4,7 @@
 
 import { materialLabel } from '@/lib/materialLabel'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { itemNote, treatmentTags, type TreatmentItem } from '@/lib/b2b/itemTreatments'
 
 export type MessageOrder = {
   id: number
@@ -15,7 +16,7 @@ export type MessageOrder = {
   total_sale_inc_vat?: number | null
 }
 
-type Item = {
+type Item = TreatmentItem & {
   materialName?: string | null
   category?: string | null
   thickness?: number | null
@@ -26,7 +27,7 @@ type Item = {
   hasTempering?: boolean | null
 }
 
-type Group = { label: string; hasTemp: boolean; lines: { w: number; h: number; qty: number; area: number }[] }
+type Group = { label: string; hasTemp: boolean; lines: { w: number; h: number; qty: number; area: number; work: string }[] }
 
 export const orderNumberOf = (o: Pick<MessageOrder, 'id' | 'custom_number'>) => o.custom_number?.trim() || `00${o.id}`
 
@@ -44,7 +45,10 @@ function groupItems(items: unknown[]): Group[] {
       groups.set(key, g)
     }
     if (item.hasTempering) g.hasTemp = true
-    g.lines.push({ w: Number(item.width ?? 0), h: Number(item.height ?? 0), qty: Number(item.quantity ?? 0), area: Number(item.totalAreaNet ?? 0) })
+    // Обработка и комментарий — к самой детали, в ту же строку: песочка по макету, фацет,
+    // отверстия, лента подсветки. Без этого цех узнавал о них голосом (05669, 09.10).
+    const work = [treatmentTags(item).join(', '), itemNote(item.comment)].filter(Boolean).join(' · ')
+    g.lines.push({ w: Number(item.width ?? 0), h: Number(item.height ?? 0), qty: Number(item.quantity ?? 0), area: Number(item.totalAreaNet ?? 0), work })
   }
   return [...groups.values()]
 }
@@ -55,7 +59,7 @@ export function buildProductionMessage(order: MessageOrder): string {
   out.push('', order.client_name)
   for (const g of groupItems(order.items)) {
     out.push('', `${g.label}${g.hasTemp ? ', закалённое' : ''}, упакованное`)
-    for (const l of g.lines) out.push(`  ${l.w}×${l.h} мм — ${l.qty} шт`)
+    for (const l of g.lines) out.push(`  ${l.w}×${l.h} мм — ${l.qty} шт${l.work ? ` · ${l.work}` : ''}`)
     const qty = g.lines.reduce((s, l) => s + l.qty, 0)
     const area = g.lines.reduce((s, l) => s + l.area, 0)
     out.push(`  Итого: ${qty} шт · ${area2(area)} м²`)
