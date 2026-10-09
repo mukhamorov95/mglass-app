@@ -83,8 +83,9 @@ export function modelName(name: string): string {
   return parts.join(', ').replace(/\s+/g, ' ').trim()
 }
 
-// Длина в названии бывает и у штучного: «Тубус картонный, длина 2,2 м», заглушки профиля.
-const NOT_LINEAR = /^(заглушк|тубус|образц|коробк|упаковк)/i
+// Длина в названии бывает и у штучного: «Тубус картонный, длина 2,2 м». Верхняя заглушка
+// профиля («Заглушка верхняя FDPA-500.1, 1 м») — погонная: режется по ширине двери.
+const NOT_LINEAR = /^(тубус|образц|коробк|упаковк)/i
 
 function roleOf(g: Group, category: string, linear: boolean): CompositionRole {
   if (!linear || !g.linear) return g.piece
