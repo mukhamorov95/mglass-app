@@ -11,6 +11,7 @@ import { sameSpot, type Elevation, type LMark, type LPanel, type P, type Plan } 
 const GLASS_STROKE = '#7c8c93'
 const DIM = '#9a9a95'
 const INK = '#111110'
+const FACADE_MAX_H = 340      // px — фасад не выше этого, иначе стёкла уезжают за экран планшета
 
 // Ширина контейнера в px: шрифт и толщины задаём в пикселях экрана, а не в миллиметрах.
 function useWidth<T extends HTMLElement>() {
@@ -73,11 +74,22 @@ function Facade({ elevation: el, selected, activeSpots, onSelect, onEdge, glassS
 }) {
   const [ref, px] = useWidth<HTMLDivElement>()
   const WALL = 70
-  const { fs, k, l, r } = fit(el.width, px || 600, f => ({ l: WALL + f * 4.2, r: WALL + f }))
-  const top = el.height + fs * 1.6
-  const bottom = fs * 3.4
-  const vb = `${-l} ${-top} ${el.width + l + r} ${top + bottom}`
-  const pxH = px ? ((top + bottom) / (el.width + l + r)) * px : 0
+  const frameAt = (w: number) => {
+    const f = fit(el.width, w, x => ({ l: WALL + x * 4.2, r: WALL + x }))
+    const top = el.height + f.fs * 1.6
+    return { ...f, top, vbW: el.width + f.l + f.r, vbH: top + f.fs * 3.4 }
+  }
+  // Узкая высокая душевая (дверь 424 × 2004) растягивала фасад на экран: рисунок сужаем,
+  // пока он не влезет по высоте, а не только по ширине колонки.
+  let pxW = px || 600
+  let fr = frameAt(pxW)
+  for (let i = 0; i < 3 && (fr.vbH / fr.vbW) * pxW > FACADE_MAX_H; i++) {
+    pxW = (pxW * FACADE_MAX_H) / ((fr.vbH / fr.vbW) * pxW)
+    fr = frameAt(pxW)
+  }
+  const { fs, k, l, top } = fr
+  const vb = `${-l} ${-top} ${fr.vbW} ${fr.vbH}`
+  const pxH = (fr.vbH / fr.vbW) * pxW
   const dimmed = (rowId: string) => !!selected && rowId !== selected
   const markColor = (rowId: string) => (selected === rowId ? INK : '#55554f')
 
@@ -95,7 +107,7 @@ function Facade({ elevation: el, selected, activeSpots, onSelect, onEdge, glassS
   return (
     <div ref={ref} className="min-w-0">
       {px > 0 && (
-        <svg viewBox={vb} width={px} height={pxH} className="block select-none" style={{ touchAction: 'manipulation' }}>
+        <svg viewBox={vb} width={pxW} height={pxH} className="block select-none mx-auto" style={{ touchAction: 'manipulation' }}>
           <defs>
             <pattern id="cs-hatch" width={fs * 0.9} height={fs * 0.9} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <line x1="0" y1="0" x2="0" y2={fs * 0.9} stroke="#d6d6d1" strokeWidth={k * 1.5} />
