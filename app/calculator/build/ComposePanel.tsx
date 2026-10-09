@@ -613,19 +613,20 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           : view === '3d'
             ? (
               <div className="space-y-1">
-                <div className="[&>div]:!h-[360px] md:[&>div]:!h-[400px] lg:[&>div]:!h-[330px]">
+                <div className="[&>div]:!h-[360px] md:[&>div]:!h-[400px] lg:[&>div]:!h-[320px]" title="Уплотнители на сцене не показаны; место детали меняется на схеме">
                   <Partition3DView model={SCENE_MODEL} dims={sceneDims} thickness={thickness} assembly={asm}
                     finishHex={finish.hex} finishId={finish.id} glassTint={GLASS.find(g => g.id === glassId)?.tint ?? GLASS[0].tint} doorOpen={doorOpen}
                     onPick={n => { const id = rowOfKey(n.key); if (id) pickRow(id, 'card') }} pickedPrefix={selected ? `row:${selected}:` : null} />
                 </div>
-                <p className="text-[11px] text-[#9a9a95]">Уплотнители на сцене не показаны; место детали меняется на схеме.</p>
+                <p className="text-[11px] text-[#9a9a95] lg:hidden">Уплотнители на сцене не показаны; место детали меняется на схеме.</p>
               </div>
             )
             : <ComposeScheme elevation={layout.elevation} plan={layout.plan} selected={selected} activeSpots={selSpots}
                 onSelect={id => pickRow(id, 'card')} onEdge={toggleSpot}
                 glassSwatch={GLASS.find(g => g.id === glassId)?.swatch ?? '#dfeaf6'} finishHex={finish.hex} />}
+        {/* На ноутбуке это видно в составе справа («нет на схеме») — строка здесь съела бы экран. */}
         {unplacedHw.length > 0 && !selRow && (
-          <p className="text-[12px] text-[#6b6b66]">
+          <p className="text-[12px] text-[#6b6b66] lg:hidden">
             Не на схеме:{' '}
             {unplacedHw.map((id, i) => {
               const h = hardware.find(x => x.id === id)!
