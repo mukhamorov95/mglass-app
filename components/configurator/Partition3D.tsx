@@ -294,14 +294,15 @@ function useSettled(deps: unknown[], delay = 400) {
   return { settled: settledKey === key, disturb }
 }
 
-function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRole, settled, mirror }: {
+function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRole, pickedPrefix, settled, mirror }: {
   assembly: Assembly; metalMat: THREE.Material; glassTint: GlassTint
   onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null
+  pickedPrefix?: string | null   // подсветить все узлы с ключом на этот префикс (конструктор: строка состава)
   settled?: boolean        // кадр «сел»: можно тратиться на сэмплы
   mirror?: boolean         // отражение в полу: дешёвые материалы, обрезка трафаретом
 }) {
   const pickable = !!onPick && !mirror
-  const lit = (key: string, role: string | null) => key === pickedKey || (!!role && role === pickedRole)
+  const lit = (key: string, role: string | null) => key === pickedKey || (!!role && role === pickedRole) || (!!pickedPrefix && key.startsWith(pickedPrefix))
   // Кабина поднята на поддон.
   return (
     <group position={[0, assembly.niche.trayH, 0]}>
@@ -415,10 +416,12 @@ function Studio() {
 }
 
 export default function Partition3D(
-  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice, variant, onPick, pickedKey, pickedRole, onCapture }:
-  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant; onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null; onCapture?: (fn: CaptureFn | null) => void },
+  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice, variant, onPick, pickedKey, pickedRole, pickedPrefix, onCapture, assembly: given }:
+  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant; onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null; pickedPrefix?: string | null; onCapture?: (fn: CaptureFn | null) => void
+    // Готовая сборка вместо модели (конструктор «Из деталей», CONSTRUCTOR_ROUTE.md К4): сцена рисует её как есть.
+    assembly?: Assembly },
 ) {
-  const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen, choice, variant), [model, dims, thickness, doorOpen, choice, variant])
+  const assembly = useMemo(() => given ?? buildFromModel(model, dims, thickness, doorOpen, choice, variant), [given, model, dims, thickness, doorOpen, choice, variant])
   // PBR-материал финиша для профилей и фурнитуры. Профиль цвета → MeshPhysicalMaterial
   // с clearcoat (реалистичный лак/зеркало); фолбэк на hex, если цвет неизвестен.
   const metalMat = useMemo(() => {
@@ -452,7 +455,7 @@ export default function Partition3D(
   const eye = assembly.niche.trayH + 1.5                     // рост смотрящего
   // Кадр «садится» через 400 мс после последнего движения; смена модели, размеров,
   // стекла или цвета фурнитуры сбрасывает счёт — считать надо заново.
-  const { settled, disturb } = useSettled([model.code, dims, glassTint, finishId, doorOpen])
+  const { settled, disturb } = useSettled([model.code, dims, glassTint, finishId, doorOpen, given])
   // R7 · Кадр на печать. Снимаем холст КАК ЕСТЬ, ничего не переключая.
   //
   // Пробовал поднимать разрешение на время съёмки тремя способами — плотностью
@@ -500,7 +503,7 @@ export default function Partition3D(
           <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.38} color="#e6eeff" />
           <directionalLight position={[cx + 1, ty + 4, cz + 6]} intensity={0.26} color="#ffffff" />
           <NicheMesh niche={assembly.niche} />
-          <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} onPick={onPick} pickedKey={pickedKey} pickedRole={pickedRole} settled={settled} />
+          <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} onPick={onPick} pickedKey={pickedKey} pickedRole={pickedRole} pickedPrefix={pickedPrefix} settled={settled} />
           {/* R3 · Отражение в полированном керамограните. Копия сцены, отражённая
               через плоскость пола; видна только внутри трафарета, который пол
               оставил на себе. renderOrder=1 — раньше стекла (2), чтобы отражение

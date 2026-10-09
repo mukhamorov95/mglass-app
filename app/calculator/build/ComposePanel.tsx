@@ -10,7 +10,11 @@ import type { CatalogGroupId, CatalogModel } from '@/lib/calc/compositionCatalog
 import { COMPOSE_TEMPLATES, applyTemplate, resolvePieces, type ComposeTemplate } from '@/lib/calc/composeTemplates'
 import { DRAFT_KEY, DRAFT_KEY_V1, migrateDraft, type Draft, type Edge, type HwRow, type PanelKind, type PanelRow, type Shape, type Spot } from '@/lib/calc/composeDraft'
 import { composeLayout, effectiveSpots, sameSpot } from '@/lib/calc/composeLayout'
+import { composeAssembly, rowOfKey } from '@/lib/calc/composeAssembly'
 import { confirmDialog } from '@/lib/dialog'
+import { getModel } from '@/lib/configurator/arrangement'
+import { Partition3DView } from '@/components/configurator/Partition3DView'
+import type { GlassTint } from '@/components/configurator/scene/assembly'
 import { ComposeScheme } from './ComposeScheme'
 
 // Конструктор «Из деталей» (docs/configurator/CONSTRUCTOR_ROUTE.md, К1–К3): душевая, которой нет
@@ -18,7 +22,7 @@ import { ComposeScheme } from './ComposeScheme'
 // считает сервер (/api/calc/composition — тот же расчёт по составу, что для чертежа),
 // цена клиенту — той же формулой, что у моделей. Корзина общая с родителем.
 // Черновик живёт в localStorage до «+ В КП» или явной очистки: собранное руками не теряется.
-// Схема (К3) рисует состав и привязку деталей к кромкам; в цену она не входит.
+// Схема (К3) и 3D (К4) рисуют состав и привязку деталей к кромкам; в цену они не входят.
 
 export type ComposeCartItem = {
   title: string; cost: number; productPrice: number; install: number
@@ -31,15 +35,17 @@ type Priced = CompositionResult & { finance?: Finance }
 const SHAPES: { id: Shape; label: string }[] = [{ id: 'niche', label: 'В нишу' }, { id: 'corner', label: 'Угловая' }, { id: 'walkin', label: 'Открытая' }]
 const KINDS: { id: PanelKind; label: string }[] = [{ id: 'fixed', label: 'Неподвижное' }, { id: 'door', label: 'Дверь' }, { id: 'slide', label: 'Раздвижная' }]
 const EDGE_RU: Record<Edge, string> = { left: 'левая кромка', right: 'правая кромка', top: 'верх', bottom: 'низ' }
-// Те же id, что GLASS_TYPES в page.tsx; имя материала B2B — на сервере (compositionServer.ts).
-const GLASS = [
-  { id: 'clear', label: 'Прозрачное', swatch: '#cfe3d3' },
-  { id: 'crystal', label: 'Осветлённое', swatch: '#dfeaf6' },
-  { id: 'graphite', label: 'Графит', swatch: '#7f858b' },
-  { id: 'matte', label: 'Матовое', swatch: '#dfe2dd' },
-  { id: 'matte-crystal', label: 'Матовое осветл.', swatch: '#e6ecef' },
-  { id: 'bronze', label: 'Бронза', swatch: '#b0895c' },
-] as const
+// Те же id и тон для 3D, что GLASS_TYPES в page.tsx; имя материала B2B — на сервере (compositionServer.ts).
+const GLASS: { id: string; label: string; swatch: string; tint: GlassTint }[] = [
+  { id: 'clear', label: 'Прозрачное', swatch: '#cfe3d3', tint: { color: '#ffffff', attenuation: '#b8d8c4', distance: 3.5 } },
+  { id: 'crystal', label: 'Осветлённое', swatch: '#dfeaf6', tint: { color: '#ffffff', attenuation: '#cfe4f2', distance: 6.0 } },
+  { id: 'graphite', label: 'Графит', swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
+  { id: 'matte', label: 'Матовое', swatch: '#dfe2dd', tint: { color: '#f2f5f1', attenuation: '#d8e0d8', distance: 2.2, roughness: 0.55 } },
+  { id: 'matte-crystal', label: 'Матовое осветл.', swatch: '#e6ecef', tint: { color: '#f6f9fa', attenuation: '#e2ecf2', distance: 3.2, roughness: 0.55 } },
+  { id: 'bronze', label: 'Бронза', swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
+]
+// Сцене нужна модель только для ключа «кадр сел»: сборку конструктор отдаёт готовой.
+const SCENE_MODEL = getModel('М2')
 const THICKNESSES = [6, 8, 10]
 const MATERIAL: Record<string, string> = { SUS304: 'нерж.', SUS316: 'нерж. 316', BR: 'латунь', ZN: 'цинк', AL: 'алюминий', PVC: 'ПВХ' }
 const DEFAULT_QTY: Partial<Record<CompositionRole, number>> = { hinge: 2, connector: 2 }
@@ -120,6 +126,12 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
     if (scroll === 'scheme') schemeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     if (scroll === 'row') document.getElementById(`hw-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
+  // 3D из той же раскладки: касание детали на сцене выбирает её строку, как на схеме.
+  const [view, setView] = useState<'scheme' | '3d'>('scheme')
+  const [doorOpen, setDoorOpen] = useState(true)
+  const asm = useMemo(() => composeAssembly(shape, layout.elevation, hardware.map(h => ({ id: h.id, role: h.role, label: h.label, stockMm: h.stockMm })), thickness, doorOpen),
+    [shape, layout, hardware, thickness, doorOpen])
+  const sceneDims = useMemo(() => ({ width: Math.round(asm.bounds.w * 1000), height: Math.round(asm.bounds.h * 1000) }), [asm])
   const panelName = (id: string) => layout.elevation.panels.find(p => p.id === id)?.label ?? 'стекло'
   const whereText = (h: HwRow) => spotsOf(h).map(s => `${panelName(s.panelId)} — ${EDGE_RU[s.edge]}`).join('; ')
 
@@ -285,15 +297,34 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         </section>
 
         <section ref={schemeRef} className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-3 scroll-mt-4">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-[15px] font-semibold text-[#111110]">Схема</h2>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[15px] font-semibold text-[#111110]">Вид</h2>
+              <div className="flex rounded-lg border border-[#e4e4e0] p-0.5 bg-[#f5f5f3]">
+                {([['scheme', 'Схема'], ['3d', '3D']] as const).map(([id, name]) => (
+                  <button key={id} onClick={() => setView(id)} className={`px-3 py-1 rounded-md text-[12px] font-medium ${view === id ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>{name}</button>
+                ))}
+              </div>
+              {view === '3d' && layout.elevation.panels.some(p => p.kind !== 'fixed') && (
+                <button onClick={() => setDoorOpen(o => !o)} className={miniChip(false)}>{doorOpen ? 'Закрыть двери' : 'Открыть двери'}</button>
+              )}
+            </div>
             {layout.elevation.panels.length > 0 && !selRow && <span className="text-[11px] text-[#9a9a95] text-right">коснитесь детали — откроется её строка</span>}
           </div>
-          {layout.elevation.panels.length > 0
-            ? <ComposeScheme elevation={layout.elevation} plan={layout.plan} selected={selected} activeSpots={selSpots}
-                onSelect={id => pickRow(id, null)} onEdge={toggleSpot}
-                glassSwatch={GLASS.find(g => g.id === glassId)?.swatch ?? '#dfeaf6'} finishHex={FINISHES.find(f => f.id === finishId)?.hex ?? '#c0c0c0'} />
-            : <p className="text-[13px] text-[#9a9a95]">Впишите размеры стёкол — здесь появится вид снаружи и план сверху.</p>}
+          {!layout.elevation.panels.length
+            ? <p className="text-[13px] text-[#9a9a95]">Впишите размеры стёкол — здесь появится вид снаружи и план сверху.</p>
+            : view === '3d'
+              ? (
+                <div className="space-y-1">
+                  <Partition3DView model={SCENE_MODEL} dims={sceneDims} thickness={thickness} assembly={asm}
+                    finishHex={finish.hex} finishId={finish.id} glassTint={GLASS.find(g => g.id === glassId)?.tint ?? GLASS[0].tint} doorOpen={doorOpen}
+                    onPick={n => { const id = rowOfKey(n.key); if (id) pickRow(id, null) }} pickedPrefix={selected ? `row:${selected}:` : null} />
+                  <p className="text-[11px] text-[#9a9a95]">Крутите пальцем или мышью. Уплотнители на сцене не показаны; место детали меняется на схеме.</p>
+                </div>
+              )
+              : <ComposeScheme elevation={layout.elevation} plan={layout.plan} selected={selected} activeSpots={selSpots}
+                  onSelect={id => pickRow(id, null)} onEdge={toggleSpot}
+                  glassSwatch={GLASS.find(g => g.id === glassId)?.swatch ?? '#dfeaf6'} finishHex={finish.hex} />}
           {selRow && (() => {
             const num = hardware.findIndex(h => h.id === selRow.id) + 1
             const mdl = byBase.get(selRow.base)
