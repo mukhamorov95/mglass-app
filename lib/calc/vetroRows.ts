@@ -56,10 +56,13 @@ export const vetroRowsFor = (base: string, rows: SupplierRowLike[]) =>
   rows.filter(r => !isDefectRow(r) && vetroBase(r.article) === base)
 
 // «Dessau-103/CP. Петля стекло-стекло 180°» → «Петля стекло-стекло 180° Dessau-103»: описание
-// с первой русской буквы, без хвоста-цвета в скобках, артикул модели — в конце.
+// после артикула (первое слово с «/» или сама модель — бывает кириллицей, «КП-001/Black.») с первой
+// русской буквы, без хвоста-цвета в скобках, артикул модели — в конце.
 export function vetroModelName(name: string, base: string): string {
-  const i = (name || '').search(/[А-Яа-яЁё]/)
+  const first = (name || '').trim().split(/\s+/)[0] ?? ''
+  const rest = first.includes('/') || first.replace(/\.+$/, '') === base.split('/')[0] ? name.trim().slice(first.length) : name || ''
+  const i = rest.search(/[А-Яа-яЁё]/)
   if (i < 0) return name || base
-  const desc = name.slice(i).replace(/\s*\([^)]*\)\s*$/, m => (supplierColorToFinish(m) || /прозрачн|чист|кристал/i.test(m) ? '' : m)).replace(/[\s.]+$/, '').trim()
+  const desc = rest.slice(i).replace(/\s*\([^)]*\)\s*$/, m => (supplierColorToFinish(m) || /прозрачн|чист|кристал/i.test(m) ? '' : m)).replace(/[\s.]+$/, '').trim()
   return `${desc} ${base}`.replace(/\s+/g, ' ').trim()
 }
