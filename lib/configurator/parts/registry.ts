@@ -7,11 +7,15 @@ import { validatePart } from './validate'
 import { SD_210_L230 } from './catalog/sd-210'
 import { FDR_30 } from './catalog/fdr-30'
 import { FDP_232 } from './catalog/fdp-232'
+import { DESSAU_103 } from './catalog/dessau-103'
+import { BALGE_004 } from './catalog/balge-004'
 
 const DECLARED: PartSpec[] = [
   SD_210_L230,
   FDR_30,
   FDP_232,
+  DESSAU_103,
+  BALGE_004,
 ]
 
 const accepted = new Map<string, PartSpec>()
