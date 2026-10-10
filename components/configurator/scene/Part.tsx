@@ -1,8 +1,10 @@
 'use client'
 
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js'
 import { RoundedBox } from '@react-three/drei'
-import type { Prim, PartSpec, V3 } from '@/lib/configurator/parts/types'
+import type { Leaf, Prim, PartSpec, V3 } from '@/lib/configurator/parts/types'
 
 const M = 0.001
 const m3 = (v: V3): V3 => [v[0] * M, v[1] * M, v[2] * M]
@@ -14,6 +16,28 @@ function axisRot(axis?: 'x' | 'y' | 'z'): V3 {
   if (axis === 'x') return [0, 0, Math.PI / 2]
   if (axis === 'z') return [Math.PI / 2, 0, 0]
   return [0, 0, 0]
+}
+
+type ExtrudePrim = Extract<Prim, { p: 'extrude' }>
+
+// Контур X–Z вытягивается по Y: в three профиль лежит в XY и тянется по Z, поэтому контур
+// пишем как (x, −z) и кладём набок. Нормали — с порогом: дуга серпа гладкая, кромки острые.
+function extrudeGeometry(pr: ExtrudePrim): THREE.BufferGeometry {
+  const h = pr.height * M
+  const b = Math.min(pr.bevel ?? 0, pr.height / 4) * M
+  const shape = new THREE.Shape(pr.outline.map(([x, z]) => new THREE.Vector2(x * M, -z * M)))
+  const g = new THREE.ExtrudeGeometry(shape, {
+    depth: h - 2 * b, bevelEnabled: b > 0, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: 2, curveSegments: 1,
+  })
+  g.rotateX(-Math.PI / 2)
+  g.translate(0, b - h / 2, 0)
+  return toCreasedNormals(g, Math.PI / 6)
+}
+
+function Extruded({ pr, material }: { pr: ExtrudePrim; material: THREE.Material }) {
+  const geo = useMemo(() => extrudeGeometry(pr), [pr])
+  useEffect(() => () => geo.dispose(), [geo])
+  return <mesh geometry={geo} position={at(pr.at)} material={material} castShadow />
 }
 
 function Primitive({ pr, material }: { pr: Prim; material: THREE.Material }) {
@@ -61,16 +85,20 @@ function Primitive({ pr, material }: { pr: Prim; material: THREE.Material }) {
       const size: V3 = pr.axis === 'y' ? [outW, len, outH] : pr.axis === 'z' ? [outW, outH, len] : [len, outH, outW]
       return <RoundedBox args={size} radius={Math.min(pr.wall, 2) * M} smoothness={3} position={at(pr.at)} material={material} castShadow />
     }
+    case 'extrude':
+      return <Extruded pr={pr} material={material} />
     default:
       return null
   }
 }
 
 // Деталь по паспорту. Рамка: +Z наружу от поверхности, +Y вверх, +X вдоль.
-export function Part({ spec, material }: { spec: PartSpec; material: THREE.Material }) {
+// leaf — нарисовать одну половину петли (при открытой двери они стоят в разных рамках).
+export function Part({ spec, material, leaf }: { spec: PartSpec; material: THREE.Material; leaf?: Leaf }) {
+  const prims = leaf ? spec.geometry.filter(pr => (pr.leaf ?? 'door') === leaf) : spec.geometry
   return (
     <group>
-      {spec.geometry.map((pr, i) => <Primitive key={i} pr={pr} material={material} />)}
+      {prims.map((pr, i) => <Primitive key={i} pr={pr} material={material} />)}
     </group>
   )
 }

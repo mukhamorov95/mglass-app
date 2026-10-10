@@ -46,6 +46,17 @@ function checkPrim(pr: Prim, i: number, out: PartIssue[], id: string) {
       sizes.push(pr.d, pr.thk)
       break
     }
+    case 'extrude': {
+      if (!Array.isArray(pr.outline) || pr.outline.length < 3) return at('outline', 'контур — не меньше трёх точек')
+      if (!pr.outline.every(pt => Array.isArray(pt) && pt.length === 2 && pt.every(num))) return at('outline', 'каждая точка — два числа, мм')
+      if (!num(pr.height)) return at('height', 'нужна высота профиля')
+      const xs = pr.outline.map(pt => pt[0]), zs = pr.outline.map(pt => pt[1])
+      const spanX = Math.max(...xs) - Math.min(...xs), spanZ = Math.max(...zs) - Math.min(...zs)
+      sizes.push(spanX, spanZ, pr.height)
+      if (pr.outline.some(pt => pt.some(v => Math.abs(v) > MAX_MM))) at('outline', `точка дальше ${MAX_MM} мм от нуля — похоже на другие единицы`)
+      if (pr.bevel != null && pr.bevel * 2 >= Math.min(spanX, spanZ, pr.height)) at('bevel', 'фаска не меньше половины габарита')
+      break
+    }
     default:
       return at('p', `неизвестный примитив «${(pr as { p: string }).p}»`)
   }

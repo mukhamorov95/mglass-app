@@ -37,12 +37,12 @@ export const DESSAU_103: PartSpec = {
   dims: D,
   // Ноль — на петлевой кромке двери; +Z — через стык к неподвижному стеклу; X — по толщине.
   geometry: [
-    { p: 'box', size: [D.plate, D.height, doorLen], at: [plateX, 0, axis - seam / 2 - doorLen / 2], round: 1.5 },
-    { p: 'box', size: [D.plate, D.height, doorLen], at: [-plateX, 0, axis - seam / 2 - doorLen / 2], round: 1.5 },
-    { p: 'box', size: [D.plate, D.height, fixedLen], at: [plateX, 0, axis + seam / 2 + fixedLen / 2], round: 1.5 },
-    { p: 'box', size: [D.plate, D.height, fixedLen], at: [-plateX, 0, axis + seam / 2 + fixedLen / 2], round: 1.5 },
-    // механизм в зазоре между полотнами, высотой выреза
-    { p: 'box', size: [D.glass, D.cutH, D.gap], at: [0, 0, axis] },
+    { p: 'box', size: [D.plate, D.height, doorLen], at: [plateX, 0, axis - seam / 2 - doorLen / 2], round: 1.5, leaf: 'door' },
+    { p: 'box', size: [D.plate, D.height, doorLen], at: [-plateX, 0, axis - seam / 2 - doorLen / 2], round: 1.5, leaf: 'door' },
+    { p: 'box', size: [D.plate, D.height, fixedLen], at: [plateX, 0, axis + seam / 2 + fixedLen / 2], round: 1.5, leaf: 'fixed' },
+    { p: 'box', size: [D.plate, D.height, fixedLen], at: [-plateX, 0, axis + seam / 2 + fixedLen / 2], round: 1.5, leaf: 'fixed' },
+    // механизм в зазоре между полотнами, высотой выреза; чуть тоньше стекла — грани не совпадают
+    { p: 'box', size: [D.glass - 0.6, D.cutH, D.gap], at: [0, 0, axis], leaf: 'door' },
   ],
   mount: {
     on: 'glass-edge',

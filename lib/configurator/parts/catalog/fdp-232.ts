@@ -35,10 +35,10 @@ export const FDP_232: PartSpec = {
   load: { kgPer2: 35, note: 'карточка АВ24, «Нагрузка: до 35 кг на 2 петли»' },
   // Ноль — на петлевой кромке двери; +Z — через стык к неподвижному стеклу; X — по толщине.
   geometry: [
-    { p: 'box', size: [D.plate, D.height, doorLeaf], at: [plateX, 0, -doorLeaf / 2], round: 1 },
-    { p: 'box', size: [D.plate, D.height, doorLeaf], at: [-plateX, 0, -doorLeaf / 2], round: 1 },
-    { p: 'box', size: [D.plate, D.height, D.axisToEnd], at: [plateX, 0, D.gap + D.axisToEnd / 2], round: 1 },
-    { p: 'box', size: [D.plate, D.height, D.axisToEnd], at: [-plateX, 0, D.gap + D.axisToEnd / 2], round: 1 },
+    { p: 'box', size: [D.plate, D.height, doorLeaf], at: [plateX, 0, -doorLeaf / 2], round: 1, leaf: 'door' },
+    { p: 'box', size: [D.plate, D.height, doorLeaf], at: [-plateX, 0, -doorLeaf / 2], round: 1, leaf: 'door' },
+    { p: 'box', size: [D.plate, D.height, D.axisToEnd], at: [plateX, 0, D.gap + D.axisToEnd / 2], round: 1, leaf: 'fixed' },
+    { p: 'box', size: [D.plate, D.height, D.axisToEnd], at: [-plateX, 0, D.gap + D.axisToEnd / 2], round: 1, leaf: 'fixed' },
     // механизм в вырезе стекла: между крышками, по центру стыка
     { p: 'box', size: [D.thk - 2 * D.plate, D.cutH, D.cutW], at: [0, 0, D.gap / 2] },
   ],

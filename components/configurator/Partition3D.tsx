@@ -364,7 +364,7 @@ function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRo
           {(() => {
             const spec = getPart(h.part)
             return spec
-              ? <Part spec={spec} material={metalMat} />
+              ? <group rotation={[0, 0, h.roll ?? 0]}><Part spec={spec} material={metalMat} leaf={h.leaf} /></group>
               : <Hardware model={h.model} shape={h.shape} material={metalMat} flatTube={h.flatTube} />
           })()}
           {/* Зона захвата: сама деталь 20–40 мм, мышью в неё не попасть. Невидимая

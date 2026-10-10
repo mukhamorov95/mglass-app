@@ -19,6 +19,8 @@ function extent(spec: PartSpec): number {
       : pr.p === 'cyl' ? Math.max(pr.d, pr.len)
       : pr.p === 'ball' ? pr.d
       : pr.p === 'ring' ? pr.d
+      // контур стоит в координатах детали, а не вокруг своего центра
+      : pr.p === 'extrude' ? Math.max(pr.height, 2 * Math.max(...pr.outline.flat().map(Math.abs)))
       : Math.max(pr.section[0], pr.section[1], pr.len)
     const off = pr.at ? Math.max(...pr.at.map(Math.abs)) : 0
     max = Math.max(max, v + off * 2)

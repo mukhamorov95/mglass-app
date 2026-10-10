@@ -18,11 +18,13 @@ export type Surface = {
   along?: [number, number]       // XZ, единичный — вдоль поверхности; по умолчанию ⊥ out
   thickness?: number             // мм — толщина стекла, нужна сквозным деталям
   section?: [number, number]     // мм — сечение штанги, для посадки на трубу
+  face?: [number, number]        // XZ — куда должна смотреть +X детали (наружу кабины): корпус петли
 }
 
 export type Placement = {
   pos: V3
   rotY: number
+  roll?: number                        // π — деталь перевёрнута вокруг своей +Z, чтобы +X смотрела в face
   mirror?: { pos: V3; rotY: number }   // вторая половина сквозной детали
 }
 
@@ -59,14 +61,17 @@ export function placePart(spec: PartSpec, s: Surface): PlaceResult {
     s.point[2] + (out[1] * n + along[1] * a) * MM,
   ]
   const rotY = rotYFor(out)
+  // +X детали задан нормалью торца и разворачивается вместе с кромкой: у левой и правой двери
+  // корпус несимметричной петли оказывался по разные стороны. Монтажник переворачивает петлю.
+  const roll = s.face && along[0] * s.face[0] + along[1] * s.face[1] < 0 ? Math.PI : undefined
 
   // Сквозная (двусторонняя П-скоба): вторая половина с изнанки полотна, развёрнута.
   if (m.through) {
     const t = s.thickness as number
     const back: V3 = [pos[0] - out[0] * t * MM, pos[1], pos[2] - out[1] * t * MM]
-    return { ok: true, placement: { pos, rotY, mirror: { pos: back, rotY: rotY + Math.PI } } }
+    return { ok: true, placement: { pos, rotY, ...(roll ? { roll } : {}), mirror: { pos: back, rotY: rotY + Math.PI } } }
   }
-  return { ok: true, placement: { pos, rotY } }
+  return { ok: true, placement: { pos, rotY, ...(roll ? { roll } : {}) } }
 }
 
 // Поверхности, которые умеет описывать сцена. Держим конструкторы рядом с посадкой,
@@ -84,9 +89,10 @@ export const surfaces = {
     }
   },
   // Торец полотна: нормаль — прочь от полотна в его плоскости, «вдоль» — по толщине.
-  glassEdge(point: V3, out: [number, number], thicknessMm: number): Surface {
+  // face — наружная нормаль полотна: туда встанет +X детали (корпус петли).
+  glassEdge(point: V3, out: [number, number], thicknessMm: number, face?: [number, number]): Surface {
     const o = unit(out)
-    return { kind: 'glass-edge', point, out: o, along: [o[1], -o[0]], thickness: thicknessMm }
+    return { kind: 'glass-edge', point, out: o, along: [o[1], -o[0]], thickness: thicknessMm, ...(face ? { face: unit(face) } : {}) }
   },
   // Штанга: точка на оси, «вдоль» — ось трубы, нормаль — куда смотрит деталь.
   tube(point: V3, axis: [number, number], out: [number, number], section: [number, number]): Surface {
