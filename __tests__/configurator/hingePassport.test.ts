@@ -44,6 +44,52 @@ describe('Паспорт FDP-232 и выбор по артикулу', () => {
   })
 })
 
+// Владелец 10.10: петли в 3D — по чертежам Ветро, начиная с ходовых стекло-стекло.
+describe('Паспорта Ветро: Dessau-103 и Balge-004', () => {
+  // Габарит по коробкам паспорта, мм: [min, max] по каждой оси рамки.
+  const extent = (id: string) => {
+    const boxes = getPart(id)!.geometry.filter(g => g.p === 'box') as { size: number[]; at?: number[] }[]
+    return [0, 1, 2].map(k => [Math.min(...boxes.map(b => (b.at?.[k] ?? 0) - b.size[k] / 2)), Math.max(...boxes.map(b => (b.at?.[k] ?? 0) + b.size[k] / 2))])
+  }
+
+  it('приняты реестром и находятся по названиям прайса Ветро во всех цветах; соседние артикулы — нет', () => {
+    expect(getPart('hinge-dessau-103')?.article).toBe('Dessau-103')
+    expect(getPart('hinge-balge-004')?.article).toBe('Balge-004')
+    expect(partForItem('Dessau-103/CP. Петля стекло-стекло 180°', 'hinge')?.id).toBe('hinge-dessau-103')
+    expect(partForItem('Dessau-103/Black/Sa. Петля стекло-стекло 180°', 'hinge')?.id).toBe('hinge-dessau-103')
+    expect(partForItem('Dessau-103 Петля хром', 'hinge')?.id).toBe('hinge-dessau-103')        // так петля названа в SolidWorks (0828-2)
+    expect(partForItem('Balge-004/BrushedRose/Sa. Петля стекло-стекло 135°-180°', 'hinge')?.id).toBe('hinge-balge-004')
+    expect(partForItem('Dessau-102/CP. Петля стекло-стекло 90°', 'hinge')).toBeNull()
+    expect(partForItem('Dessau-135/Black. Петля стекло-стекло 135°', 'hinge')).toBeNull()
+    expect(partForItem('Balge-002/CP. Петля стена-стекло 90°', 'hinge')).toBeNull()
+  })
+
+  it('Dessau-103 — габарит чертежа 117 × 60: 70 до оси на двери, 47 на неподвижном, ось посередине зазора 8', () => {
+    const [x, y, z] = extent('hinge-dessau-103')
+    expect(z[1] - z[0]).toBeCloseTo(117, 6)
+    expect(y[1] - y[0]).toBeCloseTo(60, 6)
+    expect(z[0]).toBeCloseTo(4 - 70, 6)            // дверь — в −Z от петлевой кромки
+    expect(z[1]).toBeCloseTo(4 + 47, 6)
+    expect(x[1] - x[0]).toBeCloseTo(8 + 2 * 6, 6)  // стекло 8 и две крышки по 6
+    expect(getPart('hinge-dessau-103')!.load).toBeUndefined()   // нагрузки на карточке нет — не выдумываем
+  })
+
+  it('Balge-004 — габарит чертежа 100 × 70, корпус с одной стороны (13), накладки с другой (6,75); кромка двери — 54 от торца', () => {
+    const [x, y, z] = extent('hinge-balge-004')
+    expect(z[1] - z[0]).toBeCloseTo(100, 6)
+    expect(y[1] - y[0]).toBeCloseTo(70, 6)
+    expect(z[1]).toBeCloseTo(54, 6)
+    expect(z[0]).toBeCloseTo(54 - 100, 6)
+    expect(x[1]).toBeCloseTo(4 + 13, 6)
+    expect(x[0]).toBeCloseTo(-(4 + 6.75), 6)
+    expect(getPart('hinge-balge-004')!.load).toBeUndefined()
+  })
+
+  it('без нагрузки в паспорте число петель — по габариту двери, как без паспорта', () => {
+    expect(hingeCount(0.65, 2.31, 8, getPart('hinge-dessau-103')!.load?.kgPer2)).toBe(hingesBySize(0.65, 2.31))
+  })
+})
+
 describe('Число петель: паспорт, без него — габарит (решение 2, 02.10)', () => {
   it('габаритное правило — то же, что было в assembly.ts', () => {
     expect(hingesBySize(0.65, 2.2)).toBe(2)
