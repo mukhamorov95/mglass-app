@@ -4,6 +4,7 @@ import { buildFromModel } from '@/components/configurator/scene/assembly'
 import { getModel } from '@/lib/configurator/arrangement'
 import { computeKitQuantities, computeKitPrice, kitChoices, autoShapeForRole, type Library, type ModelKit, type KitRates } from '@/lib/configurator/kit'
 import { hingesBySize, hingesByPassport, hingeCount, doorKg } from '@/lib/configurator/hinges'
+import type { Prim } from '@/lib/configurator/parts/types'
 
 // Ш4: 3D рисует выбранный артикул, а не общую форму роли. Паспорт FDP-232 — с чертежа.
 describe('Паспорт FDP-232 и выбор по артикулу', () => {
@@ -46,10 +47,19 @@ describe('Паспорт FDP-232 и выбор по артикулу', () => {
 
 // Владелец 10.10: петли в 3D — по чертежам Ветро, начиная с ходовых стекло-стекло.
 describe('Паспорта Ветро: Dessau-103 и Balge-004', () => {
-  // Габарит по коробкам паспорта, мм: [min, max] по каждой оси рамки.
+  // Габарит паспорта, мм: [min, max] по каждой оси рамки — коробки и профили вида сверху.
   const extent = (id: string) => {
-    const boxes = getPart(id)!.geometry.filter(g => g.p === 'box') as { size: number[]; at?: number[] }[]
-    return [0, 1, 2].map(k => [Math.min(...boxes.map(b => (b.at?.[k] ?? 0) - b.size[k] / 2)), Math.max(...boxes.map(b => (b.at?.[k] ?? 0) + b.size[k] / 2))])
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
+    const put = (k: number, a: number, b: number) => { lo[k] = Math.min(lo[k], a); hi[k] = Math.max(hi[k], b) }
+    for (const g of getPart(id)!.geometry) {
+      if (g.p === 'box') [0, 1, 2].forEach(k => put(k, (g.at?.[k] ?? 0) - g.size[k] / 2, (g.at?.[k] ?? 0) + g.size[k] / 2))
+      if (g.p === 'extrude') {
+        put(0, Math.min(...g.outline.map(p => p[0])), Math.max(...g.outline.map(p => p[0])))
+        put(2, Math.min(...g.outline.map(p => p[1])), Math.max(...g.outline.map(p => p[1])))
+        put(1, (g.at?.[1] ?? 0) - g.height / 2, (g.at?.[1] ?? 0) + g.height / 2)
+      }
+    }
+    return [0, 1, 2].map(k => [lo[k], hi[k]])
   }
 
   it('приняты реестром и находятся по названиям прайса Ветро во всех цветах; соседние артикулы — нет', () => {
@@ -83,6 +93,21 @@ describe('Паспорта Ветро: Dessau-103 и Balge-004', () => {
     expect(x[1]).toBeCloseTo(4 + 13, 6)
     expect(x[0]).toBeCloseTo(-(4 + 6.75), 6)
     expect(getPart('hinge-balge-004')!.load).toBeUndefined()
+  })
+
+  it('Balge-004 — корпус по виду сверху: серп 13 у шарнира и 2 на концах, шарнир Ø13 на оси, створки 41,5 и с 43', () => {
+    const g = getPart('hinge-balge-004')!.geometry.filter((p): p is Extract<Prim, { p: 'extrude' }> => p.p === 'extrude')
+    expect(g.map(p => p.leaf)).toEqual(['fixed', 'door'])
+    const [fixed, door] = g.map(p => p.outline)
+    // рамка: X = 4 + глубина от стекла, Z = 54 − x чертежа
+    const atZ = (pts: [number, number][], zz: number) => Math.max(...pts.filter(p => Math.abs(p[1] - zz) < 0.8).map(p => p[0]))
+    expect(Math.max(...door.map(p => p[0]))).toBeCloseTo(4 + 13, 1)          // низ шарнира — во всю глубину
+    expect(atZ(fixed, 54)).toBeCloseTo(4 + 2, 0)                              // конец серпа у неподвижного
+    expect(atZ(door, 54 - 100)).toBeCloseTo(4 + 2, 0)                         // конец серпа у двери
+    expect(Math.min(...fixed.map(p => p[1]))).toBeCloseTo(54 - 41.5, 1)       // створка неподвижного 41,5
+    expect(Math.max(...door.map(p => p[1]))).toBeCloseTo(54 - 43.5, 1)        // шарнир Ø13 на оси 50: левый край 43,5
+    // контур без повторов подряд — иначе вырожденное ребро
+    for (const o of [fixed, door]) o.forEach((p, i) => i && expect(p[0] === o[i - 1][0] && p[1] === o[i - 1][1]).toBe(false))
   })
 
   it('без нагрузки в паспорте число петель — по габариту двери, как без паспорта', () => {

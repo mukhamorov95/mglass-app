@@ -55,6 +55,14 @@ describe('приёмка паспорта', () => {
     expect(issues.some(i => i.field === 'dims.reach')).toBe(true)
   })
 
+  it('профиль вида сверху: контур из точек в мм, фаска меньше габарита', () => {
+    const ok = validatePart(base({ geometry: [{ p: 'extrude', outline: [[0, 0], [12, 0], [12, 40], [0, 40]], height: 70, bevel: 0.6 }] }))
+    expect(ok).toEqual([])
+    expect(validatePart(base({ geometry: [{ p: 'extrude', outline: [[0, 0], [12, 0]], height: 70 }] }))[0]?.field).toBe('geometry[0].outline')
+    expect(validatePart(base({ geometry: [{ p: 'extrude', outline: [[0, 0], [0.012, 0], [0.012, 0.04]], height: 0.07 }] })).some(i => /миллиметр/.test(i.problem))).toBe(true)
+    expect(validatePart(base({ geometry: [{ p: 'extrude', outline: [[0, 0], [12, 0], [12, 40]], height: 70, bevel: 7 }] })).some(i => i.field.endsWith('bevel'))).toBe(true)
+  })
+
   it('сквозной может быть только деталь на плоскости стекла', () => {
     const issues = validatePart(base({ mount: { on: 'glass-edge', through: true } }))
     expect(issues.some(i => i.field === 'mount.through')).toBe(true)
@@ -91,6 +99,17 @@ describe('посадка', () => {
       expect(Math.sin(a)).toBeCloseTo(out[0], 6)
       expect(Math.cos(a)).toBeCloseTo(out[1], 6)
     }
+  })
+
+  it('несимметричная деталь на торце переворачивается так, чтобы +X смотрела наружу', () => {
+    const spec = getPart('hinge-balge-004')!
+    // торец смотрит в +X мира: «вдоль» по толщине выходит −Z; наружу кабины — −Z или +Z
+    const out = placePart(spec, surfaces.glassEdge([0, 1, 0], [1, 0], 8, [0, -1]))
+    const inn = placePart(spec, surfaces.glassEdge([0, 1, 0], [1, 0], 8, [0, 1]))
+    expect(out.ok && out.placement.roll).toBeUndefined()
+    expect(inn.ok && inn.placement.roll).toBeCloseTo(Math.PI)
+    const free = placePart(spec, surfaces.glassEdge([0, 1, 0], [1, 0], 8))     // без face — как раньше
+    expect(free.ok && free.placement.roll).toBeUndefined()
   })
 
   it('не садит деталь на чужую поверхность', () => {

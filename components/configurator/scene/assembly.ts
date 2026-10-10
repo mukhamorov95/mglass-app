@@ -45,6 +45,8 @@ export type HardwarePlacement = {
   mirrorOf?: string              // вторая половина сквозной детали: только вид, в комплект НЕ считается
   pos: [number, number, number]
   rotY: number
+  roll?: number                  // поворот паспорта вокруг его +Z: π — несимметричная деталь встаёт корпусом наружу
+  leaf?: 'door' | 'fixed'        // нарисовать одну половину петли: при открытой двери у них разные рамки
 }
 
 // Выбор внешнего вида фурнитуры клиентом: shape петли/ручки. Пусто → дефолт модели.
@@ -309,19 +311,30 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     // Петли на петлевой кромке. Есть паспорт выбранной петли — число по весу двери против его
     // нагрузки и посадка паспортом на кромку (наружу — через стык, прочь от полотна двери);
     // нет — габаритное правило и прежняя рисованная петля.
+    // Нормаль открытой двери поворачивается вместе с полотном — считаем её, а не подставляем
+    // знаки руками (прежняя арифметика давала смещение по X и НОЛЬ по Z: высота верная, посадка мимо).
+    const nOut: P = [outward[0] * ca - dc[0] * sa, outward[1] * ca - dc[1] * sa]
     const hPartHinge = getPart(choice.hinge)
     const n = hingeCount(L, H, thickness, hPartHinge?.load?.kgPer2)
     const ys = n === 2 ? [0.28, H - 0.28] : [0.28, H / 2, H - 0.28]
+    // Половина петли на неподвижном стекле при открытой двери остаётся с ним (закрытая рамка).
+    const split = phi !== 0 && !!hPartHinge?.geometry.some(g => g.leaf === 'fixed')
     for (let i = 0; i < ys.length; i++) {
       const at: [number, number, number] = [Ph[0], ys[i], Ph[1]]
-      const placed = hPartHinge?.mount.on === 'glass-edge' ? placePart(hPartHinge, surfaces.glassEdge(at, [-od[0], -od[1]], thickness)) : null
-      if (placed?.ok) hardware.push({ key: `${key}-h${i}`, model: hingeModel, shape: choice.hinge, part: hPartHinge!.id, rotY: placed.placement.rotY, pos: placed.placement.pos })
-      else hardware.push({ key: `${key}-h${i}`, model: hingeModel, shape: choice.hinge, rotY, pos: at })
+      const k = `${key}-h${i}`
+      // +X паспорта — наружу кабины: корпус несимметричной петли снаружи у любой двери.
+      const placed = hPartHinge?.mount.on === 'glass-edge' ? placePart(hPartHinge, surfaces.glassEdge(at, [-od[0], -od[1]], thickness, nOut)) : null
+      if (placed?.ok) {
+        const { pos, rotY: pr, roll } = placed.placement
+        hardware.push({ key: k, model: hingeModel, shape: choice.hinge, part: hPartHinge!.id, rotY: pr, pos, ...(roll ? { roll } : {}), ...(split ? { leaf: 'door' as const } : {}) })
+        const still = split ? placePart(hPartHinge!, surfaces.glassEdge(at, [-dc[0], -dc[1]], thickness, outward)) : null
+        if (still?.ok) {
+          const c = still.placement
+          hardware.push({ key: `${k}-f`, model: hingeModel, shape: choice.hinge, part: hPartHinge!.id, mirrorOf: k, rotY: c.rotY, pos: c.pos, ...(c.roll ? { roll: c.roll } : {}), leaf: 'fixed' })
+        }
+      } else hardware.push({ key: k, model: hingeModel, shape: choice.hinge, rotY, pos: at })
     }
-    // Ручка у внешней кромки, с наружной стороны двери. Нормаль открытой двери
-    // поворачивается вместе с полотном — считаем её, а не подставляем знаки руками
-    // (прежняя арифметика давала смещение по X и НОЛЬ по Z: высота верная, посадка мимо).
-    const nOut: P = [outward[0] * ca - dc[0] * sa, outward[1] * ca - dc[1] * sa]
+    // Ручка у внешней кромки, с наружной стороны двери.
     const hShape = choice.handle ?? 'handle-bar'
     const hPart = getPart(hShape)
     // Высота ручки: 950 мм от низа полотна до ЦЕНТРА ручки (у кноба — до оси

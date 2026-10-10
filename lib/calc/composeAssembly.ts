@@ -144,9 +144,24 @@ export function composeAssembly(shape: Shape, elevation: Elevation, rows: Assemb
     if (m.type === 'hinge') {
       const ue = m.edge === 'right' ? p.w : 0
       const spec = partForItem(row.label, 'hinge')
-      const away: XZ = m.edge === 'right' ? f.dir : [-f.dir[0], -f.dir[1]]
-      const placed = spec?.mount.on === 'glass-edge' ? placePart(spec, surfaces.glassEdge(f.at(ue, m.y), away, thicknessMm)) : null
-      if (placed?.ok) { hardware.push({ key, model: 'balge', part: spec!.id, pos: placed.placement.pos, rotY: placed.placement.rotY }); continue }
+      const pair = fr.get(p.id)!
+      // +Z паспорта — через стык прочь от двери; +X — наружу кабины (корпус петли снаружи).
+      const seat = (g: Frame) => spec?.mount.on === 'glass-edge'
+        ? placePart(spec, surfaces.glassEdge(g.at(ue, m.y), m.edge === 'right' ? g.dir : [-g.dir[0], -g.dir[1]], thicknessMm, g.out))
+        : null
+      const placed = seat(f)
+      if (placed?.ok) {
+        const { pos, rotY, roll } = placed.placement
+        // Дверь открыта: половина петли на неподвижном стекле остаётся с ним, а не прошивает его.
+        const split = f !== pair.closed && f.rotY !== pair.closed.rotY && spec!.geometry.some(g => g.leaf === 'fixed')
+        hardware.push({ key, model: 'balge', part: spec!.id, pos, rotY, ...(roll ? { roll } : {}), ...(split ? { leaf: 'door' as const } : {}) })
+        const still = split ? seat(pair.closed) : null
+        if (still?.ok) {
+          const c = still.placement
+          hardware.push({ key: rowKey(row.id, `${n}f`), model: 'balge', part: spec!.id, mirrorOf: key, pos: c.pos, rotY: c.rotY, ...(c.roll ? { roll: c.roll } : {}), leaf: 'fixed' })
+        }
+        continue
+      }
       const sh = inferShape(row.label)
       const shapeId = sh === 'hinge-wall' ? 'hinge-wall' : 'hinge-glass'
       hardware.push({ key, model: 'balge', shape: shapeId, pos: f.at(ue, m.y), rotY: f.rotY + (shapeId === 'hinge-wall' && m.edge === 'right' ? Math.PI : 0) })

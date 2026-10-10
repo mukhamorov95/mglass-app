@@ -99,8 +99,34 @@ describe('3D из состава', () => {
         expect(h.pos[1]).toBeCloseTo(hingesOf(plain)[i].pos[1], 6)
         expect(h.pos[2]).toBeCloseTo(hingesOf(plain)[i].pos[2], 6)
       })
+      // корпус несимметричной петли — снаружи кабины (фронт смотрит в −Z)
+      hs.forEach(h => expect(-Math.sin(h.rotY) * (h.roll ? -1 : 1)).toBeCloseTo(-1, 6))
       // паспорт под 8–10 мм: на шестёрке не врём формой, остаётся общая петля
       expect(hingesOf(build('niche-glass-door', false, name, 6)).every(h => h.shape === 'hinge-glass' && !h.part)).toBe(true)
     }
+  })
+  it('корпус Balge снаружи у левой и у правой двери; при открытой двери половина на неподвижном остаётся в линии стёкол', () => {
+    const b = build('niche-two-doors', false, 'Balge-004/CP. Петля стекло-стекло 135°-180°')
+    const hs = b.asm.hardware.filter(h => rowOfKey(h.key) === b.rows.find(r => r.role === 'hinge')!.id)
+    expect(hs).toHaveLength(4)
+    // +X паспорта в мире: (cos rotY, −sin rotY), перевёрнутая — с минусом; наружу фронта — −Z
+    const outZ = (h: (typeof hs)[number]) => -Math.sin(h.rotY) * (h.roll ? -1 : 1)
+    expect(hs.map(h => +outZ(h).toFixed(3))).toEqual([-1, -1, -1, -1])
+    expect(new Set(hs.map(h => h.roll ?? 0)).size).toBe(2)                  // у левой и правой двери — разный переворот
+
+    const open = build('niche-glass-door', true, 'Balge-004/CP. Петля стекло-стекло 135°-180°')
+    const ho = open.asm.hardware.filter(h => rowOfKey(h.key) === open.rows.find(r => r.role === 'hinge')!.id)
+    const doorHalf = ho.filter(h => !h.mirrorOf), fixedHalf = ho.filter(h => h.mirrorOf)
+    expect(doorHalf).toHaveLength(3)
+    expect(doorHalf.every(h => h.leaf === 'door')).toBe(true)
+    expect(fixedHalf.map(h => h.leaf)).toEqual(['fixed', 'fixed', 'fixed'])
+    fixedHalf.forEach((h, i) => {
+      expect(h.mirrorOf).toBe(doorHalf[i].key)
+      expect(h.pos[0]).toBeCloseTo(doorHalf[i].pos[0], 6)                     // одна ось шарнира
+      expect(h.pos[2]).toBeCloseTo(doorHalf[i].pos[2], 6)
+      expect(Math.abs(Math.sin(h.rotY))).toBeCloseTo(1, 6)                   // +Z вдоль линии стёкол, а не за дверью
+      expect(outZ(h)).toBeCloseTo(-1, 6)
+    })
+    expect(Math.abs(Math.sin(doorHalf[0].rotY))).toBeLessThan(0.99)           // дверная половина повернулась с дверью
   })
 })
