@@ -21,6 +21,7 @@ import { ComposeScheme } from './ComposeScheme'
 import { Thumb } from './ComposeThumb'
 import { Variants } from './ComposeVariants'
 import { TplIcon } from './ComposeTplIcon'
+import { READY_MODELS, type ReadyModel } from '@/lib/calc/readyModels'
 
 // Конструктор «Из деталей» (docs/configurator/CONSTRUCTOR_ROUTE.md, К1–К3): душевая, которой нет
 // среди моделей, собирается из стёкол и фурнитуры каталогов АВ24 и Ветро (К5). Себестоимость
@@ -311,19 +312,25 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
       setStepMsg({ ok: false, text: `Не прочитал «${file.name}»: ${(e as Error).message}`, notes: [] }); return
     }
     if (!imp.panels.length) { setStepMsg({ ok: false, text: `В «${file.name}» не нашёл стёкол — это сборка душевой в STEP?`, notes: imp.notes }); return }
+    await applyImport(imp, file.name)
+  }
+  // Разобранный чертёж → черновик: и для файла, и для готовой модели (тот же подбор по каталогу).
+  async function applyImport(imp: StepImport, file: string, kind?: string) {
+    if (!catalog) return
     const filled = hardware.length > 0 || panels.some(p => p.w || p.h)
-    if (filled && !(await confirmDialog({ title: `Заменить состав чертежом «${file.name}»?`, text: 'Стёкла и фурнитура этого изделия будут заменены.', confirmLabel: 'Заменить' }))) return
+    if (filled && !(await confirmDialog({ title: `Заменить состав ${kind ? `моделью «${kind}»` : `чертежом «${file}»`}?`, text: 'Стёкла и фурнитура этого изделия будут заменены.', confirmLabel: 'Заменить' }))) return
     const d = stepToDraft(imp, catalog.models, uid)
     const tOk = THICKNESSES.includes(d.thickness)
     setDraft(cur => ({
       ...cur, shape: d.shape, thickness: tOk ? d.thickness : cur.thickness, finishId: d.finishId ?? cur.finishId,
-      panels: d.panels, hardware: d.hardware, kind: d.kind, step: { file: file.name, pending: d.pending },
+      panels: d.panels, hardware: d.hardware, kind: kind ?? d.kind, step: { file, pending: d.pending },
     }))
     setTplMissing([]); setPicked(null); setPendFocus(null)
     const notes = [...imp.notes]
     if (!tOk) notes.push(`Стекло в чертеже ${d.thickness} мм — такой толщины в расчёте нет, оставлена выбранная.`)
-    setStepMsg({ ok: true, text: `«${file.name}»: стёкол ${d.panels.length}, из каталога ${d.hardware.length}, ждут подбора ${d.pending.length}.`, notes })
+    setStepMsg({ ok: true, text: `«${kind ?? file}»: стёкол ${d.panels.length}, из каталога ${d.hardware.length}, ждут подбора ${d.pending.length}.`, notes })
   }
+  const pickReady = (m: ReadyModel) => applyImport(m.imp, `${m.imp.name}.STEP`, m.label)
 
   const [pickFor, setPickFor] = useState<string | null>(null)
   const pickForRow = pending.find(p => p.id === pickFor) ?? null
@@ -635,6 +642,16 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
           <div className="space-y-1.5 pt-1">
             <p className="text-[11px] text-[#9a9a95]">Типовые душевые по 961 монтажу 2022–2026: стёкла и фурнитура одним касанием, дальше впишите размеры. Доля — среди всех установленных душевых.</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {READY_MODELS.map(m => (
+                <button key={m.id} onClick={() => { pickReady(m); setTplOpen(false) }} disabled={!catalog} title={`${m.label}: ${m.note}`}
+                  className={`flex items-center gap-2 text-left rounded-xl border px-2 py-1.5 transition-colors disabled:opacity-40 ${draft.kind === m.label ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] bg-white hover:border-[#111110]'}`}>
+                  <span className="shrink-0 rounded-lg bg-white border border-[#efefeb] p-0.5"><TplIcon t={m.imp} /></span>
+                  <span className="min-w-0">
+                    <span className="block text-[12.5px] font-semibold text-[#111110] leading-snug">{m.label} <span className="font-normal text-[10.5px] text-white bg-[#111110] rounded px-1 align-[1px]">готовая</span></span>
+                    <span className="block text-[11px] text-[#6b6b66] leading-snug">{m.note}</span>
+                  </span>
+                </button>
+              ))}
               {COMPOSE_TEMPLATES.map(t => (
                 <button key={t.id} onClick={() => { pickTemplate(t); setTplOpen(false) }} disabled={!catalog} title={`${t.label}: ${t.share}, ${t.source}`}
                   className={`flex items-center gap-2 text-left rounded-xl border px-2 py-1.5 transition-colors disabled:opacity-40 ${draft.kind === t.label ? 'border-[#111110] bg-[#f5f5f3]' : 'border-[#e4e4e0] bg-white hover:border-[#111110]'}`}>

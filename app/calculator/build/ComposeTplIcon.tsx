@@ -1,12 +1,14 @@
 import { layoutPanels } from '@/lib/calc/composeLayout'
 import type { ComposeTemplate } from '@/lib/calc/composeTemplates'
+import type { StepImport } from '@/lib/calc/stepImport'
 
 // Значок шаблона — вид спереди (CONSTRUCTOR_ROUTE.md, К9 В7): стены, стёкла в пропорции, ручка
 // у двери, стрелка у раздвижной, излом угла. Шторка ниже двери — разница видна до касания.
 const GLASS = '#7fa0ad', FILL = '#e6eff2', INK = '#111110', WALL = '#dcdcd7'
 const STD_H = 2000
 
-export function TplIcon({ t, px = 56, pxH = 48 }: { t: ComposeTemplate; px?: number; pxH?: number }) {
+// Шаблон или готовая модель — у обоих форма и стёкла с ключами.
+export function TplIcon({ t, px = 56, pxH = 48 }: { t: Pick<ComposeTemplate, 'shape' | 'panels'> | Pick<StepImport, 'shape' | 'panels'>; px?: number; pxH?: number }) {
   const { panels, walls, corner } = layoutPanels(t.shape, t.panels.map(p => ({ ...p, id: p.key })))
   const last = panels[panels.length - 1]
   const W = last ? last.x0 + last.w : 1000
