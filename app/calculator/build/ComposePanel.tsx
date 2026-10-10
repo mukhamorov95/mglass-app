@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { numOr } from '@/lib/calc/numInput'
 import { FINANCE_FALLBACK, type Finance } from '@/lib/pricing/pickFinance'
 import type { BomItem } from '@/lib/kp/bomSections'
 import { SUPPLIER_RU, type CompositionResult, type CompositionRole } from '@/lib/calc/composition'
@@ -67,7 +68,6 @@ const RUB = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const RUBk = (n: number) => `${n.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`
 // Закупка в панели детали — с копейками, чтобы «цена × количество = сумма» сходилось на экране.
 const RUB2 = (n: number) => `${n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`
-const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const pieceList = (s: string) => s.split(/[^\d]+/).map(Number).filter(n => n > 0)
 const uid = () => Math.random().toString(36).slice(2, 10)
 const materialOf = (base: string) => MATERIAL[base.split(/\s+/)[1] ?? ''] ?? ''
@@ -239,10 +239,15 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   // Недописанная строка не входит в запрос, значит и в цену: пока она есть, цена занижена.
   // Деталь чертежа без позиции каталога — тоже недописанная строка: без неё цена занижена.
   const halfDone = okPanels.length < panels.length || okHw.length < hardware.length || pending.length > 0
-  const usable = !!fresh && fresh.complete && !halfDone
-  const sections = numOr(sectionsOver) > 0 ? numOr(sectionsOver) : okPanels.length || 1
   const m = numOr(margin), tx = numOr(tax)
   const fin = calcFinancialModel({ directCost: cost, marginPercent: m, taxPercent: tx })
+  // Пустая маржа — не «0 %», а невписанное условие; маржа + налог ≥ 100 % формулу не имеют.
+  // Раньше оба случая давали изделие за 0 ₽ (или по себестоимости) и открывали «+ В КП».
+  const finWhy = !String(margin).trim() || !String(tax).trim() ? 'впишите маржу и налог в «Условиях»'
+    : m < 0 || tx < 0 ? 'маржа и налог не бывают отрицательными'
+    : m + tx >= 100 ? 'маржа и налог вместе 100 % и больше — цену не посчитать' : ''
+  const usable = !!fresh && fresh.complete && !halfDone && !finWhy && !!fin
+  const sections = numOr(sectionsOver) > 0 ? numOr(sectionsOver) : okPanels.length || 1
   const productPrice = fin ? fin.basePrice : 0
   const install = numOr(perSection) * sections
   const deliveryN = numOr(delivery), liftN = numOr(lift)
@@ -830,7 +835,7 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
             </div>
           </div>
           {dirty && okPanels.length > 0 && state !== 'error' && <p className="text-[11px] text-[#9a9a95]">пересчёт цены…</p>}
-          {!dirty && !usable && okPanels.length > 0 && <p className="text-[11px] text-[#c2410c]">Расчёт неполный — {pending.length ? 'детали из чертежа ждут подбора из каталога' : halfDone ? 'не у всех строк есть размер, количество или длины' : 'причины выше'}. В КП не добавляю.</p>}
+          {!dirty && !usable && okPanels.length > 0 && <p className="text-[11px] text-[#c2410c]">Расчёт неполный — {pending.length ? 'детали из чертежа ждут подбора из каталога' : halfDone ? 'не у всех строк есть размер, количество или длины' : finWhy || 'причины выше'}. В КП не добавляю.</p>}
           {added && <p className="text-[11px] text-emerald-700">✓ {added}</p>}
           {noteSlot}
           <button onClick={() => setTermsOpen(o => !o)} className="w-full flex items-center justify-between text-[12px] text-[#2563eb]">
