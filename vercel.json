@@ -101,6 +101,7 @@
       "path": "/api/cron/lead-distribution",
       "schedule": "*/5 * * * *"
     },
+    { "path": "/api/cron/pbx-calls-sync", "schedule": "*/10 * * * *" },
     {
       "path": "/api/cron/morning-briefing",
       "schedule": "0 4 * * *"
