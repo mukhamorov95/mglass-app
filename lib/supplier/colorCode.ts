@@ -86,7 +86,9 @@ export function pricesByFinish(supplier: string, rows: SupplierRowLike[], axis: 
   const usable = rows
     .filter(r => !isDefectRow(r) && rowCost(r) > 0)
     .map(r => ({ r, alt: supplier === 'av24' ? !!splitAv24Article(r.article)?.alt : false }))
-    .sort((a, b) => Number(a.alt) - Number(b.alt))
+    // Один цвет бывает в нескольких строках (труба FDT-352: полировка 6K/8K/16K — всё «хром»).
+    // Без порядка цену решал порядок строк из базы; берём дорогую — цена не занижается.
+    .sort((a, b) => Number(a.alt) - Number(b.alt) || rowCost(b.r) - rowCost(a.r))
   for (const { r } of usable) {
     const f = rowFinish(supplier, r, axis)
     if (!f) continue

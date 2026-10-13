@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { rowFinish, pricesByFinish, splitAv24Article, articleBase, rowCost, colorAxisOfRole } from '@/lib/supplier/colorCode'
+import { pickRow } from '@/lib/calc/composition'
 import av24 from '../fixtures/configurator/av24-0245-rows.json'
 
 type Row = { article: string; color: string | null; name: string; retail: number; discount: number; cost: number }
@@ -91,5 +92,23 @@ describe('Цены по цветам из строк одной позиции',
       { article: 'FDPA-55.22 AL/BL', name: 'Профиль 2,2 м', retail_price: 850, discount_percent: 25 },
     ])
     expect(p.black).toBe(637.5)
+  })
+})
+
+describe('Один цвет в нескольких строках — выбор не зависит от порядка из базы', () => {
+  // 09.10: в проде состав взял трубу 8K (2025), комплект модели — 16K (2175): порядок строк не задан.
+  const tube = [
+    { article: 'FDT-352 SUS304/PSS6K', name: 'Труба FDT-352 2 м, полированный6K', retail_price: 1800, discount_percent: 25 },
+    { article: 'FDT-352 SUS304/PSS8K', name: 'Труба FDT-352 2 м, полированный8K', retail_price: 2700, discount_percent: 25 },
+    { article: 'FDT-352 SUS304/PSS16K', name: 'Труба FDT-352 2 м, полированный16K', retail_price: 2900, discount_percent: 25 },
+  ]
+  const orders = [tube, [...tube].reverse(), [tube[1], tube[0], tube[2]]]
+
+  it('цена модели — дорогая полировка при любом порядке', () => {
+    for (const rows of orders) expect(pricesByFinish('av24', rows).chrome).toBe(2175)
+  })
+
+  it('состав берёт ту же строку, что и модель', () => {
+    for (const rows of orders) expect(pickRow(rows, 'hardware', 'chrome')?.article).toBe('FDT-352 SUS304/PSS16K')
   })
 })
