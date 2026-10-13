@@ -30,8 +30,8 @@
 ## AmoCRM — только чтение
 
 - Ни одного POST/PATCH/DELETE к AmoCRM API
-- Звонки (OnlinePBX, `lib/onlinepbx.ts`; SIPUNI — только запасной click-to-call): notes с `note_type=call_out/call_in` и `params.duration > 0`
-- Сообщения (Wazzup): notes с `note_type=call_out/call_in` и `params.duration` отсутствует/0, или `note_type=amomail_message`
+- Звонки (OnlinePBX, `lib/onlinepbx.ts`; SIPUNI — только запасной click-to-call): notes `call_in`/`call_out`; разговор состоялся — `params.call_status = 4`. `duration > 0` бывает и у пропущенных — не признак (сверено 13.10, `lib/amoActivity.ts`)
+- Сообщения (Wazzup, Авито): события `incoming_chat_message`/`outgoing_chat_message`, канал — `value_after[0].message.origin`; письма — `amomail_message`
 
 ---
 
