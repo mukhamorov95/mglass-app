@@ -236,6 +236,8 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
   const glassCost = fresh?.glass.cost ?? 0
   const hwCost = fresh?.hardware.cost ?? 0
   const cost = glassCost + hwCost
+  // Пока цена считается, сумм нет — «0 ₽» читался как «бесплатно».
+  const sum = (n: number) => (fresh || !hasPanels ? RUB(n) : '…')
   // Недописанная строка не входит в запрос, значит и в цену: пока она есть, цена занижена.
   // Деталь чертежа без позиции каталога — тоже недописанная строка: без неё цена занижена.
   const halfDone = okPanels.length < panels.length || okHw.length < hardware.length || pending.length > 0
@@ -808,9 +810,9 @@ export function ComposePanel({ onAdd, cartCount, onSave, saving, deliveryTaken, 
         <section className="bg-white border border-[#e4e4e0] rounded-2xl p-3 space-y-2 text-[13px] shrink-0 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:rounded-none max-lg:border-x-0 max-lg:border-b-0 max-lg:shadow-[0_-4px_16px_rgba(0,0,0,0.06)] max-lg:max-h-[70dvh] max-lg:overflow-y-auto">
           {/* На планшете и телефоне итог закреплён внизу: видны «К оплате» и кнопки, разбивка — по «Подробнее». */}
           <div className={`space-y-0.5 ${termsOpen ? '' : 'max-lg:hidden'}`}>
-            <div className="flex justify-between"><span className="text-[#6b6b66]">Себестоимость</span><span className="font-mono font-semibold">{RUB(cost)}</span></div>
+            <div className="flex justify-between"><span className="text-[#6b6b66]">Себестоимость</span><span className="font-mono font-semibold">{sum(cost)}</span></div>
             {/* Фурнитура — вычитанием из округлённых: стекло + фурнитура = себестоимость и на экране. */}
-            <div className="text-[11px] text-[#9a9a95]">стекло {RUB(glassCost)} + фурнитура (закупка) {RUB(Math.round(cost) - Math.round(glassCost))}</div>
+            <div className="text-[11px] text-[#9a9a95]">стекло {sum(glassCost)} + фурнитура (закупка) {sum(Math.round(cost) - Math.round(glassCost))}</div>
             {usable && (
               <div className="text-[11.5px] text-[#6b6b66]">
                 Изделие {RUB(productPrice)}{install > 0 && ` · монтаж ${sections} × ${RUB(numOr(perSection))}`}{deliveryN > 0 && ` · доставка ${RUB(deliveryN)}`}{liftN > 0 && ` · подъём ${RUB(liftN)}`}{discPct > 0 && ` · скидка ${discPct}%`}
