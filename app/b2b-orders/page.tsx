@@ -25,6 +25,8 @@ import { DAY_PRESETS, clientKeyer, clientOptions, dayPresetRange, summarizeOrder
 import { mskDayKey } from '@/lib/time'
 import PointBadge from '@/components/PointBadge'
 import { SkeletonTable } from '@/components/ui/Skeleton'
+import { filterFacets, filterToSearch, matchesFilter, readFilterFromUrl, type QuoteFilter } from '@/lib/b2b/quoteFilters'
+import { sourceLabel } from '@/lib/types'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -556,6 +558,13 @@ export default function B2BOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   // Клиенты-точки на рынке: их заказы — с пометкой и первыми в срочных группах и фильтрах.
   const [pointClients, setPointClients] = useState<Set<number>>(new Set())
+  // «Просчитал» и «Откуда» — как в B2B Расчётах, выбор в адресе (?by=…&src=avito).
+  const [filter, setFilterState] = useState<QuoteFilter>(() => typeof window === 'undefined' ? { by: null, src: null } : readFilterFromUrl(window.location.search))
+  const [clientSource, setClientSource] = useState<Map<number, string>>(new Map())
+  function setFilter(next: QuoteFilter) {
+    setFilterState(next)
+    window.history.replaceState(null, '', window.location.pathname + filterToSearch(window.location.search, next))
+  }
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -914,7 +923,7 @@ export default function B2BOrdersPage() {
         return acc
       }
 
-      const [ordersData, { data: mats }, { data: varData }, points] = await Promise.all([
+      const [ordersData, { data: mats }, { data: varData }, points, { data: srcRows, error: srcErr }] = await Promise.all([
         fetchAllOrders(),
         sb.from('b2b_materials')
           .select('id,name,category,thickness,sheet_width,sheet_height,cost_price,waste_percent,supplier_id,supplier_material_name')
@@ -925,8 +934,12 @@ export default function B2BOrdersPage() {
           .order('sort_order')
           .order('id'),
         loadPointClientIds(sb),
+        // «Откуда» заказчика — для фильтра; только клиенты с указанным источником.
+        sb.from('b2b_clients').select('id, crm_source').not('crm_source', 'is', null).limit(5000),
       ])
       setPointClients(points)
+      if (srcErr) toast.error(`Источник заказчиков не загрузился: ${srcErr.message}. Фильтр «Откуда» видит только просчёты без заказчика`)
+      setClientSource(new Map(((srcRows ?? []) as { id: number; crm_source: string }[]).map(r => [r.id, r.crm_source])))
 
       const groupedVariants: Record<number, SheetVariantMin[]> = {}
       for (const v of (varData ?? []) as SheetVariantMin[]) {
@@ -966,24 +979,26 @@ export default function B2BOrdersPage() {
 
   useEffect(() => { loadOrders().catch(() => setLoading(false)) }, [])
 
-  const isFiltered = search.trim() !== '' || clientKey !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null
-  const isScoped = search.trim() !== '' || clientKey !== '' || dateFrom !== '' || dateTo !== ''
+  const isFiltered = search.trim() !== '' || clientKey !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null || !!filter.by || !!filter.src
+  const isScoped = search.trim() !== '' || clientKey !== '' || dateFrom !== '' || dateTo !== '' || !!filter.by || !!filter.src
   const clientKeyOf = useMemo(() => clientKeyer(orders), [orders])
 
   // Выборка «покупатель + даты + поиск» без этапов и сроков: итог «на какую сумму
   // заказали» не должен терять отгруженные из-за чипа «Все активные».
   const scopeOrders = useMemo(() => orders.filter(o =>
-    matchesSearch(o, search) &&
+    matchesSearch(o, search) && matchesFilter(o, filter, clientSource) &&
     (!clientKey || clientKeyOf(o) === clientKey) &&
     (!dateFrom || launchedDay(o) >= dateFrom) &&
     (!dateTo || launchedDay(o) <= dateTo),
-  ), [orders, search, clientKey, clientKeyOf, dateFrom, dateTo])
+  ), [orders, search, clientKey, clientKeyOf, dateFrom, dateTo, filter, clientSource])
   const clientOpts = useMemo(() => clientOptions(orders, clientKeyOf), [orders, clientKeyOf])
   // ClientPicker работает с числовым id — номер строки в clientOpts (+1, чтобы 0 не путался с «все»).
   const clientPickerOpts = useMemo(() => clientOpts.map((c, i) => ({ id: i + 1, label: `${c.label} · ${c.count}` })), [clientOpts])
   const pickedClient = clientOpts.find(c => c.key === clientKey) ?? null
 
-  const filteredOrdersBase = useMemo(() => {
+  // Этап, срок, табло, поиск, покупатель, даты — сначала; «Просчитал» и «Откуда» — поверх,
+  // их кнопки считаются по этому списку: число = сколько останется.
+  const stageFiltered = useMemo(() => {
     const filtered = orders.filter(o => {
       const pn = o.parsedNotes
       const stages = pn.stages ?? {}
@@ -1036,6 +1051,8 @@ export default function B2BOrdersPage() {
 
     return filtered
   }, [orders, search, clientKey, clientKeyOf, stageFilter, deadlineFilter, dateFrom, dateTo, boardFilter])
+  const filteredOrdersBase = useMemo(() => stageFiltered.filter(o => matchesFilter(o, filter, clientSource)), [stageFiltered, filter, clientSource])
+  const facets = useMemo(() => filterFacets(stageFiltered, filter, clientSource), [stageFiltered, filter, clientSource])
 
   // Заказы точек — первыми внутри выбранного этапа/фильтра, дальше порядок как был.
   const filteredOrders = useMemo(
@@ -1103,13 +1120,13 @@ export default function B2BOrdersPage() {
   }, [monthGroups])
 
   const productionDayGroups = useMemo(() => {
-    const base = orders.filter(o => matchesSearch(o, search) && (!clientKey || clientKeyOf(o) === clientKey))
+    const base = orders.filter(o => matchesSearch(o, search) && matchesFilter(o, filter, clientSource) && (!clientKey || clientKeyOf(o) === clientKey))
     const by = (st: string) => pointsFirst(
       base.filter(o => getDeadlineStatus(o).status === st),
       o => o.client_id != null && pointClients.has(o.client_id),
     )
     return { overdue: by('overdue'), today: by('today'), tomorrow: by('tomorrow'), ready: by('ready') }
-  }, [orders, search, clientKey, clientKeyOf, pointClients])
+  }, [orders, search, clientKey, clientKeyOf, pointClients, filter, clientSource])
 
   function toggleMonth(key: string) {
     setExpandedMonths(prev => {
@@ -2247,7 +2264,7 @@ export default function B2BOrdersPage() {
           </div>
           {isFiltered && (
             <button
-              onClick={() => { setSearch(''); setClientKey(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all'); setBoardFilter(null) }}
+              onClick={() => { setSearch(''); setClientKey(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all'); setBoardFilter(null); setFilter({ by: null, src: null }) }}
               className="text-[11px] text-[#8a8a85] hover:text-[#111110] px-2 py-1.5 rounded-lg hover:bg-[#f0f0ec] transition-colors whitespace-nowrap">
               Сбросить
             </button>
@@ -2297,6 +2314,29 @@ export default function B2BOrdersPage() {
             </button>
           ))}
         </div>
+        {/* Повторное нажатие снимает. Число — сколько останется в списке при этом этапе и сроке. */}
+        {(facets.authors.length > 1 || filter.by) && (
+          <div className="flex flex-wrap gap-1 items-center border-t border-[#f4f4f0] pt-2">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#b0b0aa] mr-1">Просчитал:</span>
+            {facets.authors.map(([name, n]) => (
+              <button key={name} onClick={() => setFilter({ ...filter, by: filter.by === name ? null : name })}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border select-none ${filter.by === name ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'}`}>
+                {name} <span className={filter.by === name ? 'text-white/70' : 'text-[#9a9a95]'}>{n}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {(facets.sources.length > 0 || filter.src) && (
+          <div className="flex flex-wrap gap-1 items-center border-t border-[#f4f4f0] pt-2">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#b0b0aa] mr-1">Откуда:</span>
+            {facets.sources.map(([src, n]) => (
+              <button key={src} onClick={() => setFilter({ ...filter, src: filter.src === src ? null : src })}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border select-none ${filter.src === src ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'}`}>
+                {sourceLabel(src)} <span className={filter.src === src ? 'text-white/70' : 'text-[#9a9a95]'}>{n}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Итог выборки: покупатель + период + поиск, отгруженные тоже. */}
@@ -2307,6 +2347,8 @@ export default function B2BOrdersPage() {
               <span className="text-[#8a8a85]">
                 {pickedClient ? pickedClient.label : search.trim() ? `«${search.trim()}»` : 'Все покупатели'}
                 {(dateFrom || dateTo) && <> · {dateFrom ? dateFrom.split('-').reverse().join('.') : '…'} — {dateTo ? dateTo.split('-').reverse().join('.') : '…'}</>}
+                {filter.by && <> · просчитал {filter.by}</>}
+                {filter.src && <> · {sourceLabel(filter.src)}</>}
                 {': '}
               </span>
               <span className="font-semibold">заказано {scope.all.count} на {rub(scope.all.sum)} ₽</span>
