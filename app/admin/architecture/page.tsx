@@ -146,8 +146,8 @@ const ARCHITECTURE: {
       },
       {
         table: 'message_queue',
-        description: 'Очередь обработки сообщений: статус, попытки, ошибки. Cron каждую минуту.',
-        usedBy: ['process-queue cron', 'Avito/AMO Monitor'],
+        description: 'Архив очереди до 13.10.2026 (писала заметки в AmoCRM). Новые сообщения — в inbound_events.',
+        usedBy: ['Avito/AMO Monitor (архив)'],
         editedAt: '/admin/integrations',
       },
     ],
@@ -195,7 +195,7 @@ const ROADMAP = [
   {
     status: 'done',
     label: 'Очередь сообщений Avito/AMO',
-    detail: 'avito_messages_raw + message_queue. Wazzup webhook → cron → AmoCRM.',
+    detail: 'С 13.10.2026: Wazzup webhook → inbound_events + avito_messages_raw. В AmoCRM не пишем — только чтение.',
   },
 ]
 
