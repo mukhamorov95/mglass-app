@@ -55,7 +55,7 @@
 | «Утро», «Команда», `MyDay`, ⌘K, кабинет замерщика, календарь, монтажи | Работают | Встроить |
 | Формы сайтов | Сайт зеркал с 22.09 шлёт в amo (`sites/zerkala/lib/site.ts`); Tilda и Envybox — в amo; конфигуратор → `site_leads` (1 заявка за всё время) | Сделать единый приём |
 | Около 30 мест читают amo: монитор продаж, день менеджера, коучинг, распределение, `?amo=` в расчёте и КП, здоровье | Работают | Переключить на слой `lib/crm/source` |
-| Запись в amo: `cron/process-queue`, `admin/integrations/backfill`, `amo/calls/analyze` | Выключены косвенно (флаг бота) | Удалить — отдельная задача |
+| Запись в amo: `cron/process-queue`, `admin/integrations/backfill`, `amo/calls/analyze` | Выключены косвенно (флаг бота) | ✅ 13.10 удалены; тест `__tests__/amo/amoReadOnly.test.ts` не даст вернуть |
 
 ## Разрыв
 

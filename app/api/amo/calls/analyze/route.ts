@@ -3,36 +3,13 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase-server'
 
-const AMO_BASE  = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4`
+// Анализ остаётся в call_analyses; в AmoCRM ничего не пишем — CRM только на чтение.
 const AMO_TOKEN = process.env.AMO_ACCESS_TOKEN!
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 const openai    = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
 
 export const maxDuration = 300
-
-async function addAmoNote(leadId: number, text: string) {
-  await fetch(`${AMO_BASE}/leads/${leadId}/notes`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([{ note_type: 'common', params: { text } }]),
-  })
-}
-
-async function createAmoTask(leadId: number, text: string, dueSec?: number) {
-  const due = dueSec ?? Math.floor(Date.now() / 1000) + 3600 * 24
-  await fetch(`${AMO_BASE}/tasks`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([{
-      task_type_id:        1,
-      text,
-      complete_till:       due,
-      entity_type:         'leads',
-      entity_id:           leadId,
-    }]),
-  })
-}
 
 async function transcribeAudio(url: string): Promise<string | null> {
   if (!process.env.OPENAI_API_KEY || !url) return null
@@ -200,32 +177,6 @@ export async function POST(req: Request) {
       .single()
 
     if (saveErr) throw saveErr
-
-    // 4. Add analysis note to AMO
-    const dirEmoji  = direction === 'in' ? '📞' : '📲'
-    const scoreEmoji = (analysis.manager_score ?? 0) >= 8 ? '🟢' : (analysis.manager_score ?? 0) >= 5 ? '🟡' : '🔴'
-    const amoNote = [
-      `${dirEmoji} Анализ звонка (AI)`,
-      `📋 Резюме: ${analysis.summary}`,
-      ``,
-      analysis.client_needs?.length
-        ? `💬 Потребности: ${(analysis.client_needs as string[]).join(', ')}`
-        : null,
-      analysis.objections?.length
-        ? `❗ Возражения: ${(analysis.objections as string[]).join(', ')}`
-        : null,
-      `📊 Вероятность сделки: ${analysis.deal_probability}%`,
-      `${scoreEmoji} Оценка менеджера: ${analysis.manager_score}/10`,
-      ``,
-      `➡️ Следующий шаг: ${analysis.next_step}`,
-    ].filter(Boolean).join('\n')
-
-    await addAmoNote(lead_id, amoNote)
-
-    // 5. Create AMO tasks from analysis
-    for (const task of (analysis.tasks ?? []) as string[]) {
-      await createAmoTask(lead_id, `📞 ${task}`)
-    }
 
     return NextResponse.json({
       ok:           true,

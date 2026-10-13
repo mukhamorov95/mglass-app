@@ -1,14 +1,13 @@
 /**
  * /api/admin/integrations
  *
- * GET  — returns stats + last 50 messages + recent errors
- * POST — actions: { action: 'retry', queueId: '...' } | { action: 'retry_all_failed' }
+ * GET — архив очереди message_queue: статистика, последние 50 сообщений, ошибки.
+ * Действий нет: очередь писала заметки в AmoCRM, а CRM только на чтение (13.10.2026).
  */
 
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
-import { internalAppUrl } from '@/lib/appUrl'
 
 function db() {
   return createServiceClient(
@@ -69,51 +68,4 @@ export async function GET() {
     .slice(0, 20)
 
   return NextResponse.json({ stats, messages, errors })
-}
-
-export async function POST(req: Request) {
-  const guard = await requireOwner()
-  if (guard instanceof NextResponse) return guard
-
-  const body = await req.json() as { action: string; queueId?: string }
-  const supabase = db()
-
-  if (body.action === 'retry' && body.queueId) {
-    const { error } = await supabase
-      .from('message_queue')
-      .update({ status: 'pending', next_retry_at: null, updated_at: new Date().toISOString() })
-      .eq('id', body.queueId)
-      .in('status', ['failed', 'retry_scheduled', 'synced_to_amocrm'])
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true })
-  }
-
-  if (body.action === 'retry_all_failed') {
-    const { error } = await supabase
-      .from('message_queue')
-      .update({ status: 'pending', next_retry_at: null, attempts: 0, updated_at: new Date().toISOString() })
-      .eq('status', 'failed')
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true })
-  }
-
-  if (body.action === 'run_processor') {
-    try {
-      const baseUrl = internalAppUrl() ?? 'http://localhost:3000'
-      const res = await fetch(`${baseUrl}/api/cron/process-queue`, {
-        method: 'POST',
-        headers: process.env.CRON_SECRET
-          ? { Authorization: `Bearer ${process.env.CRON_SECRET}` }
-          : {},
-      })
-      const text = await res.text()
-      let result: unknown = null
-      try { result = JSON.parse(text) } catch { result = { raw: text.slice(0, 200) } }
-      return NextResponse.json({ ok: res.ok, result })
-    } catch (e) {
-      return NextResponse.json({ ok: false, error: String(e) }, { status: 500 })
-    }
-  }
-
-  return NextResponse.json({ ok: false, error: 'unknown action' }, { status: 400 })
 }

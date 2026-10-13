@@ -17,7 +17,6 @@ export const CRON_JOBS: { job: string; title: string; maxHours: number }[] = [
   { job: 'morning-briefing', title: 'Утренняя сводка (7:00)', maxHours: 26 },
   { job: 'lead-distribution', title: 'Распределение заявок (каждые 5 мин)', maxHours: 1 },
   { job: 'pbx-calls-sync', title: 'Звонки АТС → pbx_calls (каждые 10 мин)', maxHours: 1 },
-  { job: 'process-queue', title: 'Очередь Авито → AmoCRM (10:00)', maxHours: 26 },
   { job: 'ai-recommendations', title: 'AI-рекомендации (9:00)', maxHours: 26 },
   { job: 'live-health', title: 'Проверка «Всё ли работает» (9:30, 14:30)', maxHours: 26 },
 ]
