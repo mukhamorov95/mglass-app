@@ -29,6 +29,8 @@ import { buildTelegramWorkText } from '@/lib/b2b/telegramWorkText'
 import { LEAD_REPLY_TEMPLATES, clientQuoteTextFromOrder, quoteLeadChips, readQuoteLead } from '@/lib/b2b/leadQuote'
 import type { InvoiceOrder } from '@/lib/b2b/invoiceMath'
 import { SkeletonTable } from '@/components/ui/Skeleton'
+import { filterFacets, filterToSearch, matchesFilter, readFilterFromUrl, type QuoteFilter } from '@/lib/b2b/quoteFilters'
+import { sourceLabel } from '@/lib/types'
 
 
 const PAGE_SIZE = 50
@@ -212,6 +214,13 @@ export default function B2BQuotesPage() {
   const [expanded, setExpanded]       = useState<number | null>(null)
   const [tab, setTab]                 = useState<TabKey>('all')
   const [page, setPage]               = useState(1)
+  // «Просчитал» и «Откуда» — из адреса страницы (?by=…&src=avito), чтобы фильтр пережил обновление.
+  const [filter, setFilterState] = useState<QuoteFilter>(() => typeof window === 'undefined' ? { by: null, src: null } : readFilterFromUrl(window.location.search))
+  const [clientSource, setClientSource] = useState<Map<number, string>>(new Map())
+  function setFilter(next: QuoteFilter) {
+    setFilterState(next); setPage(1)
+    window.history.replaceState(null, '', window.location.pathname + filterToSearch(window.location.search, next))
+  }
   const [userRole, setUserRole]       = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
@@ -525,16 +534,20 @@ export default function B2BQuotesPage() {
         }
       }
 
-      const [{ data: orders, error: ordersErr }, { data: attaches, error: attachErr }, { data: mats, error: matsErr }] = await Promise.all([
+      const [{ data: orders, error: ordersErr }, { data: attaches, error: attachErr }, { data: mats, error: matsErr }, { data: srcRows, error: srcErr }] = await Promise.all([
         ordersQuery,
         sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
         sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
+        // «Откуда» заказчика — для фильтра; только клиенты с указанным источником.
+        sb.from('b2b_clients').select('id, crm_source').not('crm_source', 'is', null).limit(5000),
       ])
       // Пустой список при сбое читался бы как «просчётов нет» — показываем ошибку с «Повторить».
       if (ordersErr) throw new Error(ordersErr.message)
       if (attachErr || matsErr) {
         showError('Часть данных не загрузилась', `${[attachErr && `вложения: ${attachErr.message}`, matsErr && `материалы: ${matsErr.message}`].filter(Boolean).join('; ')}. Себестоимость и сводка по материалам могут быть неполными — обновите страницу`)
       }
+      if (srcErr) showError('Источник заказчиков не загрузился', `${srcErr.message}. Фильтр «Откуда» видит только просчёты без заказчика — обновите страницу`)
+      setClientSource(new Map(((srcRows ?? []) as { id: number; crm_source: string }[]).map(r => [r.id, r.crm_source])))
       setQuotes((orders ?? []).map(q => ({
         ...q, items: Array.isArray(q.items) ? (q.items as OrderItem[]) : [],
       })))
@@ -692,7 +705,8 @@ export default function B2BQuotesPage() {
   // ── Derived ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('')
 
-  const visible = useMemo(() => {
+  // Вкладка и поиск — сначала; «Просчитал» и «Откуда» — поверх, их кнопки считаются по этому списку.
+  const tabList = useMemo(() => {
     let list: Quote[]
     if (tab === 'price_approval') list = quotes.filter(needsPriceApproval)
     else if (tab === 'templates') list = quotes.filter(isTemplate)
@@ -713,6 +727,8 @@ export default function B2BQuotesPage() {
     }
     return list
   }, [quotes, tab, search])
+  const visible = useMemo(() => tabList.filter(q => matchesFilter(q, filter, clientSource)), [tabList, filter, clientSource])
+  const facets = useMemo(() => filterFacets(tabList, filter, clientSource), [tabList, filter, clientSource])
 
   // «Остаётся с заказа» по просчётам — тем же расчётом, что на экране экономики заказа
   // (lib/unitEconomics): выручка − переменные − НДС к уплате. Одна цифра на всю систему.
@@ -732,6 +748,7 @@ export default function B2BQuotesPage() {
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0, templates: 0, price_approval: 0 }
     for (const q of quotes) {
+      if (!matchesFilter(q, filter, clientSource)) continue
       if (isTemplate(q)) { c.templates++; continue }
       const s = getStatus(q); c[s] = (c[s] ?? 0) + 1
       if (notLaunched(q)) { c.all++; if (isToday(q.created_at)) c.today++ }
@@ -739,7 +756,7 @@ export default function B2BQuotesPage() {
       if (needsPriceApproval(q)) c.price_approval++
     }
     return c
-  }, [quotes])
+  }, [quotes, filter, clientSource])
 
   if (loading) return (
     <SkeletonTable rows={10} />
@@ -796,10 +813,48 @@ export default function B2BQuotesPage() {
         ))}
       </div>
 
+      {/* Фильтры поверх вкладки: повторное нажатие снимает. Число — сколько останется в списке. */}
+      {(facets.authors.length > 1 || facets.sources.length > 0 || filter.by || filter.src) && (
+        <div className="space-y-1.5 mb-4 text-[12px]">
+          {(facets.authors.length > 1 || filter.by) && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[#9a9a95] mr-1">Просчитал:</span>
+              {facets.authors.map(([name, n]) => (
+                <button key={name} onClick={() => setFilter({ ...filter, by: filter.by === name ? null : name })}
+                  className={`px-2.5 py-1 rounded-lg transition-colors ${filter.by === name ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
+                  {name} <span className={filter.by === name ? 'text-white/70' : 'text-[#9a9a95]'}>{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {(facets.sources.length > 0 || filter.src) && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[#9a9a95] mr-1">Откуда:</span>
+              {facets.sources.map(([src, n]) => (
+                <button key={src} onClick={() => setFilter({ ...filter, src: filter.src === src ? null : src })}
+                  className={`px-2.5 py-1 rounded-lg transition-colors ${filter.src === src ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
+                  {sourceLabel(src)} <span className={filter.src === src ? 'text-white/70' : 'text-[#9a9a95]'}>{n}</span>
+                </button>
+              ))}
+              {(filter.by || filter.src) && (
+                <button onClick={() => setFilter({ by: null, src: null })} className="ml-1 px-2 py-1 text-[#9a9a95] hover:text-[#111110] underline underline-offset-2">
+                  сбросить
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center">
-          <p className="text-[13px] text-[#6b6b66]">Нет расчётов</p>
-          <p className="text-[11px] text-[#9a9a95] mt-0.5">Сохранённые из калькулятора расчёты появятся здесь</p>
+          {filter.by || filter.src ? (<>
+            <p className="text-[13px] text-[#6b6b66]">По фильтру в этой вкладке ничего</p>
+            <button onClick={() => setFilter({ by: null, src: null })} className="text-[11px] text-[#111110] underline underline-offset-2 mt-1">Сбросить фильтр</button>
+          </>) : (<>
+            <p className="text-[13px] text-[#6b6b66]">Нет расчётов</p>
+            <p className="text-[11px] text-[#9a9a95] mt-0.5">Сохранённые из калькулятора расчёты появятся здесь</p>
+          </>)}
         </div>
       ) : (
         <>
