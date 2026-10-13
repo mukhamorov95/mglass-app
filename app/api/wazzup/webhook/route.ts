@@ -1,21 +1,11 @@
-/**
- * Wazzup webhook receiver.
- *
- * Architecture: Avito/WhatsApp → Wazzup → HERE → raw storage → queue → AmoCRM + AI (async)
- *
- * This handler must be FAST:
- *   1. Parse incoming messages
- *   2. Save each message to avito_messages_raw
- *   3. Add a queue entry
- *   4. Return 200 OK immediately
- *
- * AmoCRM sync and AI processing are handled by /api/cron/process-queue.
- * If AI or AmoCRM fail, messages are NOT lost — they stay in the queue with retry.
- */
+// Приём сообщений Wazzup (WhatsApp, Telegram, MAX). С1 маршрута розничной CRM
+// (docs/B2C_CRM_ROUTE.md): пакет сначала целиком ложится в inbound_events, потом
+// разбирается — входящие в avito_messages_raw (имя историческое), исходящие менеджеров
+// с текстом в wazzup_outgoing_messages. В AmoCRM отсюда больше ничего не уходит.
 
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { internalAppUrl } from '@/lib/appUrl'
+import { checkWazzupSecret, wazzupWebhookSecret } from '@/lib/wazzupWebhookSecret'
 
 export const maxDuration = 15
 
@@ -62,12 +52,12 @@ function isOutgoing(msg: Record<string, unknown>): boolean {
   )
 }
 
-// Кто написал клиенту. В AmoCRM больше половины исходящих приходят без автора —
-// отправлены из приложения Wazzup или с телефона. Wazzup сообщает автора сам, поэтому
-// сохраняем исходящее с ним (без текста и контакта клиента). Сбой записи приём не ломает.
-async function saveOutgoing(supabase: ReturnType<typeof db>, msg: Record<string, unknown>) {
+// Кто и что написал клиенту. В AmoCRM больше половины исходящих приходят без автора —
+// отправлены из приложения Wazzup или с телефона; Wazzup сообщает автора сам.
+// Текст храним с 13.10 (решение владельца). Возвращает false, если запись не удалась.
+async function saveOutgoing(supabase: ReturnType<typeof db>, msg: Record<string, unknown>): Promise<boolean> {
   const id = msg.messageId ?? msg.id
-  if (!id) return
+  if (!id) return true
   const str = (v: unknown) => (v === undefined || v === null || v === '' ? null : String(v))
   const bool = (v: unknown) => (typeof v === 'boolean' ? v : null)
   const sentAt = str(msg.dateTime)
@@ -84,23 +74,27 @@ async function saveOutgoing(supabase: ReturnType<typeof db>, msg: Record<string,
       message_type:      str(msg.type),
       sent_at:           sentAt && !Number.isNaN(Date.parse(sentAt)) ? sentAt : new Date().toISOString(),
       payload_keys:      Object.keys(msg),
+      text:              str(msg.text),
+      content_uri:       str(msg.contentUri),
     }, { onConflict: 'wazzup_message_id', ignoreDuplicates: true })
-    if (error) console.error('[wazzup-webhook] outgoing save failed', error.message)
+    if (error) { console.error('[wazzup-webhook] outgoing save failed', error.message); return false }
+    return true
   } catch (e) {
     console.error('[wazzup-webhook] outgoing save threw', e)
+    return false
   }
 }
 
 export async function POST(req: Request) {
-  // Опциональный секрет вебхука. Пока WAZZUP_WEBHOOK_SECRET не задан — приём
-  // работает как раньше (Wazzup вызовы не подписывает). Когда владелец задаст env
-  // И добавит ?secret=... в URL вебхука в кабинете Wazzup — чужие POST отсекаются.
-  // Секрет принимаем из query (?secret=) или заголовка X-Webhook-Secret.
-  const webhookSecret = process.env.WAZZUP_WEBHOOK_SECRET
-  if (webhookSecret) {
-    const provided = new URL(req.url).searchParams.get('secret') ?? req.headers.get('x-webhook-secret')
-    if (provided !== webhookSecret) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  }
+  // Чужой секрет — отказ. Вызов без секрета пока принимаем: старый адрес вебхука в Wazzup
+  // без ?secret=. После перевода вебхука на hooks.mglass.pro с секретом — отказ и без него.
+  const provided = new URL(req.url).searchParams.get('secret') ?? req.headers.get('x-webhook-secret')
+  const secret = checkWazzupSecret(provided, wazzupWebhookSecret({
+    WAZZUP_WEBHOOK_SECRET: process.env.WAZZUP_WEBHOOK_SECRET,
+    WAZZUP_API_KEY: process.env.WAZZUP_API_KEY,
+  }))
+  if (secret === 'bad') return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  if (secret !== 'ok') console.warn(`[wazzup-webhook] вызов без секрета (${secret})`)
 
   let body: { messages?: unknown[] }
   try {
@@ -115,6 +109,15 @@ export async function POST(req: Request) {
 
   const supabase = db()
 
+  // Журнал до разбора. Не записался — база недоступна: 503, пусть Wazzup пробует снова.
+  const { data: event, error: eventErr } = await supabase
+    .from('inbound_events').insert({ provider: 'wazzup', payload: body }).select('id').single()
+  if (eventErr || !event) {
+    console.error('[wazzup-webhook] inbound_events insert failed', eventErr?.message)
+    return NextResponse.json({ error: 'storage_unavailable' }, { status: 503 })
+  }
+  const failures: string[] = []
+
   for (const raw of messages) {
     const msg = raw as Record<string, unknown>
 
@@ -124,7 +127,7 @@ export async function POST(req: Request) {
 
       // Outgoing echo: check if it's a human manager writing (not our bot's own echo)
       if (isOutgoing(msg)) {
-        await saveOutgoing(supabase, msg)
+        if (!(await saveOutgoing(supabase, msg))) failures.push(`out ${String(msg.messageId ?? msg.id ?? '?')}`)
         const chatId = String(msg.chatId ?? '')
         if (chatId) {
           const { data: chat } = await supabase
@@ -192,44 +195,20 @@ export async function POST(req: Request) {
 
       if (saveErr || !saved) {
         console.error('[wazzup-webhook] raw save failed', saveErr)
-        continue
+        failures.push(`in ${wazzupId ?? '?'}: ${saveErr?.message ?? 'no row'}`)
       }
-
-      // ── 2. Enqueue for processing ────────────────────────────────────────────
-      const { error: qErr } = await supabase.from('message_queue').insert({
-        source:         'wazzup',
-        raw_message_id: saved.id,
-        status:         'pending',
-        attempts:       0,
-        max_attempts:   5,
-      })
-
-      if (qErr) {
-        console.error('[wazzup-webhook] queue insert failed', qErr)
-        // Raw message is saved — cron will re-enqueue or admin can retry
-      }
-
     } catch (msgErr) {
       console.error('[wazzup-webhook] error processing single message', msgErr)
-      // Never let one bad message break the whole batch
+      failures.push(`msg: ${String(msgErr).slice(0, 120)}`)
     }
   }
 
-  // Разгребаем очередь прямо здесь: тариф Vercel Hobby разрешает крону только
-  // один запуск в сутки, а сообщение должно попасть в CRM сразу. Крон остаётся
-  // подстраховкой на случай, если этот вызов не успел или упал.
-  const base = internalAppUrl()
-  if (base && process.env.CRON_SECRET) {
-    try {
-      await fetch(`${base}/api/cron/process-queue`, {
-        headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
-        signal: AbortSignal.timeout(20_000),
-      })
-    } catch (e) {
-      console.error('[wazzup-webhook] inline queue processing failed', e)
-    }
-  }
+  // Пакет уже в журнале: недоразобранное разберём из inbound_events, поэтому отвечаем 200.
+  await supabase.from('inbound_events').update({
+    status: failures.length ? 'failed' : 'processed',
+    error: failures.length ? failures.join('; ').slice(0, 2000) : null,
+    processed_at: new Date().toISOString(),
+  }).eq('id', event.id)
 
-  // Always return 200 so Wazzup does not retry the webhook
   return NextResponse.json({ ok: true })
 }
