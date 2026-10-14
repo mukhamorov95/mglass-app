@@ -1,0 +1,54 @@
+id,source,material,size,post_ops,complexity,p1,p10,p100,p1000,M1_V,M1_F,M8_V1,M8_F,M8_beta
+1,pricing,"Hardboard .125""",1.5 x 3 in,cut,,1.6,,0.65,0.55,0.587,1.016,1.151,0.447,0.115
+2,pricing,"Dark Gray Acrylic .118""",1.5 x 3 in,cut,,2.24,,0.84,0.7,0.75,1.495,1.476,0.762,0.115
+3,pricing,"5052 Aluminum .187""",1.5 x 3 in,cut,,8.47,,3.21,2.12,2.426,6.089,4.983,3.502,0.115
+4,pricing,Mild Steel .059,2 x 2 in,cut,Simple,3.38,,1.06,0.84,0.913,2.478,1.814,1.564,0.115
+5,pricing,Mild Steel .059,2 x 2 in,cut,Moderate,4.12,,1.39,1.12,1.213,2.919,2.4,1.717,0.115
+6,pricing,Mild Steel .059,2 x 2 in,cut,Dense,7.19,,2.9,2.42,2.594,4.61,5.103,2.081,0.115
+7,pricing,5052 Aluminum .187,2 x 2 in,deburr,,10.39,,3.72,2.47,2.822,7.626,5.788,4.62,0.115
+8,pricing,"Docol Steel Tube 1.5 x .065""",6 x 1.5 x 1.5 in,cut,,24.95,,9.93,6.21,7.186,17.91,14.896,10.112,0.115
+9,pricing,6061 Aluminum Billet,2.35 x 2.35 in,cut,,360.54,,72.71,57.98,62.331,299.844,123.498,236.533,0.115
+10,pricing,"5052 Aluminum .100""",5.375 x 6.3 in,cut,,16.48,,5.32,3.38,3.889,12.704,8.038,8.484,0.115
+11,pricing,"5052 Aluminum .100""",5.375 x 6.3 in,bend+tap,,37.49,,11.06,8.18,9.073,28.593,18.249,19.253,0.115
+12,pricing,"5052 Aluminum .100""",5.375 x 6.3 in,bend+tap+anodize,,51.82,,19.35,16.77,17.705,34.199,34.566,17.18,0.115
+13,home,"5052 Aluminum .187""",3.6 x 2.5,deburr,,9.41,4.82,3.2,,3.441,6.231,5.527,3.946,0.115
+14,home,"Copper .063""",1.4 x 5.2,deburr,,19.51,13.23,10.22,,10.909,8.885,17.136,2.344,0.115
+15,home,"Delrin .270""",2.6 x 2.9,tap,,13.17,8.06,5.26,,5.769,7.769,9.301,3.992,0.115
+16,home,"5052 Aluminum .063""",4 x 4.838,deburr+bend+tap+hardware+anodize,,38.49,17.48,12.7,,13.232,25.985,20.935,17.415,0.115
+17,home,"Carbon Fiber .039""",6.7 x 4.25,cut,,94.23,52.72,46.79,,47.005,47.505,71.988,20.938,0.115
+18,service:anodizing,"5052 Aluminum .125""",4 x 3.25 in,deburr+bend+csk+anodize,,41.58,,12.86,,12.57,29.01,21.498,20.082,0.115
+19,service:anodizing,"5052 H32 Aluminum .090""",6.5 x 7.5 in,deburr+bend+tap+dimple+anodize,,72.63,,24.62,,24.135,48.495,41.278,31.352,0.115
+20,service:anodizing,6061 T6 Aluminum Billet,2.5 x 2.5 in,anodize+media_blast,,357.23,,73.32,,70.452,286.778,120.495,236.735,0.115
+21,service:cnc-bending,"G90 Galvanized Steel .059""","5.4"" x 6""",bend+hardware,,31.76,,8.32,,8.083,23.677,13.825,17.935,0.115
+22,service:cnc-bending,"Cold Rolled Steel .119""","6.3"" x 7.4""",bend+tap+hardware+dimple+powder,,73.33,,16.21,,15.633,57.697,26.737,46.593,0.115
+23,service:cnc-bending,"Polycarbonate .118""","4"" x 5.5""",bend,,24.98,,7.84,,7.667,17.313,13.113,11.867,0.115
+24,service:countersinking,"ABS .234""",4.1 x 4 in,csk,,21.45,,8.16,,8.026,13.424,13.727,7.723,0.115
+25,service:countersinking,"6061 Aluminum .125""​",6 x 4 in,csk,,31.86,,14.19,,14.012,17.848,23.964,7.896,0.115
+26,service:countersinking,"5052 Aluminum .125""​",5.4 x 6 in,deburr+bend+csk+anodize,,56.92,,23.21,,22.869,34.051,39.114,17.806,0.115
+27,service:deburring-services,"5052 Aluminum .187""",3.5 x 2.5 in,deburr,,9.9,,3.7,,3.637,6.263,6.221,3.679,0.115
+28,service:deburring-services,"Copper .063""",6 x 6 in,deburr+bend,,80.45,,40.26,,39.854,40.596,68.163,12.287,0.115
+29,service:deburring-services,"5052 Aluminum .063""",9 x 6.5 in,deburr+bend+hardware+anodize,,65.81,,32.66,,32.325,33.485,55.286,10.524,0.115
+30,service:dimple-forming,"304 Stainless Steel .060""",3.5 x 2.5 in,deburr+dimple,,21.74,,5.29,,5.124,16.616,8.763,12.977,0.115
+31,service:dimple-forming,"Cold Rolled Steel .048""",18 x 12.5 in,bend+dimple+powder,,90.75,,33.08,,32.497,58.253,55.581,35.169,0.115
+32,service:dimple-forming,"5052 Aluminum .080""",25.75 x 10.75 in,deburr+bend+dimple,,80.56,,40.4,,39.994,40.566,68.403,12.157,0.115
+33,service:hardware,"HRP&O Steel .188""",3.5 x 1 in,hardware,,14.14,,3.24,,3.13,11.01,5.353,8.787,0.115
+34,service:hardware,"Cold Rolled Steel .135""",3 x 3 in,bend+hardware,,27.05,,6.44,,6.232,20.818,10.658,16.392,0.115
+35,service:hardware,"5052 Aluminum .063""","5.5 x 6""",deburr+bend+hardware+anodize,,44.51,,19.48,,19.227,25.283,32.884,11.626,0.115
+36,service:plating,"4130 Chromoly .063""",4 x 4 in,plating,,29.14,,11.75,,11.574,17.566,19.796,9.344,0.115
+37,service:plating,"Cold Rolled Carbon Steel .119""",2.5 x 4.75 in,bend+hardware+plating,,32.48,,7.99,,7.743,24.737,13.242,19.238,0.115
+38,service:plating,"Cold Rolled Carbon Steel .059""",5 x 6 in,hardware+plating,,55.1,,18.48,,18.11,36.99,30.974,24.126,0.115
+39,service:powder-coating,"5052 Aluminum .187""",3.5 x 2.5 in,deburr+powder,,20.69,,3.31,,3.134,17.556,5.361,15.329,0.115
+40,service:powder-coating,"Cold Rolled Steel .119""",6.5 x 7.5 in,deburr+bend+tap+hardware+dimple+powder,,73.26,,17.57,,17.007,56.253,29.088,44.172,0.115
+41,service:powder-coating,"5052 Aluminum .080""",4.8 x 5.8 in,deburr+bend+hardware+powder,,48.44,,16.04,,15.713,32.727,26.874,21.566,0.115
+42,service:sheet-cutting,"5052 Aluminum .187""",3.5 x 2.5 in,deburr,,9.9,,3.7,,3.637,6.263,6.221,3.679,0.115
+43,service:sheet-cutting,"Carbon Fiber .039""",3.35 x 3.25 in,cut,,53.42,,29.6,,29.359,24.061,50.214,3.206,0.115
+44,service:sheet-cutting,"ABS Plastic .125""",3.5 x 3.5 in,cut,,7.42,,2.99,,2.945,4.475,5.037,2.383,0.115
+45,service:tapping,"5052 Aluminum .100""",2.5 x 4.75 in,deburr+tap,,12.09,,4.4,,4.322,7.768,7.392,4.698,0.115
+46,service:tapping,"HRP&O Steel .187""","4 x 4""",tap,,23.32,,5.77,,5.593,17.727,9.565,13.755,0.115
+47,service:tapping,Delrin,2.5 x 3 in,tap,,15.16,,5.66,,5.564,9.596,9.516,5.644,0.115
+48,service:tumbling,"6061 Aluminum .125""",3.5 x 2.5 in,tumble,,16.06,,3.08,,2.949,13.111,5.044,11.016,0.115
+49,service:tumbling,"4130 Chromoly .125""",3.75 x 4 in,tumble,,29.82,,8.11,,7.891,21.929,13.496,16.324,0.115
+50,service:tumbling,Cold Rolled Carbon Steel,5 x 2 in,bend+tumble,,30.13,,4.84,,4.585,25.545,7.841,22.289,0.115
+51,service:welding,"5052 H32 Aluminum .063""",3.816 x 4.865 in,deburr+bend+weld,,55.62,,8.37,,7.893,47.727,13.499,42.121,0.115
+52,service:welding,"5052 H32 Aluminum .080""",10.07 x 8.609 in,deburr+bend+weld,,75.0,,13.78,,13.162,61.838,22.51,52.49,0.115
+53,service:welding,"5052 H32 Aluminum .125""",8.166 x 7.206 in,deburr+bend+csk+anodize+weld,,92.67,,32.05,,31.438,61.232,53.768,38.902,0.115
