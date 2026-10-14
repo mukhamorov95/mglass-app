@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
-import { auditAccess, countBySeverity, escapeHtml, formatReport, type AccessSnapshot, type Finding } from '@/lib/security/accessAudit'
+import { auditAccess, countBySeverity, escapeHtml, formatReport, summarizeStorage, type AccessSnapshot, type Finding } from '@/lib/security/accessAudit'
 
 // Ежемесячный прогон «кто что видит» (решение владельца 22.09.2026).
 // Снимок прав берёт SQL-функция, выводы делает lib/security/accessAudit.
@@ -25,18 +25,23 @@ export async function GET(req: Request) {
 
     const findings = auditAccess(snap as AccessSnapshot)
     const counts = countBySeverity(findings)
+    // Сводку по бакетам кладём рядом со снимком: /admin/security читает только её,
+    // не таща весь снимок и не импортируя правила в клиентский бандл.
+    const snapshot = { ...(snap as AccessSnapshot), storage_summary: summarizeStorage((snap as AccessSnapshot).storage) }
 
-    const { data: prevRow } = await sb.from('security_audit_runs')
+    // Ошибка чтения прошлого прогона — не «первый прогон»: иначе отчёт врёт «нового нет».
+    const { data: prevRow, error: prevErr } = await sb.from('security_audit_runs')
       .select('findings').order('created_at', { ascending: false }).limit(1).maybeSingle()
-    const prev = (prevRow?.findings ?? null) as Finding[] | null
+    const prev = prevErr ? null : (prevRow?.findings ?? null) as Finding[] | null
+    const prevNote = prevErr ? `\n\n⚠️ Прошлый прогон не прочитан, сравнения нет: ${escapeHtml(prevErr.message)}` : ''
 
     const { error: insErr } = await sb.from('security_audit_runs').insert({
-      findings, ...counts, snapshot: snap,
+      findings, ...counts, snapshot,
     })
     // Supabase не бросает: без этой проверки прогон «прошёл», а в админке пусто.
     const saveNote = insErr ? `\n\n⚠️ Результат не сохранился в базе: ${escapeHtml(insErr.message)}` : ''
 
-    await notifyAdmins(formatReport(findings, prev) + saveNote)
+    await notifyAdmins(formatReport(findings, prev) + prevNote + saveNote)
     if (insErr) return NextResponse.json({ error: insErr.message, ...counts }, { status: 500 })
     return NextResponse.json({ ok: true, ...counts, total: findings.length })
   } catch (e) {

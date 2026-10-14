@@ -1,3 +1,13 @@
+## Задача (14.10): прогон доступов смотрит в хранилище (бакеты Supabase Storage)
+
+**Повод:** две дыры 01.10 жили в бакетах, а ежемесячный прогон (`lib/security/accessAudit.ts`) их не читал (`grep -c storage` = 0).
+* `lib/security/accessAudit.ts`: `auditStorage` + `PUBLIC_BUCKETS_OK` (furniture-shower, shower-models — с причиной), `bucketsInPolicy`, `summarizeStorage`. Находки: `storage_public_bucket` (публичный вне списка, high), `storage_public_write` / `storage_public_read` (политика anon/PUBLIC без проверки сессии), `storage_anon_list` (список файлов разрешённого бакета, low), `storage_policy_no_to` (PUBLIC с проверкой сессии, medium), `storage_policy_all_buckets` (бакет не назван), `storage_not_scanned` / `storage_empty_snapshot` (пустой снимок = сломанный прибор).
+* Миграция `supabase/migrations/20261014_security_snapshot_storage.sql` — функция `security_access_snapshot` + раздел `storage`. **НЕ накачена** (задача — только чтение прода); до наката прогон пишет находку «Хранилище не проверено».
+* Крон: сводка `storage_summary` в снимке, ошибка чтения прошлого прогона не глотается. `/admin/security`: таблица бакетов, ошибка загрузки отчёта видна.
+* Тест `__tests__/access/storageAudit.test.ts` (21): фикстура «публичный бакет вне списка» доказана красной на выключенном правиле.
+* Прод 14.10 (только чтение): 8 бакетов, 4 публичных, 7 политик. Находки по живому снимку: kp-photos (15 файлов, туда же пишет /api/deals/[id]/files — чертежи сделок) и work-photos (0 файлов, код не знает) — high; список furniture-shower анониму — low. Пробы чтения ролями (откат): аноним 2 (furniture-shower), партнёр 2, штат 124+2.
+* **Следующий шаг:** после мержа накатить миграцию (`apply_migration`), вручную дёрнуть крон или дождаться 1.11; решение владельца по kp-photos и work-photos.
+
 ## Задача (14.10): оплаты B2B проставляет банк, а не менеджер (`docs/accounting/BANK_AUTOPAY_ROUTE.md`)
 
 **Повод:** владелец: «подгружать выписку с банка… чтобы оно автоматически проставляло, чтобы не надо было это менеджеру делать».

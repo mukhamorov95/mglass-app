@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { DEVICE_CLASS_LABELS, type DeviceClass } from '@/lib/deviceClass'
-import type { Finding } from '@/lib/security/accessAudit'
+import type { BucketSummary, Finding } from '@/lib/security/accessAudit'
 
 // Безопасность: активные устройства по каждому сотруднику + журнал событий
 // входа. Политика: 1 телефон + 1 ПК на аккаунт; вход на новом устройстве
@@ -184,20 +184,33 @@ export default function SecurityPage() {
 // Прогон «кто что видит» — раз в месяц кроном, результат сюда. Сам прогон
 // описан в lib/security/accessAudit.ts: он читает права из базы и говорит,
 // где ворота шире, чем думали.
+type AuditRun = { created_at: string; findings: Finding[]; high: number; medium: number; low: number; storage: BucketSummary[] | null }
+
+const STORAGE_CMD: Record<string, string> = { r: 'чтение', a: 'загрузка', w: 'замена', d: 'удаление', '*': 'всё' }
+
 function AccessAudit() {
-  const [run, setRun] = useState<{ created_at: string; findings: Finding[]; high: number; medium: number; low: number } | null>(null)
+  const [run, setRun] = useState<AuditRun | null>(null)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
     (async () => {
       const { createClient } = await import('@/lib/supabase-browser')
-      const { data } = await createClient()
+      const { data, error } = await createClient()
         .from('security_audit_runs')
-        .select('created_at, findings, high, medium, low')
+        .select('created_at, findings, high, medium, low, storage:snapshot->storage_summary')
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
-      if (data) setRun(data as { created_at: string; findings: Finding[]; high: number; medium: number; low: number })
+      // Без этой проверки отказ чтения выглядел как «прогон ещё не запускался».
+      if (error) setLoadErr(error.message)
+      else if (data) setRun(data as unknown as AuditRun)
     })()
   }, [])
+
+  if (loadErr) return (
+    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[13px] text-red-800 mb-4">
+      Отчёт прогона доступов не загрузился: {loadErr}
+    </div>
+  )
 
   if (!run) return (
     <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 text-[13px] text-[#9a9a95] mb-4">
@@ -215,7 +228,7 @@ function AccessAudit() {
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-[13px] font-semibold">Прогон доступов · {new Date(run.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</span>
         <span className="text-[12px]">{run.high} важных · {run.medium} средних · {run.low} мелких</span>
-        {run.findings.length > 0 && (
+        {(run.findings.length > 0 || run.storage) && (
           <button onClick={() => setOpen(v => !v)} className="text-[12px] font-medium underline underline-offset-2 ml-auto">
             {open ? 'свернуть' : 'показать находки'}
           </button>
@@ -234,8 +247,43 @@ function AccessAudit() {
               <p className="text-[11px] text-[#6b6b66] mt-0.5">{f.detail}</p>
             </div>
           ))}
+          <StorageBuckets buckets={run.storage} />
         </div>
       )}
+    </div>
+  )
+}
+
+// Бакеты из того же прогона: кто что может с файлами. Выводы — в находках выше,
+// здесь только факты, чтобы владелец видел и «чистые» бакеты.
+function StorageBuckets({ buckets }: { buckets: BucketSummary[] | null }) {
+  if (!buckets) return (
+    <div className="bg-white/70 rounded-lg px-3 py-2 text-[12px] text-[#6b6b66]">
+      Хранилище в этом прогоне не проверялось — сводка по бакетам появится со следующего.
+    </div>
+  )
+  const mb = (n: number | null) => n == null ? 'без лимита' : `до ${Math.round(n / 1048576)} МБ`
+  return (
+    <div className="bg-white/70 rounded-lg px-3 py-2">
+      <div className="text-[12px] font-semibold text-[#111110] mb-1.5">Хранилище · {buckets.length} бакетов</div>
+      <div className="space-y-1.5">
+        {buckets.map(b => (
+          <div key={b.id} className="text-[11px] text-[#6b6b66]">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-[#111110]">{b.id}</span>
+              <span className={`px-1.5 py-px rounded-full ${b.public ? (b.allowListed ? 'bg-[#f0f0ec]' : 'bg-red-100 text-red-700') : 'bg-emerald-50 text-emerald-700'}`}>
+                {b.public ? (b.allowListed ? 'открыт по ссылке · так задумано' : 'открыт по ссылке') : 'закрыт'}
+              </span>
+              <span>{b.objects ?? '?'} файлов · {mb(b.file_size_limit)} · {b.allowed_mime_types?.length ? b.allowed_mime_types.join(', ') : 'любые типы'}</span>
+            </div>
+            <div className="mt-0.5">
+              {b.policies.length === 0
+                ? (b.public ? 'Политик нет: загружает только сервер, по ссылке читает любой.' : 'Политик нет — с файлами работает только сервер.')
+                : b.policies.map(p => `${STORAGE_CMD[p.cmd] ?? p.cmd}: ${p.roles.join(', ')} («${p.policy}»)`).join(' · ')}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

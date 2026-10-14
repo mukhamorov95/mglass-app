@@ -99,7 +99,11 @@ describe('кто пишет в activity_log', () => {
 })
 
 describe('прогон доступов знает про activity_log', () => {
-  const base: AccessSnapshot = { policies: [], grants: [], rls: [], suspicious_columns: [] }
+  // Хранилище проверено и чисто — здесь только правила про таблицу.
+  const base: AccessSnapshot = {
+    policies: [], grants: [], rls: [], suspicious_columns: [],
+    storage: { buckets: [{ id: 'private-files', public: false, file_size_limit: null, allowed_mime_types: null }], policies: [] },
+  }
 
   it('таблица в SENSITIVE_TABLES', () => {
     expect(SENSITIVE_TABLES.has('activity_log')).toBe(true)
