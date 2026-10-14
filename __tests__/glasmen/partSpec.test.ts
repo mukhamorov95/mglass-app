@@ -40,6 +40,16 @@ describe('деталь из шагов расчёта', () => {
     expect(geometryToQuoteFacts(side).holes).toEqual([{ d: 16, n: 2 }])
   })
 
+  it('скос: отверстия у верхней кромки идут вдоль наклона и остаются внутри детали', () => {
+    const g = buildFromSpec(spec({ shape: 'bevel', W: 1000, H: 600, HL: 600, HR: 450, holes: [{ d: 10, n: 4, layout: 'corners', edge: 45, end: 0 }] }))
+    expect(g.issues.filter(i => i.level === 'hard')).toEqual([])
+    const [tl, tr] = g.holes
+    expect(tl.cy).toBeCloseTo(0.15 * 45 + 45 * Math.hypot(1, 0.15), 2)
+    expect(tr.cy).toBeCloseTo(150 * 955 / 1000 + 45 * Math.hypot(1, 0.15), 2)
+    const side = buildFromSpec(spec({ shape: 'bevel', W: 800, H: 2000, HL: 1800, HR: 2000, holes: [{ d: 16, n: 2, layout: 'rowSide', edge: 30, end: 250 }] }))
+    expect(side.holes.map(h => h.cy)).toEqual([450, 1750])
+  })
+
   it('вырезы: n штук в ряд по ширине, считаются в цену как вырезы', () => {
     const g = buildFromSpec(spec({ W: 2000, H: 600, cutouts: [{ w: 75, h: 75, r: 8, n: 2, fromTop: 300 }] }))
     expect(g.cutouts).toHaveLength(2)
