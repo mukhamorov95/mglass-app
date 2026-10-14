@@ -1,6 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { shopScopeOf, inShopScope } from '@/lib/production/shopScope'
+import ShopScopeBanner from '@/components/production/ShopScopeBanner'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, getApplicableStages, type DetailStageKey } from '@/lib/productionStages'
@@ -36,7 +39,12 @@ function specLine(it?: Item): string {
   return [dims, mat, qty].filter(Boolean).join(' · ')
 }
 
-export default function OrdersScreen() {
+export default function OrdersPage() {
+  return <Suspense fallback={null}><OrdersScreen /></Suspense>
+}
+
+function OrdersScreen() {
+  const scope = shopScopeOf(useSearchParams().get('client'))
   const sb = createClient()
   const [tasks, setTasks] = useState<Task[]>([])
   const [orders, setOrders] = useState<Map<number, Order>>(new Map())
@@ -80,7 +88,7 @@ export default function OrdersScreen() {
         loadPointClientIds(sb),
       ])
       setPointClients(points)
-      const fresh = new Map(ords.filter(o => isLiveShopOrder(o)).map(o => [o.id, o as Order]))
+      const fresh = new Map(ords.filter(o => isLiveShopOrder(o) && inShopScope(scope, o)).map(o => [o.id, o as Order]))
       setOrders(fresh)
       const freshIds = [...fresh.keys()]
       ts = await readIn<Task, number>(freshIds, (part, from, to) => sb.from('production_tasks')
@@ -89,7 +97,7 @@ export default function OrdersScreen() {
       ts.sort((a, b) => a.sequence_order - b.sequence_order || a.id - b.id)
     }
     setTasks(ts)
-  }, [sb])
+  }, [sb, scope])
 
   const reload = useCallback(async () => {
     try {
@@ -170,6 +178,7 @@ export default function OrdersScreen() {
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Заказы</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5">{orderIds.length} в работе · точки первыми, дальше по срочности · клик — раскрыть{me.production_lead ? ' · вы ответственный' : ''}</p>
+        <ShopScopeBanner scope={scope} allHref="/production-app/orders" />
         <ProductionTabs />
       </div>
 
