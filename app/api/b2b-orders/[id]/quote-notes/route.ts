@@ -4,6 +4,7 @@ import { isOwnerRole } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { LEAD_NOTE_KEYS, leadNoteError } from '@/lib/b2b/leadQuote'
+import { syncInvoicesForOrders } from '@/lib/money/invoiceSync'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,5 +53,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: patch })
   if (error) return NextResponse.json({ error: `Заметки просчёта не записаны: ${error.message}` }, { status: 500 })
-  return NextResponse.json({ ok: true })
+
+  // Калькулятор пишет итог заказа из браузера и сразу зовёт этот маршрут. Неоплаченный счёт
+  // следует за заказом здесь же — иначе он застывает (14.10: шесть счетов разошлись с заказом,
+  // клиент платил итог заказа, счёт висел «частично»). Сбой не отменяет сохранённый просчёт.
+  let invoiceWarning: string | null = null
+  try { await syncInvoicesForOrders(svc, [orderId]) } catch (e) {
+    invoiceWarning = `Счёт по заказу не обновлён: ${e instanceof Error ? e.message : String(e)}`
+  }
+  return NextResponse.json({ ok: true, invoiceWarning })
 }
