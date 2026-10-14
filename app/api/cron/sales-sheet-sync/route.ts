@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { notifyAdmins } from '@/lib/telegram'
 import { formatSyncReport, syncSalesBook } from '@/lib/sales/salesSheetSync'
 import { withCronRun } from '@/lib/cronRuns'
+import { amoGet } from '@/lib/amocrm'
 
 export const maxDuration = 300
 
@@ -26,6 +27,8 @@ async function run(req: NextRequest) {
         if (!r.ok) throw new Error(`HTTP ${r.status} — книга должна быть открыта по ссылке`)
         return r.text()
       },
+      // Тип изделия — из сделки amo по «Номеру заказа»; amoGet — только GET.
+      amoGet: (path, params) => amoGet(path, params),
     })
     if (!dry) await notifyAdmins(formatSyncReport(report)).catch(() => {})
     return NextResponse.json({ ok: !report.error, report })

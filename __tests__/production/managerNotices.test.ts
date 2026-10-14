@@ -21,6 +21,15 @@ describe('сообщения менеджеру о событиях цеха', (
     expect(t).toContain('Отметил: Никита')
   })
 
+  it('рекламация после цеха — маршрут не менялся, «снова с этапа» не пишется', () => {
+    const t = reworkNotice({ id: 9, custom_number: '00009' }, {
+      foundAt: 'after_production', restartAt: 'after_production', reason: 'client_claim', comment: null, itemIndex: 0, by: 'Эльзат', reopened: 0,
+    })
+    expect(t).toContain('<b>00009</b>: после цеха, Рекламация клиента')
+    expect(t).toContain('Поз. 1: маршрут в цеху не менялся — нужна ли переделка, решаете вы.')
+    expect(t).not.toContain('снова с этапа')
+  })
+
   it('HTML в тексте экранируется — Telegram иначе отвергает сообщение целиком', () => {
     expect(escapeHtml('a<b>&c')).toBe('a&lt;b&gt;&amp;c')
   })

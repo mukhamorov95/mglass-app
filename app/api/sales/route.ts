@@ -10,6 +10,7 @@ import { bookNames } from '@/lib/sales/bookNames'
 import { resolvePeriod, parseManagers } from '@/lib/sales/period'
 import { mskDayKey } from '@/lib/time'
 import { inChunks, pageAll } from '@/lib/supabase/pageAll'
+import { formatProductTypes, parseProductTypes, pickRetailProductType } from '@/lib/sales/retailProductType.mjs'
 
 // Отдел продаж: леджер продаж. GET — продажи за месяц + итоги + по менеджерам
 // (владелец/РОП — все, менеджер — свои). POST — создать продажу (в т.ч. из лида).
@@ -161,7 +162,14 @@ export async function POST(req: NextRequest) {
     created_by: me.name,
   }
   const sb = await serviceAsMe()
-  const { data, error } = await sb.from('crm_sales').insert(row).select('id').single()
+  // Тип изделия: выбранный в форме (коды или текст «душевая и зеркала»), иначе —
+  // правило по тексту «изделия» лида. Не определился — пусто.
+  let productType = formatProductTypes(parseProductTypes(b.product_type as string))
+  if (!productType && row.lead_id) {
+    const { data: lead } = await sb.from('crm_leads').select('product').eq('id', row.lead_id).maybeSingle()
+    productType = pickRetailProductType({ text: (lead as { product: string | null } | null)?.product ?? null }).value
+  }
+  const { data, error } = await sb.from('crm_sales').insert({ ...row, product_type: productType }).select('id').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (row.lead_id) {
@@ -190,6 +198,11 @@ export async function PATCH(req: NextRequest) {
   if ('status' in b) patch.status = b.status === 'closed' ? 'closed' : 'open'
   for (const k of ['amount', 'partner_fee', 'prepayment'] as const) if (k in b) patch[k] = Number(b[k]) || 0
   for (const k of ['order_no', 'client', 'ready_date', 'sale_date', 'department', 'payment_method', 'manager', 'note'] as const) if (k in b) patch[k] = (b[k] as string) || null
+  if ('product_type' in b) {
+    const t = formatProductTypes(parseProductTypes(b.product_type as string))
+    if (b.product_type && !t) return NextResponse.json({ error: 'Не понял тип изделия — выберите из списка' }, { status: 400 })
+    patch.product_type = t
+  }
 
   const sb = await serviceAsMe()
   const { data: before } = await sb.from('crm_sales')
