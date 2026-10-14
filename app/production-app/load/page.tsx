@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { PRODUCTION_STAGES } from '@/lib/productionStages'
 import { addWorkingDays, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import { shopScopeOf, inShopScope } from '@/lib/production/shopScope'
+import { readPaged } from '@/lib/production/paged'
 import ShopScopeBanner from '@/components/production/ShopScopeBanner'
 
 // А3: тепловая карта загрузки цеха. Строки — этапы, столбцы — СРОЧНОСТЬ по сроку
@@ -49,17 +50,16 @@ function cellBg(n: number, max: number, bucket: number): string {
 export default async function ProductionLoadPage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
   const scope = shopScopeOf((await searchParams).client)
   const svc = createServiceClient()
-  const { data: taskData } = await svc.from('production_tasks')
-    .select('order_id, stage_key').neq('status', 'done').limit(20000)
-  const allTasks = (taskData ?? []) as Task[]
+  // Страницами: PostgREST отдаёт не больше 1000 строк, .limit(20000) потолок не поднимал (lib/production/paged.ts)
+  const allTasks = await readPaged<Task>((from, to) => svc.from('production_tasks')
+    .select('id, order_id, stage_key').neq('status', 'done').order('id').range(from, to))
   const orderIds = [...new Set(allTasks.map(t => t.order_id))]
 
   // А5: пропускная способность — сколько задач закрыто СЕГОДНЯ по этапам (поток
   // против очереди). Рабочие идут queued→done без «в работе», поэтому меряем не WIP
   // по людям (трение), а реальный выход по этапу за день.
-  const { data: doneData } = await svc.from('production_tasks')
-    .select('order_id, stage_key').eq('status', 'done').gte('completed_at', startOfTodayISO()).limit(20000)
-  const done = (doneData ?? []) as Task[]
+  const done = await readPaged<Task>((from, to) => svc.from('production_tasks')
+    .select('id, order_id, stage_key').eq('status', 'done').gte('completed_at', startOfTodayISO()).order('id').range(from, to))
 
   const orderDeadline = new Map<number, number | null>()
   const inScope = new Set<number>()
