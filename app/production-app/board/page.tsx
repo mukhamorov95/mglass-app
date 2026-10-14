@@ -5,6 +5,7 @@ import { type DetailStages, getApplicableStages, type DetailStageKey, stageLabel
 import { shopScopeOf, inShopScope, withShopScope } from '@/lib/production/shopScope'
 import ShopScopeBanner from '@/components/production/ShopScopeBanner'
 import { PROD_SINCE } from '@/lib/orderFlags'
+import { readPaged, readIn } from '@/lib/production/paged'
 import { loadPointClientIds, pointRank } from '@/lib/b2b/points'
 import PointBadge from '@/components/PointBadge'
 
@@ -94,16 +95,18 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const filter: FilterKey = (FILTERS.some(f => f.key === sp.filter) ? sp.filter : 'all') as FilterKey
   const svc = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-  const [{ data }, pointClients] = await Promise.all([svc
+  // Страницами: с .limit(500) при 541 заказе (14.10) самые старые — самые просроченные — молча пропадали
+  const [data, pointClients] = await Promise.all([readPaged<Record<string, unknown>>((from, to) => svc
     .from('b2b_orders')
     .select('id,client_id,client_name,custom_number,items,notes,created_at,launched_at')
     .not('notes', 'ilike', '%"status":"quote"%')
     .is('archived_at', null)
     .gte('created_at', PROD_SINCE)
     .order('created_at', { ascending: false })
-    .limit(500), loadPointClientIds(svc)])
+    .order('id', { ascending: false })
+    .range(from, to)), loadPointClientIds(svc)])
 
-  const active: Order[] = (data ?? []).filter((o: Record<string, unknown>) => inShopScope(scope, o as { client_id: number | null; client_name: string | null })).map((o: Record<string, unknown>) => ({
+  const active: Order[] = data.filter((o: Record<string, unknown>) => inShopScope(scope, o as { client_id: number | null; client_name: string | null })).map((o: Record<string, unknown>) => ({
     id: o.id as number,
     client_name: o.client_name as string | null,
     custom_number: o.custom_number as string | null,
@@ -117,9 +120,8 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 
   // WIP-оверлей из нового поточного цеха.
   const orderIds = active.map(o => o.id)
-  const { data: ipTasks } = orderIds.length
-    ? await svc.from('production_tasks').select('order_id,stage_key,assigned_to').eq('status', 'in_progress').in('order_id', orderIds)
-    : { data: [] as { order_id: number; stage_key: string; assigned_to: string | null }[] }
+  const ipTasks = await readIn<{ order_id: number; stage_key: string; assigned_to: string | null }, number>(orderIds, (part, from, to) =>
+    svc.from('production_tasks').select('id,order_id,stage_key,assigned_to').eq('status', 'in_progress').in('order_id', part).order('id').range(from, to))
   const assigneeIds = [...new Set((ipTasks ?? []).map(t => t.assigned_to).filter((x): x is string => !!x))]
   const { data: users } = assigneeIds.length
     ? await svc.from('users').select('id,name').in('id', assigneeIds)
@@ -129,9 +131,8 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   for (const t of ipTasks ?? []) ipByOrderStage.set(`${t.order_id}:${t.stage_key}`, t.assigned_to ? userName.get(t.assigned_to) : undefined)
 
   // Пул по станциям (из «Пула на сегодня»): сколько открытых задач стоит на каждой.
-  const { data: poolTasks } = orderIds.length
-    ? await svc.from('production_tasks').select('station,status').in('order_id', orderIds).in('status', ['queued', 'in_progress', 'problem'])
-    : { data: [] as { station: string; status: string }[] }
+  const poolTasks = await readIn<{ station: string; status: string }, number>(orderIds, (part, from, to) =>
+    svc.from('production_tasks').select('id,station,status').in('order_id', part).in('status', ['queued', 'in_progress', 'problem']).order('id').range(from, to))
   const pool = new Map<string, { open: number; problems: number }>()
   for (const t of (poolTasks ?? []) as { station: string; status: string }[]) {
     const cur = pool.get(t.station) ?? { open: 0, problems: 0 }

@@ -527,7 +527,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
 
   const [viewMode, setViewMode]     = useState<ViewMode>('manager')
   // Меню владельца по контурам (lib/nav/contours.ts); 'legacy' — прежние шесть режимов.
-  const [contour, setContour]       = useState<Contour | 'legacy'>('mglass')
+  // Начальная вкладка — по адресу, ещё на сервере: иначе страница B2B мелькала вкладкой M-Glass до гидрации
+  const [contour, setContour]       = useState<Contour | 'legacy'>(() => contourFor(pathname ?? '/', 'mglass'))
   // Закупщик с manager_workspace (Вера): две вкладки — Менеджер / Логист.
   const [buyerWs, setBuyerWs]       = useState<'manager' | 'logist'>('manager')
   const [open, setOpen]             = useState<Set<string>>(new Set())
