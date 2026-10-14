@@ -1,12 +1,9 @@
 import QuoterLoader from '../_components/QuoterLoader'
-import type { Tab } from '../_components/quoterState'
 
 export const metadata = { title: 'Расчёт · GLASMEN демо' }
 
-const TABS: Tab[] = ['dxf', 'template', 'size']
-
-export default async function GlasmenQuotePage({ searchParams }: { searchParams: Promise<{ tab?: string | string[] }> }) {
-  const { tab } = await searchParams
-  const t = typeof tab === 'string' && (TABS as string[]).includes(tab) ? (tab as Tab) : null
-  return <QuoterLoader initialTab={t} />
+// ?source=dxf — сразу шаг «Форма: по чертежу DXF»; без параметра — деталь задаётся шагами.
+export default async function GlasmenQuotePage({ searchParams }: { searchParams: Promise<{ source?: string | string[] }> }) {
+  const { source } = await searchParams
+  return <QuoterLoader initialSource={source === 'dxf' ? 'dxf' : source === 'form' ? 'form' : null} />
 }

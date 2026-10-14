@@ -38,9 +38,10 @@ export function Breakdown({ row }: { row: QuoteRow }) {
 }
 
 export default function PricePanel({
-  q, blocked, hardNote = null, model, onModel, discount, onDiscount, overrides, onOverride, wholeOrder, onWholeOrder,
+  q, qty, blocked, hardNote = null, model, onModel, discount, onDiscount, overrides, onOverride, wholeOrder, onWholeOrder,
 }: {
   q: QuoteState<QuoteResponse>
+  qty: number                         // количество из шага 5: его строка выделена, итог — сверху
   blocked: string | null
   hardNote?: string | null            // жёсткие замечания черновых правил: цена — только для справки
   model: ModelId
@@ -58,6 +59,7 @@ export default function PricePanel({
   const res = shown?.models[model]
   const rows = res?.rows ?? []
   const one = rows.find(r => r.qty === 1)
+  const mine = rows.find(r => r.qty === qty)
   const M = res && res.paramsUsed.includes('M') ? res.params.M : 0
 
   return (
@@ -99,6 +101,13 @@ export default function PricePanel({
           {shown && res && (
             <div className={`space-y-3 transition-opacity ${q.loading || hardNote ? 'opacity-50' : ''} ${hardNote ? 'grayscale' : ''}`} aria-busy={q.loading}>
               {hardNote && <p className="text-[11px] font-medium uppercase tracking-wide text-[#55554f]">Для справки — деталь в таком виде не принимаем</p>}
+              {mine && (
+                <div className="rounded-xl bg-[#f5f5f3] px-3 py-2.5">
+                  <div className="text-[12px] text-[#55554f]">{mine.qty} шт. × {rub(mine.perPiece)}</div>
+                  <div className="text-[24px] font-semibold tabular-nums tracking-tight">{rub(mine.lineTotal)}</div>
+                  <div className="text-[11px] text-[#9a9a95]">{VAT_LABEL}{discount ? `, после скидки ${discount} %` : ''}</div>
+                </div>
+              )}
               <p className="text-[12px] leading-snug text-[#55554f]">{res.description}</p>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[320px] text-[13px]">
@@ -117,12 +126,13 @@ export default function PricePanel({
                       return (
                         <Fragment key={r.qty}>
                           <tr
-                            className={`cursor-pointer border-b border-[#f0f0ed] hover:bg-[#fafaf9] ${open ? 'bg-[#fafaf9]' : ''}`}
+                            className={`cursor-pointer border-b border-[#f0f0ed] hover:bg-[#fafaf9] ${open ? 'bg-[#fafaf9]' : ''} ${r.qty === qty ? 'font-semibold' : ''}`}
                             onClick={() => setOpenQty(open ? null : r.qty)}
                             aria-expanded={open}
                           >
                             <td className="py-2 pr-2">
                               <span className="mr-1 inline-block w-3 text-[#9a9a95]">{open ? '▾' : '▸'}</span>{r.qty}
+                              {r.qty === qty && <span className="ml-1.5 rounded bg-[#111110] px-1 py-0.5 text-[10px] font-normal text-white">ваше</span>}
                               {r.floorApplied && <span className="ml-1.5 rounded bg-[#f5f5f3] px-1 py-0.5 text-[10px] text-[#55554f]" title="Цена поднята до минимальной цены позиции">мин. позиции</span>}
                               {r.minOrderApplied && <span className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] text-amber-900" title="Доплата до минимальной суммы заказа">мин. заказа</span>}
                             </td>
