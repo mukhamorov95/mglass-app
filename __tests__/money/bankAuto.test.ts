@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { matchInvoice, type OpenInvoice } from '@/lib/accounting/bankMatch'
+import { matchInvoice, matchOrder, orderIdsIn, type OpenInvoice } from '@/lib/accounting/bankMatch'
 import { loadOpenInvoices, postBankRow, type BankRow } from '@/lib/accounting/bankPost'
 import { autoApplyBank, isLoan, isOwnTransfer } from '@/lib/accounting/bankAuto'
 import { makeDb, fakeClient, type FakeDb } from './fakeSupabase'
@@ -119,5 +119,66 @@ describe('автопроставление при загрузке выписк�
     const again = await autoApplyBank(svc(db), 'ooo', null)
     expect(again.applied).toHaveLength(0)
     expect(db.tables.payments.filter(p => p.source === 'bank_statement_import')).toHaveLength(1)
+  })
+})
+
+// Остаток выписки после первого прогона: 12 платежей ровно на итог заказа при устаревшем
+// счёте или без счёта, 2 — на сводный счёт, записанный через другое тире.
+describe('устаревший счёт, заказ без счёта, тире в номере', () => {
+  it('сводный счёт «05167–05400», клиент пишет «05167-05400»', () => {
+    const m = matchInvoice({ amount: 101767, inn: null, purpose: 'СЧЁТ N 05167-05400 оТ 05.08.2026' }, [inv({ no: '05167–05400', amount: 101767, remainder: 101767, orders: [5167, 5400] })])
+    expect(m).toMatchObject({ strong: true, byOrder: false })
+  })
+
+  it('счёт выставлен до правки заказа — сумма сверяется с итогом заказа (05557: 37 259 / 37 120)', () => {
+    const m = matchInvoice({ amount: 37120, inn: null, purpose: 'по счет-спецификации 05557' }, [inv({ no: '05557', amount: 37259, remainder: 37259, orderRemainder: 37120 })])
+    expect(m).toMatchObject({ strong: true, byOrder: true, partial: false, over: 0 })
+  })
+
+  it('итог заказа больше счёта — тоже (05542: счёт 16 334, заказ и оплата 21 478)', () => {
+    const m = matchInvoice({ amount: 21478, inn: null, purpose: 'Оплата по счету 05542' }, [inv({ no: '05542', amount: 16334, remainder: 16334, orderRemainder: 21478 })])
+    expect(m).toMatchObject({ strong: true, byOrder: true, over: 0 })
+  })
+
+  it('ни счёту, ни заказу не равно — решает человек', () => {
+    expect(matchInvoice({ amount: 30053.1, inn: null, purpose: 'Оплата по счету №05432' }, [inv({ no: '05432', amount: 27053, remainder: 27053, orderRemainder: 27053 })])).toBeNull()
+  })
+
+  it('заказ без счёта находится по номеру и сумме', () => {
+    expect(orderIdsIn('Оплата по счёту-спецификации № 05317, НДС 16 318,23')).toEqual([5317])
+    expect(orderIdsIn('СЧЁТ N 05167-05400')).toEqual([5167, 5400])
+    const o = { id: 5317, no: '05317', payer: 'LoLegko', total: 90492, remainder: 90492, marked: 0 }
+    expect(matchOrder({ amount: 90492, inn: null, purpose: 'Оплата по счёту-спецификации № 05317' }, [o])).toMatchObject({ order: { id: 5317 }, partial: false })
+    expect(matchOrder({ amount: 90000, inn: null, purpose: '05317' }, [o])).toBeNull()
+  })
+
+  it('автоподбор: заказ без счёта и устаревший счёт; проводка в ДДС ссылается на тот же платёж', async () => {
+    const db = makeDb({
+      invoices: [{ id: 81, invoice_no: '05557', amount: 37259, order_ids: [5557], status: 'issued', payer_client_id: null, payer_name: 'AveoGlass', issued_at: '2026-09-29' }],
+      b2b_orders: [
+        { id: 5557, client_name: 'AveoGlass', total_after_discount: 37120, total_sale_inc_vat: 41244 },
+        { id: 5317, client_name: 'LoLegko', total_after_discount: 90492, total_sale_inc_vat: 90492 },
+      ],
+      b2b_clients: [],
+      bank_statement_rows: [
+        { id: 1, unit: 'ooo', external_key: 'a', op_date: '2026-10-01', amount: 37120, direction: 'in', status: 'new', payment_id: null, inn: '7716979735', counterparty: 'ООО "АВЕ"', purpose: 'Оплата за материалы по счет-спецификации 05557 от 29.09.2026', account: null },
+        { id: 2, unit: 'ooo', external_key: 'b', op_date: '2026-10-07', amount: 90492, direction: 'in', status: 'new', payment_id: null, inn: '7716979735', counterparty: 'ООО "АВЕ"', purpose: 'Оплата по счёту-спецификации № 05317', account: null },
+      ],
+      payments: [], cashflow_entries: [], payment_requests: [],
+    })
+    const res = await autoApplyBank(svc(db), 'ooo', null)
+    expect(res.applied.map(a => a.invoiceNo)).toEqual(['05557', 'заказ 05317'])
+    expect(res.warnings.join(' ')).toContain('Счёт № 05557 устарел')
+    expect(res.warnings.join(' ')).not.toContain('Переплата')
+    const [p1, p2] = db.tables.payments
+    expect(p1).toMatchObject({ invoice_id: 81, b2b_order_id: 5557, amount: 37120 })
+    expect(p2).toMatchObject({ invoice_id: null, b2b_order_id: 5317, amount: 90492, source: 'bank_statement_import' })
+    expect(db.tables.bank_statement_rows[1]).toMatchObject({ payment_id: p2.id, invoice_id: null })
+
+    const r = await postBankRow(svc(db), db.tables.bank_statement_rows[1] as unknown as BankRow,
+      { fundId: 3, subfundId: null, account: null, requestId: null, invoiceId: null }, { id: 'u', name: 'Вера' })
+    expect(r).toMatchObject({ ok: true })
+    expect(db.tables.cashflow_entries[0]).toMatchObject({ payment_id: p2.id })
+    expect(db.tables.bank_statement_rows[1]).toMatchObject({ status: 'posted', payment_id: p2.id })
   })
 })
