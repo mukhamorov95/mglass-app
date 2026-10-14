@@ -4,6 +4,7 @@ import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { autoApplyBank } from '@/lib/accounting/bankAuto'
+import { allocateAdvances } from '@/lib/accounting/clientAdvance'
 
 // Оплаты заказов по загруженной выписке — уверенные совпадения, без человека. Вкладка
 // «Выписка» зовёт после загрузки и повторяет, пока more: true.
@@ -22,7 +23,14 @@ export async function POST(req: NextRequest) {
   const { data: me } = await sb.from('users').select('name').eq('id', user?.id ?? '').maybeSingle()
 
   try {
-    const res = await autoApplyBank(createServiceClient(), unit, (me as { name?: string } | null)?.name ?? null, { dry: body?.dry === true })
+    const svc = createServiceClient()
+    const res = await autoApplyBank(svc, unit, (me as { name?: string } | null)?.name ?? null, { dry: body?.dry === true })
+    // Банк оплатил заказ, уже списанный с аванса, — списание возвращается в остаток аванса
+    if (res.applied.length) {
+      try { res.warnings.push(...(await allocateAdvances(svc)).warnings) } catch (e) {
+        res.warnings.push(`Авансы не пересчитаны: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
     return NextResponse.json({ ok: true, ...res })
   } catch (e) {
     return NextResponse.json({ error: `Оплаты по выписке не проставлены: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })

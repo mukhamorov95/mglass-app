@@ -7,7 +7,7 @@ import { readIn, num, type Row } from './paged'
 // (A23): прямой платёж по заказу + доля платежей по счетам, где заказ стоит рядом с другими.
 // Суммы соседей по счёту дочитываются, иначе доля чужого заказа досталась бы нашему.
 
-type PayRow = PaymentRow & { external_key: string | null }
+export type PayRow = PaymentRow & { external_key: string | null; source: string | null; method: string | null }
 
 const toPay = (p: Row): PayRow => ({
   amount: num(p.amount),
@@ -15,15 +15,18 @@ const toPay = (p: Row): PayRow => ({
   invoice_id: p.invoice_id == null ? null : num(p.invoice_id),
   voided_at: (p.voided_at as string | null) ?? null,
   external_key: (p.external_key as string | null) ?? null,
+  source: (p.source as string | null) ?? null,
+  method: (p.method as string | null) ?? null,
 })
 
-const PCOLS = 'id, amount, b2b_order_id, invoice_id, voided_at, external_key'
+const PCOLS = 'id, amount, b2b_order_id, invoice_id, voided_at, external_key, source, method'
 
 // orderTotals — итоги заказов, которые уже прочитаны (чтобы не читать дважды); недостающие дочитаем.
 export async function loadOrderPaid(
   svc: SupabaseClient,
   orderTotals: Map<number, number>,
-  opts: { excludeKeys?: string[] } = {},
+  // skip — какие платежи не считать (аванс считает долг без отметок и своих прошлых списаний)
+  opts: { excludeKeys?: string[]; skip?: (p: PayRow) => boolean } = {},
 ): Promise<Map<number, number>> {
   const orderIds = [...orderTotals.keys()]
   if (orderIds.length === 0) return new Map()
@@ -52,7 +55,7 @@ export async function loadOrderPaid(
     ...direct.map(toPay),
     // С прямой привязкой к заказу платёж уже посчитан выше — через счёт второй раз не берём.
     ...viaInvoice.map(toPay).filter(p => p.b2b_order_id == null),
-  ].filter(p => !p.external_key || !exclude.has(p.external_key))
+  ].filter(p => (!p.external_key || !exclude.has(p.external_key)) && !opts.skip?.(p))
 
   const paid = paidByOrder(pays, [...invoices.values()], totals)
   const out = new Map<number, number>()

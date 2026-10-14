@@ -7,6 +7,7 @@ import { withCronRun } from '@/lib/cronRuns'
 import { reconcileOrder, type KeyState } from '@/lib/payments/reconcilePlan'
 import { loadOrderPaid } from '@/lib/money/orderPaid'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { allocateAdvances } from '@/lib/accounting/clientAdvance'
 
 export const maxDuration = 300
 
@@ -137,6 +138,13 @@ async function run(req: NextRequest) {
     }
   }
 
+  // Авансы клиентов: запуск мимо экрана, правка итога, оплата заказа напрямую — план
+  // списаний пересчитывается здесь же, раз в сутки (lib/accounting/clientAdvance.ts).
+  let advances: Awaited<ReturnType<typeof allocateAdvances>> | null = null
+  try { advances = await allocateAdvances(svc) } catch (e) {
+    stat.errors.push(`авансы: ${e instanceof Error ? e.message : 'ошибка'}`)
+  }
+
   // Б7: розница в ядро. Оплаты B2C живут галочками ведомости продаж, а не
   // заказами: в orders одна строка на всю базу.
   // ВНИМАНИЕ: 925 из 926 розничных строк — историческая выгрузка из Google-
@@ -150,7 +158,7 @@ async function run(req: NextRequest) {
   if (!doRetail) {
     const { count: liveOnly } = await svc.from('payments')
       .select('*', { count: 'exact', head: true }).is('voided_at', null)
-    return NextResponse.json({ ok: true, ...stat, retail: 'skipped (add ?retail=1 to backfill)', corePayments: liveOnly })
+    return NextResponse.json({ ok: true, ...stat, advances, retail: 'skipped (add ?retail=1 to backfill)', corePayments: liveOnly })
   }
   type SaleRow = {
     id: number; amount: number | null; prepayment: number | null; sale_date: string

@@ -4,7 +4,8 @@ import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { parseStatement, dedupe } from '@/lib/bank/parseStatement'
-import { loadOpenInvoices, postBankRow, type BankRow } from '@/lib/accounting/bankPost'
+import { applyBankOrderPayment, applyBankPayment, loadOpenInvoices, postBankRow, type BankRow } from '@/lib/accounting/bankPost'
+import { allocateAdvances, createAdvance, loadAdvanceSummaries, voidAdvance, type AdvanceSummary } from '@/lib/accounting/clientAdvance'
 import { matchInvoice, type OpenInvoice } from '@/lib/accounting/bankMatch'
 import { isLoan, isOwnTransfer } from '@/lib/accounting/bankAuto'
 
@@ -132,6 +133,13 @@ export async function GET(req: NextRequest) {
     ? await svc.from('payments').select('id, b2b_order_id').in('id', orderPayIds)
     : { data: [] }
   const orderByPay = new Map((orderPays ?? []).map(p => [Number(p.id), Number(p.b2b_order_id) || null]))
+  // Строки, записанные авансом клиента: сколько списано на заказы и сколько осталось
+  // Сбой — словами: строка-аванс без пометки выглядела бы обычным неразобранным приходом
+  let advances = new Map<number, AdvanceSummary>()
+  let advancesError: string | null = null
+  try { advances = await loadAdvanceSummaries(svc, (rows ?? []).filter(r => r.direction === 'in').map(r => Number(r.id))) } catch (e) {
+    advancesError = e instanceof Error ? e.message : String(e)
+  }
 
   // Одобренные заявки — кандидаты на «этот расход уже согласован»
   const { data: reqs } = await svc.from('payment_requests')
@@ -149,14 +157,15 @@ export async function GET(req: NextRequest) {
     const own = r.direction === 'in' && isOwnTransfer(r.inn)
     const loan = r.direction === 'in' && isLoan(r.purpose)
     const applied = !!r.payment_id
-    const auto = r.direction === 'in' && status === 'new' && !applied && !own && !loan
+    const advance = advances.get(Number(r.id)) ?? null
+    const auto = r.direction === 'in' && status === 'new' && !applied && !own && !loan && !advance
       ? matchInvoice({ amount: Number(r.amount), inn: r.inn ?? null, purpose: r.purpose ?? null }, open)
       : null
     const had = linkedBy.get(Number(r.invoice_id))
     const paidOrder = applied && !r.invoice_id ? orderByPay.get(Number(r.payment_id)) ?? null : null
     return {
       ...r,
-      applied, own, loan,
+      applied, own, loan, advance,
       order: paidOrder ? { id: paidOrder, no: String(paidOrder).padStart(5, '0') } : null,
       invoice: auto
         ? { ...auto.invoice, partial: auto.partial, rest: auto.rest, over: auto.over }
@@ -172,7 +181,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json({ items, invoices: open, invoicesError })
+  return NextResponse.json({ items, invoices: open, invoicesError, advancesError })
 }
 
 export async function PATCH(req: NextRequest) {
@@ -196,6 +205,47 @@ export async function PATCH(req: NextRequest) {
       .update({ status: action === 'skip' ? 'skipped' : 'new' }).eq('id', id).select('id')
     if (error || !data?.length) return NextResponse.json({ error: error?.message ?? 'Строка не обновилась' }, { status: 500 })
     return NextResponse.json({ ok: true })
+  }
+
+  // Оплата заказа без проводки в ДДС: строку бухгалтер проведёт потом тем же платежом
+  if (action === 'apply') {
+    if (row.direction !== 'in') return NextResponse.json({ error: 'Оплата — только приход' }, { status: 400 })
+    if (row.payment_id) return NextResponse.json({ error: 'Оплата по строке уже проставлена' }, { status: 409 })
+    const invoiceId = Number(body.invoice_id) || 0
+    const orderId = Number(body.order_id) || 0
+    if (!invoiceId && !orderId) return NextResponse.json({ error: 'Выберите счёт или заказ' }, { status: 400 })
+    const note = `Из выписки, проставил(а) ${me.name}`
+    const res = invoiceId
+      ? await applyBankPayment(svc, row as BankRow, invoiceId, me, { note })
+      : await applyBankOrderPayment(svc, row as BankRow, orderId, me, note)
+    if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
+    const { error: markErr } = await svc.from('bank_statement_rows')
+      .update({ payment_id: res.paymentId, invoice_id: invoiceId || null }).eq('id', id)
+    const warnings = [...res.warnings, ...(markErr ? [`Оплата записана, строка выписки не отмечена: ${markErr.message}`] : [])]
+    // Заказ клиента с авансом оплачен напрямую — лишнее списание вернётся в остаток аванса
+    try { warnings.push(...(await allocateAdvances(svc)).warnings) } catch (e) {
+      warnings.push(`Авансы не пересчитаны: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    return NextResponse.json({ ok: true, payment_id: res.paymentId, invoice: 'invoice' in res ? res.invoice : res.order, warnings })
+  }
+
+  if (action === 'advance') {
+    const res = await createAdvance(svc, row as BankRow & { inn?: string | null }, {
+      clientId: Number(body.client_id) || null,
+      appliesFrom: typeof body.applies_from === 'string' && body.applies_from ? body.applies_from : null,
+      me,
+    })
+    if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
+    const summary = (await loadAdvanceSummaries(svc, [id])).get(id) ?? null
+    return NextResponse.json({ ok: true, advance: summary, warnings: res.allocated.warnings })
+  }
+
+  if (action === 'unadvance') {
+    const advanceId = Number(body.advance_id) || 0
+    if (!advanceId) return NextResponse.json({ error: 'Нет аванса' }, { status: 400 })
+    const res = await voidAdvance(svc, advanceId, me)
+    if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
+    return NextResponse.json({ ok: true, voided: res.voided })
   }
 
   const fundId = Number(body.fund_id)

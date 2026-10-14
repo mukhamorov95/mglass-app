@@ -44,7 +44,11 @@ export async function autoApplyBank(
     .order('op_date').order('id'))) as unknown as Row[]
   if (rows.length === 0) return out
 
-  const candidates = rows.filter(r => !isOwnTransfer(r.inn) && !isLoan(r.purpose))
+  // Аванс клиента — деньги вперёд, а не оплата счёта: его списывает clientAdvance
+  const advRows = await readPaged(() => svc.from('client_advances').select('id, bank_row_id')
+    .eq('unit', unit).is('voided_at', null).not('bank_row_id', 'is', null).order('id'))
+  const advance = new Set(advRows.map(a => Number(a.bank_row_id)))
+  const candidates = rows.filter(r => !isOwnTransfer(r.inn) && !isLoan(r.purpose) && !advance.has(r.id))
   const [open, openOrders] = await Promise.all([
     loadOpenInvoices(svc),
     loadOpenOrders(svc, [...new Set(candidates.flatMap(r => orderIdsIn(r.purpose)))]),

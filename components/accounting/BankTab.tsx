@@ -20,10 +20,17 @@ type Row = {
   invoice: RowInvoice | null
   applied?: boolean; own?: boolean; loan?: boolean
   order?: { id: number; no: string } | null
+  advance?: Advance | null
 }
-type BankList = { items: Row[]; invoices?: OpenInvoice[]; invoicesError?: string | null }
+type Advance = {
+  id: number; client: string; amount: number; used: number; left: number
+  receivedAt: string; appliesFrom: string; orders: { id: number; no: string; amount: number }[]
+}
+type BankList = { items: Row[]; invoices?: OpenInvoice[]; invoicesError?: string | null; advancesError?: string | null }
 type PostAnswer = {
   invoice: { no: string; partial: boolean; rest: number; over: number; replaced: number } | null
+  advance?: Advance | null
+  voided?: number
   warnings?: string[]
 }
 
@@ -36,6 +43,10 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
   const [rows, setRows] = useState<Row[]>([])
   const [invoices, setInvoices] = useState<OpenInvoice[]>([])
   const [invoicesError, setInvoicesError] = useState<string | null>(null)
+  const [advancesError, setAdvancesError] = useState<string | null>(null)
+  // Форма «аванс клиента»: с какой даты запуска заказы списываются с него
+  const [advForm, setAdvForm] = useState<{ row: number; from: string } | null>(null)
+  const [unadv, setUnadv] = useState<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [status, setStatus] = useState<'new' | 'posted' | 'skipped'>('new')
   const [loading, setLoading] = useState(true)
@@ -58,6 +69,7 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
         setRows(res.data.items)
         setInvoices(res.data.invoices ?? [])
         setInvoicesError(res.data.invoicesError ?? null)
+        setAdvancesError(res.data.advancesError ?? null)
         setLoadError(null)
       }
       setLoading(false)
@@ -137,6 +149,26 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
       for (const w of j.warnings ?? []) toast.info(w)
       setChosen(p => { const n = { ...p }; delete n[id]; return n })
     }
+    if (body.action === 'apply') {
+      const inv = j.invoice
+      toast.success(inv ? `Оплата проставлена: ${inv.partial ? `частично, останется ${RUB(inv.rest)}` : 'закрыто'}` : 'Оплата проставлена', {
+        detail: 'Заказ в «Заказах B2B» — «Оплачен · банк». Строку осталось провести в ДДС.',
+      })
+      for (const w of j.warnings ?? []) toast.info(w)
+      setChosen(p => { const n = { ...p }; delete n[id]; return n })
+    }
+    if (body.action === 'advance') {
+      const a = j.advance
+      toast.success(a ? `Аванс ${a.client}: списано ${RUB(a.used)} на заказов ${a.orders.length}, остаток ${RUB(a.left)}` : 'Аванс записан', {
+        detail: 'Заказы — «Оплачен · аванс» в «Заказах B2B»; новые запуски клиента спишутся сами. Строку осталось провести в ДДС.',
+      })
+      for (const w of j.warnings ?? []) toast.info(w)
+      setAdvForm(null)
+    }
+    if (body.action === 'unadvance') {
+      toast.success('Аванс отменён', { detail: `Снято списаний: ${j.voided ?? 0} — эти заказы снова ждут оплату` })
+      setUnadv(null)
+    }
     reload(); onPosted()
   }
 
@@ -182,6 +214,11 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
           <button onClick={reload} className="underline flex-shrink-0">повторить</button>
         </div>
       )}
+      {advancesError && (
+        <p className="px-3 py-2 rounded-lg bg-amber-50 text-amber-800 text-[13px]">
+          Авансы не загрузились ({advancesError}) — строки-авансы сейчас не помечены, не проставляйте по ним оплату.
+        </p>
+      )}
       {status === 'new' && invoicesError && (
         <p className="px-3 py-2 rounded-lg bg-amber-50 text-amber-800 text-[13px]">
           Счета не загрузились ({invoicesError}) — подбор и выбор счёта сейчас недоступны, приход можно провести без счёта.
@@ -223,7 +260,32 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
                 {r.own ? 'Свой перевод ИП ↔ ООО — не выручка, счёта у него нет' : 'Заём — не выручка, счёта у него нет'}
               </p>
             )}
-            {r.direction === 'in' && !r.own && !r.loan && (
+            {r.direction === 'in' && r.advance && (
+              <div className="mt-2 rounded-lg bg-[#f5f5f3] px-2.5 py-2 text-[12px]">
+                <p className="text-[#111110]">
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 mr-1.5">аванс</span>
+                  {r.advance.client} · списано {RUB(r.advance.used)} · <span className="font-semibold">остаток {RUB(r.advance.left)}</span>
+                </p>
+                <p className="text-[#9a9a95] mt-0.5">
+                  С аванса оплачиваются заказы, запущенные с {DD(r.advance.appliesFrom)}.{r.advance.appliesFrom.slice(0, 4)}, по порядку запуска
+                </p>
+                {r.advance.orders.length > 0 && (
+                  <p className="text-[#6b6b66] mt-1">
+                    {r.advance.orders.map(o => `${o.no} — ${RUB(o.amount)}`).join(' · ')}
+                  </p>
+                )}
+                {unadv === r.id ? (
+                  <span className="mt-1.5 inline-flex gap-2">
+                    <button onClick={() => act(r.id, { action: 'unadvance', advance_id: r.advance!.id }, 'Аванс не отменён')} disabled={busy === r.id}
+                      className="text-red-700 underline">снять все списания и отменить аванс</button>
+                    <button onClick={() => setUnadv(null)} className="text-[#6b6b66] underline">не надо</button>
+                  </span>
+                ) : (
+                  <button onClick={() => setUnadv(r.id)} className="mt-1.5 text-[#6b6b66] underline">отменить аванс</button>
+                )}
+              </div>
+            )}
+            {r.direction === 'in' && !r.own && !r.loan && !r.advance && (
               <div className="mt-2 text-[12px] flex flex-wrap items-center gap-x-2 gap-y-1">
                 {r.applied && status === 'new' && (
                   <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">✓ оплата заказа проставлена по выписке — осталось провести в ДДС</span>
@@ -258,8 +320,34 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
                         без счёта
                       </button>
                     )}
+                    {inv && (
+                      <button onClick={() => act(r.id, { action: 'apply', invoice_id: inv.id }, 'Оплата не проставлена')} disabled={busy === r.id}
+                        className="text-[#111110] underline">
+                        проставить оплату без ДДС
+                      </button>
+                    )}
+                    {!advancesError && (
+                      <button onClick={() => setAdvForm(advForm?.row === r.id ? null : { row: r.id, from: r.op_date.slice(0, 10) })}
+                        className="text-[#111110] underline">
+                        аванс клиента
+                      </button>
+                    )}
                   </>
                 )}
+              </div>
+            )}
+
+            {advForm?.row === r.id && (
+              <div className="mt-2 rounded-lg border border-[#e4e4e0] bg-[#f5f5f3] p-2.5 text-[12px] flex flex-wrap items-center gap-2">
+                <span className="text-[#6b6b66]">Клиент — по ИНН плательщика. Списывать с заказов, запущенных с</span>
+                <input type="date" value={advForm.from} onChange={e => setAdvForm({ row: r.id, from: e.target.value })}
+                  className="border border-[#e4e4e0] rounded-lg px-2 py-1 bg-white text-[13px]" />
+                <button onClick={() => act(r.id, { action: 'advance', applies_from: advForm.from }, 'Аванс не записан')}
+                  disabled={busy === r.id || !advForm.from}
+                  className="px-3 py-1 rounded-lg bg-[#111110] text-white font-semibold disabled:opacity-40">
+                  Записать аванс
+                </button>
+                <button onClick={() => setAdvForm(null)} className="text-[#6b6b66] underline">отмена</button>
               </div>
             )}
 
