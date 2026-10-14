@@ -73,41 +73,51 @@ export function specSize(spec: PartSpec): { W: number; H: number } {
   return spec.shape === 'circle' ? { W: spec.W, H: spec.W } : { W: spec.W, H: spec.H }
 }
 
-function outerOf(spec: PartSpec, W: number, H: number, issues: DfmIssue[]): { outer: Seg[]; label: string } {
+// Верхняя кромка y(x) и её наклон: у скоса отверстия «сверху» идут вдоль скошенной кромки, а не по габариту.
+type Top = { y: (x: number) => number; k: number }
+const FLAT: Top = { y: () => 0, k: 0 }
+
+function outerOf(spec: PartSpec, W: number, H: number, issues: DfmIssue[]): { outer: Seg[]; label: string; top: Top } {
   switch (spec.shape) {
     case 'rounded': {
       const R = limitRadius(Math.max(0, spec.R), Math.min(W, H) / 2, 'Радиус углов', issues)
-      return { outer: roundedRectSegs(0, 0, W, H, [R, R, R, R]), label: `R${numRu(R)}` }
+      return { outer: roundedRectSegs(0, 0, W, H, [R, R, R, R]), label: `R${numRu(R)}`, top: FLAT }
     }
     case 'bevel': {
       const HL = clamp(spec.HL, [30, H], 'Высота левой стороны', issues)
       const HR = clamp(spec.HR, [30, H], 'Высота правой стороны', issues)
-      if (HL === H && HR === H) return { outer: roundedRectSegs(0, 0, W, H), label: '' }
+      if (HL === H && HR === H) return { outer: roundedRectSegs(0, 0, W, H), label: '', top: FLAT }
       const pts = [{ x: 0, y: H - HL }, { x: W, y: H - HR }, { x: W, y: H }, { x: 0, y: H }]
-      return { outer: pts.map((p, i) => line(p, pts[(i + 1) % pts.length])), label: `скос ${numRu(HL)}/${numRu(HR)}` }
+      const k = (HL - HR) / W
+      return { outer: pts.map((p, i) => line(p, pts[(i + 1) % pts.length])), label: `скос ${numRu(HL)}/${numRu(HR)}`, top: { y: x => H - HL + k * x, k } }
     }
     case 'circle':
-      return { outer: circleSegs({ x: W / 2, y: W / 2 }, W / 2), label: '' }
+      return { outer: circleSegs({ x: W / 2, y: W / 2 }, W / 2), label: '', top: FLAT }
     case 'ellipse':
-      return { outer: ellipseSegs(W / 2, H / 2, W / 2, H / 2), label: '' }
+      return { outer: ellipseSegs(W / 2, H / 2, W / 2, H / 2), label: '', top: FLAT }
     case 'arch': {
       const A = limitRadius(Math.max(0, spec.A), Math.min(W / 2, H), 'Подъём дуги', issues)
-      return { outer: archSegs(W, H, A), label: `подъём ${numRu(A)}` }
+      return { outer: archSegs(W, H, A), label: `подъём ${numRu(A)}`, top: FLAT }
     }
     default:
-      return { outer: roundedRectSegs(0, 0, W, H), label: '' }
+      return { outer: roundedRectSegs(0, 0, W, H), label: '', top: FLAT }
   }
 }
 
-function holesOf(g: HoleGroup, W: number, H: number, issues: DfmIssue[]): HoleGeom[] {
+function holesOf(g: HoleGroup, W: number, H: number, top: Top, issues: DfmIssue[]): HoleGeom[] {
   const d = clamp(g.d, SPEC_LIMITS.holeD, 'Диаметр отверстия', issues)
   const e = clamp(g.edge, SPEC_LIMITS.holeEdge, 'От кромки до центра отверстия', issues)
-  if (g.layout === 'corners') return [[e, e], [W - e, e], [W - e, H - e], [e, H - e]].map(([cx, cy]) => ({ cx, cy, d }))
+  // От наклонной кромки отступ e — по перпендикуляру, поэтому по вертикали он длиннее.
+  const below = (x: number) => top.y(x) + e * Math.hypot(1, top.k)
+  if (g.layout === 'corners') return [[e, below(e)], [W - e, below(W - e)], [W - e, H - e], [e, H - e]].map(([cx, cy]) => ({ cx, cy, d }))
   const n = Math.round(clamp(g.n, SPEC_LIMITS.holeN, 'Число отверстий', issues, 'шт'))
-  const len = g.layout === 'rowTop' ? W : H
+  if (g.layout === 'rowTop') {
+    const end = clamp(g.end, [e, Math.max(e, W / 2)], 'От торца до крайнего отверстия', issues)
+    return evenly(end, W - end, n).map(cx => ({ cx, cy: below(cx), d }))
+  }
+  const y0 = top.y(0), len = H - y0
   const end = clamp(g.end, [e, Math.max(e, len / 2)], 'От торца до крайнего отверстия', issues)
-  const at = evenly(end, len - end, n)
-  return g.layout === 'rowTop' ? at.map(cx => ({ cx, cy: e, d })) : at.map(cy => ({ cx: e, cy, d }))
+  return evenly(y0 + end, H - end, n).map(cy => ({ cx: e, cy, d }))
 }
 
 function cutoutsOf(g: CutoutGroup, W: number, H: number, issues: DfmIssue[]): Seg[][] {
@@ -124,8 +134,8 @@ export function buildFromSpec(spec: PartSpec): PartGeometry {
   const lim = spec.shape === 'circle' ? SPEC_LIMITS.circle : spec.shape === 'ellipse' ? SPEC_LIMITS.ellipse : SPEC_LIMITS.side
   const W = clamp(spec.W, lim, spec.shape === 'circle' ? 'Диаметр' : 'Ширина', issues)
   const H = spec.shape === 'circle' ? W : clamp(spec.H, lim, 'Высота', issues)
-  const { outer, label } = outerOf(spec, W, H, issues)
-  const holes = spec.holes.flatMap(g => holesOf(g, W, H, issues))
+  const { outer, label, top } = outerOf(spec, W, H, issues)
+  const holes = spec.holes.flatMap(g => holesOf(g, W, H, top, issues))
   const cutouts = spec.cutouts.flatMap(g => cutoutsOf(g, W, H, issues))
   const title = SHAPES.find(s => s.id === spec.shape)?.title ?? 'Деталь'
   const size = spec.shape === 'circle' ? `Ø${numRu(W)}` : `${numRu(W)}×${numRu(H)}`

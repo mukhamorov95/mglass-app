@@ -43,10 +43,11 @@ export function thicknessesFor(list: DemoMaterial[], kind: Kind): { t: number; f
 export function materialsFor(list: DemoMaterial[], kind: Kind, t: number | null): { category: string; items: DemoMaterial[] }[] {
   const ms = list.filter(m => kindOf(m) === kind && m.thickness === t)
   const cats = [...new Set(ms.map(m => m.category || 'Без категории'))]
+  // Группа с самым дешёвым материалом — первой: базовое стекло выше рифлёного и сатина.
   return cats.map(category => ({
     category,
     items: ms.filter(m => (m.category || 'Без категории') === category).sort((a, b) => a.pricePerM2 - b.pricePerM2 || a.name.localeCompare(b.name, 'ru')),
-  }))
+  })).sort((a, b) => a.items[0].pricePerM2 - b.items[0].pricePerM2)
 }
 
 // Толщина по умолчанию: прежняя, если есть у вида; иначе ходовая (стекло 8, зеркало 4); иначе ближайшая к прежней.

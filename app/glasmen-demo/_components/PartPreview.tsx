@@ -38,7 +38,7 @@ export default function PartPreview({
 
   return (
     <svg
-      viewBox={`${-pad} ${-pad * 0.6} ${W + pad * 1.6} ${H + pad * 1.6}`}
+      viewBox={`${-pad * 0.5} ${-pad * 0.5} ${W + pad * 1.5} ${H + pad * 1.4}`}
       className="h-auto w-full rounded-xl border border-[#e4e4e0] bg-white"
       style={{ maxHeight: 460 }}
       role="img"

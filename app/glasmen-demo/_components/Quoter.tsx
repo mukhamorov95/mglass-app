@@ -304,14 +304,14 @@ export default function Quoter({ initialSource }: { initialSource: Source | null
             <div className="mt-3 grid grid-cols-2 gap-3 sm:max-w-[420px]">
               <Field label="Высота слева"><NumField value={sp.HL} onChange={n => setSpec({ HL: n })} className="w-full" suffix="мм" ariaLabel="Высота слева, мм" /></Field>
               <Field label="Высота справа"><NumField value={sp.HR} onChange={n => setSpec({ HR: n })} className="w-full" suffix="мм" ariaLabel="Высота справа, мм" /></Field>
-              <p className="col-span-2 text-[11px] text-[#9a9a95]">Верхняя кромка — прямая от левой высоты к правой; низ ровный. Большая из высот — не больше общей высоты.</p>
+              <p className="col-span-2 text-[11px] text-[#9a9a95]">Трапеция: верхняя кромка — прямая от левой высоты к правой, низ ровный. Высоты — не больше общей.</p>
             </div>
           )}
           {!fromDxf && sp.shape === 'arch' && (
             <Field label="Подъём дуги" className="mt-3 max-w-[200px]"><NumField value={sp.A} onChange={n => setSpec({ A: n })} className="w-full" suffix="мм" ariaLabel="Подъём дуги, мм" /></Field>
           )}
           {!fromDxf && sp.shape !== 'rect' && (
-            <p className="mt-2 text-[11px] text-[#9a9a95]">{SHAPES.find(x => x.id === sp.shape)?.hint} Цена — по габариту; к непрямоугольной форме движок добавляет надбавку за криволинейную резку.</p>
+            <p className="mt-2 text-[11px] text-[#9a9a95]">Цена — по габариту; к непрямоугольной форме движок добавляет надбавку за сложную форму.</p>
           )}
 
           {fromDxf && (
