@@ -25,7 +25,7 @@ export const ISSUE_INFO: Record<string, { title: string; fix: string }> = {
   holes_too_close: { title: 'Отверстия близко друг к другу', fix: 'Разнесите отверстия.' },
   narrow_bridge: { title: 'Узкая перемычка', fix: 'Отодвиньте вырез или отверстие от кромки и друг от друга.' },
   cutout_sharp_corner: { title: 'Острый внутренний угол', fix: 'Скруглите внутренние углы выреза до минимального радиуса.' },
-  param_clamped: { title: 'Значение вне диапазона', fix: 'Взято ближайшее допустимое — проверьте параметр шаблона.' },
+  param_clamped: { title: 'Значение вне диапазона', fix: 'Взято ближайшее допустимое — проверьте размер.' },
 }
 
 export const issueTitle = (i: DfmIssue) => ISSUE_INFO[i.code]?.title ?? i.code

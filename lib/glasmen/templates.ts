@@ -43,7 +43,7 @@ export function resolveParams(params: TemplateParam[], input: Partial<TemplatePa
   return { p, issues }
 }
 
-function clampIssue(label: string, asked: number, used: number, range: string): DfmIssue {
+export function clampIssue(label: string, asked: number, used: number, range: string): DfmIssue {
   return { code: 'param_clamped', level: 'soft', message: `«${label}»: ${numRu(asked)} вне допустимого (${range}), взято ${numRu(used)}.` }
 }
 
@@ -64,19 +64,33 @@ export function roundedRectSegs(x: number, y: number, w: number, h: number, r: [
   return segs.filter(s => (s.kind === 'arc' ? s.r > 1e-9 : segLength(s) > 1e-9))
 }
 
-function ellipseSegs(cx: number, cy: number, a: number, b: number, n = 360): Seg[] {
+export function ellipseSegs(cx: number, cy: number, a: number, b: number, n = 360): Seg[] {
   const pts: Pt[] = []
   for (let i = 0; i < n; i++) pts.push({ x: cx + a * Math.cos((TAU * i) / n), y: cy + b * Math.sin((TAU * i) / n) })
   return pts.map((p, i) => line(p, pts[(i + 1) % n]))
 }
 
-function limitRadius(r: number, max: number, label: string, issues: DfmIssue[]): number {
+// Прямоугольник с дугой сверху; подъём A ≤ min(W/2, H) — проверяет вызывающий.
+export function archSegs(W: number, H: number, A: number): Seg[] {
+  if (A < 0.01) return roundedRectSegs(0, 0, W, H)
+  const R = (W * W / 4 + A * A) / (2 * A)
+  const c = { x: W / 2, y: R }
+  const s = Math.atan2(A - R, -W / 2), e = Math.atan2(A - R, W / 2)
+  return [
+    line({ x: 0, y: H }, { x: 0, y: A }),
+    arc(c, R, s, (((e - s) % TAU) + TAU) % TAU),
+    line({ x: W, y: A }, { x: W, y: H }),
+    line({ x: W, y: H }, { x: 0, y: H }),
+  ].filter(sg => sg.kind === 'arc' || segLength(sg) > 1e-9)
+}
+
+export function limitRadius(r: number, max: number, label: string, issues: DfmIssue[]): number {
   if (r <= max + 1e-9) return r
   issues.push(clampIssue(label, r, max, `не больше ${numRu(max)} мм при этих размерах`))
   return max
 }
 
-const evenly = (from: number, to: number, n: number): number[] =>
+export const evenly = (from: number, to: number, n: number): number[] =>
   n <= 0 ? [] : n === 1 ? [(from + to) / 2] : Array.from({ length: n }, (_, i) => from + ((to - from) * i) / (n - 1))
 
 function part(name: string, outer: Seg[], holes: HoleGeom[], cutouts: Seg[][], issues: DfmIssue[]): PartGeometry {
@@ -126,20 +140,7 @@ const arch: PartTemplate = {
     const { p, issues } = resolveParams(arch.params, input)
     const { W, H } = p
     const A = limitRadius(p.A, Math.min(W / 2, H), 'Подъём дуги', issues)
-    let outer: Seg[]
-    if (A < 0.01) outer = roundedRectSegs(0, 0, W, H)
-    else {
-      const R = (W * W / 4 + A * A) / (2 * A)
-      const c = { x: W / 2, y: R }
-      const s = Math.atan2(A - R, -W / 2), e = Math.atan2(A - R, W / 2)
-      outer = [
-        line({ x: 0, y: H }, { x: 0, y: A }),
-        arc(c, R, s, (((e - s) % TAU) + TAU) % TAU),
-        line({ x: W, y: A }, { x: W, y: H }),
-        line({ x: W, y: H }, { x: 0, y: H }),
-      ].filter(sg => sg.kind === 'arc' || segLength(sg) > 1e-9)
-    }
-    return part(`Арка ${numRu(W)}×${numRu(H)}, подъём ${numRu(A)}`, outer, [], [], issues)
+    return part(`Арка ${numRu(W)}×${numRu(H)}, подъём ${numRu(A)}`, archSegs(W, H, A), [], [], issues)
   },
 }
 

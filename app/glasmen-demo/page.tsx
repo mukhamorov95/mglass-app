@@ -17,7 +17,7 @@ const OPERATIONS = [
 const FAQ: { q: string; a: string }[] = [
   {
     q: 'Как получить цену без менеджера?',
-    a: 'Загрузите DXF, выберите шаблон или введите размеры. Цену считает код по нашему действующему прайсу — за штуку и за партию, сразу на экране.',
+    a: 'Загрузите DXF или пройдите шаги: стекло или зеркало, толщина, материал, размеры, количество. Цену считает код по нашему действующему прайсу — за штуку и за партию, сразу на экране.',
   },
   {
     q: 'Какие файлы принимаете?',
@@ -25,7 +25,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Нет чертежа — что делать?',
-    a: 'Возьмите шаблон (прямоугольник, круг, овал, арка, полка, фартук, полотно душевой) или задайте ширину и высоту. Шаблон можно скачать как DXF.',
+    a: 'Задайте ширину и высоту, при необходимости — форму (скруглённые углы, скос, круг, овал, арка), отверстия и вырезы. Получившуюся деталь можно скачать как DXF.',
   },
   {
     q: 'Можно ли сверлить и резать закалённое стекло?',
@@ -55,7 +55,7 @@ export default function GlasmenDemoHome() {
       <section className="rounded-2xl border border-[#e4e4e0] bg-white px-5 py-8 sm:px-8 sm:py-12">
         <p className="text-[12px] font-medium uppercase tracking-wide text-[#9a9a95]">Стекло и зеркала под размер для бизнеса</p>
         <h1 className="mt-2 max-w-3xl text-[26px] font-semibold leading-tight tracking-tight sm:text-[36px]">
-          Цена стеклянной детали за секунды — по чертежу, шаблону или размерам
+          Цена стеклянной детали за секунды — по чертежу или размерам
         </h1>
         <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-[#55554f] sm:text-[15px]">
           Загрузите DXF — калькулятор найдёт контур, отверстия и вырезы, проверит их по правилам стекла и покажет цену за штуку и за партию. Без звонка и без регистрации — так задумано для будущего сайта; демо открыто только владельцу.
@@ -109,15 +109,15 @@ export default function GlasmenDemoHome() {
       </section>
 
       <section>
-        <h2 className="text-[18px] font-semibold tracking-tight">Нет чертежа? Шаблон, размеры или фото</h2>
+        <h2 className="text-[18px] font-semibold tracking-tight">Нет чертежа? По шагам или фото</h2>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <Link href="/glasmen-demo/quote?tab=template" className="rounded-xl border border-[#e4e4e0] bg-white p-4 hover:border-[#111110]">
-            <div className="text-[14px] font-medium">Шаблон</div>
-            <div className="mt-1 text-[12px] leading-snug text-[#55554f]">Прямоугольник, круг, овал, арка, полка, фартук, полотно душевой — размеры ползунками, DXF скачивается.</div>
+          <Link href="/glasmen-demo/quote?source=form" className="rounded-xl border border-[#e4e4e0] bg-white p-4 hover:border-[#111110]">
+            <div className="text-[14px] font-medium">По шагам</div>
+            <div className="mt-1 text-[12px] leading-snug text-[#55554f]">Стекло или зеркало → толщина → материал → размеры → количество → форма, отверстия и вырезы. DXF скачивается.</div>
           </Link>
-          <Link href="/glasmen-demo/quote?tab=size" className="rounded-xl border border-[#e4e4e0] bg-white p-4 hover:border-[#111110]">
-            <div className="text-[14px] font-medium">Размеры</div>
-            <div className="mt-1 text-[12px] leading-snug text-[#55554f]">Ширина × высота прямоугольника — цена сразу.</div>
+          <Link href="/glasmen-demo/quote?source=dxf" className="rounded-xl border border-[#e4e4e0] bg-white p-4 hover:border-[#111110]">
+            <div className="text-[14px] font-medium">По чертежу DXF</div>
+            <div className="mt-1 text-[12px] leading-snug text-[#55554f]">Размеры, форма, отверстия и вырезы — из файла; проверка по правилам стекла.</div>
           </Link>
           <div className="rounded-xl border border-dashed border-[#e4e4e0] bg-white/60 p-4">
             <div className="text-[14px] font-medium text-[#55554f]">Фото или эскиз <span className="ml-1 rounded bg-[#f5f5f3] px-1.5 py-0.5 text-[11px] font-normal text-[#9a9a95]">скоро</span></div>

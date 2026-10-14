@@ -11,7 +11,7 @@ const bomb = () => {
   return dxf(Array.from({ length: 50 }, (_, k) => insert('L3', 0, k * 20)), { blocks })
 }
 const saved = (d: Partial<Dxf> & { text: string }, extra: Record<string, unknown> = {}) =>
-  JSON.stringify({ tab: 'dxf', dxf: { name: 'a.dxf', units: null, ...d }, ...extra })
+  JSON.stringify({ source: 'dxf', dxf: { name: 'a.dxf', units: null, ...d }, ...extra })
 
 describe('черновик расчёта: «отравленный» DXF не переживает перезагрузку', () => {
   it('сохранённый чертёж-бомба убирается из черновика при чтении, быстро и с именем файла', () => {
@@ -21,7 +21,7 @@ describe('черновик расчёта: «отравленный» DXF не �
     expect(performance.now() - t).toBeLessThan(1000)
     expect(snap.dxf).toBeNull()
     expect(droppedDxf).toBe('bomb.dxf')
-    expect(snap.tab).toBe('dxf')
+    expect(snap.source).toBe('dxf')
   })
 
   it('чертёж с «1e400» тоже убирается', () => {
@@ -39,8 +39,10 @@ describe('черновик расчёта: «отравленный» DXF не �
   it('неизвестные единицы в черновике → «не подтверждены»; битый JSON → значения по умолчанию', () => {
     const text = dxf([rectLw(0, 0, 100, 60)])
     expect(readSnapshot(null, saved({ text, units: 'parsec' as never })).snap.dxf?.units).toBeNull()
-    const d = readSnapshot('size', '{oops')
-    expect(d.snap.tab).toBe('size')
+    const d = readSnapshot('form', '{oops')
+    expect(d.snap.source).toBe('form')
+    expect(d.snap.qty).toBe(1)
+    expect(d.snap.kind).toBe('glass')
     expect(d.snap.dxf).toBeNull()
     expect(d.droppedDxf).toBeNull()
   })
@@ -71,7 +73,7 @@ describe('черновик расчёта: «отравленный» DXF не �
 })
 
 describe('показ цены: единицы и черновые правила стекла', () => {
-  const ok = { matsDone: true, hasMaterial: true, tab: 'dxf' as const, hasDxf: true, hasFacts: true, unitsPending: false, hardCount: 0 }
+  const ok = { matsDone: true, hasMaterial: true, source: 'dxf' as const, hasDxf: true, hasFacts: true, unitsPending: false, hardCount: 0 }
 
   it('всё в порядке — цена и кнопка доступны', () => {
     expect(priceGate(ok)).toEqual({ blocked: null, hardNote: null, addReason: null })
@@ -94,7 +96,8 @@ describe('показ цены: единицы и черновые правила
 
   it('DXF без контура — цены нет, без «загрузите чертёж»', () => {
     expect(priceGate({ ...ok, hasFacts: false }).blocked).toMatch(/в чертеже не найден контур/)
-    expect(priceGate({ ...ok, tab: 'size', hasDxf: false, hasFacts: false }).blocked).toMatch(/Загрузите чертёж/)
+    expect(priceGate({ ...ok, source: 'form', hasDxf: false, hasFacts: false }).blocked).toMatch(/Задайте размеры/)
+    expect(priceGate({ ...ok, hasDxf: false, hasFacts: false }).blocked).toMatch(/Загрузите чертёж DXF/)
   })
 
   it('unitsPendingFor: мм в файле — не спрашиваем; дюймы, метры, «не указаны» — до подтверждения', () => {
@@ -105,5 +108,29 @@ describe('показ цены: единицы и черновые правила
     expect(unitsPendingFor(d, geom('m'))).toBe(true)
     expect(unitsPendingFor(d, geom('none'))).toBe(true)
     expect(unitsPendingFor({ ...d, units: 'inch' }, geom('inch'))).toBe(false)
+  })
+})
+
+describe('черновик шагов: вид, толщина, форма, отверстия, количество', () => {
+  it('поля шагов читаются; битые — по умолчанию; количество в пределах 1…10 000', () => {
+    const raw = JSON.stringify({
+      source: 'form', kind: 'mirror', thickness: 6, qty: 1e9,
+      spec: { shape: 'arch', W: 900, H: 'x', A: 250, holes: [{ d: 12, n: 3, layout: 'rowSide', edge: 40, end: 200 }, 'мусор'], cutouts: [{ w: 70 }] },
+    })
+    const { snap } = readSnapshot(null, raw)
+    expect(snap.kind).toBe('mirror')
+    expect(snap.thickness).toBe(6)
+    expect(snap.qty).toBe(10000)
+    expect(snap.spec.shape).toBe('arch')
+    expect(snap.spec.W).toBe(900)
+    expect(snap.spec.H).toBe(600)
+    expect(snap.spec.holes).toEqual([{ d: 12, n: 3, layout: 'rowSide', edge: 40, end: 200 }])
+    expect(snap.spec.cutouts).toEqual([{ w: 70, h: 75, r: 8, n: 1, fromTop: 300 }])
+  })
+
+  it('неизвестная форма и расположение отверстий → значения по умолчанию', () => {
+    const { snap } = readSnapshot(null, JSON.stringify({ spec: { shape: 'star', holes: [{ layout: 'spiral' }] } }))
+    expect(snap.spec.shape).toBe('rect')
+    expect(snap.spec.holes[0].layout).toBe('corners')
   })
 })
