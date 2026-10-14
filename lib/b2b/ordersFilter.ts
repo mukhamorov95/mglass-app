@@ -64,7 +64,8 @@ export function clientOptions(orders: ClientRef[], keyOf: (o: ClientRef) => stri
 }
 
 export type Bucket = { count: number; sum: number }
-export type OrdersSummary = { all: Bucket; active: Bucket; shipped: Bucket; paid: Bucket; partial: Bucket; unpaid: Bucket }
+// paidByMark — часть paid: «Оплачен» стоит отметкой человека, денег в загруженных выписках нет
+export type OrdersSummary = { all: Bucket; active: Bucket; shipped: Bucket; paid: Bucket; paidByMark: Bucket; partial: Bucket; unpaid: Bucket }
 
 // Итог выборки целиком — отгруженные тоже: «на какую сумму заказали» не зависит
 // от того, на каком этапе заказ сейчас. «Не оплачено» — всё, где оплаты нет или
@@ -74,9 +75,10 @@ export function summarizeOrders<T>(
   priceOf: (o: T) => number,
   shippedOf: (o: T) => boolean,
   payOf: (o: T) => 'paid' | 'partial' | 'unpaid' | 'unknown',
+  bankConfirmedOf: (o: T) => boolean = () => true,
 ): OrdersSummary {
   const b = (): Bucket => ({ count: 0, sum: 0 })
-  const s: OrdersSummary = { all: b(), active: b(), shipped: b(), paid: b(), partial: b(), unpaid: b() }
+  const s: OrdersSummary = { all: b(), active: b(), shipped: b(), paid: b(), paidByMark: b(), partial: b(), unpaid: b() }
   const add = (x: Bucket, v: number) => { x.count++; x.sum += v }
   for (const o of orders) {
     const v = Math.round(priceOf(o))
@@ -84,6 +86,7 @@ export function summarizeOrders<T>(
     add(shippedOf(o) ? s.shipped : s.active, v)
     const p = payOf(o)
     add(p === 'paid' ? s.paid : p === 'partial' ? s.partial : s.unpaid, v)
+    if (p === 'paid' && !bankConfirmedOf(o)) add(s.paidByMark, v)
   }
   return s
 }
