@@ -12,6 +12,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 process.removeAllListeners('warning')
 const R = await import('../lib/sales/retailProductType.mjs')
@@ -21,7 +22,8 @@ const has = n => process.argv.includes('--' + n)
 const APPLY = has('apply')
 const SINCE = arg('since', '2025-06-01')
 
-const envPath = arg('env', new URL('../.env.local', import.meta.url).pathname)
+// fileURLToPath, а не .pathname: в пути «КОД/КЛАУД» кириллица, и .pathname отдаёт %D0%9A… — файла нет
+const envPath = arg('env', fileURLToPath(new URL('../.env.local', import.meta.url)))
 const env = Object.fromEntries(readFileSync(envPath, 'utf8').split('\n')
   .filter(l => l.includes('=') && !l.startsWith('#'))
   .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]))
