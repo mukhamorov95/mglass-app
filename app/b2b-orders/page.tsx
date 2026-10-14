@@ -16,6 +16,7 @@ import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
 import { maxFormattedNumber, nextOrderNumber } from '@/lib/b2b/orderNumber'
 import { payStatusFromPayments, type OrderPayStatus } from '@/lib/b2b/orderPayStatus'
+import type { PaidBy } from '@/lib/b2b/paidBy'
 import { writeFailure } from '@/lib/rlsWrite'
 import { matchScore } from '@/lib/search/translitMatch'
 import ClientPicker from '@/components/ClientPicker'
@@ -607,6 +608,8 @@ export default function B2BOrdersPage() {
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
   // A23: оплачено по заказам — из payments (деньги, не notes). null — ещё не загрузилось.
   const [paidByOrderId, setPaidByOrderId] = useState<Record<number, number> | null>(null)
+  // Кто отметил оплату — подпись к метке «Оплачен» (последний живой платёж заказа)
+  const [paidWho, setPaidWho] = useState<Record<number, PaidBy>>({})
   const [paidErr, setPaidErr] = useState<string | null>(null)
   const getOrderPayStatus = (o: Order): OrderPayStatus =>
     payStatusFromPayments(getFinalPrice(o), paidByOrderId ? (paidByOrderId[o.id] ?? 0) : undefined)
@@ -854,10 +857,11 @@ export default function B2BOrdersPage() {
       const res = await Promise.all(parts.map(async part => {
         const r = await fetch(`/api/b2b-orders/payments?ids=${part.join(',')}`).catch(() => { throw new Error(NETWORK_ERROR) })
         if (!r.ok) throw new Error(await responseError(r))
-        const j = await r.json() as { paid?: Record<number, number> }
-        return j.paid ?? {}
+        const j = await r.json() as { paid?: Record<number, number>; by?: Record<number, PaidBy> }
+        return { paid: j.paid ?? {}, by: j.by ?? {} }
       }))
-      setPaidByOrderId(Object.assign({}, ...res))
+      setPaidByOrderId(Object.assign({}, ...res.map(x => x.paid)))
+      setPaidWho(Object.assign({}, ...res.map(x => x.by)))
       setPaidErr(null)
     } catch (e) {
       setPaidErr(e instanceof Error ? e.message : NETWORK_ERROR)
@@ -868,10 +872,16 @@ export default function B2BOrdersPage() {
   async function reloadPaid(orderId: number) {
     const r = await fetch(`/api/b2b-orders/payments?ids=${orderId}`).catch(() => null)
     if (!r?.ok) { toast.error('Оплата заказа не обновилась на экране', { detail: r ? await responseError(r) : NETWORK_ERROR }); return }
-    const j = await r.json().catch(() => null) as { paid?: Record<number, number> } | null
+    const j = await r.json().catch(() => null) as { paid?: Record<number, number>; by?: Record<number, PaidBy> } | null
     setPaidByOrderId(prev => {
       const next = { ...(prev ?? {}) }
       if (j?.paid?.[orderId] != null) next[orderId] = j.paid[orderId]
+      else delete next[orderId]
+      return next
+    })
+    setPaidWho(prev => {
+      const next = { ...prev }
+      if (j?.by?.[orderId]) next[orderId] = j.by[orderId]
       else delete next[orderId]
       return next
     })
@@ -2470,8 +2480,8 @@ export default function B2BOrdersPage() {
                           {(dc?.next_action || dc?.reason) && (
                             <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
                           )}
-                          {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
-                            <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
+                          {(() => { const pb = PAY_BADGE[payStatus]; const who = paidWho[order.id]; return pb ? (
+                            <span title={who?.title} className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}{who?.label ? ` · ${who.label}` : ''}</span>
                           ) : null })()}
                           {requiresDeadlineControl(order) && (
                             <>
@@ -2635,8 +2645,8 @@ export default function B2BOrdersPage() {
                             {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
                               <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
                             )}
-                            {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
-                              <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
+                            {(() => { const pb = PAY_BADGE[payStatus]; const who = paidWho[order.id]; return pb ? (
+                              <span title={who?.title} className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}{who?.label ? ` · ${who.label}` : ''}</span>
                             ) : null })()}
                           </div>
                           <p className="text-[11px] text-[#9a9a95] mt-0.5">
@@ -2819,8 +2829,8 @@ export default function B2BOrdersPage() {
                                     {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
                                       <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66]">📝 Контроль</span>
                                     )}
-                                    {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
-                                      <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
+                                    {(() => { const pb = PAY_BADGE[payStatus]; const who = paidWho[order.id]; return pb ? (
+                                      <span title={who?.title} className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}{who?.label ? ` · ${who.label}` : ''}</span>
                                     ) : null })()}
                                     {lastDoneIdx >= 0 && !isShipped && (
                                       <span className="text-[10px] text-[#9a9a95]">· {STAGES[lastDoneIdx].label}</span>

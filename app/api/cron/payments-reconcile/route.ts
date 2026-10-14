@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
-import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
+import { recordPayment, recordPaymentOnce, voidPayment } from '@/lib/payments/recordPayment'
 import { b2bPaymentKey, salePaymentKey } from '@/lib/payments/paymentKeys'
 import { upsertSaleFromB2B, voidSale } from '@/lib/salesLedger'
 import { withCronRun } from '@/lib/cronRuns'
+import { reconcileOrder, type KeyState } from '@/lib/payments/reconcilePlan'
+import { loadOrderPaid } from '@/lib/money/orderPaid'
+import { finalTotalOf } from '@/lib/b2b/priceOverride'
 
 export const maxDuration = 300
 
 // Д2: ночная сверка notes ↔ денежное ядро. Первый прогон = бэкфилл всей
 // истории оплат B2B (заказы, оплаченные до появления ядра). Идемпотентно:
 // ключ платежа — бизнес-документ, повторный прогон ничего не меняет.
-// Расхождение notes → ядро правится в пользу notes: пока notes остаются
-// рабочим механизмом менеджеров, они и есть источник факта оплаты.
+// Отметка в notes без платежа — дописываем; «оплату сняли» — снимаем. Платёж,
+// который уже есть, не перезаписываем (reconcilePlan.ts — почему).
 
 type Notes = {
   payment_status?: string
@@ -48,42 +51,63 @@ async function run(req: NextRequest) {
     if (page.length < PAGE) break
   }
 
-  // Живые ключи ядра одним запросом: иначе на каждый неоплаченный заказ
-  // уходил бы отдельный select и прогон не влезал в лимит времени.
-  const liveKeys = new Set<string>()
+  // Ключи ядра одним запросом — и живые, и снятые: иначе на каждый заказ уходил бы
+  // отдельный select и прогон не влезал в лимит времени. Ошибка чтения — не «ключей
+  // нет»: с пустым списком сверка дописала бы платежи поверх всех оплаченных заказов.
+  const keyState = new Map<string, KeyState>()
   for (let from = 0; ; from += PAGE) {
-    const { data } = await svc.from('payments').select('external_key').is('voided_at', null).range(from, from + PAGE - 1)
-    const page = (data ?? []) as { external_key: string }[]
-    page.forEach(p => liveKeys.add(p.external_key))
+    const { data, error } = await svc.from('payments').select('id, external_key, voided_at').order('id').range(from, from + PAGE - 1)
+    if (error) return NextResponse.json({ error: `Платежи не прочитаны: ${error.message}` }, { status: 500 })
+    const page = (data ?? []) as { external_key: string; voided_at: string | null }[]
+    page.forEach(p => keyState.set(p.external_key, p.voided_at ? 'voided' : 'live'))
     if (page.length < PAGE) break
   }
+  const liveKeys = new Set([...keyState].filter(([, st]) => st === 'live').map(([k]) => k))
 
-  const stat = { scanned: orders.length, paid: 0, partial: 0, voided: 0, sales: 0, retail: 0, errors: [] as string[] }
+  // Сколько уже пришло по заказам, которым сверка может дописать «остаток»: выписка и
+  // счета считаются, иначе деньги из банка задвоились бы ночным платежом.
+  const needPaid = new Map<number, number>()
+  for (const o of orders) {
+    const n = parseNotes(o.notes)
+    const total = finalTotalOf(o)
+    if ((n.payment_status === 'paid' || !!n.stages?.invoice_paid) && total > 0 && !keyState.has(b2bPaymentKey(o.id, 'settlement'))) {
+      needPaid.set(o.id, total)
+    }
+  }
+  let paidByOrder = new Map<number, number>()
+  try { paidByOrder = await loadOrderPaid(svc, needPaid) } catch (e) {
+    return NextResponse.json({ error: `Оплаты заказов не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
+
+  const stat = { scanned: orders.length, paid: 0, partial: 0, voided: 0, inserted: 0, sales: 0, retail: 0, errors: [] as string[] }
 
   for (const o of orders) {
     const n = parseNotes(o.notes)
-    const total = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
+    const total = finalTotalOf(o)
     const isPaid = n.payment_status === 'paid' || !!n.stages?.invoice_paid
     const prepay = Number(n.prepayment_amount ?? 0)
     const paidAt = n.stages?.invoice_paid || String(o.created_at).slice(0, 10)
     const prepayKey = b2bPaymentKey(o.id, 'prepayment')
     const settleKey = b2bPaymentKey(o.id, 'settlement')
 
+    const partial = n.payment_status === 'partial'
+    const steps = reconcileOrder({
+      paid: isPaid, partial, total, prepay,
+      prepayKey: keyState.get(prepayKey), settleKey: keyState.get(settleKey),
+      paidOther: paidByOrder.get(o.id) ?? 0,
+    })
+
     try {
+      for (const st of steps) {
+        const key = st.part === 'prepayment' ? prepayKey : settleKey
+        if (st.op === 'void') { await voidPayment(svc, key); continue }
+        const added = await recordPaymentOnce(svc, {
+          externalKey: key, amount: st.amount, paidAt, kind: st.kind,
+          source: 'reconcile', b2bOrderId: o.id, importBatch: 'reconcile',
+        })
+        if (added) stat.inserted++
+      }
       if (isPaid && total > 0) {
-        if (prepay > 0) {
-          await recordPayment(svc, {
-            externalKey: prepayKey, amount: prepay, paidAt, kind: 'prepayment',
-            source: 'reconcile', b2bOrderId: o.id, importBatch: 'reconcile',
-          })
-        }
-        const rest = Math.round((total - prepay) * 100) / 100
-        if (rest > 0) {
-          await recordPayment(svc, {
-            externalKey: settleKey, amount: rest, paidAt, kind: prepay > 0 ? 'remainder' : 'full',
-            source: 'reconcile', b2bOrderId: o.id, importBatch: 'reconcile',
-          })
-        }
         const saleId = await upsertSaleFromB2B(svc, o, { paidAt, manager: o.created_by_name })
         if (saleId) {
           await svc.from('crm_sales').update({
@@ -96,22 +120,15 @@ async function run(req: NextRequest) {
           stat.sales++
         }
         stat.paid++
-      } else if (n.payment_status === 'partial' && prepay > 0) {
-        await recordPayment(svc, {
-          externalKey: prepayKey, amount: prepay, paidAt, kind: 'prepayment',
-          source: 'reconcile', b2bOrderId: o.id, importBatch: 'reconcile',
-        })
-        await voidPayment(svc, settleKey)
+      } else if (partial && prepay > 0) {
         const saleId = await upsertSaleFromB2B(svc, o, { paidAt, manager: o.created_by_name })
         if (saleId) {
           await svc.from('crm_sales').update({ prepayment: prepay, prepayment_paid: true, remainder_paid: false }).eq('id', saleId)
           stat.sales++
         }
         stat.partial++
-      } else if (liveKeys.has(prepayKey) || liveKeys.has(settleKey)) {
+      } else if (steps.length) {
         // Не оплачен, а в ядре платёж есть — оплату сняли задним числом.
-        await voidPayment(svc, prepayKey)
-        await voidPayment(svc, settleKey)
         await voidSale(svc, { b2bOrderId: o.id })
         stat.voided++
       }
