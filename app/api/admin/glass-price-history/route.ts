@@ -3,10 +3,14 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { getRole } from '@/lib/getRole'
 
 // История себестоимости: «какая цена была, когда действовал прайс от такой-то даты».
-// Без параметров — краткая сводка для кнопки в справочнике «Стекло».
+// Без параметров — сводка для справочника «Стекло»: действующий прайс, прошлый
+// и что изменилось при его применении (было → стало по каждой ячейке).
+// Себестоимость видят те же роли, что открывают справочник: владелец и закупщик.
+const COST_ROLES = new Set(['admin', 'ceo', 'buyer'])
+
 export async function GET(req: NextRequest) {
   const role = await getRole()
-  if (!role) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  if (!role || !COST_ROLES.has(role)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const supa = createServiceClient()
   const name = req.nextUrl.searchParams.get('name')
@@ -21,7 +25,15 @@ export async function GET(req: NextRequest) {
   const current = (lists ?? []).find(l => l.status === 'applied') ?? null
 
   if (!name || !category) {
-    return NextResponse.json({ current, total: (lists ?? []).length, lists: lists ?? [] })
+    const previous = current
+      ? (lists ?? []).find(l => l.id !== current.id && l.supplier === current.supplier && l.price_date < current.price_date) ?? null
+      : null
+    const { data: changes } = current
+      ? await supa.from('glass_price_apply_log')
+        .select('matrix_name, matrix_category, thickness, old_value, new_value')
+        .eq('list_id', current.id)
+      : { data: [] }
+    return NextResponse.json({ current, previous, changes: changes ?? [], total: (lists ?? []).length, lists: lists ?? [] })
   }
 
   let q = supa.from('glass_price_apply_log')

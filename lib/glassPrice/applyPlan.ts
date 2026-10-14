@@ -19,6 +19,8 @@ export function roundTo(value: number, step: number): number {
 // План применения прайса к себестоимости справочника «Стекло».
 // Правила изоляции: трогаем только cost-строки и только ячейки с привязкой;
 // нет цены в прайсе — ячейка остаётся прежней (не обнуляется).
+// Выключенное правило на конкретную толщину — «эту толщину не трогать»:
+// иначе выключить одну ячейку при правиле «все толщины» было нечем.
 export function buildApplyPlan(
   items: ParsedItem[],
   mappings: Mapping[],
@@ -47,11 +49,16 @@ export function buildApplyPlan(
     const [name, category] = target.split('|') as [string, MatrixCostRow['category']]
     const row = matrix.get(target)
     const rules = enabled.filter(m => m.matrix_name === name && m.matrix_category === category)
+    const off = mappings.filter(m => !m.enabled && m.thickness !== 0 && m.matrix_name === name && m.matrix_category === category)
 
     for (const thickness of MATRIX_THICKNESSES) {
       const rule = rules.find(m => m.thickness === thickness) ?? rules.find(m => m.thickness === 0)
       if (!rule) continue
       const base = { matrix_name: name, matrix_category: category, thickness, section: rule.section, product: rule.product }
+
+      if (!rules.some(m => m.thickness === thickness) && off.some(m => m.thickness === thickness)) {
+        skips.push({ ...base, reason: 'excluded' }); continue
+      }
 
       if (!row) { skips.push({ ...base, reason: 'no_matrix_row' }); continue }
       const prices = byProduct.get(productKey(rule.section, rule.product))
