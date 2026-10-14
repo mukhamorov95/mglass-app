@@ -68,7 +68,12 @@ describe('списки в базе совпадают с кодом', () => {
   })
 
   it('ключи notes, закрытые для браузера, — SERVER_ONLY_NOTE_KEYS и stages.invoice_paid', () => {
-    const body = migration.match(/function public\._b2b_order_money_keys[\s\S]*?end \$\$;/)
+    // Действует последняя по имени миграция, которая переопределяет функцию
+    const dir = join(root, 'supabase/migrations')
+    const last = readdirSync(dir).filter(f => f.endsWith('.sql')).sort()
+      .map(f => readFileSync(join(dir, f), 'utf8'))
+      .filter(sql => /function public\._b2b_order_money_keys/.test(sql)).pop() ?? ''
+    const body = last.match(/function public\._b2b_order_money_keys[\s\S]*?end \$\$;/)
     expect(body, '_b2b_order_money_keys не найдена в миграции').not.toBeNull()
     const inSql = [...body![0].matchAll(/^\s*'([a-z_.]+)',/gm)].map(x => x[1]).sort()
     expect(inSql).toEqual([...SERVER_ONLY_NOTE_KEYS, 'stages.invoice_paid'].sort())
@@ -132,6 +137,8 @@ describe('перепись: ключи оплаты и согласования 
     'app/api/b2b-quotes/[id]/adjust-total/route.ts': ['price_approval', 'total_history'],
     'app/api/b2b-orders/[id]/adjust-total/route.ts': ['total_history'],
     'app/api/b2b-quotes/[id]/price-approval/route.ts': ['price_approval'],
+    // этап «Оплачен» датой денег из выписки и аванса (14.10)
+    'lib/b2b/paidStage.ts': ['invoice_paid', 'payment_source', 'payment_status', 'prepayment_amount'],
   }
   const KEYS = [...SERVER_ONLY_NOTE_KEYS, 'invoice_paid']
 

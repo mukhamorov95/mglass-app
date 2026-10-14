@@ -168,6 +168,8 @@ type NotesData = {
   drawing_url?: string
   bulk_actions?: BulkAction[]
   payment_status?: string
+  // этап «Оплачен» поставили деньги: bank — перевод из выписки, advance — списание с аванса
+  payment_source?: string | null
   prepayment_amount?: number
 }
 
@@ -327,6 +329,16 @@ function fetchUpdStatus(ids: number[]): Promise<UpdStatus | null> {
 
 function fmtDate(s: string) {
   return new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function paidSourceLabel(source: string | null | undefined): string {
+  return source === 'advance' ? 'с аванса клиента' : 'по выписке банка'
+}
+
+function stageTitle(key: StageKey, doneDate: string | null | undefined, source: string | null | undefined, todo: string): string {
+  if (!doneDate) return todo
+  if (key === 'invoice_paid' && source) return `Оплачен ${paidSourceLabel(source)} ${fmtDate(doneDate)}`
+  return `Выполнено: ${doneDate}`
 }
 
 function tomorrowDateStr() {
@@ -1181,6 +1193,11 @@ export default function B2BOrdersPage() {
     // «Счёт оплачен» — событие денег, пишется единым роутом (Д2), не напрямую.
     if (stageKey === 'invoice_paid') {
       const willBePaid = !stages.invoice_paid
+      // Этап поставили деньги — снимается вместе с платежом в «Бухгалтерии», не кнопкой
+      if (!willBePaid && order.parsedNotes.payment_source) {
+        toast.info(`Оплачен ${paidSourceLabel(order.parsedNotes.payment_source)}`, { detail: 'Отметку поставили деньги. Снимется сама, если платёж отменят в «Бухгалтерии» → «Банк».' })
+        return
+      }
       const r = await fetch(`/api/b2b-orders/${orderId}/payment`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: willBePaid ? 'paid' : 'unpaid' }),
@@ -1839,7 +1856,7 @@ export default function B2BOrdersPage() {
                 <button
                   key={stage.key}
                   onClick={() => toggleStage(order.id, stage.key)}
-                  title={done ? `Выполнено: ${doneDate}` : 'Нажмите чтобы отметить'}
+                  title={stageTitle(stage.key, doneDate, pn.payment_source, 'Нажмите чтобы отметить')}
                   className={`flex flex-col items-center px-2 py-1 rounded-md text-[10px] font-medium transition-all border select-none ${
                     done
                       ? 'bg-emerald-600 text-white border-emerald-600'
@@ -2694,7 +2711,7 @@ export default function B2BOrdersPage() {
                           <button
                             key={stage.key}
                             onClick={e => { e.stopPropagation(); toggleStage(order.id, stage.key) }}
-                            title={done ? `Выполнено: ${doneDate}` : 'Отметить'}
+                            title={stageTitle(stage.key, doneDate, pn.payment_source, 'Отметить')}
                             className={`flex flex-col items-center px-2 py-0.5 rounded text-[10px] font-medium transition-all border select-none ${
                               done
                                 ? 'bg-emerald-600 text-white border-emerald-600'

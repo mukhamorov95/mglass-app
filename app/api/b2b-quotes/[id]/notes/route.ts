@@ -12,6 +12,7 @@ import {
 import type { OrderNotesAction } from '@/lib/b2b/orderNotesClient'
 import { pointLaunchGate, orderTotal, IN_WORK_STATUSES } from '@/lib/b2b/points'
 import { allocateAdvances } from '@/lib/accounting/clientAdvance'
+import { recentPaidSince, syncPaidStages } from '@/lib/b2b/paidStage'
 
 // Правка notes просчёта/заказа со списка просчётов, воронки и печати КП. Экран шлёт
 // намерение, патч собирается здесь из свежих notes (lib/b2b/orderNotes.ts): копия
@@ -145,6 +146,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ((body.action === 'launch' || body.action === 'status') && o.client_id != null) {
     try {
       const r = await allocateAdvances(svc, { clientIds: [o.client_id] })
+      // Списание с аванса — оплата заказа: этап «Оплачен» датой списания
+      if (r.written + r.voided > 0) r.warnings.push(...(await syncPaidStages(svc, { paidSince: recentPaidSince() })).warnings)
       if (r.warnings.length) advanceWarning = r.warnings.join('; ')
     } catch (e) {
       advanceWarning = `Аванс клиента не пересчитан: ${e instanceof Error ? e.message : String(e)}`

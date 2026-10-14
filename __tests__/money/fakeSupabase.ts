@@ -75,6 +75,7 @@ export function fakeClient(db: FakeDb) {
         neq: (c: string, v: unknown) => { preds.push(r => !eqv(r[c], v)); return b },
         in: (c: string, vs: unknown[]) => { const s = new Set(vs.map(String)); preds.push(r => s.has(String(r[c]))); return b },
         is: (c: string, v: unknown) => { preds.push(r => (r[c] ?? null) === v); return b },
+        like: (c: string, pat: string) => { const re = new RegExp('^' + pat.split('%').map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 's'); preds.push(r => re.test(String(r[c] ?? ''))); return b },
         not: (c: string, o: string, v: unknown) => { if (o === 'is') preds.push(r => (r[c] ?? null) !== v); return b },
         gte: (c: string, v: unknown) => { preds.push(r => r[c] != null && String(r[c]) >= String(v)); return b },
         gt: (c: string, v: unknown) => { preds.push(r => r[c] != null && String(r[c]) > String(v)); return b },

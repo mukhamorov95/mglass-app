@@ -63,13 +63,14 @@ export function launchPatch(
   }
 }
 
-// Ключи, которые пишет только сервер: оплата — /api/b2b-orders/[id]/payment (плюс
-// stages.invoice_paid там же), согласование цены и история суммы — маршруты корректировки.
-// Из браузера их отбивает триггер guard_b2b_order_money (20261002_b2b_money_columns_guard.sql,
-// тот же список), но сервис-ключ он пропускает — поэтому маршрут, который кладёт в patch
-// ключи из тела запроса, обязан их отсеять сам.
+// Ключи, которые пишет только сервер: оплата — /api/b2b-orders/[id]/payment и деньги из
+// выписки (lib/b2b/paidStage.ts, плюс stages.invoice_paid там же), согласование цены и
+// история суммы — маршруты корректировки. Из браузера их отбивает триггер guard_b2b_order_money
+// (_b2b_order_money_keys, последняя редакция — 20261014_paid_stage_source_guard.sql, тот же
+// список), но сервис-ключ он пропускает — поэтому маршрут, который кладёт в patch ключи из
+// тела запроса, обязан их отсеять сам.
 export const SERVER_ONLY_NOTE_KEYS: readonly string[] = [
-  'payment_status', 'prepayment_amount', 'paid_at', 'payments', 'price_approval', 'total_history',
+  'payment_status', 'payment_source', 'prepayment_amount', 'paid_at', 'payments', 'price_approval', 'total_history',
 ]
 
 export const KP_PAYMENT_TERMS = ['50_50', '100'] as const
