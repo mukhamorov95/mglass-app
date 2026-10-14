@@ -19,6 +19,7 @@ type Row = {
   status: string; suggest: Suggest; request: { id: number; status: string } | null
   invoice: RowInvoice | null
   applied?: boolean; own?: boolean; loan?: boolean
+  order?: { id: number; no: string } | null
 }
 type BankList = { items: Row[]; invoices?: OpenInvoice[]; invoicesError?: string | null }
 type PostAnswer = {
@@ -242,6 +243,8 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
                           : <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">закроет счёт</span>
                     )}
                   </>
+                ) : r.order ? (
+                  <span className="text-[#111110]">Заказ {r.order.no} — счёта в приложении нет</span>
                 ) : status === 'new' ? (
                   <span className="text-[#9a9a95]">счёт не подобран — проведём как обычный приход</span>
                 ) : null}

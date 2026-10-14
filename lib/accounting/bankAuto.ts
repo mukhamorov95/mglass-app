@@ -1,11 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { readPaged } from '@/lib/money/paged'
 import { EXECUTOR, SELLER_B2B } from '@/lib/companyRequisites'
-import { matchInvoice } from './bankMatch'
-import { applyBankPayment, loadOpenInvoices, type BankRow } from './bankPost'
+import { matchInvoice, matchOrder, orderIdsIn } from './bankMatch'
+import { applyBankOrderPayment, applyBankPayment, loadOpenInvoices, loadOpenOrders, type BankRow } from './bankPost'
 
-// Оплата заказа по выписке — без человека. Только уверенные совпадения (номер счёта и сумма,
-// см. bankMatch); спорные остаются бухгалтеру. Операция ДДС здесь не создаётся: строка
+// Оплата заказа по выписке — без человека. Только уверенные совпадения (номер счёта и сумма
+// счёта или итога заказа; номер заказа без счёта и сумма — см. bankMatch); спорные — бухгалтеру. Операция ДДС здесь не создаётся: строка
 // остаётся «новой» с проставленным платежом, бухгалтер проводит её в фонд как обычно.
 // За один вызов — сколько успеем за budgetMs: запрос идёт через прокси и не должен упереться
 // в лимит ответа, остальное доделает следующий вызов (more: true).
@@ -44,30 +44,45 @@ export async function autoApplyBank(
     .order('op_date').order('id'))) as unknown as Row[]
   if (rows.length === 0) return out
 
-  const open = await loadOpenInvoices(svc)
-  for (const r of rows) {
-    if (isOwnTransfer(r.inn) || isLoan(r.purpose)) continue
-    const m = matchInvoice({ amount: Number(r.amount), inn: r.inn, purpose: r.purpose }, open)
-    if (!m?.strong) continue
-    if (opts.dry) {
-      out.planned.push({ rowId: r.id, invoiceNo: m.invoice.no, amount: Number(r.amount), payer: r.counterparty, marked: m.invoice.marked ?? 0 })
-      m.invoice.remainder = Math.max(0, Math.round((m.invoice.remainder - Number(r.amount)) * 100) / 100)
-      continue
-    }
-    if (Date.now() - t0 > budgetMs) { out.more = true; break }
+  const candidates = rows.filter(r => !isOwnTransfer(r.inn) && !isLoan(r.purpose))
+  const [open, openOrders] = await Promise.all([
+    loadOpenInvoices(svc),
+    loadOpenOrders(svc, [...new Set(candidates.flatMap(r => orderIdsIn(r.purpose)))]),
+  ])
+  const by = uploader ? `, загрузил(а) ${uploader}` : ''
+  const less = (v: number, a: number) => Math.max(0, Math.round((v - a) * 100) / 100)
 
-    const res = await applyBankPayment(svc, r, m.invoice.id, { id: null, name: null },
-      `Автоподбор по выписке: счёт № ${m.invoice.no}${uploader ? `, загрузил(а) ${uploader}` : ''}`)
-    if (!res.ok) { out.failed.push({ rowId: r.id, error: res.error }); continue }
-    const { data: marked, error } = await svc.from('bank_statement_rows')
-      .update({ payment_id: res.paymentId, invoice_id: m.invoice.id }).eq('id', r.id).select('id')
-    if (error || !marked?.length) {
-      out.warnings.push(`Оплата по счёту № ${res.invoice.no} записана, но строка выписки не отмечена${error ? `: ${error.message}` : ''}`)
+  for (const r of candidates) {
+    const amount = Number(r.amount)
+    const bank = { amount, inn: r.inn, purpose: r.purpose }
+    const m = matchInvoice(bank, open)
+    const mo = m?.strong ? null : matchOrder(bank, openOrders)
+    if (!m?.strong && !mo) continue
+    const no = m?.strong ? m.invoice.no : `заказ ${mo!.order.no}`
+    if (opts.dry) {
+      out.planned.push({ rowId: r.id, invoiceNo: no, amount, payer: r.counterparty, marked: m?.strong ? m.invoice.marked ?? 0 : mo!.order.marked })
+    } else {
+      if (Date.now() - t0 > budgetMs) { out.more = true; break }
+      const res = m?.strong
+        ? await applyBankPayment(svc, r, m.invoice.id, { id: null, name: null },
+          { note: `Автоподбор по выписке: счёт № ${m.invoice.no}${m.byOrder ? ' (оплачен итог заказа)' : ''}${by}`, byOrder: m.byOrder })
+        : await applyBankOrderPayment(svc, r, mo!.order.id, { id: null, name: null },
+          `Автоподбор по выписке: заказ ${mo!.order.no}, счёта в приложении нет${by}`)
+      if (!res.ok) { out.failed.push({ rowId: r.id, error: res.error }); continue }
+      const { data: marked, error } = await svc.from('bank_statement_rows')
+        .update({ payment_id: res.paymentId, invoice_id: m?.strong ? m.invoice.id : null }).eq('id', r.id).select('id')
+      if (error || !marked?.length) {
+        out.warnings.push(`Оплата (${no}) записана, но строка выписки не отмечена${error ? `: ${error.message}` : ''}`)
+      }
+      out.warnings.push(...res.warnings)
+      const eff = 'invoice' in res ? res.invoice : res.order
+      out.applied.push({ rowId: r.id, invoiceNo: no, amount, partial: eff.partial, replaced: eff.replaced })
     }
-    out.warnings.push(...res.warnings)
-    out.applied.push({ rowId: r.id, invoiceNo: res.invoice.no, amount: Number(r.amount), partial: res.invoice.partial, replaced: res.invoice.replaced })
-    // Следующая строка того же счёта видит уже уменьшенный остаток
-    m.invoice.remainder = Math.max(0, Math.round((m.invoice.remainder - Number(r.amount)) * 100) / 100)
+    // Следующая строка того же счёта/заказа видит уже уменьшенный остаток
+    if (m?.strong) {
+      m.invoice.remainder = less(m.invoice.remainder, amount)
+      if (m.invoice.orderRemainder != null) m.invoice.orderRemainder = less(m.invoice.orderRemainder, amount)
+    } else mo!.order.remainder = less(mo!.order.remainder, amount)
   }
   return out
 }

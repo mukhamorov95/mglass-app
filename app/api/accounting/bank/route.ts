@@ -126,6 +126,12 @@ export async function GET(req: NextRequest) {
     ? await svc.from('invoices').select('id,invoice_no,payer_name,amount,order_ids').in('id', linkedIds)
     : { data: [] }
   const linkedBy = new Map((linked ?? []).map(i => [Number(i.id), i]))
+  // Оплата проставлена по заказу без счёта — показываем заказ
+  const orderPayIds = (rows ?? []).filter(r => r.payment_id && !r.invoice_id).map(r => Number(r.payment_id))
+  const { data: orderPays } = orderPayIds.length
+    ? await svc.from('payments').select('id, b2b_order_id').in('id', orderPayIds)
+    : { data: [] }
+  const orderByPay = new Map((orderPays ?? []).map(p => [Number(p.id), Number(p.b2b_order_id) || null]))
 
   // Одобренные заявки — кандидаты на «этот расход уже согласован»
   const { data: reqs } = await svc.from('payment_requests')
@@ -147,9 +153,11 @@ export async function GET(req: NextRequest) {
       ? matchInvoice({ amount: Number(r.amount), inn: r.inn ?? null, purpose: r.purpose ?? null }, open)
       : null
     const had = linkedBy.get(Number(r.invoice_id))
+    const paidOrder = applied && !r.invoice_id ? orderByPay.get(Number(r.payment_id)) ?? null : null
     return {
       ...r,
       applied, own, loan,
+      order: paidOrder ? { id: paidOrder, no: String(paidOrder).padStart(5, '0') } : null,
       invoice: auto
         ? { ...auto.invoice, partial: auto.partial, rest: auto.rest, over: auto.over }
         : had
