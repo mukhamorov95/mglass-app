@@ -13,6 +13,7 @@ import {
   MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, OWNER_AI, isGroup, isSection, visibleFor,
   type NavItem, type NavEntry, type NavSection,
 } from '@/lib/nav/managerMenu'
+import { CONTOURS, CONTOUR_LABEL, RARE, contourFor, type Contour } from '@/lib/nav/contours'
 
 type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions; canViewMoney?: boolean; referralRate?: number | null }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
@@ -408,6 +409,13 @@ function activeSections(pathname: string, entries: NavEntry[]): string[] {
     .map(sec => `sec:${sec.sectionLabel}`)
 }
 
+// Раскрытые подменю контура: то, где лежит адрес, и «Редкое», если адрес оттуда.
+function contourOpen(pathname: string, c: Contour): string[] {
+  const open = activeSections(pathname, CONTOURS[c])
+  if (inSection(pathname, RARE.map(i => i.href))) open.push('rare')
+  return open
+}
+
 function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   const open: string[] = []
   if (mode === 'manager') {
@@ -518,6 +526,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
   const isAdmin = role === 'admin'
 
   const [viewMode, setViewMode]     = useState<ViewMode>('manager')
+  // Меню владельца по контурам (lib/nav/contours.ts); 'legacy' — прежние шесть режимов.
+  const [contour, setContour]       = useState<Contour | 'legacy'>('mglass')
   // Закупщик с manager_workspace (Вера): две вкладки — Менеджер / Логист.
   const [buyerWs, setBuyerWs]       = useState<'manager' | 'logist'>('manager')
   const [open, setOpen]             = useState<Set<string>>(new Set())
@@ -532,7 +542,11 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
       const saved = localStorage.getItem('sidebarMode') as ViewMode | null
       const mode: ViewMode = saved ?? detectModeFromPath(pathname)
       setViewMode(mode)
-      setOpen(new Set(autoOpenAdmin(pathname, mode)))
+      const savedContour = localStorage.getItem('sidebarContour')
+      const c = savedContour === 'legacy' ? 'legacy'
+        : contourFor(pathname, savedContour === 'b2b' || savedContour === 'ceo' ? savedContour : 'mglass')
+      setContour(c)
+      setOpen(new Set(c === 'legacy' ? autoOpenAdmin(pathname, mode) : contourOpen(pathname, c)))
     } else if (role) {
       const base = autoOpenRole(pathname, role)
       if (role === 'buyer' && permissions.manager_workspace) {
@@ -546,9 +560,15 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (isAdmin) {
-      const auto = autoOpenAdmin(pathname, viewMode)
+    if (isAdmin && contour !== 'legacy') {
+      // Адрес из поиска или ссылки может лежать в другом контуре — вкладка идёт за ним
+      const c = contourFor(pathname, contour)
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (c !== contour) setContour(c)
+      const auto = contourOpen(pathname, c)
+      if (auto.length) setOpen(prev => new Set([...prev, ...auto]))
+    } else if (isAdmin) {
+      const auto = autoOpenAdmin(pathname, viewMode)
       if (auto.length) setOpen(prev => new Set([...prev, ...auto]))
     } else if (role) {
       const auto = autoOpenRole(pathname, role)
@@ -563,6 +583,12 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     setViewMode(mode)
     localStorage.setItem('sidebarMode', mode)
     setOpen(new Set(autoOpenAdmin(pathname, mode)))
+  }
+
+  function switchContour(c: Contour | 'legacy') {
+    setContour(c)
+    localStorage.setItem('sidebarContour', c)
+    setOpen(new Set(c === 'legacy' ? autoOpenAdmin(pathname, viewMode) : contourOpen(pathname, c)))
   }
 
   function switchBuyerWs(ws: 'manager' | 'logist') {
@@ -828,6 +854,28 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     )
   }
 
+  function renderContour(c: Contour) {
+    const activeCls = 'bg-[#efefec] text-[#111110] font-medium'
+    return (
+      <>
+        {CONTOURS[c].map((entry, idx) =>
+          isGroup(entry) ? (
+            <div key={`g-${idx}`} className="px-2.5 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
+              {entry.groupLabel}
+            </div>
+          ) : isSection(entry) ? navSection(entry, activeCls) : navItem(entry, activeCls)
+        )}
+        <div className="pt-3">
+          {accordion('rare', `Редкое · ${RARE.length}`, 'text-[#b8b8b2]', 'text-[#c4c4be]', RARE, activeCls)}
+        </div>
+        <button type="button" onClick={() => switchContour('legacy')}
+          className="w-full mt-2 px-2.5 py-[6px] rounded-md text-left text-[11px] text-[#b0b0aa] hover:text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+          ↺ Старое меню
+        </button>
+      </>
+    )
+  }
+
   function renderNav() {
     // Бухгалтерия: только свой раздел
     if (role === 'accountant') return (
@@ -932,6 +980,9 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
       </>
     )
 
+    // Роли без своей ветки (office, logist…) проходят сюда же — контуры только у владельца
+    if (isAdmin && contour !== 'legacy') return renderContour(contour)
+
     // Admin preview — manager view (shows everything, ignores permissions for admin)
     if (viewMode === 'manager') return (
       <>
@@ -1015,7 +1066,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
   // ── JSX ─────────────────────────────────────────────────────────────────────
 
   // Замерщику — всегда; владельцу в режиме «Замерщик» — только на страницах замеров.
-  const measurerBar = role === 'measurer' || (isAdmin && viewMode === 'measurer' && MEASURER_TABS.some(t => active(t.href)))
+  const measurerBar = role === 'measurer' || (isAdmin && contour === 'legacy' && viewMode === 'measurer' && MEASURER_TABS.some(t => active(t.href)))
 
   return (
     <>
@@ -1046,8 +1097,9 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
       >
         {/* Header */}
         <div className="border-b border-[#e4e4e0] flex-shrink-0">
+          <div className="flex items-center">
           <Link href="/" onClick={() => setMobileOpen(false)}
-            className="flex items-center gap-2.5 px-4 py-3 hover:bg-[#f5f5f3] transition-colors">
+            className={`flex items-center gap-2.5 py-3 hover:bg-[#f5f5f3] transition-colors ${isAdmin && contour !== 'legacy' ? 'pl-4 pr-2 flex-shrink-0' : 'px-4 flex-1'}`}>
             <div className="w-[26px] h-[26px] bg-[#111110] rounded-[6px] flex items-center justify-center flex-shrink-0">
               <span className="text-white text-[10px] font-bold tracking-tight">MG</span>
             </div>
@@ -1060,8 +1112,30 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
               )}
             </div>
           </Link>
+          {isAdmin && contour !== 'legacy' && (
+            <div role="tablist" aria-label="Контур" className="flex-1 min-w-0 mr-3 flex bg-[#efefec] rounded-[7px] p-[3px] gap-[2px]">
+              {(Object.keys(CONTOURS) as Contour[]).map(c => (
+                <button key={c} role="tab" aria-selected={contour === c} onClick={() => switchContour(c)}
+                  className={`flex-1 py-[4px] rounded-[5px] text-[10px] font-semibold whitespace-nowrap transition-all ${
+                    contour === c ? 'bg-white text-[#111110] shadow-sm' : 'text-[#9a9a95] hover:text-[#6b6b66]'
+                  }`}>
+                  {CONTOUR_LABEL[c]}
+                </button>
+              ))}
+            </div>
+          )}
+          </div>
 
-          {isAdmin && (
+          {isAdmin && contour === 'legacy' && (
+            <div className="px-3 pb-3">
+              <button type="button" onClick={() => switchContour(contourFor(pathname, 'mglass'))}
+                className="w-full py-[5px] rounded-[7px] bg-[#111110] text-white text-[10px] font-semibold hover:bg-[#2a2a28] transition-colors">
+                Новое меню: M-Glass · B2B · CEO
+              </button>
+            </div>
+          )}
+
+          {isAdmin && contour === 'legacy' && (
             <div className="px-3 pb-3 space-y-[4px]">
               {/* Два ряда: сверху — владельческие режимы, снизу — операционные */}
               {([
