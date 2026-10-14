@@ -1609,7 +1609,8 @@ export default function B2BOrdersPage() {
   const sumRub = (list: Order[]) => list.reduce((s, o) => s + Math.round(getFinalPrice(o)), 0)
   const totalSum = sumRub(orders)
   const filteredSum = sumRub(filteredOrders)
-  const scope = summarizeOrders(scopeOrders, getFinalPrice, o => !!o.parsedNotes.stages?.shipped, getOrderPayStatus)
+  const scope = summarizeOrders(scopeOrders, getFinalPrice, o => !!o.parsedNotes.stages?.shipped, getOrderPayStatus,
+    o => !!o.parsedNotes.payment_source)
   const today = mskDayKey()
   // Готовность производства: отгружен ли заказ. Не связано с тем, найден ли клиент в базе.
   const shippedCount = orders.filter(o => !!o.parsedNotes.stages?.shipped).length
@@ -2395,6 +2396,11 @@ export default function B2BOrdersPage() {
             ) : (
               <span title="По платежам из банка, кассы и отметок «Оплачен» (таблица payments), а не по галочкам в заказе">
                 <span className="text-emerald-700">оплачено {scope.paid.count} · {rub(scope.paid.sum)} ₽</span>
+                {scope.paidByMark.count > 0 && (
+                  <span className="text-[#9a9a95]" title="«Оплачен» поставлен человеком, а в загруженных выписках банка денег за эти заказы нет: оплата на ИП, наличными — или отметка ошибочная. Подтвердится сама, когда платёж придёт выпиской.">
+                    {' '}(из них только отметкой {scope.paidByMark.count} · {rub(scope.paidByMark.sum)} ₽)
+                  </span>
+                )}
                 {scope.partial.count > 0 && <> · <span className="text-amber-700">частично {scope.partial.count} · {rub(scope.partial.sum)} ₽</span></>}
                 {' · '}<span className={scope.unpaid.count ? 'text-red-600' : ''}>без платежей {scope.unpaid.count} · {rub(scope.unpaid.sum)} ₽</span>
               </span>

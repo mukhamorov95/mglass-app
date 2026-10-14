@@ -63,4 +63,18 @@ describe('summarizeOrders', () => {
     expect(s.paid.sum + s.partial.sum + s.unpaid.sum).toBe(s.all.sum)
     expect(s.unpaid).toEqual({ count: 1, sum: 5_000 })
   })
+  // 14.10 ShowerGlass: «оплачено 33», из них 6 — отметка «Оплачен» без денег в выписке
+  it('оплаченные отметкой без банка — отдельной частью оплаченных', () => {
+    const t = summarizeOrders<O & { bank: boolean }>(
+      [
+        { sum: 100, shipped: false, pay: 'paid', bank: true },
+        { sum: 40, shipped: false, pay: 'paid', bank: false },
+        { sum: 30, shipped: false, pay: 'partial', bank: false },
+      ],
+      o => o.sum, o => o.shipped, o => o.pay, o => o.bank,
+    )
+    expect(t.paid).toEqual({ count: 2, sum: 140 })
+    expect(t.paidByMark).toEqual({ count: 1, sum: 40 })
+    expect(s.paidByMark).toEqual({ count: 0, sum: 0 })
+  })
 })
