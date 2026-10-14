@@ -10,6 +10,7 @@
 >
 > Смежные доки: `docs/CONFIGURATOR_COORDINATION.md` (граница Сайт+3D ↔ Прайс),
 > `docs/WAREHOUSE_ARCHITECTURE.md` (склад), `docs/INVENTORY.md` (реализация склада).
+> Идеи из чужого КП на CRM+ERP (14.10), разложенные по нашим маршрутам: `docs/ERP_PROPOSAL_TAKEAWAYS.md`.
 
 ## Карта доменов
 
