@@ -259,5 +259,10 @@ export async function PATCH(req: NextRequest) {
     invoiceId: Number(body.invoice_id) || null,
   }, me)
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
+  if (res.paymentId && !row.payment_id) {
+    try { res.warnings.push(...(await allocateAdvances(svc)).warnings) } catch (e) {
+      res.warnings.push(`Авансы не пересчитаны: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
   return NextResponse.json({ ok: true, entry_id: res.entryId, payment_id: res.paymentId, invoice: res.invoice, warnings: res.warnings })
 }

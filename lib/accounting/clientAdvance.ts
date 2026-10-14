@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
-import { isTransferMark } from '@/lib/payments/marks'
+import { ADVANCE_SOURCE, isTransferMark } from '@/lib/payments/marks'
 import { loadOrderPaid } from '@/lib/money/orderPaid'
 import { readIn, readPaged, num, type Row } from '@/lib/money/paged'
 import { manualPaymentKind, fmtRub } from '@/lib/money/invoiceStatus'
@@ -13,7 +13,7 @@ import { finalTotalOf } from '@/lib/b2b/priceOverride'
 // не пишется. План пересчитывается целиком на каждом вызове — правка итога, оплата заказа
 // напрямую, отмена заказа возвращают лишнее списание в остаток аванса.
 
-export const ADVANCE_SOURCE = 'client_advance'
+export { ADVANCE_SOURCE }
 const TOL = 0.5
 const r2 = (v: number) => Math.round(v * 100) / 100
 export const advanceKey = (advanceId: number, orderId: number) => `advance:${advanceId}:${orderId}`

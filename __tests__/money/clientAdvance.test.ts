@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { makeDb, fakeClient, type FakeDb } from './fakeSupabase'
 import { advanceKey, allocateAdvances, createAdvance, loadAdvanceSummaries, planAllocations, voidAdvance } from '@/lib/accounting/clientAdvance'
 import { autoApplyBank } from '@/lib/accounting/bankAuto'
+import { applyBankPayment } from '@/lib/accounting/bankPost'
 import { paidByOf } from '@/lib/b2b/paidBy'
 
 // 14.10, ГлассДекор: 400 000 ₽ пришли авансом (в назначении — счёт 05522 на 27 500),
@@ -111,6 +112,28 @@ describe('аванс ГлассДекор', () => {
     db.tables.client_advances.push({ id: 1, client_id: 7, unit: 'ooo', bank_row_id: 108, amount: 250, received_at: '2026-09-30', applies_from: '2026-10-20', voided_at: null })
     const res = await autoApplyBank(svc(), 'ooo', null)
     expect(res.applied).toEqual([])
+  })
+
+  // 14.10 на проде: аванс записали раньше, чем 27 250 за 05522 легли на счёт, — аванс закрыл
+  // 05522 целиком, и перевод за этот счёт отбивался «счёт уже оплачен».
+  it('перевод за счёт, уже покрытый авансом, проходит; аванс отдаёт лишнее', async () => {
+    db.tables.payments = db.tables.payments.filter(p => p.id !== 2)
+    await createAdvance(svc(), db.tables.bank_statement_rows[0] as never, { appliesFrom: '2026-09-23', me })
+    expect(alloc(5522)).toBe(27500)
+
+    const row = { id: 137, unit: 'ooo', external_key: 'b', op_date: '2026-09-23', amount: 27250, direction: 'in' as const, status: 'new', counterparty: null, purpose: '05522', account: null }
+    expect(await applyBankPayment(svc(), row, 72, me)).toMatchObject({ ok: true, invoice: { partial: true, rest: 250 } })
+    await allocateAdvances(svc())
+    expect(alloc(5522)).toBe(250)
+    expect(db.tables.invoices.find(i => i.id === 72)!.status).toBe('paid')
+  })
+
+  it('автоподбор видит счёт, закрытый авансом, — клиент заплатил его напрямую', async () => {
+    await createAdvance(svc(), db.tables.bank_statement_rows[0] as never, { appliesFrom: '2026-09-23', me })
+    db.tables.bank_statement_rows.push({ id: 200, unit: 'ooo', external_key: 'd', op_date: '2026-10-08', amount: 108500, direction: 'in', status: 'new', inn: '7723428778', payment_id: null, counterparty: 'ГЛАСС ДЕКОР', purpose: 'Оплата по счёту 05597', account: null })
+    expect((await autoApplyBank(svc(), 'ooo', null)).applied.map(a => a.invoiceNo)).toEqual(['05597'])
+    await allocateAdvances(svc())
+    expect(alloc(5597)).toBeNull()
   })
 
   it('метка в заказах — «Оплачен · аванс»', () => {

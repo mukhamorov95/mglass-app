@@ -4,7 +4,7 @@ import { readPaged, readIn, num } from '@/lib/money/paged'
 import { asInvoiceRows, loadPaymentsForInvoices, toInvoiceLike } from '@/lib/money/invoicePayments'
 import { invoicePayment, invoicePayments, manualPaymentKind, fmtRub } from '@/lib/money/invoiceStatus'
 import { syncInvoiceStatus } from '@/lib/money/invoiceManualPayment'
-import { isTransferMark } from '@/lib/payments/marks'
+import { isAdvanceAllocation, isTransferMark } from '@/lib/payments/marks'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { orderNo, rowEffect, type OpenInvoice, type OpenOrder } from './bankMatch'
 
@@ -25,7 +25,7 @@ export async function loadOpenInvoices(svc: SupabaseClient): Promise<OpenInvoice
     .neq('status', 'cancelled').order('id'))
   const invs = asInvoiceRows(rows)
   const pays = invs.length ? await loadPaymentsForInvoices(svc, invs) : []
-  const facts = invoicePayments(invs, pays.filter(p => !isTransferMark(p)))
+  const facts = invoicePayments(invs, pays.filter(p => !isTransferMark(p) && !isAdvanceAllocation(p)))
   const marks = invoicePayments(invs, pays.filter(p => isTransferMark(p)))
   const orderIds = [...new Set(invs.flatMap(i => i.order_ids ?? []))]
   const orders = await readIn(orderIds, part => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat').in('id', part).order('id'))
@@ -71,7 +71,8 @@ export async function loadOpenOrders(svc: SupabaseClient, ids: number[]): Promis
   return orders.filter(o => !invoiced.has(num(o.id))).map(o => {
     const id = num(o.id)
     const mine = pays.filter(p => num(p.b2b_order_id) === id)
-    const fact = mine.filter(p => !isTransferMark(p as { source?: string; method?: string })).reduce((s, p) => s + num(p.amount), 0)
+    const fact = mine.filter(p => !isTransferMark(p as { source?: string; method?: string }) && !isAdvanceAllocation(p as { source?: string }))
+      .reduce((s, p) => s + num(p.amount), 0)
     const marked = mine.filter(p => isTransferMark(p as { source?: string; method?: string })).reduce((s, p) => s + num(p.amount), 0)
     const total = finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number })
     return { id, no: orderNo(id), payer: (o.client_name as string | null) ?? null, total, remainder: Math.max(0, Math.round((total - fact) * 100) / 100), marked }
@@ -131,7 +132,7 @@ export async function applyBankPayment(
   // Отметка «Оплачен» — до прихода денег. Пришли деньги из банка — отметку заменяем фактом,
   // а не копим переплату: остаток считаем по деньгам, отметки снимаем после записи платежа.
   const marks = others.filter(p => isTransferMark(p))
-  const state = invoicePayment(inv, others.filter(p => !marks.includes(p)))
+  const state = invoicePayment(inv, others.filter(p => !marks.includes(p) && !isAdvanceAllocation(p)))
   if (state.remainder <= TOL) {
     return {
       ok: false, status: 409,
@@ -197,7 +198,7 @@ export async function applyBankOrderPayment(
   if (pErr) return { ok: false, status: 500, error: `Платежи заказа не прочитаны: ${pErr.message}` }
   const others = (payRows ?? []).filter(p => p.external_key !== key)
   const marks = others.filter(p => isTransferMark(p))
-  const paid = others.filter(p => !marks.includes(p)).reduce((s, p) => s + num(p.amount), 0)
+  const paid = others.filter(p => !marks.includes(p) && !isAdvanceAllocation(p)).reduce((s, p) => s + num(p.amount), 0)
   const remainder = Math.max(0, Math.round((total - paid) * 100) / 100)
   if (remainder <= TOL) return { ok: false, status: 409, error: `Заказ ${no} уже оплачен по платежам` }
 
