@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { invoiceChanges, overlappingOpen, overlapMessage, syncInvoicesForOrders, type OpenInvoice } from '@/lib/money/invoiceSync'
+import { invoiceChanges, overlappingOpen, overlapMessage, syncInvoicesForOrders, syncInvoiceToOrders, type OpenInvoice } from '@/lib/money/invoiceSync'
 import { makeDb, fakeClient, type FakeDb } from './fakeSupabase'
 
 const h = vi.hoisted(() => ({ db: null as unknown as FakeDb, role: 'admin' }))
@@ -111,5 +111,31 @@ describe('POST /api/invoices', () => {
     const { status } = await register({ order_ids: [10, 11], amount: 20000, vat: 3606 })
     expect(status).toBe(200)
     expect(h.db.tables.invoices).toHaveLength(2)
+  })
+})
+
+// 14.10: шесть счетов выставлены до правки просчёта; клиент оплатил итог заказа из выписки,
+// счёт висел «частично». Пересчёт — тем же счётом, платёж остаётся на нём.
+describe('syncInvoiceToOrders — один счёт под итоги заказов', () => {
+  const svc = () => fakeClient(h.db) as unknown as SupabaseClient
+
+  it('частично оплаченный устаревший счёт → сумма заказа, статус «оплачен»', async () => {
+    h.db.tables.invoices.push({ id: 27, invoice_no: '05407', order_ids: ['10'], amount: 24844, vat: 4480, status: 'issued' })
+    h.db.tables.payments.push({ id: 1, amount: 12000, invoice_id: 27, b2b_order_id: 10, voided_at: null, paid_at: '2026-09-04', source: 'bank_statement_import', method: 'Перевод', external_key: 'bank:ooo:a' })
+    const res = await syncInvoiceToOrders(svc(), 27)
+    expect(res).toMatchObject({ ok: true, paid: false, updated: { no: '05407', from: 24844, to: 12000 } })
+    expect(h.db.tables.invoices[0]).toMatchObject({ amount: 12000, status: 'paid', paid_at: '2026-09-04' })
+  })
+
+  it('оплаченный по платежам счёт не трогаем', async () => {
+    h.db.tables.invoices.push({ id: 5, invoice_no: '0450', order_ids: [10], amount: 9000, vat: 1622.95, status: 'paid' })
+    h.db.tables.payments.push({ id: 1, amount: 9000, invoice_id: 5, b2b_order_id: null, voided_at: null })
+    expect(await syncInvoiceToOrders(svc(), 5)).toMatchObject({ ok: true, paid: true, updated: null })
+    expect(h.db.tables.invoices[0].amount).toBe(9000)
+  })
+
+  it('отменённый — отказ', async () => {
+    h.db.tables.invoices.push({ id: 6, invoice_no: '0451', order_ids: [11], amount: 1, vat: 0, status: 'cancelled' })
+    expect(await syncInvoiceToOrders(svc(), 6)).toMatchObject({ ok: false, status: 409 })
   })
 })

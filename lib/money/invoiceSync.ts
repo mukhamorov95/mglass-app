@@ -3,6 +3,7 @@ import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { readIn, num } from './paged'
 import { attachInvoicePayments, asInvoiceRows } from './invoicePayments'
 import { invoiceVat, type InvoicePayState } from './invoiceStatus'
+import { syncInvoiceStatus } from './invoiceManualPayment'
 
 // Счёт не застывает: пока он не оплачен (по платежам), его сумма, НДС и плательщик
 // следуют за заказами. Оплаченный счёт — выданный и закрытый документ, его не трогаем.
@@ -67,31 +68,67 @@ export async function loadInvoicesWithOrders(svc: SupabaseClient, orderIds: numb
   return attachInvoicePayments(svc, asInvoiceRows([...byId.values()]))
 }
 
+type SyncTarget = { id: number; invoice_no?: unknown; amount?: unknown; vat?: unknown; order_ids: number[] | null }
+type Synced = { id: number; no: string; from: number; to: number }
+
+async function orderTotals(svc: SupabaseClient, ids: number[]): Promise<Map<number, number>> {
+  const orders = await readIn(ids, part => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat').in('id', part).order('id'))
+  return new Map(orders.map(o => [num(o.id), finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number })]))
+}
+
+// Сумма счёта = сумма итогов его заказов. Колонку статуса после правки приводим к платежам:
+// счёт, по которому уже пришёл итог заказа, становится «оплачен».
+async function applyOrderTotals(svc: SupabaseClient, inv: SyncTarget, totals: Map<number, number>): Promise<Synced | null> {
+  const ids = inv.order_ids ?? []
+  if (ids.length === 0 || ids.some(id => !totals.has(id))) return null   // заказ не нашёлся — сумму счёта не угадываем
+  const amount = Math.round(ids.reduce((s, id) => s + (totals.get(id) ?? 0), 0) * 100) / 100
+  const patch = invoiceChanges(
+    { amount: Number(inv.amount) || 0, vat: num(inv.vat), payer_client_id: null, payer_entity_id: null, payer_name: null },
+    { amount },
+  )
+  if (!patch) return null
+  const { error } = await svc.from('invoices').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', inv.id)
+  if (error) throw new Error(`Счёт № ${inv.invoice_no} не обновлён: ${error.message}`)
+  const st = await syncInvoiceStatus(svc, inv.id)
+  if (!st.ok) throw new Error(`Счёт № ${inv.invoice_no}: сумма обновлена, статус — нет: ${st.error}`)
+  return { id: inv.id, no: String(inv.invoice_no), from: Number(inv.amount) || 0, to: amount }
+}
+
 // После смены суммы заказа: пересчитать сумму и НДС неоплаченных счетов с этим заказом.
 export async function syncInvoicesForOrders(svc: SupabaseClient, orderIds: number[]): Promise<{
-  updated: { id: number; no: string; from: number; to: number }[]
+  updated: Synced[]
   paidSkipped: string[]
 }> {
   const invoices = await loadInvoicesWithOrders(svc, orderIds)
   const open = invoices.filter(i => i.derivedStatus !== 'paid')
   const paidSkipped = invoices.filter(i => i.derivedStatus === 'paid').map(i => String(i.invoice_no))
-  const allOrders = [...new Set(open.flatMap(i => i.order_ids ?? []))]
-  const orders = await readIn(allOrders, part => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat').in('id', part).order('id'))
-  const totals = new Map(orders.map(o => [num(o.id), finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number })]))
+  const totals = await orderTotals(svc, [...new Set(open.flatMap(i => i.order_ids ?? []))])
 
-  const updated: { id: number; no: string; from: number; to: number }[] = []
+  const updated: Synced[] = []
   for (const inv of open) {
-    const ids = inv.order_ids ?? []
-    if (ids.some(id => !totals.has(id))) continue   // заказ не нашёлся — сумму счёта не угадываем
-    const amount = Math.round(ids.reduce((s, id) => s + (totals.get(id) ?? 0), 0) * 100) / 100
-    const patch = invoiceChanges(
-      { amount: Number(inv.amount) || 0, vat: num(inv.vat), payer_client_id: null, payer_entity_id: null, payer_name: null },
-      { amount },
-    )
-    if (!patch) continue
-    const { error } = await svc.from('invoices').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', inv.id)
-    if (error) throw new Error(`Счёт № ${inv.invoice_no} не обновлён: ${error.message}`)
-    updated.push({ id: inv.id, no: String(inv.invoice_no), from: Number(inv.amount) || 0, to: amount })
+    const done = await applyOrderTotals(svc, inv, totals)
+    if (done) updated.push(done)
   }
   return { updated, paidSkipped }
+}
+
+// Один счёт — под текущие итоги его заказов (счёт выставили, потом поправили просчёт).
+// Оплаченный по платежам не трогаем: это закрытый документ.
+export async function syncInvoiceToOrders(svc: SupabaseClient, invoiceId: number): Promise<
+  | { ok: true; updated: Synced | null; paid: boolean }
+  | { ok: false; status: number; error: string }
+> {
+  const { data, error } = await svc.from('invoices')
+    .select('id, invoice_no, order_ids, amount, vat, status, payer_client_id, payer_entity_id, payer_name').eq('id', invoiceId).maybeSingle()
+  if (error) return { ok: false, status: 500, error: `Счёт не прочитан: ${error.message}` }
+  if (!data) return { ok: false, status: 404, error: 'Счёт не найден' }
+  if (data.status === 'cancelled') return { ok: false, status: 409, error: `Счёт № ${data.invoice_no} отменён` }
+  const [inv] = await attachInvoicePayments(svc, asInvoiceRows([data]))
+  if (inv.derivedStatus === 'paid') return { ok: true, updated: null, paid: true }
+  try {
+    const updated = await applyOrderTotals(svc, inv, await orderTotals(svc, inv.order_ids ?? []))
+    return { ok: true, updated, paid: false }
+  } catch (e) {
+    return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) }
+  }
 }
