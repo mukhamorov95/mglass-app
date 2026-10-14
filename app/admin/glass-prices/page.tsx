@@ -98,11 +98,14 @@ function ruDate(iso: string) {
 }
 
 // Под новой ценой: прежняя зачёркнутой и разница. Рост себестоимости — красным.
-function DeltaLine({ d, prevDate }: { d: PriceDelta; prevDate: string | null }) {
+// «Было» — что стояло в справочнике до применения, а не цена прошлого прайса:
+// ячейку могли править руками между прайсами (тонированное зеркало 6 мм: 1 520 по
+// прайсу, 1 700 в справочнике).
+function DeltaLine({ d }: { d: PriceDelta }) {
   const color = d.rub > 0 ? '#dc2626' : '#059669'
   return (
     <div className="mt-0.5 text-[10px] font-mono leading-none whitespace-nowrap"
-      title={`${prevDate ? `По прайсу от ${prevDate}` : 'Было'}: ${fmt(d.old)} ₽ → сейчас ${fmt(d.now)} ₽ (${fmtRub(d.rub)} ₽, ${fmtPct(d.pct)})`}>
+      title={`В справочнике было ${fmt(d.old)} ₽ → сейчас ${fmt(d.now)} ₽ (${fmtRub(d.rub)} ₽, ${fmtPct(d.pct)})`}>
       <span className="text-[#9a9a95] line-through">{fmt(d.old)}</span>
       <span className="ml-1" style={{ color }}>{fmtRub(d.rub)} ₽ · {fmtPct(d.pct)}</span>
     </div>
@@ -1032,7 +1035,7 @@ export default function GlassPricesPage() {
                   {sum.up > 0 && sum.down > 0 && ', '}
                   {sum.down > 0 && <span className="text-[#059669]">снизилось {sum.down}</span>}
                   {sum.total > 1 && <span className="text-[#9a9a95]"> (от {fmtPct(sum.minPct)} до {fmtPct(sum.maxPct)})</span>}.
-                  {showCompare && prevDate && <span className="text-[#9a9a95]"> Зачёркнуто — цена по прайсу от {prevDate}.</span>}
+                  {showCompare && <span className="text-[#9a9a95]"> Зачёркнуто — что стояло в справочнике до этого прайса{prevDate && <> (прошлый прайс — от {prevDate})</>}.</span>}
                 </span>
                 <button
                   onClick={() => {
@@ -1167,7 +1170,7 @@ export default function GlassPricesPage() {
                           <td key={t} className="px-2 py-2 text-center"
                             onClick={() => startEdit(origName, field, getDisplayVal(origName, field, dbVal))}>
                             {renderCell(origName, field, dbVal, { bold: delta != null })}
-                            {delta && <DeltaLine d={delta} prevDate={prevDate} />}
+                            {delta && <DeltaLine d={delta} />}
                             {mInfo && (
                               <button
                                 onClick={e => { e.stopPropagation(); setPopover({ name: origName, mm: t, salePrice: displayVal as number, info: mInfo }) }}

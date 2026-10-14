@@ -28,10 +28,9 @@ import { CUSTOMER_KINDS, LEAD_REPLY_TEMPLATES, buildClientQuoteText, leadNotesPa
 import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
-// 12 мм убрано из просчётов решением владельца 22.09.2026: цены продажи на эту
-// толщину нет ни в справочнике (notes.sale_price пуст), ни в матрице (колонка t12
-// в запрос вообще не входит), поэтому позиция уходила в КП по 0 ₽ при
-// себестоимости 5 700–10 300 ₽/м². Появится цена — убрать отсюда.
+// 12 мм не делаем — решение владельца 14.10.2026 («мы с 12 мм не работаем»).
+// Себестоимость t12 в справочнике очищена, материалы B2B на 12 мм выключены,
+// правила прайса AIG на 12 мм выключены. Не возвращать без нового решения.
 const EXCLUDED_THICKNESS = [12]
 
 const MATERIAL_ORDER = [
