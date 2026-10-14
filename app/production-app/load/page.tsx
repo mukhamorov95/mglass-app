@@ -2,6 +2,8 @@ import ProductionTabs from '@/components/ProductionTabs'
 import { createServiceClient } from '@/lib/supabase-service'
 import { PRODUCTION_STAGES } from '@/lib/productionStages'
 import { addWorkingDays, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import { shopScopeOf, inShopScope } from '@/lib/production/shopScope'
+import ShopScopeBanner from '@/components/production/ShopScopeBanner'
 
 // А3: тепловая карта загрузки цеха. Строки — этапы, столбцы — СРОЧНОСТЬ по сроку
 // отгрузки заказа (production_day у задач не заполнен, поэтому ось — дедлайн из А1).
@@ -10,7 +12,7 @@ import { addWorkingDays, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 export const dynamic = 'force-dynamic'
 
 type Task = { order_id: number; stage_key: string }
-type OrderRow = { id: number; notes: string | null; launched_at: string | null }
+type OrderRow = { id: number; notes: string | null; launched_at: string | null; client_id: number | null; client_name: string | null }
 
 function orderDeadlineMs(o: OrderRow): number | null {
   let notes: Record<string, unknown> = {}
@@ -44,26 +46,34 @@ function cellBg(n: number, max: number, bucket: number): string {
   return 'bg-blue-50 text-blue-700'
 }
 
-export default async function ProductionLoadPage() {
+export default async function ProductionLoadPage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
+  const scope = shopScopeOf((await searchParams).client)
   const svc = createServiceClient()
   const { data: taskData } = await svc.from('production_tasks')
     .select('order_id, stage_key').neq('status', 'done').limit(20000)
-  const tasks = (taskData ?? []) as Task[]
-  const orderIds = [...new Set(tasks.map(t => t.order_id))]
+  const allTasks = (taskData ?? []) as Task[]
+  const orderIds = [...new Set(allTasks.map(t => t.order_id))]
 
   // А5: пропускная способность — сколько задач закрыто СЕГОДНЯ по этапам (поток
   // против очереди). Рабочие идут queued→done без «в работе», поэтому меряем не WIP
   // по людям (трение), а реальный выход по этапу за день.
   const { data: doneData } = await svc.from('production_tasks')
-    .select('stage_key').eq('status', 'done').gte('completed_at', startOfTodayISO()).limit(20000)
-  const doneToday = new Map<string, number>()
-  for (const d of (doneData ?? []) as { stage_key: string }[]) doneToday.set(d.stage_key, (doneToday.get(d.stage_key) ?? 0) + 1)
+    .select('order_id, stage_key').eq('status', 'done').gte('completed_at', startOfTodayISO()).limit(20000)
+  const done = (doneData ?? []) as Task[]
 
   const orderDeadline = new Map<number, number | null>()
-  for (let i = 0; i < orderIds.length; i += 500) {
-    const { data: od } = await svc.from('b2b_orders').select('id, notes, launched_at').in('id', orderIds.slice(i, i + 500))
-    for (const o of (od ?? []) as OrderRow[]) orderDeadline.set(o.id, orderDeadlineMs(o))
+  const inScope = new Set<number>()
+  const allIds = [...new Set([...orderIds, ...done.map(d => d.order_id)])]
+  for (let i = 0; i < allIds.length; i += 500) {
+    const { data: od } = await svc.from('b2b_orders').select('id, notes, launched_at, client_id, client_name').in('id', allIds.slice(i, i + 500))
+    for (const o of (od ?? []) as OrderRow[]) {
+      orderDeadline.set(o.id, orderDeadlineMs(o))
+      if (inShopScope(scope, o)) inScope.add(o.id)
+    }
   }
+  const tasks = scope ? allTasks.filter(t => inScope.has(t.order_id)) : allTasks
+  const doneToday = new Map<string, number>()
+  for (const d of done) if (!scope || inScope.has(d.order_id)) doneToday.set(d.stage_key, (doneToday.get(d.stage_key) ?? 0) + 1)
 
   // Матрица stage × bucket.
   const stages = PRODUCTION_STAGES.map(s => s.key)
@@ -86,6 +96,7 @@ export default async function ProductionLoadPage() {
         <p className="text-[13px] text-[#9a9a95] mt-0.5">
           {totalPending} задач в работе{overdue > 0 && <> · <span className="text-red-600 font-semibold">{overdue} просрочено</span></>} · по этапам и сроку отгрузки
         </p>
+        <ShopScopeBanner scope={scope} allHref="/production-app/load" />
         <ProductionTabs />
       </div>
 

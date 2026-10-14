@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { type DetailStages, getApplicableStages, type DetailStageKey, stageLabel } from '@/lib/productionStages'
+import { shopScopeOf, inShopScope, withShopScope } from '@/lib/production/shopScope'
+import ShopScopeBanner from '@/components/production/ShopScopeBanner'
 import { PROD_SINCE } from '@/lib/orderFlags'
 import { loadPointClientIds, pointRank } from '@/lib/b2b/points'
 import PointBadge from '@/components/PointBadge'
@@ -85,9 +87,10 @@ type FilterKey = typeof FILTERS[number]['key']
 type CellStatus = 'done' | 'inprogress' | 'partial' | 'problem' | 'none'
 type Cell = { status: CellStatus; doneN?: number; total?: number; worker?: string; frontier?: boolean }
 
-export default async function BoardPage({ searchParams }: { searchParams: Promise<{ all?: string; filter?: string }> }) {
+export default async function BoardPage({ searchParams }: { searchParams: Promise<{ all?: string; filter?: string; client?: string }> }) {
   const sp = await searchParams
   const showAll = sp.all === '1'
+  const scope = shopScopeOf(sp.client)
   const filter: FilterKey = (FILTERS.some(f => f.key === sp.filter) ? sp.filter : 'all') as FilterKey
   const svc = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -100,7 +103,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     .order('created_at', { ascending: false })
     .limit(500), loadPointClientIds(svc)])
 
-  const active: Order[] = (data ?? []).map((o: Record<string, unknown>) => ({
+  const active: Order[] = (data ?? []).filter((o: Record<string, unknown>) => inShopScope(scope, o as { client_id: number | null; client_name: string | null })).map((o: Record<string, unknown>) => ({
     id: o.id as number,
     client_name: o.client_name as string | null,
     custom_number: o.custom_number as string | null,
@@ -223,8 +226,9 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         <p className="text-[13px] text-[#9a9a95] mt-0.5">
           {rows.length - doneCount} в работе · {doneCount} готовы к отгрузке{problemCount > 0 ? ` · ${problemCount} с проблемой` : ''}
         </p>
+        <ShopScopeBanner scope={scope} allHref="/production-app/board" />
         <ProductionTabs extra={
-          <Link href={showAll ? '/production-app/board' : '/production-app/board?all=1'}
+          <Link href={withShopScope(showAll ? '/production-app/board' : '/production-app/board?all=1', scope)}
             className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f0f0ec] transition-colors ml-auto">
             {showAll ? 'Скрыть готовые' : `Показать готовые (${doneCount})`}
           </Link>
@@ -261,7 +265,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
             const n = counts[f.key]
             const tone = f.key === 'overdue' ? 'text-red-600' : f.key === 'problems' ? 'text-orange-600' : f.key === 'ready' ? 'text-emerald-700' : 'text-[#6b6b66]'
             return (
-              <Link key={f.key} href={f.key === 'all' ? '/production-app/board' : `/production-app/board?filter=${f.key}`}
+              <Link key={f.key} href={withShopScope(f.key === 'all' ? '/production-app/board' : `/production-app/board?filter=${f.key}`, scope)}
                 className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${active ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] hover:bg-[#f0f0ec]'}`}>
                 {f.label} <span className={active ? 'opacity-70' : tone}>{n}</span>
               </Link>

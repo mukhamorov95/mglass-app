@@ -30,9 +30,10 @@ const MGLASS: NavEntry[] = [
     { href: '/contracts',        label: 'Договоры и счета',  icon: '📃' },
   ] },
   { groupLabel: 'Производство' },
-  { href: '/production-app/orders', label: 'Заказы в цеху',  icon: '📋' },
-  { href: '/production-app/load',   label: 'Планирование',   icon: '🗓️' },
-  { href: '/production-app/board',  label: 'Участки цеха',   icon: '🔧' },
+  // Розничный заказ идёт в цех B2B-заказом клиента M GLASS — те же экраны с фильтром (Н2)
+  { href: '/production-app/orders?client=mglass', label: 'Заказы в цеху',  icon: '📋' },
+  { href: '/production-app/load?client=mglass',   label: 'Планирование',   icon: '🗓️' },
+  { href: '/production-app/board?client=mglass',  label: 'Участки цеха',   icon: '🔧' },
   { sectionLabel: 'Замеры', icon: '📐', items: [
     { href: '/measure-requests',  label: 'Заявки на замер',   icon: '📐' },
     { href: '/measure-calendar',  label: 'Календарь замеров', icon: '🗓️' },
