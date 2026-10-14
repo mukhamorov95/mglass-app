@@ -521,6 +521,13 @@ export default function MyQueuePage() {
     setReworkBusy(false)
     // Отказ — лист причин остаётся открытым, чтобы повторить, не выбирая заново.
     if (!r) return
+    const j = await r.json().catch(() => null) as { reopen?: number; restartStage?: string; notified?: boolean } | null
+    toast.success('Брак записан', {
+      detail: (j?.reopen && j.restartStage
+        ? `Деталь снова в очереди с этапа «${stageLabel(j.restartStage)}».`
+        : 'Маршрут не менялся, запись — в журнале брака.')
+        + (j?.notified ? ' Менеджеру отправлено сообщение.' : ''),
+    })
     setReworkFor(null)
     setReworkOther('')
     void load()
