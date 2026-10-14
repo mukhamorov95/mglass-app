@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { auditAccess, countBySeverity, escapeHtml, formatReport, namesWhoWrites, SENSITIVE_TABLES, type AccessSnapshot, type SnapshotPolicy } from '@/lib/security/accessAudit'
 
-const empty: AccessSnapshot = { policies: [], grants: [], rls: [], suspicious_columns: [] }
+// Закрытый бакет без политик: хранилище проверено и чисто, правила таблиц — отдельно
+// (__tests__/access/storageAudit.test.ts).
+const empty: AccessSnapshot = {
+  policies: [], grants: [], rls: [], suspicious_columns: [],
+  storage: { buckets: [{ id: 'private-files', public: false, file_size_limit: null, allowed_mime_types: null }], policies: [] },
+}
 
 describe('прогон доступов ловит то, что нашлось руками 22.09', () => {
   it('политика, выданная PUBLIC, — находка (так открылись справочники анониму)', () => {

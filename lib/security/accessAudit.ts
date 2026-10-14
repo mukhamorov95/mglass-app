@@ -10,7 +10,8 @@
 //   • RLS включён, а политик нет → таблица молча отдаёт пусто (или, если ворота
 //     не нужны, кто-то думает, что они есть);
 //   • RLS вообще выключен на таблице с деньгами или людьми;
-//   • пароль/секрет хранится колонкой.
+//   • пароль/секрет хранится колонкой;
+//   • (01.10) бакет хранилища открыт шире, чем думали, — см. auditStorage.
 
 // У политик INSERT условие живёт в check, а не в using: первый прогон из-за
 // этого объявил «запись без входа» там, где проверка была.
@@ -19,11 +20,24 @@ export type SnapshotGrant = { table: string; grantee: string; privilege: string 
 export type SnapshotRls = { table: string; enabled: boolean; policies: number }
 export type SnapshotColumn = { table: string; column: string }
 
+export type SnapshotBucket = {
+  id: string
+  public: boolean
+  file_size_limit: number | null
+  allowed_mime_types: string[] | null
+  objects?: number
+}
+// Политики storage.objects — та же форма, что у таблиц (table = 'objects').
+export type StorageSnapshot = { buckets: SnapshotBucket[]; policies: SnapshotPolicy[] }
+
 export type AccessSnapshot = {
   policies: SnapshotPolicy[]
   grants: SnapshotGrant[]
   rls: SnapshotRls[]
   suspicious_columns: SnapshotColumn[]
+  // Нет у снимков до 14.10.2026 и у функции, на которую не накатили миграцию
+  // 20261014_security_snapshot_storage.sql, — тогда прогон говорит об этом находкой.
+  storage?: StorageSnapshot
 }
 
 export type Severity = 'high' | 'medium' | 'low'
@@ -248,8 +262,141 @@ export function auditAccess(s: AccessSnapshot): Finding[] {
     })
   }
 
+  out.push(...auditStorage(s.storage))
+
   const rank: Record<Severity, number> = { high: 0, medium: 1, low: 2 }
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || a.table.localeCompare(b.table))
+}
+
+// ── Хранилище ────────────────────────────────────────────────────────────────
+// Две дыры 01.10.2026 жили в бакетах, а не в таблицах: b2b-attachments отдавал
+// любому вошедшему (и партнёру) чертежи всех заказчиков, в furniture-shower
+// загружать и удалять мог аноним. Прогон таблиц их не видел — бакеты он не читал.
+// Публичный бакет отдаёт файл по прямой ссылке без входа и мимо всех политик,
+// поэтому каждый такой бакет — решение, записанное здесь с причиной.
+export const PUBLIC_BUCKETS_OK = new Set([
+  'furniture-shower', // фото фурнитуры для 3D-конфигуратора на сайте; грузят только сотрудники (01.10)
+  'shower-models',    // картинки моделей душевых М1…М12 для витрины и конфигуратора
+  // kp-photos сюда не внесён: кроме фото для КП в него пишет /api/deals/[id]/files —
+  // чертежи сделок. work-photos — пустой, код его не знает. Решает владелец.
+])
+
+// Какие бакеты называет условие политики. pg_get_expr печатает
+// «bucket_id = 'x'::text» и «bucket_id = ANY (ARRAY['a'::text, 'b'::text])».
+// null — бакет не назван, и правило действует на все бакеты, включая будущие.
+export function bucketsInPolicy(p: SnapshotPolicy): string[] | null {
+  const text = `${p.using ?? ''} ${p.check ?? ''}`
+  const found = new Set<string>()
+  for (const m of text.matchAll(/bucket_id\s*=\s*'([^']+)'/g)) found.add(m[1])
+  for (const m of text.matchAll(/bucket_id\s*=\s*any\s*\(\s*array\s*\[([^\]]*)\]/gi)) {
+    for (const q of m[1].matchAll(/'([^']+)'/g)) found.add(q[1])
+  }
+  return found.size ? [...found].sort() : null
+}
+
+// В каталоге политика без TO и политика TO public неотличимы — обе выданы PUBLIC.
+const roleWord = (roles: string[]) => roles.includes('anon') && !roles.includes('PUBLIC')
+  ? 'роли anon'
+  : 'роли PUBLIC (так выглядит create policy без TO; в неё входит anon)'
+
+export function auditStorage(st: StorageSnapshot | undefined): Finding[] {
+  // Пустота — утверждение о приборе, пока не доказано обратное: молчание тут
+  // выглядело бы как «в хранилище чисто».
+  if (!st) return [{
+    severity: 'medium', code: 'storage_not_scanned', table: 'storage',
+    title: 'Хранилище не проверено: в снимке нет бакетов',
+    detail: 'Функция security_access_snapshot не отдала раздел storage — на базу не накатили миграцию 20261014_security_snapshot_storage.sql. Пока её нет, прогон бакетов не видит, а дыры 01.10 были именно там.',
+  }]
+  if ((st.buckets ?? []).length === 0) return [{
+    severity: 'medium', code: 'storage_empty_snapshot', table: 'storage',
+    title: 'Снимок хранилища пуст: 0 бакетов',
+    detail: 'Бакеты в проекте есть (14.10 — восемь). Пустой список значит сломанный снимок, а не чистое хранилище: проверить функцию security_access_snapshot.',
+  }]
+
+  const out: Finding[] = []
+  const byId = new Map(st.buckets.map(b => [b.id, b]))
+  const listedInPublic = new Map<string, string[]>()
+
+  for (const p of st.policies ?? []) {
+    const buckets = bucketsInPolicy(p)
+    const label = buckets ? buckets.join(', ') : 'все бакеты'
+    const key = `storage:${buckets ? buckets.join(',') : '*'}`
+
+    if (isPublicRole(p.roles) && !policyChecksSession(p)) {
+      if (WRITE_CMDS.has(p.cmd)) {
+        out.push({
+          severity: 'high', code: 'storage_public_write', table: key,
+          title: `Запись в хранилище без входа: ${label} · ${p.policy}`,
+          detail: `Политика выдана ${roleWord(p.roles)} и сессии не требует: загрузить, заменить или удалить файл может любой с публичным ключом со страницы сайта. Нужно TO authenticated и условие на роль.`,
+        })
+        continue
+      }
+      for (const b of buckets ?? ['*']) {
+        const bucket = byId.get(b)
+        if (bucket?.public && PUBLIC_BUCKETS_OK.has(b)) {
+          out.push({
+            severity: 'low', code: 'storage_anon_list', table: `storage:${b}`,
+            title: `Аноним видит список файлов: ${b} · ${p.policy}`,
+            detail: 'Файлы бакета открыты по ссылке осознанно (PUBLIC_BUCKETS_OK), но политика чтения отдаёт ещё и список всех имён — по нему находят то, на что ссылок не давали. Если сайт сам файлы не перечисляет, политику можно снять.',
+          })
+        } else if (bucket?.public) {
+          listedInPublic.set(b, [...(listedInPublic.get(b) ?? []), p.policy])
+        } else {
+          const why = bucket ? 'Бакет закрыт, но политика'
+            : b === '*' ? 'Условие не называет бакет, и политика'
+            : 'Бакета с таким именем сейчас нет — откроется, как только его создадут: политика'
+          out.push({
+            severity: 'high', code: 'storage_public_read', table: `storage:${b}`,
+            title: `Чтение хранилища без входа: ${b === '*' ? 'все бакеты' : b} · ${p.policy}`,
+            detail: `${why} выдана ${roleWord(p.roles)} и сессии не требует — аноним видит и скачивает файлы. Нужно TO authenticated и условие на роль.`,
+          })
+        }
+      }
+      continue
+    }
+
+    if (p.roles.includes('PUBLIC')) {
+      out.push({
+        severity: 'medium', code: 'storage_policy_no_to', table: key,
+        title: `Политика хранилища без TO: ${label} · ${p.policy}`,
+        detail: `Выдана PUBLIC. Сегодня анонима отсекает условие «${p.using ?? p.check ?? '—'}», но одна правка условия откроет бакет без входа. Нужно явное TO authenticated.`,
+      })
+    }
+    if (!buckets) {
+      out.push({
+        severity: 'medium', code: 'storage_policy_all_buckets', table: key,
+        title: `Политика хранилища не называет бакет: ${p.policy}`,
+        detail: 'В условии нет bucket_id = …, значит правило действует на все бакеты, включая будущие: новый бакет с чертежами откроется тем же, кому открыты фото витрины.',
+      })
+    }
+  }
+
+  for (const b of st.buckets) {
+    if (!b.public || PUBLIC_BUCKETS_OK.has(b.id)) continue
+    const listed = listedInPublic.get(b.id)
+    out.push({
+      severity: 'high', code: 'storage_public_bucket', table: `storage:${b.id}`,
+      title: `Бакет открыт по ссылке без входа: ${b.id}`,
+      detail: `Публичный бакет отдаёт любой файл по прямой ссылке без входа и мимо политик${b.objects != null ? ` (файлов: ${b.objects})` : ''}${listed ? `; политика ${listed.map(n => `«${n}»`).join(', ')} вдобавок отдаёт анониму список всех файлов` : ''}. Если так задумано — внести в PUBLIC_BUCKETS_OK с причиной; если нет — сделать бакет приватным и отдавать файлы подписанной ссылкой (createSignedUrl).`,
+    })
+  }
+  return out
+}
+
+// Сводка по бакетам для /admin/security: кто что может, без выводов.
+export type BucketSummary = SnapshotBucket & {
+  allowListed: boolean
+  policies: { policy: string; cmd: string; roles: string[] }[]
+}
+export function summarizeStorage(st: StorageSnapshot | undefined): BucketSummary[] | null {
+  if (!st) return null
+  return st.buckets.map(b => ({
+    ...b,
+    allowListed: PUBLIC_BUCKETS_OK.has(b.id),
+    policies: (st.policies ?? [])
+      .filter(p => { const bs = bucketsInPolicy(p); return !bs || bs.includes(b.id) })
+      .map(p => ({ policy: p.policy, cmd: p.cmd, roles: p.roles })),
+  }))
 }
 
 // Отчёт уходит в телеграм с parse_mode: HTML: один «<» в имени политики или
