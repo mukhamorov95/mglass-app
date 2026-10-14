@@ -11,6 +11,7 @@ import {
 } from '@/lib/b2b/orderNotes'
 import type { OrderNotesAction } from '@/lib/b2b/orderNotesClient'
 import { pointLaunchGate, orderTotal, IN_WORK_STATUSES } from '@/lib/b2b/points'
+import { allocateAdvances } from '@/lib/accounting/clientAdvance'
 
 // Правка notes просчёта/заказа со списка просчётов, воронки и печати КП. Экран шлёт
 // намерение, патч собирается здесь из свежих notes (lib/b2b/orderNotes.ts): копия
@@ -137,5 +138,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Экран берёт notes из ответа; не перечиталось — отдаём свежие с патчем, а не null.
   const { data: after } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
   const notes = (after as { notes: string | null } | null)?.notes ?? JSON.stringify({ ...fresh, ...patch })
-  return NextResponse.json({ ok: true, notes, columns })
+
+  // Запущенный заказ клиента с авансом оплачивается с аванса сразу; отменённый или
+  // возвращённый в просчёты — отдаёт списание обратно. Сбой не отменяет запуск: ночная сверка повторит.
+  let advanceWarning: string | null = null
+  if ((body.action === 'launch' || body.action === 'status') && o.client_id != null) {
+    try {
+      const r = await allocateAdvances(svc, { clientIds: [o.client_id] })
+      if (r.warnings.length) advanceWarning = r.warnings.join('; ')
+    } catch (e) {
+      advanceWarning = `Аванс клиента не пересчитан: ${e instanceof Error ? e.message : String(e)}`
+    }
+  }
+  return NextResponse.json({ ok: true, notes, columns, advanceWarning })
 }

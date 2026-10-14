@@ -12,6 +12,7 @@ export type PaidBy = { label: string | null; title: string }
 
 const BANK = 'bank_statement_import'
 const RECONCILE = 'reconcile'
+const ADVANCE = 'client_advance'
 
 const ruDate = (d: string | null) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d ?? '')
@@ -34,6 +35,9 @@ export function paidByOf(p: PaidByPayment | null): PaidBy | null {
   const who = p.entered_by_name?.trim() || null
   if (p.source === BANK) {
     return { label: 'банк', title: `Пришло по выписке банка ${date}${who ? `, провёл(а) ${who}` : ''}` }
+  }
+  if (p.source === ADVANCE) {
+    return { label: 'аванс', title: `Списано с аванса клиента ${date}` }
   }
   if (p.source === RECONCILE || !who) {
     // Сверка до 14.10 перезаписывала платёж кнопки «Оплачен» и стирала автора.
