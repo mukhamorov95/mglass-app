@@ -256,6 +256,7 @@ export default async function CfoDashboardPage() {
                 { href: '/cfo/order-economics', label: 'Честная экономика заказа (раскрой + труд)' },
                 { href: '/cfo/order-economics/retail', label: 'Фонды розничного заказа (душевые)' },
                 { href: '/cfo/margins', label: 'Таблица маржинальности' },
+                { href: '/cfo/products', label: 'Отчёт по изделиям (B2B): маржа по материалу' },
                 { href: '/cfo/unit',    label: 'Unit-экономика заказов' },
                 { href: '/cfo/sales-ledger', label: 'Продажи и маржа' },
                 { href: '/admin/settings', label: 'Финансовые настройки' },
