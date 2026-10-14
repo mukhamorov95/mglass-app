@@ -1,7 +1,8 @@
 // Строка выписки ↔ неоплаченный счёт. Чистые функции: и сервер (автоподбор), и
 // вкладка «Выписка» (ручной выбор с поиском) считают одинаково.
 // Сравниваем с ОСТАТКОМ по платежам, а не с суммой счёта: вторая половина оплаты
-// равна остатку, а не счёту, и до правки не находилась вовсе.
+// равна остатку, а не счёту, и до правки не находилась вовсе. Остаток — по деньгам
+// (выписка, наличные): ручное «Оплачен» деньгами не считается, его подтверждает банк.
 
 export type OpenInvoice = {
   id: number
@@ -11,6 +12,8 @@ export type OpenInvoice = {
   amount: number
   paid: number
   remainder: number
+  // Сколько закрыто отметкой «Оплачен» без денег в банке — пришедший перевод её заменит
+  marked?: number
   orders: number[]
   issued_at: string | null
 }
@@ -26,6 +29,8 @@ export type RowEffect = {
 }
 
 const TOL = 0.5
+// Счёт и итог заказа расходятся на рубли округления (05599: счёт 17 433, оплатили итог 17 440)
+const SLACK = 10
 const round2 = (v: number) => Math.round(v * 100) / 100
 
 export function rowEffect(remainder: number, amount: number): RowEffect {
@@ -40,7 +45,10 @@ export function invoiceNoIn(no: string, purpose: string | null): boolean {
   return new RegExp(`(^|\\D)${escRe(no)}(\\D|$)`).test(purpose)
 }
 
-export type InvoiceMatch = { invoice: OpenInvoice } & RowEffect
+// strong — номер счёта в назначении и сумма сошлись, и номер не случайный: ИНН совпал или
+// номер длинный (05569 в сумме или дате не встречается). Такой строке оплата проставляется
+// без человека; остальные подобранные — подсказка бухгалтеру. ИНН есть у трети клиентов.
+export type InvoiceMatch = { invoice: OpenInvoice; strong: boolean } & RowEffect
 
 // ИНН или номер счёта — сильные признаки; одна лишь сумма — слабый, но с ними складывается.
 // Сумма больше остатка — не автоподбор: это либо другой счёт, либо оплата нескольких сразу,
@@ -48,19 +56,20 @@ export type InvoiceMatch = { invoice: OpenInvoice } & RowEffect
 export function matchInvoice(row: BankIn, invoices: OpenInvoice[]): InvoiceMatch | null {
   const amount = Number(row.amount)
   const scored = invoices.flatMap(i => {
-    if (i.remainder <= TOL || amount > i.remainder + TOL) return []
-    const sameAmount = Math.abs(i.remainder - amount) < TOL
+    if (i.remainder <= TOL || amount > i.remainder + SLACK) return []
+    const sameAmount = Math.abs(i.remainder - amount) <= SLACK
     const sameInn = !!row.inn && !!i.inn && i.inn === row.inn
     const noInPurpose = invoiceNoIn(i.no, row.purpose)
     const ok = (sameInn && (sameAmount || noInPurpose)) || (noInPurpose && sameAmount)
-    return ok ? [{ i, noInPurpose }] : []
+    const strong = noInPurpose && sameAmount && (sameInn || i.no.replace(/\D/g, '').length >= 5)
+    return ok ? [{ i, noInPurpose, strong }] : []
   })
-  let pick = scored.length === 1 ? scored[0].i : null
+  let pick = scored.length === 1 ? scored[0] : null
   if (!pick && scored.length > 1) {
     const byNo = scored.filter(s => s.noInPurpose)
-    if (byNo.length === 1) pick = byNo[0].i
+    if (byNo.length === 1) pick = byNo[0]
   }
-  return pick ? { invoice: pick, ...rowEffect(pick.remainder, amount) } : null
+  return pick ? { invoice: pick.i, strong: pick.strong, ...rowEffect(pick.i.remainder, amount) } : null
 }
 
 const digits = (s: string) => s.replace(/\D/g, '')

@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { parseStatement, dedupe } from '@/lib/bank/parseStatement'
 import { loadOpenInvoices, postBankRow, type BankRow } from '@/lib/accounting/bankPost'
 import { matchInvoice, type OpenInvoice } from '@/lib/accounting/bankMatch'
+import { isLoan, isOwnTransfer } from '@/lib/accounting/bankAuto'
 
 // Б9: загрузка банковской выписки и разнесение её по фондам.
 // Строка выписки — кандидат, а не операция: ДДС рождается только после
@@ -118,8 +119,9 @@ export async function GET(req: NextRequest) {
       invoicesError = e instanceof Error ? e.message : String(e)
     }
   }
-  // Проведённые строки показывают свой счёт, даже если он уже оплачен
-  const linkedIds = status === 'new' ? [] : [...new Set((rows ?? []).map(r => Number(r.invoice_id)).filter(n => n > 0))]
+  // Строки со своим счётом (проведённые и с оплатой, проставленной автоподбором) показывают
+  // его, даже если он уже оплачен
+  const linkedIds = [...new Set((rows ?? []).map(r => Number(r.invoice_id)).filter(n => n > 0))]
   const { data: linked } = linkedIds.length
     ? await svc.from('invoices').select('id,invoice_no,payer_name,amount,order_ids').in('id', linkedIds)
     : { data: [] }
@@ -138,12 +140,16 @@ export async function GET(req: NextRequest) {
           Math.abs(Number(q.amount) - Number(r.amount)) < 0.5 &&
           (!q.counterparty || !cp || q.counterparty.trim().toLowerCase().slice(0, 12) === cp.slice(0, 12)))
       : null
-    const auto = r.direction === 'in' && status === 'new'
+    const own = r.direction === 'in' && isOwnTransfer(r.inn)
+    const loan = r.direction === 'in' && isLoan(r.purpose)
+    const applied = !!r.payment_id
+    const auto = r.direction === 'in' && status === 'new' && !applied && !own && !loan
       ? matchInvoice({ amount: Number(r.amount), inn: r.inn ?? null, purpose: r.purpose ?? null }, open)
       : null
     const had = linkedBy.get(Number(r.invoice_id))
     return {
       ...r,
+      applied, own, loan,
       invoice: auto
         ? { ...auto.invoice, partial: auto.partial, rest: auto.rest, over: auto.over }
         : had

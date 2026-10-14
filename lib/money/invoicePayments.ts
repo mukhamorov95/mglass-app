@@ -5,7 +5,7 @@ import { invoicePayments, type InvoiceLike, type InvoicePayment, type PaymentLik
 // Серверная часть статуса счёта: дочитать платежи к списку счетов без потолка 1000 строк.
 // Только service-role и только после проверки роли в вызывающем маршруте.
 
-export const PAYMENT_COLS = 'id, amount, invoice_id, b2b_order_id, voided_at, paid_at, external_key, source'
+export const PAYMENT_COLS = 'id, amount, invoice_id, b2b_order_id, voided_at, paid_at, external_key, source, method'
 
 export const toPaymentLike = (p: Row): PaymentLike => ({
   id: num(p.id),
@@ -16,6 +16,7 @@ export const toPaymentLike = (p: Row): PaymentLike => ({
   paid_at: (p.paid_at as string | null) ?? null,
   external_key: (p.external_key as string | null) ?? null,
   source: (p.source as string | null) ?? null,
+  method: (p.method as string | null) ?? null,
 })
 
 // Невойднутые платежи, которые могут относиться к этим счетам: по invoice_id и по заказам.
