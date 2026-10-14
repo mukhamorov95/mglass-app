@@ -17,7 +17,8 @@ export type DetailStageKey =
   | 'problem'
 
 export type DetailStageState = {
-  status:            'done' | 'problem'
+  // reopened — этап переоткрыт переделкой (/api/production/rework): ключ остаётся, но не «готово»
+  status:            'done' | 'problem' | 'reopened'
   updated_at:        string
   updated_by:        string
   updated_by_email?: string

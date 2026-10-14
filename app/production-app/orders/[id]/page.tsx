@@ -7,7 +7,10 @@ import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering, PROBLEM_REASONS, STAGE_LABELS, getApplicableStages } from '@/lib/productionStages'
 import { andonCode } from '@/lib/productionRouting'
-import { toast as toastError, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { toast as toastError, responseError, NETWORK_ERROR, sendOrToast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/dialog'
+import { REWORK_REASONS, REWORK_REASON_LABELS, REWORK_COMMENT_MAX, type ReworkReason } from '@/lib/production/rework'
+import { reworkPreviewLine, reworkResultText, type ReworkPreview, type ReworkResult } from '@/lib/production/reworkText'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -233,6 +236,104 @@ function ProblemModal({
   )
 }
 
+// ─── ReworkModal ──────────────────────────────────────────────────────────────
+// Брак / переделка по выбранным позициям. В отличие от «Проблемы» задачу из потока не
+// вынимает: маршрут детали возвращается назад, и очередь снова говорит правду. Что именно
+// переоткроется, человек видит в подтверждении до записи.
+
+function ReworkModal({
+  itemCount,
+  saving,
+  onConfirm,
+  onCancel,
+}: {
+  itemCount: number
+  saving:    boolean
+  onConfirm: (reason: ReworkReason, note: string) => void
+  onCancel:  () => void
+}) {
+  const [reason, setReason] = useState<ReworkReason | null>(null)
+  const [note,   setNote]   = useState('')
+  const needsNote = reason === 'other' && !note.trim()
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]">
+      <div className="w-full max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
+        <div className="px-5 pt-5 pb-3 border-b border-[#f0f0ec]">
+          <div className="flex items-center justify-between mb-0.5">
+            <h2 className="text-[16px] font-bold text-[#111110]">Брак / переделка</h2>
+            <button onClick={onCancel} aria-label="Закрыть" className="p-1 -mr-1 text-[#9a9a95] hover:text-[#111110] transition-colors">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-[12px] text-[#9a9a95]">
+            {itemCount} {plural(itemCount, 'позиция', 'позиции', 'позиций')} · деталь пойдёт заново, брак запишется
+          </p>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Что случилось</p>
+            <div className="space-y-1.5">
+              {REWORK_REASONS.map(r => (
+                <button
+                  key={r.code}
+                  onClick={() => setReason(prev => prev === r.code ? null : r.code)}
+                  className={`w-full text-left px-3.5 py-3 rounded-xl text-[14px] font-medium border transition-all ${
+                    reason === r.code
+                      ? 'border-red-400 bg-red-50 text-red-700'
+                      : 'border-[#e8e8e4] bg-[#fafaf9] text-[#3a3a35] hover:border-[#c4c4be] hover:bg-white'
+                  }`}
+                >
+                  {reason === r.code && <span className="mr-1.5 text-red-500">✓</span>}
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">
+              Комментарий {reason === 'other' ? '(напишите, что случилось)' : '(необязательно)'}
+            </p>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              maxLength={REWORK_COMMENT_MAX}
+              rows={2}
+              placeholder="Например: скол угла после закалки"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8e4] bg-[#fafaf9] text-[13px] text-[#111110] placeholder-[#c4c4be] resize-none focus:outline-none focus:border-[#9a9a95]"
+            />
+          </div>
+        </div>
+
+        <div className="px-5 pb-5 pt-2 flex gap-2.5">
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="flex-1 py-3 rounded-xl border border-[#e8e8e4] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f4f4f0] transition-colors"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={() => reason && onConfirm(reason, note)}
+            disabled={saving || !reason || needsNote}
+            className={`flex-1 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+              saving || !reason || needsNote
+                ? 'bg-red-100 text-red-300 cursor-not-allowed'
+                : 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+            }`}
+          >
+            {saving ? 'Записываю…' : 'Дальше'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── UndoModal ────────────────────────────────────────────────────────────────
 
 function UndoModal({
@@ -440,8 +541,8 @@ function ItemCard({
                     </button>
                   )}
                 </div>
-                <span className={`text-[8px] ${isDone ? 'text-green-600' : 'text-[#c4c4be]'}`}>
-                  {isDone && sd?.updated_at ? fmtDateShort(sd.updated_at) : isDone ? 'готово' : 'ожидает'}
+                <span className={`text-[8px] ${isDone ? 'text-green-600' : sd?.status === 'reopened' ? 'text-red-600 font-semibold' : 'text-[#c4c4be]'}`}>
+                  {isDone && sd?.updated_at ? fmtDateShort(sd.updated_at) : isDone ? 'готово' : sd?.status === 'reopened' ? 'переделка' : 'ожидает'}
                 </span>
               </div>
             )
@@ -488,6 +589,7 @@ export default function ProductionOrderPage() {
   const [saving,        setSaving]        = useState(false)
   const [toast,         setToast]         = useState<{ msg: string; ok: boolean } | null>(null)
   const [problemModal,  setProblemModal]  = useState<{ items: number[] } | null>(null)
+  const [reworkModal,   setReworkModal]   = useState<{ items: number[] } | null>(null)
   const [undoModal,     setUndoModal]     = useState<{
     itemIndex:     number
     stageKey:      DetailStageKey
@@ -681,6 +783,62 @@ export default function ProductionOrderPage() {
     }
   }
 
+  // ─── Брак / переделка ─────────────────────────────────────────────────────
+  // Пишет в журнал переделок (production_rework) через /api/production/rework — то же
+  // действие, что «Переделать» в очереди: маршрут детали переоткрывается сервером.
+  // Сначала план без записи (dry_run) → подтверждение с последствием → запись по позициям.
+
+  async function saveRework(reason: ReworkReason, note: string) {
+    if (!reworkModal || !order || saving) return
+    const items = [...reworkModal.items].sort((a, b) => a - b)
+    const comment = note.trim() || null
+    const reasonLabel = REWORK_REASON_LABELS[reason] ?? reason
+    const body = (itemIndex: number, dryRun: boolean) => JSON.stringify({
+      order_id: order.id, item_index: itemIndex, reason, comment, dry_run: dryRun,
+    })
+    const init = (b: string): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: b })
+
+    setSaving(true)
+    const previews: ReworkPreview[] = []
+    for (const idx of items) {
+      const r = await sendOrToast(`Поз. ${idx + 1}: план переделки не получен`, '/api/production/rework', init(body(idx, true)), 'Ничего не записано — попробуйте ещё раз')
+      if (!r) { setSaving(false); return }
+      previews.push(await r.json() as ReworkPreview)
+    }
+    setSaving(false)
+
+    const ok = await confirmDialog({
+      title: `Записать брак: ${reasonLabel}?`,
+      text: [...previews.map(reworkPreviewLine), comment ? `Комментарий: ${comment}` : ''].filter(Boolean).join('\n'),
+      confirmLabel: 'Записать брак',
+      danger: true,
+    })
+    if (!ok) return
+
+    setSaving(true)
+    const done: ReworkResult[] = []
+    for (const idx of items) {
+      const r = await sendOrToast(`Поз. ${idx + 1}: брак не записан`, '/api/production/rework', init(body(idx, false)), 'Попробуйте ещё раз или скажите начальнику цеха')
+      if (!r) continue
+      const j = await r.json() as ReworkResult
+      done.push({ ...j, warnings: Array.isArray(j.warnings) ? j.warnings : [] })
+    }
+    setSaving(false)
+    if (done.length === 0) return
+
+    // Позиции, которые не записались, остаются выбранными — повторить можно, не выбирая заново.
+    const failed = items.filter(i => !done.some(d => d.itemIndex === i))
+    setReworkModal(failed.length ? { items: failed } : null)
+    setSelectedItems(new Set(failed))
+    const { title, detail } = reworkResultText(done, reasonLabel)
+    toastError.success(title, { detail })
+
+    // Сервер переоткрыл этапы и в notes.detail_stages — перечитываем, чтобы карточка не врала.
+    const { data } = await createClient().from('b2b_orders').select('notes').eq('id', order.id).maybeSingle()
+    const fresh = data as { notes: string | null } | null
+    if (fresh) setOrder(prev => prev ? { ...prev, notes: fresh.notes } : prev)
+  }
+
   // ─── Unset stage ──────────────────────────────────────────────────────────
 
   async function unsetStage(
@@ -799,6 +957,15 @@ export default function ProductionOrderPage() {
           saving={saving}
           onConfirm={saveProblem}
           onCancel={() => setProblemModal(null)}
+        />
+      )}
+
+      {reworkModal && (
+        <ReworkModal
+          itemCount={reworkModal.items.length}
+          saving={saving}
+          onConfirm={saveRework}
+          onCancel={() => setReworkModal(null)}
         />
       )}
 
@@ -966,7 +1133,7 @@ export default function ProductionOrderPage() {
 
             {selectedItems.size === 0 && (
               <p className="text-[11px] text-[#b0b0aa] mb-2 px-0.5">
-                Выберите позиции выше, чтобы отметить этап
+                Выберите позиции выше, чтобы отметить этап или брак
               </p>
             )}
 
@@ -994,6 +1161,19 @@ export default function ProductionOrderPage() {
                   </button>
                 )
               })}
+              {/* Брак отдельно от «Проблемы»: проблема останавливает задачу и ждёт начальника,
+                  брак возвращает деталь в маршрут и пишется в журнал (отчёт «Изделия»). */}
+              <button
+                onClick={() => setReworkModal({ items: [...selectedItems] })}
+                disabled={selectedItems.size === 0 || saving}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-[13px] font-medium border transition-all ${
+                  selectedItems.size === 0 || saving
+                    ? 'border-red-100 text-red-300 bg-red-50 cursor-not-allowed'
+                    : 'border-red-300 text-red-600 bg-white hover:bg-red-50 active:bg-red-100'
+                }`}
+              >
+                ♻ Брак / переделка
+              </button>
             </div>
           </div>
 
