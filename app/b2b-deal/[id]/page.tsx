@@ -3,7 +3,8 @@ import { redirect, notFound } from 'next/navigation'
 import { getRole, isOwnerRole, canAccessRoute } from '@/lib/getRole'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { finalTotalOf, type PriceApproval } from '@/lib/b2b/priceOverride'
-import { paidByOrder, remainderStatus } from '@/lib/b2b/orderPayments'
+import { remainderStatus } from '@/lib/b2b/orderPayments'
+import { loadOrderPaid } from '@/lib/money/orderPaid'
 import { effectiveItemTotal, VAT, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { orderCostBreakdown } from '@/lib/b2b/orderCostBreakdown'
 import { loadB2BRates, marginTone, type MarginTone } from '@/lib/b2b/rates'
@@ -74,32 +75,17 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const claim = notes.claim as { status?: string; reason?: string; cost?: number; fault?: string } | undefined
   const delivery = notes.delivery as { method?: string; address?: string | null; status?: string } | undefined
   // A23: оплата — из payments (не из notes). Прямые платежи по заказу + доля от
-  // оплаченных счетов, куда заказ входит. Считаем на сервере — деньги наружу
-  // без себестоимости.
-  const [{ data: pays, error: paysErr }, { data: invs, error: invsErr }, { rates }, { data: taskRows, error: tasksErr }] = await Promise.all([
-    sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').eq('b2b_order_id', dealId).is('voided_at', null),
+  // оплаченных счетов, куда заказ входит; доля сводного счёта — от итогов всех его заказов
+  // (loadOrderPaid дочитывает соседей). Считаем на сервере — деньги наружу без себестоимости.
+  const [paidRes, { data: invs, error: invsErr }, { rates }, { data: taskRows, error: tasksErr }] = await Promise.all([
+    loadOrderPaid(sb, new Map([[dealId, total]])).then(m => ({ paid: m.get(dealId) ?? 0, err: null }), (e: unknown) => ({ paid: 0, err: { message: e instanceof Error ? e.message : String(e) } })),
     sb.from('invoices').select('id, invoice_no, status, order_ids, amount').overlaps('order_ids', [dealId]),
     loadB2BRates(sb),
     sb.from('production_tasks').select('stage_key, status, completed_at, completed_by_name').eq('order_id', dealId),
   ])
-  let invPays: { amount: number; b2b_order_id: number | null; invoice_id: number | null; voided_at: string | null }[] = []
-  let invPaysErr: { message: string } | null = null
-  const invIds = ((invs ?? []) as { id: number }[]).map(i => i.id)
-  if (invIds.length) {
-    const { data, error: e } = await sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').in('invoice_id', invIds).is('voided_at', null)
-    invPays = ((data ?? []) as Record<string, unknown>[])
-      .filter(p => p.b2b_order_id == null)
-      .map(p => ({ amount: Number(p.amount) || 0, b2b_order_id: null, invoice_id: Number(p.invoice_id) || null, voided_at: null }))
-    invPaysErr = e
-  }
   // Без оплат «Оплачено»/«Остаток» соврали бы («не заведена») — такие строки не показываем.
-  const moneyErr = paysErr ?? invsErr ?? invPaysErr
-  const paidMap = paidByOrder(
-    [...((pays ?? []) as Record<string, unknown>[]).map(p => ({ amount: Number(p.amount) || 0, b2b_order_id: Number(p.b2b_order_id) || null, invoice_id: p.invoice_id == null ? null : Number(p.invoice_id), voided_at: (p.voided_at as string | null) ?? null })), ...invPays],
-    ((invs ?? []) as Record<string, unknown>[]).map(i => ({ id: Number(i.id), order_ids: Array.isArray(i.order_ids) ? (i.order_ids as unknown[]).map(Number) : null, amount: Number(i.amount) || 0 })),
-    new Map([[dealId, total]]),
-  )
-  const rem = remainderStatus(total, paidMap.get(dealId) ?? 0)
+  const moneyErr = paidRes.err ?? invsErr
+  const rem = remainderStatus(total, paidRes.paid)
   const paid = rem.paid
   // Напомнить об оплате — пока не оплачено полностью и есть что оплачивать: запущенный заказ
   // или выставленный счёт. Номер счёта — только если счёт на один этот заказ: у общего счёта

@@ -129,9 +129,18 @@ export async function GET(req: NextRequest) {
       id: n(i.id), order_ids: Array.isArray(i.order_ids) ? (i.order_ids as unknown[]).map(Number) : null, amount: n(i.amount),
     }))
 
-    const paidMap = paidByOrder(allPayments, invRows, orderTotals)
+    // Доля сводного счёта считается от итогов ВСЕХ его заказов: без соседей, которых нет на
+    // экране (фильтр, период), весь счёт ложился на видимые — 14.10 заказ на 4 802 ₽ показал
+    // «оплачено 101 767».
+    const weights = new Map(orderTotals)
+    const neighbours = [...new Set(invRows.flatMap(i => i.order_ids ?? []))].filter(id => !weights.has(id))
+    const neighbourRows = await readIn(neighbours, part => svc.from('b2b_orders')
+      .select('id, total_after_discount, total_sale_inc_vat').in('id', part).order('id'))
+    for (const o of neighbourRows) weights.set(n(o.id), finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }))
+
+    const paidMap = paidByOrder(allPayments, invRows, weights)
     const paid: Record<number, number> = {}
-    for (const [id, amt] of paidMap) paid[id] = Math.round(amt)
+    for (const [id, amt] of paidMap) if (orderTotals.has(id)) paid[id] = Math.round(amt)
 
     return NextResponse.json({ paid, by }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
