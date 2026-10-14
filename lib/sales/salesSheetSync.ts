@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseBookTotals, parseStatusTab, parseTab, parseTabList, parseTabMonth } from './salesSheetParse.mjs'
+import { amoProductTypes, formatProductTypes, type AmoGet } from './retailProductType.mjs'
 
 export const SALES_BOOK_ID = '15FavFbEdA_G33k_4ExsuPYF4Xf_eezmGC64OTsTY9vw'
 const SUMMARY_GID = '1728905654'          // лист «МГЛАСС»: «Продаж за месяц» по годам
@@ -48,6 +49,7 @@ export type ExistingSale = Partial<Record<Field, unknown>> & {
   external_key: string | null
   order_no: string | null
   voided: boolean
+  product_type?: string | null
 }
 
 export type MonthPlan = {
@@ -146,7 +148,32 @@ export type HiddenStatusReport = {
   changed: { order_no: string | null; closed: boolean }[]
   unknown: string[]
 }
-export type SyncReport = { dry: boolean; months: MonthReport[]; hidden?: HiddenStatusReport[]; error?: string }
+// Тип изделия: книга с июня 2025 графы «изделие» не ведёт — берём из сделки amo
+// по «Номеру заказа» (только чтение). unknown — новые продажи, для которых amo типа не дал.
+export type ProductTypeReport = { filled: number; unknown: (string | null)[]; deferred: number; error?: string }
+export type SyncReport = { dry: boolean; months: MonthReport[]; hidden?: HiddenStatusReport[]; productTypes?: ProductTypeReport; error?: string }
+
+// За один прогон amo спрашиваем не больше чем про столько заказов: крон ограничен по
+// времени, история — делом scripts/backfill-retail-product-type.mjs.
+export const PRODUCT_LOOKUP_CAP = 40
+// Пустой тип у уже заведённой продажи перепроверяем, пока ей не больше 60 дней:
+// менеджер успевает отметить «Тип изделия» в amo после оплаты.
+export const PRODUCT_RETRY_DAYS = 60
+
+// Чьи типы спрашивать у amo: новые продажи и свежие без типа, новейшие первыми.
+export function productTypeCandidates(
+  inserts: Pick<SheetSale, 'order_no' | 'sale_date'>[],
+  emptyMatched: Pick<SheetSale, 'order_no' | 'sale_date'>[],
+  today: string,
+  cap = PRODUCT_LOOKUP_CAP,
+): { take: string[]; deferred: number } {
+  const since = new Date(Date.parse(today) - PRODUCT_RETRY_DAYS * 86400_000).toISOString().slice(0, 10)
+  const all = [...inserts, ...emptyMatched.filter(s => s.sale_date >= since)]
+    .filter(s => s.order_no)
+    .sort((a, b) => b.sale_date.localeCompare(a.sale_date))
+  const uniq = [...new Set(all.map(s => s.order_no!))]
+  return { take: uniq.slice(0, cap), deferred: Math.max(0, uniq.length - cap) }
+}
 
 // Со скрытыми вкладками сверяем только статус — маржа считается по закрытым
 // объектам. Книга «Маржа» ведётся с апреля 2025 (2025 год владелец заполнил 05.10),
@@ -168,7 +195,7 @@ const monthBounds = (ym: string) => {
 
 export async function syncSalesBook(
   sb: SupabaseClient,
-  opts: { dry?: boolean; only?: string[]; since?: string; fetchText?: Fetch } = {},
+  opts: { dry?: boolean; only?: string[]; since?: string; fetchText?: Fetch; amoGet?: AmoGet; today?: string } = {},
 ): Promise<SyncReport> {
   const fetchText = opts.fetchText ?? defaultFetch
   const base = `https://docs.google.com/spreadsheets/d/${SALES_BOOK_ID}`
@@ -181,6 +208,9 @@ export async function syncSalesBook(
 
   const bookTotals = parseBookTotals(await fetchText(`${base}/gviz/tq?tqx=out:csv&gid=${SUMMARY_GID}`)) as Map<string, number>
   const months: MonthReport[] = []
+  const today = opts.today ?? new Date().toISOString().slice(0, 10)
+  const typeReport: ProductTypeReport = { filled: 0, unknown: [], deferred: 0 }
+  let lookupsLeft = PRODUCT_LOOKUP_CAP
 
   for (const tab of tabs) {
     const name = tab.name.trim()
@@ -190,7 +220,7 @@ export async function syncSalesBook(
     const sales = parsed.sales
 
     const { data: ex, error: exErr } = await sb.from('crm_sales')
-      .select(['id', 'external_key', 'voided', ...FIELDS].join(', '))
+      .select(['id', 'external_key', 'voided', 'product_type', ...FIELDS].join(', '))
       .eq('import_batch', BATCH).eq('ledger_month', month)
     if (exErr) throw new Error(`${name}: ${exErr.message}`)
     const plan = planMonth(sales, (ex ?? []) as unknown as ExistingSale[])
@@ -199,6 +229,22 @@ export async function syncSalesBook(
     const liveCount = (ex ?? []).filter(r => !(r as unknown as ExistingSale).voided).length
     const orphansHeld = liveOrphans.length > 0 && (sales.length === 0 || liveOrphans.length > orphanLimit(liveCount))
     const toUpdate = plan.matched.filter(m => m.changed.length || m.rekey || m.revive)
+
+    // Тип изделия — из amo; сбой amo не роняет сверку книги, только пишется в отчёт.
+    const emptyMatched = plan.matched.filter(m => !String(m.row.product_type ?? '').trim())
+    const types = new Map<string, string | null>()
+    if (opts.amoGet && !orphansHeld && !typeReport.error) {
+      const cand = productTypeCandidates(plan.inserts, emptyMatched.map(m => m.sale), today, lookupsLeft)
+      typeReport.deferred += cand.deferred
+      lookupsLeft -= cand.take.length
+      try {
+        const found = await amoProductTypes(cand.take, opts.amoGet)
+        for (const [no, t] of found) types.set(no, formatProductTypes(t.types))
+      } catch (e) {
+        typeReport.error = e instanceof Error ? e.message : String(e)
+      }
+    }
+    const typeOf = (s: SheetSale) => (s.order_no ? types.get(s.order_no) ?? null : null)
 
     // Подозрение на сломанное чтение книги — месяц не трогаем вовсе.
     if (!opts.dry && !orphansHeld) {
@@ -225,10 +271,27 @@ export async function syncSalesBook(
         const { error } = await sb.from('crm_sales').upsert(rows, { onConflict: 'external_key' })
         if (error) throw new Error(`${name}: ${error.message}`)
       }
+      // Только в пустое: тип, поставленный руками или бэкфиллом, не переписываем.
+      for (const s of [...plan.inserts, ...emptyMatched.map(m => m.sale)]) {
+        const t = typeOf(s)
+        if (!t) continue
+        const { data, error } = await sb.from('crm_sales').update({ product_type: t })
+          .eq('external_key', s.external_key).or('product_type.is.null,product_type.eq.').select('id')
+        if (error) throw new Error(`${name}, ${s.order_no}: ${error.message}`)
+        typeReport.filled += data?.length ?? 0
+      }
       if (liveOrphans.length) {
         const { error } = await sb.from('crm_sales')
           .update({ voided: true, updated_at: now }).in('id', liveOrphans.map(r => r.id))
         if (error) throw new Error(`${name}: ${error.message}`)
+      }
+    }
+
+    if (!orphansHeld) {
+      // Боевой прогон досчитал строки при записи; сухой считает, что записал бы.
+      if (opts.dry) typeReport.filled += [...plan.inserts, ...emptyMatched.map(m => m.sale)].filter(s => typeOf(s)).length
+      if (opts.amoGet && !typeReport.error) {
+        typeReport.unknown.push(...plan.inserts.filter(s => types.has(s.order_no ?? '') && !typeOf(s)).map(s => s.order_no))
       }
     }
 
@@ -281,7 +344,7 @@ export async function syncSalesBook(
     since: opts.since && opts.since > HIDDEN_SINCE ? opts.since : HIDDEN_SINCE,
     visible: allTabs.map(t => parseTabMonth(t.name)!),
   })
-  return { dry: !!opts.dry, months, hidden }
+  return { dry: !!opts.dry, months, hidden, ...(opts.amoGet ? { productTypes: typeReport } : {}) }
 }
 
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
@@ -401,6 +464,12 @@ export function formatSyncReport(r: SyncReport): string {
   if (fixes.length) {
     lines.push('\n✏️ <b>Поправить в книге</b>')
     lines.push(...fixes.map(f => `• ${f}`))
+  }
+  const pt = r.productTypes
+  if (pt && (pt.filled || pt.unknown.length || pt.error)) {
+    lines.push(`\n🏷 Изделие из amo: проставлено ${pt.filled}${pt.deferred ? `, отложено ${pt.deferred}` : ''}`)
+    if (pt.unknown.length) lines.push(`   нет «Тип изделия» в сделке amo: ${pt.unknown.map(n => esc(n ?? '—')).slice(0, 10).join(', ')}`)
+    if (pt.error) lines.push(`   ⚠️ amo не ответил: ${esc(pt.error)}`)
   }
   // Потолок сообщения Telegram — 4096 символов.
   const text = lines.join('\n')

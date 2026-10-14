@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { pickRetailProductType, type CalcLike } from '@/lib/sales/retailProductType.mjs'
 
 // Ведомость продаж наполняется САМА (docs/ERP_MONEY_ARCHITECTURE.md §3):
 // факт оплаты — единственное событие, рождающее строку crm_sales.
@@ -38,6 +39,24 @@ type RetailOrderRow = {
   client_name: string | null
   total_sale_price: number | null
   total_cost_price: number | null
+  calculation_id?: number | null
+}
+
+// Тип изделия продажи — только в пустое: поставленный руками или бэкфиллом не
+// переписываем. Сбой не роняет запись оплаты: тип добирает бэкфилл.
+async function fillProductType(svc: SupabaseClient, saleId: number, input: Parameters<typeof pickRetailProductType>[0]) {
+  const { value } = pickRetailProductType(input)
+  if (!value) return
+  const { error } = await svc.from('crm_sales').update({ product_type: value })
+    .eq('id', saleId).or('product_type.is.null,product_type.eq.')
+  if (error) console.error(`[salesLedger] product_type #${saleId}: ${error.message}`)
+}
+
+async function loadCalculation(svc: SupabaseClient, id: number | null | undefined): Promise<CalcLike | null> {
+  if (!id) return null
+  const { data, error } = await svc.from('calculations').select('product_type, input_data').eq('id', id).maybeSingle()
+  if (error) console.error(`[salesLedger] calculations #${id}: ${error.message}`)
+  return (data as CalcLike | null) ?? null
 }
 
 async function upsertCost(svc: SupabaseClient, saleId: number, cost: number, source: 'b2b_order' | 'order' | 'calculation' | 'import') {
@@ -102,6 +121,7 @@ export async function upsertSaleFromRetail(
   if (error) throw new Error(`upsertSaleFromRetail(${order.id}): ${error.message}`)
   const saleId = (data as { id: number }).id
   if (order.total_cost_price != null) await upsertCost(svc, saleId, Number(order.total_cost_price), 'order')
+  await fillProductType(svc, saleId, { calculation: await loadCalculation(svc, order.calculation_id) })
   return saleId
 }
 
@@ -111,6 +131,7 @@ type ContractRow = {
   total: number | null
   customer: Record<string, unknown> | null
   manager_name: string | null
+  product_kind?: string | null
 }
 
 // Имя клиента у договора лежит в jsonb customer (физлицо — ФИО, юрлицо — название).
@@ -132,8 +153,8 @@ export async function upsertSaleFromContract(
   opts: { paidAt: string; manager?: string | null; actorName?: string | null },
 ): Promise<number | null> {
   const { data: existing } = await svc.from('crm_sales')
-    .select('id, sale_date').eq('contract_id', contract.id).maybeSingle()
-  const prev = existing as { id: number; sale_date: string } | null
+    .select('id, sale_date, calculation_id').eq('contract_id', contract.id).maybeSingle()
+  const prev = existing as { id: number; sale_date: string; calculation_id: number | null } | null
 
   const row = {
     contract_id: contract.id,
@@ -152,7 +173,12 @@ export async function upsertSaleFromContract(
     .upsert(row, { onConflict: 'contract_id' })
     .select('id').single()
   if (error) throw new Error(`upsertSaleFromContract(#${contract.id}): ${error.message}`)
-  return (data as { id: number }).id
+  const saleId = (data as { id: number }).id
+  await fillProductType(svc, saleId, {
+    calculation: await loadCalculation(svc, prev?.calculation_id),
+    dealKinds: [contract.product_kind ?? null],
+  })
+  return saleId
 }
 
 // Откат оплаты: строка продажи не удаляется — помечается voided (история цела).

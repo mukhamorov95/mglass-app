@@ -48,12 +48,12 @@ export async function PATCH(
   const warnings: string[] = []
   try {
     const { data: ord } = await client.from('orders')
-      .select('id, client_name, total_sale_price, total_cost_price, created_by')
+      .select('id, client_name, total_sale_price, total_cost_price, created_by, calculation_id')
       .eq('id', id).maybeSingle()
     const order = ord as {
       id: string; client_name: string | null
       total_sale_price: number | null; total_cost_price: number | null
-      created_by: string | null
+      created_by: string | null; calculation_id: number | null
     } | null
     if (!order) return NextResponse.json({ ok: true, warnings })
 

@@ -81,7 +81,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const sb = createServiceClient()
   const { data: c } = await sb.from('contracts')
-    .select('id, number, total, customer, manager_name').eq('id', contractId).maybeSingle()
+    .select('id, number, total, customer, manager_name, product_kind').eq('id', contractId).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Договор не найден' }, { status: 404 })
 
   try {
