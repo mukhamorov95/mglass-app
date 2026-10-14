@@ -1,9 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
 import { readPaged, readIn, num } from '@/lib/money/paged'
-import { attachInvoicePayments, asInvoiceRows, loadPaymentsForInvoices, toInvoiceLike } from '@/lib/money/invoicePayments'
-import { invoicePayment, manualPaymentKind, fmtRub } from '@/lib/money/invoiceStatus'
-import { MANUAL_SOURCE, syncInvoiceStatus } from '@/lib/money/invoiceManualPayment'
+import { asInvoiceRows, loadPaymentsForInvoices, toInvoiceLike } from '@/lib/money/invoicePayments'
+import { invoicePayment, invoicePayments, manualPaymentKind, fmtRub } from '@/lib/money/invoiceStatus'
+import { syncInvoiceStatus } from '@/lib/money/invoiceManualPayment'
+import { isTransferMark } from '@/lib/payments/marks'
 import { rowEffect, type OpenInvoice } from './bankMatch'
 
 // Б9: разнесение строки выписки. Приход по счёту — сначала платёж в ядро payments
@@ -14,13 +15,20 @@ import { rowEffect, type OpenInvoice } from './bankMatch'
 const TOL = 0.5
 export const BANK_SOURCE = 'bank_statement_import'
 
-// Неоплаченные по платежам счета — для автоподбора и ручного выбора на вкладке «Выписка».
+// Счета, по которым деньги пришли не целиком, — для автоподбора и ручного выбора на вкладке
+// «Выписка». Ручное «Оплачен» деньгами не считается: счёт, закрытый только отметкой, остаётся
+// здесь, и пришедший перевод её подтвердит (14.10: 23 платежа ждали отмеченные счета).
 export async function loadOpenInvoices(svc: SupabaseClient): Promise<OpenInvoice[]> {
   const rows = await readPaged(() => svc.from('invoices')
     .select('id, invoice_no, payer_client_id, payer_name, amount, status, order_ids, issued_at')
     .neq('status', 'cancelled').order('id'))
-  const withPay = await attachInvoicePayments(svc, asInvoiceRows(rows))
-  const open = withPay.filter(i => i.derivedStatus !== 'paid' && i.remainder > TOL)
+  const invs = asInvoiceRows(rows)
+  const pays = invs.length ? await loadPaymentsForInvoices(svc, invs) : []
+  const facts = invoicePayments(invs, pays.filter(p => !isTransferMark(p)))
+  const marks = invoicePayments(invs, pays.filter(p => isTransferMark(p)))
+  const open = invs
+    .map(i => Object.assign({}, i, facts.get(i.id)!, { marked: marks.get(i.id)?.paid ?? 0 }))
+    .filter(i => i.remainder > TOL)
   const payerIds = [...new Set(open.map(i => num(i.payer_client_id)).filter(n => n > 0))]
   const clients = await readIn(payerIds, part => svc.from('b2b_clients').select('id, inn').in('id', part).order('id'))
   const innBy = new Map(clients.map(c => [num(c.id), String(c.inn ?? '').trim() || null]))
@@ -32,6 +40,7 @@ export async function loadOpenInvoices(svc: SupabaseClient): Promise<OpenInvoice
     amount: num(i.amount),
     paid: i.paid,
     remainder: i.remainder,
+    marked: i.marked,
     orders: i.order_ids ?? [],
     issued_at: (i.issued_at as string | null) ?? null,
   }))
@@ -55,6 +64,79 @@ export type PostResult =
     }
   | { ok: false; status: number; error: string }
 
+export type BankPayResult =
+  | { ok: true; paymentId: number; warnings: string[]; invoice: NonNullable<Extract<PostResult, { ok: true }>['invoice']> }
+  | { ok: false; status: number; error: string }
+
+// Приход по счёту → платёж в ядро. Отдельно от ДДС: автоподбор при загрузке выписки
+// проставляет оплату заказа сразу, а операцию ДДС бухгалтер проводит потом — тем же
+// ключом строки, так что платёж не задваивается.
+export async function applyBankPayment(
+  svc: SupabaseClient, row: BankRow, invoiceId: number,
+  me: { id: string | null; name: string | null }, note?: string,
+): Promise<BankPayResult> {
+  const warnings: string[] = []
+  const amount = Number(row.amount)
+  const { data: invRow, error: invErr } = await svc.from('invoices')
+    .select('id, invoice_no, amount, order_ids, status').eq('id', invoiceId).maybeSingle()
+  if (invErr) return { ok: false, status: 500, error: `Счёт не прочитан: ${invErr.message}` }
+  if (!invRow) return { ok: false, status: 404, error: 'Счёт не найден' }
+  const inv = toInvoiceLike(invRow)
+  const invAmount = num(inv.amount)
+  const invOrders = inv.order_ids ?? []
+  const no = String((invRow as { invoice_no?: string }).invoice_no ?? invoiceId)
+  if (invRow.status === 'cancelled') return { ok: false, status: 409, error: `Счёт № ${no} отменён — выберите другой или проведите без счёта` }
+
+  const key = `bank:${row.unit}:${row.external_key}`
+  let pays
+  try { pays = await loadPaymentsForInvoices(svc, [inv]) } catch (e) {
+    return { ok: false, status: 500, error: `Платежи по счёту не прочитаны: ${e instanceof Error ? e.message : String(e)}` }
+  }
+  // Свой же платёж (повтор после сбоя, проводка после автоподбора) не считаем «уже пришедшими» деньгами
+  const others = pays.filter(p => p.external_key !== key)
+  // Отметка «Оплачен» — до прихода денег. Пришли деньги из банка — отметку заменяем фактом,
+  // а не копим переплату: остаток считаем по деньгам, отметки снимаем после записи платежа.
+  const marks = others.filter(p => isTransferMark(p))
+  const state = invoicePayment(inv, others.filter(p => !marks.includes(p)))
+  if (state.remainder <= TOL) {
+    return {
+      ok: false, status: 409,
+      error: `Счёт № ${no} уже оплачен по платежам: ${fmtRub(state.paid)} из ${fmtRub(invAmount)}. Проведите строку без счёта или выберите другой`,
+    }
+  }
+
+  const eff = rowEffect(state.remainder, amount)
+  let paymentId: number | null = null
+  try {
+    const p = await recordPayment(svc, {
+      externalKey: key, amount, paidAt: String(row.op_date),
+      kind: manualPaymentKind(state.paid, amount, state.remainder),
+      source: BANK_SOURCE, method: 'Перевод',
+      invoiceId: inv.id,
+      // Якорь заказа — только когда счёт на один заказ, иначе деньги прилипли бы к произвольному
+      b2bOrderId: invOrders.length === 1 ? invOrders[0] : null,
+      enteredBy: me.id, enteredByName: me.name,
+      note: note ?? `Счёт № ${no} из выписки${eff.partial ? ' (частичная оплата)' : ''}`,
+    })
+    paymentId = p?.id ?? null
+  } catch (e) {
+    return { ok: false, status: 500, error: `Платёж не записан: ${e instanceof Error ? e.message : String(e)}` }
+  }
+  if (!paymentId) return { ok: false, status: 500, error: 'Платёж не записан' }
+
+  let replaced = 0
+  for (const m of marks) {
+    try { await voidPayment(svc, String(m.external_key), me.id ?? undefined); replaced++ } catch (e) {
+      warnings.push(`Отметка «Оплачен» не снята — по счёту возможна переплата: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  if (eff.over > 0) warnings.push(`Переплата по счёту № ${no}: ${fmtRub(eff.over)} сверх остатка`)
+
+  const synced = await syncInvoiceStatus(svc, inv.id)
+  if (!synced.ok) warnings.push(synced.error)
+  return { ok: true, paymentId, warnings, invoice: { no, partial: eff.partial, rest: eff.rest, over: eff.over, replaced } }
+}
+
 export async function postBankRow(
   svc: SupabaseClient, row: BankRow, input: PostInput, me: { id: string | null; name: string },
 ): Promise<PostResult> {
@@ -66,65 +148,15 @@ export async function postBankRow(
   let paymentId: number | null = null
   let invoice: Extract<PostResult, { ok: true }>['invoice'] = null
   if (invoiceId) {
-    const { data: invRow, error: invErr } = await svc.from('invoices')
-      .select('id, invoice_no, amount, order_ids, status').eq('id', invoiceId).maybeSingle()
-    if (invErr) return { ok: false, status: 500, error: `Счёт не прочитан: ${invErr.message}` }
-    if (!invRow) return { ok: false, status: 404, error: 'Счёт не найден' }
-    const inv = toInvoiceLike(invRow)
-    const invAmount = num(inv.amount)
-    const invOrders = inv.order_ids ?? []
-    const no = String((invRow as { invoice_no?: string }).invoice_no ?? invoiceId)
-    if (invRow.status === 'cancelled') return { ok: false, status: 409, error: `Счёт № ${no} отменён — выберите другой или проведите без счёта` }
-
-    const key = `bank:${row.unit}:${row.external_key}`
-    let pays
-    try { pays = await loadPaymentsForInvoices(svc, [inv]) } catch (e) {
-      return { ok: false, status: 500, error: `Платежи по счёту не прочитаны: ${e instanceof Error ? e.message : String(e)}` }
+    const res = await applyBankPayment(svc, row, invoiceId, me)
+    if (!res.ok) {
+      return res.status === 500 && res.error.startsWith('Платёж не записан')
+        ? { ...res, error: `${res.error} — строка не проведена` }
+        : res
     }
-    // Свой же платёж (повтор после сбоя) не считаем «уже пришедшими» деньгами
-    const others = pays.filter(p => p.external_key !== key)
-    // Ручное «Оплачен» — отметка до прихода денег. Пришли деньги из банка и не
-    // помещаются в остаток из-за неё — отметку заменяем фактом, а не копим переплату.
-    const manual = others.filter(p => p.source === MANUAL_SOURCE && p.invoice_id === inv.id)
-    const withManual = invoicePayment(inv, others)
-    const noManual = invoicePayment(inv, others.filter(p => !manual.includes(p)))
-    const replace = manual.length > 0 && amount > withManual.remainder + TOL && noManual.remainder > TOL
-    const state = replace ? noManual : withManual
-    if (state.remainder <= TOL) {
-      return {
-        ok: false, status: 409,
-        error: `Счёт № ${no} уже оплачен по платежам: ${fmtRub(state.paid)} из ${fmtRub(invAmount)}. Проведите строку без счёта или выберите другой`,
-      }
-    }
-
-    const eff = rowEffect(state.remainder, amount)
-    try {
-      const p = await recordPayment(svc, {
-        externalKey: key, amount, paidAt: String(row.op_date),
-        kind: manualPaymentKind(state.paid, amount, state.remainder),
-        source: BANK_SOURCE, method: 'Перевод',
-        invoiceId: inv.id,
-        // Якорь заказа — только когда счёт на один заказ, иначе деньги прилипли бы к произвольному
-        b2bOrderId: invOrders.length === 1 ? invOrders[0] : null,
-        enteredBy: me.id, enteredByName: me.name,
-        note: `Счёт № ${no} из выписки${eff.partial ? ' (частичная оплата)' : ''}`,
-      })
-      paymentId = p?.id ?? null
-    } catch (e) {
-      return { ok: false, status: 500, error: `Платёж не записан — строка не проведена: ${e instanceof Error ? e.message : String(e)}` }
-    }
-    if (!paymentId) return { ok: false, status: 500, error: 'Платёж не записан — строка не проведена' }
-
-    let replaced = 0
-    if (replace) {
-      for (const m of manual) {
-        try { await voidPayment(svc, String(m.external_key), me.id ?? undefined); replaced++ } catch (e) {
-          warnings.push(`Ручная отметка оплаты не снята — по счёту возможна переплата: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-    }
-    if (eff.over > 0) warnings.push(`Переплата по счёту № ${no}: ${fmtRub(eff.over)} сверх остатка`)
-    invoice = { no, partial: eff.partial, rest: eff.rest, over: eff.over, replaced }
+    paymentId = res.paymentId
+    invoice = res.invoice
+    warnings.push(...res.warnings)
   }
 
   const entry = {
@@ -154,11 +186,6 @@ export async function postBankRow(
     }
   } else {
     entryId = num((ins.data as { id: number }).id)
-  }
-
-  if (invoiceId) {
-    const synced = await syncInvoiceStatus(svc, invoiceId)
-    if (!synced.ok) warnings.push(synced.error)
   }
 
   if (input.requestId) {

@@ -2,7 +2,8 @@
 
 // Б9: выписка. Загрузили файл из банка — получили список строк с подсказкой
 // фонда (как разносили этого контрагента раньше или из одобренной заявки).
-// Строка становится операцией ДДС только после «Провести».
+// Строка становится операцией ДДС только после «Провести». Оплату заказа по уверенному
+// совпадению (номер счёта и сумма) система проставляет сама сразу после загрузки.
 
 import { useEffect, useRef, useState } from 'react'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
@@ -17,6 +18,7 @@ type Row = {
   counterparty: string | null; purpose: string | null; doc_no: string | null
   status: string; suggest: Suggest; request: { id: number; status: string } | null
   invoice: RowInvoice | null
+  applied?: boolean; own?: boolean; loan?: boolean
 }
 type BankList = { items: Row[]; invoices?: OpenInvoice[]; invoicesError?: string | null }
 type PostAnswer = {
@@ -65,12 +67,36 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
   const reload = () => { setLoading(true); setTick(t => t + 1) }
   const switchStatus = (k: typeof status) => { if (k !== status) { setLoading(true); setStatus(k) } }
 
+  // Оплаты заказов по уверенным совпадениям — пачками, пока сервер говорит «ещё».
+  async function autoPay(): Promise<string> {
+    let applied = 0, failed = 0
+    for (let i = 0; i < 10; i++) {
+      const r = await fetch('/api/accounting/bank/auto', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unit }),
+      }).catch(() => null)
+      const j = r ? await r.json().catch(() => ({})) : {}
+      if (!r?.ok) return ` · ⚠️ оплаты не проставлены: ${j.error ?? (r ? `ошибка ${r.status}` : 'сервер не ответил')}`
+      applied += j.applied?.length ?? 0
+      failed += j.failed?.length ?? 0
+      if (!j.more) break
+    }
+    return applied || failed
+      ? ` · оплата заказа проставлена по ${applied} строкам${failed ? `, не вышло по ${failed}` : ''}`
+      : ''
+  }
+
   async function upload(file: File) {
     setErr(null); setMsg('Читаю выписку…')
     const body = new FormData()
     body.append('file', file)
     body.append('unit', unit)
-    const r = await fetch('/api/accounting/bank', { method: 'POST', body }).catch(() => null)
+    // Канал до сервера после простоя просыпается секунды (прокси в РФ): 504 или обрыв —
+    // повторяем один раз. Повторная загрузка дублей не создаёт.
+    let r = await fetch('/api/accounting/bank', { method: 'POST', body }).catch(() => null)
+    if (!r || r.status === 504 || r.status === 502) {
+      setMsg('Сервер отвечает медленно — повторяю…')
+      r = await fetch('/api/accounting/bank', { method: 'POST', body }).catch(() => null)
+    }
     const j = r ? await r.json().catch(() => ({})) : {}
     if (!r || !r.ok) { setErr(r ? (j.error ?? `Не разобралось (${r.status})`) : 'Сервер не ответил — проверьте связь'); setMsg(null); return }
     const fmt = j.format === '1c' ? '1С-обмен' : 'CSV'
@@ -85,7 +111,8 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
           ? ` · сошлось с итогами банка (приход ${RUB(rec.bankIn)}, расход ${RUB(rec.bankOut)})`
           : ` · ⚠️ расходится с банком: у нас приход ${RUB(rec.parsedIn)}/расход ${RUB(rec.parsedOut)}, банк ${RUB(rec.bankIn)}/${RUB(rec.bankOut)}`
       }
-      setMsg(m)
+      setMsg(m + ' · проставляю оплаты…')
+      setMsg(m + await autoPay())
     }
     reload()
   }
@@ -190,16 +217,24 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
               </span>
             </div>
 
-            {r.direction === 'in' && (
+            {r.direction === 'in' && (r.own || r.loan) && (
+              <p className="mt-2 text-[12px] text-[#6b6b66]">
+                {r.own ? 'Свой перевод ИП ↔ ООО — не выручка, счёта у него нет' : 'Заём — не выручка, счёта у него нет'}
+              </p>
+            )}
+            {r.direction === 'in' && !r.own && !r.loan && (
               <div className="mt-2 text-[12px] flex flex-wrap items-center gap-x-2 gap-y-1">
+                {r.applied && status === 'new' && (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">✓ оплата заказа проставлена по выписке — осталось провести в ДДС</span>
+                )}
                 {inv ? (
                   <>
                     <span className="text-[#111110]">
                       Счёт № {inv.no}{inv.payer ? `, ${inv.payer}` : ''}{inv.orders.length > 1 ? ` (заказов ${inv.orders.length})` : ''}
                       {inv.remainder != null && inv.remainder < inv.amount - 0.5 ? ` · остаток ${RUB(inv.remainder)} из ${RUB(inv.amount)}` : ` · ${RUB(inv.amount)}`}
                     </span>
-                    {status === 'new' && <span className="text-[#9a9a95]">{inv.manual ? 'выбран вручную' : 'подобран по ИНН/номеру/сумме'}</span>}
-                    {status === 'new' && eff && (
+                    {status === 'new' && !r.applied && <span className="text-[#9a9a95]">{inv.manual ? 'выбран вручную' : 'подобран по ИНН/номеру/сумме'}</span>}
+                    {status === 'new' && !r.applied && eff && (
                       eff.partial
                         ? <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800">частичная оплата — останется {RUB(eff.rest)}</span>
                         : eff.over > 0
@@ -210,7 +245,7 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
                 ) : status === 'new' ? (
                   <span className="text-[#9a9a95]">счёт не подобран — проведём как обычный приход</span>
                 ) : null}
-                {status === 'new' && !invoicesError && (
+                {status === 'new' && !invoicesError && !r.applied && (
                   <>
                     <button onClick={() => setPicker(open ? null : { row: r.id, q: '' })} className="text-[#111110] underline">
                       {inv ? 'другой счёт' : 'выбрать счёт'}
@@ -268,6 +303,7 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
                   className="px-4 py-1.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold disabled:opacity-40">
                   {busy === r.id ? '…'
                     : r.request ? 'Провести и закрыть заявку'
+                    : r.applied ? 'Провести в ДДС'
                     : inv ? (eff?.partial ? 'Провести как частичную оплату' : 'Провести и закрыть счёт')
                     : 'Провести'}
                 </button>

@@ -25,6 +25,7 @@ export type PaymentLike = {
   paid_at?: string | null
   external_key?: string | null
   source?: string | null
+  method?: string | null
 }
 
 export type InvoicePayState = 'paid' | 'partial' | 'unpaid'
