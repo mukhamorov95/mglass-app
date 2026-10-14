@@ -63,7 +63,7 @@ export type PlanSkip = {
   matrix_name: string
   matrix_category: MatrixCategory
   thickness: number
-  reason: 'no_item' | 'no_price' | 'no_matrix_row'
+  reason: 'no_item' | 'no_price' | 'no_matrix_row' | 'excluded'
   section: string
   product: string
 }

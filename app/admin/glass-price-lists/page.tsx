@@ -571,6 +571,11 @@ function PlanTab({ listId, log, onToast, onApplied }: {
           Изменится ячеек: <span className="font-medium text-[#111110]">{plan.changes.length}</span> ·
           без изменений: {plan.unchanged} ·
           нет цены в прайсе: {plan.skips.filter(s => s.reason === 'no_price').length} ·
+          {plan.skips.some(s => s.reason === 'excluded') && (
+            <span title="Выключенное правило на эту толщину во вкладке «Привязки»">
+              не трогаем по правилу: {plan.skips.filter(s => s.reason === 'excluded').map(s => `${s.matrix_name} ${s.thickness} мм`).join(', ')} ·{' '}
+            </span>
+          )}
           непривязанных колонок прайса: {plan.unmappedProducts.length}
         </div>
         <div className="flex items-center gap-2">

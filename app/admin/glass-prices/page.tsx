@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { cellDelta, changeKey, fmtPct, fmtRub, summarize, type PriceChange, type PriceDelta } from '@/lib/glassPrice/priceDelta'
 
 const GLASS_MM  = [4, 5, 6, 8, 10] as const
 const MIRROR_MM = [4, 6] as const
@@ -92,6 +93,22 @@ function fmt(v: number | null | undefined) {
   return v.toLocaleString('ru-RU')
 }
 
+function ruDate(iso: string) {
+  return new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
+}
+
+// Под новой ценой: прежняя зачёркнутой и разница. Рост себестоимости — красным.
+function DeltaLine({ d, prevDate }: { d: PriceDelta; prevDate: string | null }) {
+  const color = d.rub > 0 ? '#dc2626' : '#059669'
+  return (
+    <div className="mt-0.5 text-[10px] font-mono leading-none whitespace-nowrap"
+      title={`${prevDate ? `По прайсу от ${prevDate}` : 'Было'}: ${fmt(d.old)} ₽ → сейчас ${fmt(d.now)} ₽ (${fmtRub(d.rub)} ₽, ${fmtPct(d.pct)})`}>
+      <span className="text-[#9a9a95] line-through">{fmt(d.old)}</span>
+      <span className="ml-1" style={{ color }}>{fmtRub(d.rub)} ₽ · {fmtPct(d.pct)}</span>
+    </div>
+  )
+}
+
 function makeKey(name: string, field: string, tab: TabKey): EditKey {
   return `${name}::${field}::${tab}`
 }
@@ -134,7 +151,10 @@ export default function GlassPricesPage() {
   const [savingAll, setSavingAll] = useState(false)
   const [syncingB2B, setSyncingB2B] = useState(false)
   const autoFilledRef = useRef<Set<string>>(new Set())
-  const [priceList, setPriceList] = useState<{ price_date: string; title: string } | null>(null)
+  const [priceList, setPriceList] = useState<{ price_date: string; title: string; applied_at?: string | null } | null>(null)
+  const [prevList, setPrevList]   = useState<{ price_date: string } | null>(null)
+  const [changes, setChanges]     = useState<Map<string, PriceChange>>(new Map())
+  const [showCompare, setShowCompare] = useState(true)
   const [undoRows, setUndoRows]   = useState<GlassRow[] | null>(null)
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -209,8 +229,14 @@ export default function GlassPricesPage() {
   useEffect(() => {
     fetch('/api/admin/glass-price-history')
       .then(r => r.ok ? r.json() : null)
-      .then(d => setPriceList(d?.current ?? null))
+      .then(d => {
+        setPriceList(d?.current ?? null)
+        setPrevList(d?.previous ?? null)
+        setChanges(new Map(((d?.changes ?? []) as PriceChange[]).map(c => [changeKey(c.matrix_name, c.matrix_category, c.thickness), c])))
+      })
       .catch(() => {})
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    try { if (localStorage.getItem('glass-prices:compare') === 'off') setShowCompare(false) } catch { /* без хранилища — сравнение включено */ }
     fetch('/api/admin/suppliers?supplier_type=glass_mirror')
       .then(r => r.ok ? r.json() : [])
       .then((data: { id: string; name: string; status: string }[]) =>
@@ -280,6 +306,7 @@ export default function GlassPricesPage() {
   const curCat = categoryOf(priceTab)
   const isCostTab = curPT === 'cost'
   const thicknesses = curCat === 'mirror' ? MIRROR_MM : GLASS_MM
+  const prevDate = prevList ? ruDate(prevList.price_date) : null
   const hasDirty = Object.keys(dirty).length > 0
 
   const rowCat = (r: GlassRow) => r.category ?? 'glass'
@@ -593,7 +620,7 @@ export default function GlassPricesPage() {
     name: string,
     field: string,
     dbVal: number | null,
-    opts: { amber?: boolean; readOnly?: boolean } = {}
+    opts: { amber?: boolean; readOnly?: boolean; bold?: boolean } = {}
   ) {
     const displayVal = getDisplayVal(name, field, dbVal)
     const isDirty    = isCellDirty(name, field)
@@ -632,7 +659,7 @@ export default function GlassPricesPage() {
             : 'border border-transparent hover:border-[#d0d0cc] hover:bg-[#f8f8f7]'}
           ${opts.amber
             ? `min-w-[52px] font-semibold ${displayVal != null ? 'text-[#b45309]' : 'text-[#e8c88a]'}`
-            : `min-w-[64px] ${displayVal != null ? 'text-[#111110]' : 'text-[#c8c8c4]'}`}`}
+            : `min-w-[64px] ${opts.bold ? 'font-semibold' : ''} ${displayVal != null ? 'text-[#111110]' : 'text-[#c8c8c4]'}`}`}
         title="Нажми чтобы изменить"
       >
         {displayVal != null ? (opts.amber ? `${displayVal}%` : fmt(displayVal)) : '—'}
@@ -987,6 +1014,39 @@ export default function GlassPricesPage() {
             )
           })()}
 
+          {isCostTab && priceList && (() => {
+            const deltas = allNames.flatMap(name => thicknesses.map(t => {
+              const cR = rows.find(r => r.name === name && r.price_type === 'cost' && rowCat(r) === curCat)
+              const dbVal = (cR?.[`t${t}` as keyof GlassRow] as number | null) ?? null
+              return cellDelta(changes.get(changeKey(name, curCat, t)), dbVal)
+            })).filter((d): d is PriceDelta => d != null)
+            const sum = summarize(deltas)
+            if (!sum) return null
+            return (
+              <div className="mb-3 px-4 py-2.5 bg-white border border-[#e4e4e0] rounded-xl flex items-center justify-between gap-3 flex-wrap text-[12px] text-[#6b6b66]">
+                <span>
+                  Прайс от <span className="font-medium text-[#111110]">{ruDate(priceList.price_date)}</span>
+                  {priceList.applied_at && <> применён {ruDate(priceList.applied_at)}</>}:{' '}
+                  изменилось <span className="font-medium text-[#111110]">{sum.total}</span> —{' '}
+                  {sum.up > 0 && <span className="text-[#dc2626]">выросло {sum.up}</span>}
+                  {sum.up > 0 && sum.down > 0 && ', '}
+                  {sum.down > 0 && <span className="text-[#059669]">снизилось {sum.down}</span>}
+                  {sum.total > 1 && <span className="text-[#9a9a95]"> (от {fmtPct(sum.minPct)} до {fmtPct(sum.maxPct)})</span>}.
+                  {showCompare && prevDate && <span className="text-[#9a9a95]"> Зачёркнуто — цена по прайсу от {prevDate}.</span>}
+                </span>
+                <button
+                  onClick={() => {
+                    const next = !showCompare
+                    setShowCompare(next)
+                    try { localStorage.setItem('glass-prices:compare', next ? 'on' : 'off') } catch { /* нет хранилища */ }
+                  }}
+                  className="text-[12px] text-[#0071e3] hover:underline whitespace-nowrap">
+                  {showCompare ? 'Скрыть сравнение' : 'Показать, как было'}
+                </button>
+              </div>
+            )
+          })()}
+
           <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden mb-4">
             <table className="w-full text-[13px]">
               <thead>
@@ -1100,10 +1160,14 @@ export default function GlassPricesPage() {
                         const realMargin = mInfo
                           ? (curCat === 'glass' && mInfo.temperingIncVat > 0 ? mInfo.marginWithTemp : mInfo.margin)
                           : 0
+                        const delta = isCostTab && showCompare && !isCellDirty(origName, field)
+                          ? cellDelta(changes.get(changeKey(origName, curCat, t)), dbVal)
+                          : null
                         return (
                           <td key={t} className="px-2 py-2 text-center"
                             onClick={() => startEdit(origName, field, getDisplayVal(origName, field, dbVal))}>
-                            {renderCell(origName, field, dbVal)}
+                            {renderCell(origName, field, dbVal, { bold: delta != null })}
+                            {delta && <DeltaLine d={delta} prevDate={prevDate} />}
                             {mInfo && (
                               <button
                                 onClick={e => { e.stopPropagation(); setPopover({ name: origName, mm: t, salePrice: displayVal as number, info: mInfo }) }}
