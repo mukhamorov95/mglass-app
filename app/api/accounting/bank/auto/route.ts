@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { autoApplyBank } from '@/lib/accounting/bankAuto'
 import { allocateAdvances } from '@/lib/accounting/clientAdvance'
+import { recentPaidSince, syncPaidStages } from '@/lib/b2b/paidStage'
 
 // Оплаты заказов по загруженной выписке — уверенные совпадения, без человека. Вкладка
 // «Выписка» зовёт после загрузки и повторяет, пока more: true.
@@ -31,7 +32,18 @@ export async function POST(req: NextRequest) {
         res.warnings.push(`Авансы не пересчитаны: ${e instanceof Error ? e.message : String(e)}`)
       }
     }
-    return NextResponse.json({ ok: true, ...res })
+    // Деньги пришли — этап «Оплачен» в заказах датой выписки (lib/b2b/paidStage)
+    let stages = 0
+    if (body?.dry !== true) {
+      try {
+        const st = await syncPaidStages(svc, { paidSince: recentPaidSince() })
+        stages = st.changed.length
+        res.warnings.push(...st.warnings)
+      } catch (e) {
+        res.warnings.push(`Этап «Оплачен» не обновлён: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    return NextResponse.json({ ok: true, ...res, stages })
   } catch (e) {
     return NextResponse.json({ error: `Оплаты по выписке не проставлены: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }

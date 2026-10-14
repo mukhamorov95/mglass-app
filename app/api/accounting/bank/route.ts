@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { parseStatement, dedupe } from '@/lib/bank/parseStatement'
 import { applyBankOrderPayment, applyBankPayment, loadOpenInvoices, postBankRow, type BankRow } from '@/lib/accounting/bankPost'
 import { allocateAdvances, createAdvance, loadAdvanceSummaries, voidAdvance, type AdvanceSummary } from '@/lib/accounting/clientAdvance'
+import { recentPaidSince, syncPaidStages } from '@/lib/b2b/paidStage'
 import { matchInvoice, type OpenInvoice } from '@/lib/accounting/bankMatch'
 import { isLoan, isOwnTransfer } from '@/lib/accounting/bankAuto'
 
@@ -16,6 +17,12 @@ import { isLoan, isOwnTransfer } from '@/lib/accounting/bankAuto'
 
 export const maxDuration = 120
 
+// Деньги записаны — этап «Оплачен» в заказах датой денег. Сбой — предупреждение: ночная сверка повторит.
+async function syncStages(svc: ReturnType<typeof createServiceClient>, warnings: string[]) {
+  try { warnings.push(...(await syncPaidStages(svc, { paidSince: recentPaidSince() })).warnings) } catch (e) {
+    warnings.push(`Этап «Оплачен» не обновлён: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
 
 // Банки отдают 1С-обмен в windows-1251; utf-8 распознаём по отсутствию «замен».
 async function decode(file: File): Promise<string> {
@@ -226,6 +233,7 @@ export async function PATCH(req: NextRequest) {
     try { warnings.push(...(await allocateAdvances(svc)).warnings) } catch (e) {
       warnings.push(`Авансы не пересчитаны: ${e instanceof Error ? e.message : String(e)}`)
     }
+    await syncStages(svc, warnings)
     return NextResponse.json({ ok: true, payment_id: res.paymentId, invoice: 'invoice' in res ? res.invoice : res.order, warnings })
   }
 
@@ -237,7 +245,9 @@ export async function PATCH(req: NextRequest) {
     })
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
     const summary = (await loadAdvanceSummaries(svc, [id])).get(id) ?? null
-    return NextResponse.json({ ok: true, advance: summary, warnings: res.allocated.warnings })
+    const warnings = [...res.allocated.warnings]
+    await syncStages(svc, warnings)
+    return NextResponse.json({ ok: true, advance: summary, warnings })
   }
 
   if (action === 'unadvance') {
@@ -245,7 +255,9 @@ export async function PATCH(req: NextRequest) {
     if (!advanceId) return NextResponse.json({ error: 'Нет аванса' }, { status: 400 })
     const res = await voidAdvance(svc, advanceId, me)
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
-    return NextResponse.json({ ok: true, voided: res.voided })
+    const warnings: string[] = []
+    await syncStages(svc, warnings)
+    return NextResponse.json({ ok: true, voided: res.voided, warnings })
   }
 
   const fundId = Number(body.fund_id)
@@ -263,6 +275,7 @@ export async function PATCH(req: NextRequest) {
     try { res.warnings.push(...(await allocateAdvances(svc)).warnings) } catch (e) {
       res.warnings.push(`Авансы не пересчитаны: ${e instanceof Error ? e.message : String(e)}`)
     }
+    await syncStages(svc, res.warnings)
   }
   return NextResponse.json({ ok: true, entry_id: res.entryId, payment_id: res.paymentId, invoice: res.invoice, warnings: res.warnings })
 }

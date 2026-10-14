@@ -8,6 +8,7 @@ import { reconcileOrder, type KeyState } from '@/lib/payments/reconcilePlan'
 import { loadOrderPaid } from '@/lib/money/orderPaid'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { allocateAdvances } from '@/lib/accounting/clientAdvance'
+import { syncPaidStages } from '@/lib/b2b/paidStage'
 
 export const maxDuration = 300
 
@@ -34,6 +35,19 @@ async function run(req: NextRequest) {
   if (!secret || auth !== `Bearer ${secret}`) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const svc = createServiceClient()
+
+  // До сверки: авансы клиентов (запуск мимо экрана, правка итога, оплата напрямую) и этап
+  // «Оплачен» по деньгам из выписки — сверка ниже берёт дату оплаты продажи из этапа.
+  const pre: string[] = []
+  let advances: Awaited<ReturnType<typeof allocateAdvances>> | null = null
+  try { advances = await allocateAdvances(svc) } catch (e) { pre.push(`авансы: ${e instanceof Error ? e.message : 'ошибка'}`) }
+  let paidStages = 0
+  try {
+    const st = await syncPaidStages(svc)
+    paidStages = st.changed.length
+    pre.push(...st.warnings)
+  } catch (e) { pre.push(`этап «Оплачен»: ${e instanceof Error ? e.message : 'ошибка'}`) }
+
   type OrderRow = {
     id: number; custom_number: string | null; client_name: string | null
     total_after_discount: number | null; total_sale_inc_vat: number | null
@@ -80,7 +94,7 @@ async function run(req: NextRequest) {
     return NextResponse.json({ error: `Оплаты заказов не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
 
-  const stat = { scanned: orders.length, paid: 0, partial: 0, voided: 0, inserted: 0, sales: 0, retail: 0, errors: [] as string[] }
+  const stat = { scanned: orders.length, paid: 0, partial: 0, voided: 0, inserted: 0, sales: 0, retail: 0, paidStages, errors: [...pre] }
 
   for (const o of orders) {
     const n = parseNotes(o.notes)
@@ -136,13 +150,6 @@ async function run(req: NextRequest) {
     } catch (e) {
       if (stat.errors.length < 20) stat.errors.push(`#${o.id}: ${e instanceof Error ? e.message : 'ошибка'}`)
     }
-  }
-
-  // Авансы клиентов: запуск мимо экрана, правка итога, оплата заказа напрямую — план
-  // списаний пересчитывается здесь же, раз в сутки (lib/accounting/clientAdvance.ts).
-  let advances: Awaited<ReturnType<typeof allocateAdvances>> | null = null
-  try { advances = await allocateAdvances(svc) } catch (e) {
-    stat.errors.push(`авансы: ${e instanceof Error ? e.message : 'ошибка'}`)
   }
 
   // Б7: розница в ядро. Оплаты B2C живут галочками ведомости продаж, а не
