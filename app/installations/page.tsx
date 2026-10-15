@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 
-// Монтажи — одно окно отдела реализации: заявка на монтаж (один заказ = одна
-// задача бригаде) по устоявшейся форме компании, копия в чат монтажной группы
-// одним нажатием, ссылка в Google Календарь, статусы назначен/закрыт и сводка
-// по бригадам. Фаза 2 — кабинет монтажника, фаза 3 — выплаты и маржа объекта.
+// Монтажи — одно окно отдела реализации: выезд бригады по устоявшейся форме компании,
+// копия в чат монтажной группы одним нажатием, ссылка в Google Календарь, статусы
+// назначен/закрыт. С 15.10 сюда перенесены выезды из Google Календаря офиса (source
+// 'gcal', docs/installations/MONTAGE_ROUTE.md): у заказа бывает несколько выездов —
+// этапы, доделки, рекламации, — поэтому вид выезда виден на карточке и в сводке месяца.
 
 type Crew = { id: number; name: string; members: string | null; active: boolean }
 type Inst = {
@@ -30,7 +31,26 @@ type Inst = {
   closed_at: string | null
   created_by: string | null
   created_at: string
+  source: 'app' | 'gcal'
+  kind: Kind
+  crew_members: string[] | null
+  amount_note: string | null
 }
+
+type Kind = 'install' | 'claim' | 'rework' | 'stage'
+const KIND: Record<Kind, { label: string; cls: string } | null> = {
+  install: null,
+  claim:  { label: 'Рекламация', cls: 'bg-red-50 text-red-700' },
+  rework: { label: 'Доделка',    cls: 'bg-amber-50 text-amber-800' },
+  stage:  { label: 'Этап',       cls: 'bg-[#f0f0ec] text-[#6b6b66]' },
+}
+const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+const shiftMonth = (ym: string, d: number) => {
+  const [y, m] = ym.split('-').map(Number)
+  const t = new Date(Date.UTC(y, m - 1 + d, 1))
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}`
+}
+const monthEnd = (ym: string) => new Date(Date.parse(shiftMonth(ym, 1) + '-01T00:00:00Z') - 86400000).toISOString().slice(0, 10)
 
 const TODAY = new Date().toISOString().slice(0, 10)
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
@@ -95,7 +115,8 @@ export default function InstallationsPage() {
   const [saving, setSaving] = useState(false)
   const [me, setMe] = useState<string>('')
   const [filterCrew, setFilterCrew] = useState<'all' | number>('all')
-  const [filterStatus, setFilterStatus] = useState<'active' | 'done' | 'all'>('active')
+  const [filterStatus, setFilterStatus] = useState<'active' | 'done' | 'all'>('all')
+  const [month, setMonth] = useState(TODAY.slice(0, 7))
   const [newCrew, setNewCrew] = useState('')
   const [crewsOpen, setCrewsOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -184,18 +205,20 @@ export default function InstallationsPage() {
         const { data: p } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
         setMe((p as { name: string | null } | null)?.name ?? user.email ?? '')
       }
-      const monthAgo = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)
+      // Месяц целиком плюс недели на его краях — сводка «на этой неделе» не обрывается 1-го числа
+      const from = new Date(Date.parse(month + '-01T00:00:00Z') - 7 * 86400000).toISOString().slice(0, 10)
+      const to = new Date(Date.parse(monthEnd(month) + 'T00:00:00Z') + 7 * 86400000).toISOString().slice(0, 10)
       const [{ data: cs }, { data: rows }] = await Promise.all([
         sb.from('installation_crews').select('*').order('name'),
         sb.from('installations').select('*')
-          .or(`status.eq.planned,scheduled_date.gte.${monthAgo}`)
+          .or(`and(scheduled_date.gte.${from},scheduled_date.lte.${to}),scheduled_date.is.null`)
           .order('scheduled_date', { ascending: true, nullsFirst: false })
           .order('time_from', { ascending: true }),
       ])
       setCrews((cs ?? []) as Crew[])
       setInsts((rows ?? []) as Inst[])
     } finally { setLoading(false) }
-  }, [sb])
+  }, [sb, month])
   useEffect(() => { void load() }, [load])
 
   const crewName = (id: number | null) => crews.find(c => c.id === id)?.name ?? null
@@ -267,7 +290,9 @@ export default function InstallationsPage() {
     setNewCrew(''); await load()
   }
 
+  const inMonth = (i: Inst) => !i.scheduled_date || i.scheduled_date.slice(0, 7) === month
   const visible = insts.filter(i =>
+    inMonth(i) &&
     (filterCrew === 'all' || i.crew_id === filterCrew) &&
     (filterStatus === 'all' ? true : filterStatus === 'done' ? i.status === 'done' : i.status === 'planned')
   )
@@ -281,11 +306,14 @@ export default function InstallationsPage() {
   const monday = (() => { const d = new Date(TODAY + 'T00:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.toISOString().slice(0, 10) })()
   const sunday = (() => { const d = new Date(monday + 'T00:00:00'); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10) })()
   const weekInsts = insts.filter(i => i.scheduled_date && i.scheduled_date >= monday && i.scheduled_date <= sunday && i.status !== 'canceled')
-  const monthKey = TODAY.slice(0, 7)
-  const crewMonth = new Map<number, number>()
-  for (const i of insts) {
-    if (i.status !== 'done' || !i.crew_id || (i.scheduled_date ?? '').slice(0, 7) !== monthKey) continue
-    crewMonth.set(i.crew_id, (crewMonth.get(i.crew_id) ?? 0) + Number(i.amount ?? 0))
+  // Сводка месяца — выезды, а не деньги: «сумма монтажа» повторного выезда в календаре
+  // бывает нарастающей («26000+5000» после 26000), сложение выездов считало бы её дважды
+  const monthInsts = insts.filter(i => i.scheduled_date?.slice(0, 7) === month && i.status !== 'canceled')
+  const kindCount = (k: Kind) => monthInsts.filter(i => i.kind === k).length
+  const people = new Map<string, number>()
+  for (const i of monthInsts) {
+    const names = i.crew_members?.length ? i.crew_members : (crewName(i.crew_id) ?? '').split(',').map(x => x.trim()).filter(Boolean)
+    for (const n of names) people.set(n, (people.get(n) ?? 0) + 1)
   }
 
   if (loading) return <SkeletonTable rows={8} />
@@ -304,6 +332,15 @@ export default function InstallationsPage() {
             <p className="text-[13px] text-[#9a9a95] mt-0.5">
               На этой неделе: {weekInsts.length} · закрыто {weekInsts.filter(i => i.status === 'done').length}
             </p>
+            <div className="flex items-center gap-1.5 mt-2">
+              <button onClick={() => setMonth(m => shiftMonth(m, -1))} className="w-7 h-7 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]" aria-label="Предыдущий месяц">‹</button>
+              <span className="text-[13px] font-semibold text-[#111110] min-w-[120px] text-center">{MONTHS[Number(month.slice(5)) - 1]} {month.slice(0, 4)}</span>
+              <button onClick={() => setMonth(m => shiftMonth(m, 1))} className="w-7 h-7 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]" aria-label="Следующий месяц">›</button>
+              {month !== TODAY.slice(0, 7) && <button onClick={() => setMonth(TODAY.slice(0, 7))} className="text-[11px] text-[#9a9a95] hover:text-[#111110] ml-1">сегодня</button>}
+            </div>
+            <p className="text-[12px] text-[#6b6b66] mt-1.5">
+              Выездов за месяц {monthInsts.length}: монтажей {kindCount('install')} · рекламаций <span className={kindCount('claim') ? 'text-red-700 font-semibold' : ''}>{kindCount('claim')}</span> · доделок {kindCount('rework')} · этапов {kindCount('stage')}
+            </p>
           </div>
           <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-[#111110] text-white text-[13px] font-semibold hover:opacity-90">
             ＋ Заявка на монтаж
@@ -314,7 +351,7 @@ export default function InstallationsPage() {
       <div className="px-5 pt-4 max-w-[900px] space-y-4">
         {/* Фильтры */}
         <div className="flex items-center gap-2 flex-wrap">
-          {([['active', 'Назначенные'], ['done', 'Закрытые'], ['all', 'Все']] as const).map(([k, l]) => (
+          {([['all', 'Все'], ['active', 'Назначенные'], ['done', 'Закрытые']] as const).map(([k, l]) => (
             <button key={k} onClick={() => setFilterStatus(k)}
               className={`px-3 py-1.5 rounded-full text-[12px] font-medium border ${filterStatus === k ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0]'}`}>
               {l}
@@ -390,7 +427,9 @@ export default function InstallationsPage() {
                     <div className="min-w-0">
                       <p className="text-[14px] font-bold text-[#111110]">
                         {[i.time_from, i.time_to].filter(Boolean).join('–')} · #{i.order_no}
+                        {KIND[i.kind] && <span className={`ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded ${KIND[i.kind]!.cls}`}>{KIND[i.kind]!.label}</span>}
                         {i.status === 'done' && <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">закрыт</span>}
+                        {i.source === 'gcal' && <span className="ml-2 text-[9px] font-medium px-1.5 py-0.5 rounded border border-[#e4e4e0] text-[#9a9a95]" title="Перенесено из Google Календаря офиса. Прошедший выезд закрыт по дате: в календаре отметок о закрытии нет.">из календаря</span>}
                         {i.status === 'canceled' && <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#f0f0ec] text-[#9a9a95]">отменён</span>}
                       </p>
                       {i.title && <p className="text-[13px] text-[#111110] mt-0.5">{i.title}</p>}
@@ -399,17 +438,21 @@ export default function InstallationsPage() {
                       </p>
                       {i.address && <p className="text-[12px] text-[#6b6b66]">{i.address}</p>}
                       {i.entry_note && <p className="text-[11px] text-amber-700 mt-0.5">🔑 {i.entry_note}</p>}
+                      {i.comment && <p className="text-[11px] text-[#6b6b66] mt-0.5 whitespace-pre-line">💬 {i.comment}</p>}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      {crewName(i.crew_id) && <p className="text-[12px] font-semibold text-[#111110]">👷 {crewName(i.crew_id)}</p>}
-                      {i.amount != null && <p className="text-[13px] font-mono text-[#111110] mt-0.5">{RUB(Number(i.amount))} ₽</p>}
+                      {(crewName(i.crew_id) ?? i.crew_members?.join(', ')) && <p className="text-[12px] font-semibold text-[#111110]">👷 {crewName(i.crew_id) ?? i.crew_members?.join(', ')}</p>}
+                      {i.amount != null && <p className="text-[13px] font-mono text-[#111110] mt-0.5" title="Сумма монтажа из карточки выезда">{RUB(Number(i.amount))} ₽</p>}
+                      {i.amount_note && <p className="text-[11px] text-[#9a9a95] max-w-[220px]">{i.amount_note}</p>}
                       {i.contact_before && <p className="text-[11px] text-[#9a9a95] mt-0.5">📞 {i.contact_before}</p>}
                     </div>
                   </div>
                   <div className="flex gap-1.5 mt-3 flex-wrap">
                     <button onClick={() => copyChat(i)} className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[12px] font-medium text-[#111110] hover:border-[#111110]">📋 Скопировать для чата</button>
-                    <a href={gcalUrl(i, crewName(i.crew_id))} target="_blank" rel="noreferrer"
-                      className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[12px] font-medium text-[#111110] hover:border-[#111110]">📅 В Google Календарь</a>
+                    {i.source !== 'gcal' && (
+                      <a href={gcalUrl(i, crewName(i.crew_id))} target="_blank" rel="noreferrer"
+                        className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[12px] font-medium text-[#111110] hover:border-[#111110]">📅 В Google Календарь</a>
+                    )}
                     {i.status === 'planned' && (
                       <button onClick={() => setStatus(i, 'done')} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-medium">✓ Объект закрыт</button>
                     )}
@@ -427,14 +470,14 @@ export default function InstallationsPage() {
           </div>
         ))}
 
-        {/* Сводка по бригадам за месяц */}
-        {crewMonth.size > 0 && (
+        {/* Выезды по людям за месяц — счётом, без денег (см. сводку выше) */}
+        {people.size > 0 && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Бригады · закрыто в этом месяце</p>
-            {[...crewMonth.entries()].sort((a, b) => b[1] - a[1]).map(([cid, sum]) => (
-              <div key={cid} className="flex justify-between text-[13px] py-0.5">
-                <span className="text-[#111110]">👷 {crewName(cid)}</span>
-                <span className="font-mono font-semibold text-[#111110]">{RUB(sum)} ₽</span>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Выезды за {MONTHS[Number(month.slice(5)) - 1]} · по людям</p>
+            {[...people.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => (
+              <div key={name} className="flex justify-between text-[13px] py-0.5">
+                <span className="text-[#111110]">👷 {name}</span>
+                <span className="font-mono font-semibold text-[#111110]">{n}</span>
               </div>
             ))}
           </div>
