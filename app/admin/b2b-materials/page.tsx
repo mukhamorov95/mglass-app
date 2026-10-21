@@ -30,7 +30,7 @@ type SheetVariant = {
 const EMPTY: Omit<B2BMaterial, 'id' | 'created_at'> = {
   name: '', category: 'стекло', thickness: 6, cost_price: 0, sale_price: 0,
   vat_rate: 22, waste_percent: 15, passthrough: false, active: true, notes: null,
-  sheet_width: 3210, sheet_height: 2250, pattern_direction: 'none',
+  sheet_width: 3210, sheet_height: 2250, sheet_edge_mm: 0, pattern_direction: 'none',
   supplier_id: null, supplier_material_name: null, stock_sheets: 0,
 }
 
@@ -136,6 +136,7 @@ export default function B2BMaterialsPage() {
       thickness: Number(form.thickness),
       sheet_width: Number(form.sheet_width) || 3210,
       sheet_height: Number(form.sheet_height) || 2250,
+      sheet_edge_mm: Math.max(0, Math.min(100, Number(form.sheet_edge_mm) || 0)),
       pattern_direction: form.pattern_direction ?? 'none',
       stock_sheets: Number(form.stock_sheets) || 0,
       notes: Object.keys(notesObj).length > 0 ? JSON.stringify(notesObj) : null,
@@ -328,7 +329,7 @@ export default function B2BMaterialsPage() {
             <div className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2 pt-1 border-t border-[#f0f0ec] mt-1">
               Раскрой листа
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div>
                 <label className="block text-[11px] text-[#9a9a95] mb-1">Длина листа, мм</label>
                 <input type="number" min="100" max="9000"
@@ -343,6 +344,14 @@ export default function B2BMaterialsPage() {
                   className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
                   value={form.sheet_height ?? 2250}
                   onChange={e => setForm(f => ({ ...f, sheet_height: Number(e.target.value) }))}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-[#9a9a95] mb-1" title="Полоса без покрытия вдоль каждой длинной стороны: у матовых 10 мм — рабочее поле 3210×2230. От неё зависит, ляжет ли рядом вторая крупная деталь или лист уйдёт целиком">Нерабочая кромка, мм</label>
+                <input type="number" min="0" max="100"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                  value={form.sheet_edge_mm ?? 0}
+                  onChange={e => setForm(f => ({ ...f, sheet_edge_mm: Number(e.target.value) }))}
                 />
               </div>
               <div>

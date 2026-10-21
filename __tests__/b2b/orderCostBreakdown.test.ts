@@ -73,3 +73,12 @@ describe('orderCostBreakdown — расхождения видны, а не пр
     expect(b.storedDiff).toBe(61)
   })
 })
+
+describe('целые листы в подписи материала', () => {
+  it('05662: три сатина листом целиком, осветлённое — по отходу', () => {
+    const sat = { costMaterial: 12827, costWithVat: 12827, costExVat: 10514, width: 1155, height: 2772, quantity: 1, wastePercent: 30, wholeSheets: 1, totalAreaNet: 3.2017, totalAreaBilled: 7.2225 }
+    const clr = { costMaterial: 1838, costWithVat: 1838, costExVat: 1507, width: 600, height: 2200, quantity: 1, wastePercent: 18, totalAreaNet: 1.32, totalAreaBilled: 1.5576 }
+    const b = orderCostBreakdown([sat, { ...sat, totalAreaNet: 3.1945 }, { ...sat, totalAreaNet: 3.2012 }, clr], 0, 0)
+    expect(b.lines.find(l => l.name === 'Материал')?.note).toBe('в расчёте 23,23 м² при чистых 10,92 м² — 3 листа целиком: вторая деталь на лист не ложится, остальное — отход 18% на раскрой')
+  })
+})

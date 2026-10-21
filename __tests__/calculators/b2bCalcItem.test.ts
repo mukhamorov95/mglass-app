@@ -53,3 +53,21 @@ describe('calcItem — ядро B2B-цены', () => {
     expect(r.margin).toBeLessThan(100)
   })
 })
+
+describe('крупная деталь — целым листом (05662)', () => {
+  const SATIN = { ...MAT, name: 'Сатинированное бесцветное', thickness: 10, cost_price: 1776, sheet_edge_mm: 10 }
+  it('сатин 1155×2772 ×3: в расчёте три целых листа, цена клиенту — по чистой площади', () => {
+    const whole = calcItem(SATIN, 1155, 2772, 3, 30)
+    const plain = calcItem({ ...SATIN, sheet_width: 0 }, 1155, 2772, 3, 30)
+    expect(whole.wholeSheets).toBe(3)
+    expect(whole.totalAreaBilled).toBeCloseTo(3 * 7.2225, 4)
+    expect(whole.costMaterial).toBe(Math.round(whole.totalAreaBilled * 1776))
+    expect(whole.saleIncVat).toBe(plain.saleIncVat)
+    expect(plain.wholeSheets).toBeUndefined()
+  })
+  it('мелкая деталь, триплекс и проходной материал — расход из справочника', () => {
+    expect(calcItem(SATIN, 600, 2200, 1, 30).wholeSheets).toBeUndefined()
+    expect(calcItem(SATIN, 1155, 2772, 1, 30, false, [], false, null, [], true).wholeSheets).toBeUndefined()
+    expect(calcItem({ ...SATIN, passthrough: true }, 1155, 2772, 1, 10).wholeSheets).toBeUndefined()
+  })
+})
