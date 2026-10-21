@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { cellDelta, changeKey, fmtPct, fmtRub, summarize, type PriceChange, type PriceDelta } from '@/lib/glassPrice/priceDelta'
 import { applyDraft, moveName, orderedNames, sameOrder } from '@/lib/glass/materialOrder'
+import { marginOf, parsePct, priceForMargin, saleNetCost, tenth } from '@/lib/glassPrice/marginPrice'
+import { promptDialog } from '@/lib/dialog'
 
 const GLASS_MM  = [4, 5, 6, 8, 10] as const
 const MIRROR_MM = [4, 6] as const
@@ -358,6 +360,74 @@ export default function GlassPricesPage() {
     setDirty(prev => ({ ...prev, [dk]: { name, field, priceType: pt, category: curCat, numVal } }))
   }
 
+  // База процента под продажной ценой: себестоимость без НДС (у стекла с закалкой) и опекс
+  function marginBase(name: string, mm: number): { net: number; opexPct: number } | null {
+    if (!formulaLoaded) return null
+    const section = curCat === 'mirror' ? 'mirror' : 'glass'
+    const fp = (key: string) => formula.find(p => p.section === section && p.param_key === key)?.value ?? 0
+    const cRow = costRow(name)
+    const cost = (cRow?.[`t${mm}` as keyof GlassRow] as number | null) ?? 0
+    if (!cRow || cost <= 0) return null
+    const net = saleNetCost({
+      cost, wastePct: cRow.waste_pct ?? 0, purchaseVatPct: fp('purchase_vat'),
+      temperingPerM2: curCat === 'glass' ? fp(`tempering_t${mm}`) : 0, temperingVatPct: fp('tempering_vat'),
+    })
+    return { net, opexPct: fp('opex') }
+  }
+
+  function salePriceShown(name: string, mm: number): number | null {
+    const dbVal = (tabRow(name)?.[`t${mm}` as keyof GlassRow] as number | null) ?? null
+    return getDisplayVal(name, `t${mm}`, dbVal)
+  }
+
+  // Процент введён в ячейку под ценой → цена пересчитывается кодом и ждёт «Сохранить изменения»
+  function commitMargin(name: string, mm: number, raw: string) {
+    const pct = parsePct(raw)
+    const base = marginBase(name, mm)
+    if (pct == null || !base) return
+    const cur = salePriceShown(name, mm)
+    if (cur != null && cur > 0 && tenth(marginOf(cur, base.net, base.opexPct)) === tenth(pct)) return
+    const price = priceForMargin(base.net, base.opexPct, pct)
+    if (price == null) { showToast(`Маржа ${pct}% недостижима: опекс ${base.opexPct}% + маржа ≥ 100%`); return }
+    stageValue(name, `t${mm}`, price)
+  }
+
+  async function setRowMargin(name: string) {
+    const shown = thicknesses.flatMap(t => {
+      const base = marginBase(name, t)
+      const price = salePriceShown(name, t)
+      return base && price != null && price > 0 ? [tenth(marginOf(price, base.net, base.opexPct))] : []
+    })
+    const lo = Math.min(...shown), hi = Math.max(...shown)
+    const raw = await promptDialog({
+      title: `Маржа для всей строки «${getNameDisplay(name)}»`,
+      text: `Цены всех толщин пересчитаются под эту маржу и встанут в «Сохранить изменения».${shown.length ? ` Сейчас ${lo === hi ? `${lo}%` : `${lo}–${hi}%`}.` : ''}`,
+      label: 'Маржа, %',
+      defaultValue: shown.length && lo === hi ? String(lo) : '',
+      placeholder: '45',
+      confirmLabel: 'Пересчитать',
+    })
+    if (raw == null) return
+    const pct = parsePct(raw)
+    if (pct == null) { showToast('Нужно число — например, 45 или 45,5'); return }
+    const done: number[] = [], noCost: number[] = [], unreachable: number[] = []
+    for (const t of thicknesses) {
+      const base = marginBase(name, t)
+      if (!base) { noCost.push(t); continue }
+      const price = priceForMargin(base.net, base.opexPct, pct)
+      if (price == null) { unreachable.push(t); continue }
+      if (price !== salePriceShown(name, t)) stageValue(name, `t${t}`, price)
+      done.push(t)
+    }
+    const tail = [
+      noCost.length ? `без себестоимости: ${noCost.join(', ')} мм` : '',
+      unreachable.length ? `недостижима: ${unreachable.join(', ')} мм` : '',
+    ].filter(Boolean).join('; ')
+    showToast(done.length
+      ? `Маржа ${pct}% — ${done.length} ${done.length === 1 ? 'толщина' : done.length < 5 ? 'толщины' : 'толщин'}${tail ? `; ${tail}` : ''}. Сохраните изменения.`
+      : `Цены не пересчитаны — ${tail}`)
+  }
+
   // Stage a name rename (no API call)
   function stageName(origName: string, newNameVal: string) {
     const dk = dirtyKey(origName, '__name__', 'cost', curCat)
@@ -372,6 +442,8 @@ export default function GlassPricesPage() {
   function commitEdit(name: string, field: string) {
     const raw = editVal.trim()
     setEditKey(null)
+
+    if (/^m\d+$/.test(field)) { commitMargin(name, Number(field.slice(1)), raw); return }
 
     if (field === '__name__') {
       const newNameVal = raw
@@ -919,6 +991,7 @@ export default function GlassPricesPage() {
               Кликни по ячейке → введи значение → Enter. Нажми <span className="font-medium text-[#111110]">«Сохранить изменения»</span> чтобы записать в базу.
               <span className="ml-1 text-[#b45309]">Расход %</span> — базовый коэффициент потерь при раскрое.
               {isOwner && <> Стрелки ▲▼ слева — порядок материалов в меню калькулятора B2B: выше — популярнее.</>}
+              {curPT === 'sale' && <> Процент под ценой — маржа: нажми и введи свой — цена пересчитается; «% на строку» — одна маржа на все толщины материала, ⓘ — расчёт.</>}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -1150,6 +1223,13 @@ export default function GlassPricesPage() {
                               ${nameDirty ? 'text-[#b45309] underline decoration-dotted' : 'text-[#111110]'}`}>
                               {dispName}
                             </span>}
+                        {curPT === 'sale' && formulaLoaded && !nameEditing && (
+                          <button onClick={e => { e.stopPropagation(); setRowMargin(origName) }}
+                            className="block mt-1 text-[11px] text-[#0071e3] hover:underline"
+                            title="Одна маржа на все толщины этого материала">
+                            % на строку
+                          </button>
+                        )}
                         {isCostTab && (
                           <div className="flex items-center gap-1.5 mt-1.5" onClick={e => e.stopPropagation()}>
                             <select
@@ -1201,9 +1281,9 @@ export default function GlassPricesPage() {
                         const mInfo = curPT === 'sale' && formulaLoaded && displayVal != null && displayVal > 0
                           ? getMarginInfo(origName, t, displayVal)
                           : null
-                        const realMargin = mInfo
-                          ? (curCat === 'glass' && mInfo.temperingIncVat > 0 ? mInfo.marginWithTemp : mInfo.margin)
-                          : 0
+                        const base = mInfo ? marginBase(origName, t) : null
+                        const realMargin = base && displayVal != null ? tenth(marginOf(displayVal, base.net, base.opexPct)) : 0
+                        const marginEditing = editKey === makeKey(origName, `m${t}`, tab)
                         const delta = isCostTab && showCompare && !isCellDirty(origName, field)
                           ? cellDelta(changes.get(changeKey(origName, curCat, t)), dbVal)
                           : null
@@ -1212,14 +1292,33 @@ export default function GlassPricesPage() {
                             onClick={() => startEdit(origName, field, getDisplayVal(origName, field, dbVal))}>
                             {renderCell(origName, field, dbVal, { bold: delta != null })}
                             {delta && <DeltaLine d={delta} />}
-                            {mInfo && (
-                              <button
-                                onClick={e => { e.stopPropagation(); setPopover({ name: origName, mm: t, salePrice: displayVal as number, info: mInfo }) }}
-                                className="block mx-auto mt-0.5 text-[10px] font-mono font-semibold rounded px-1 py-0.5 hover:opacity-70 transition-opacity leading-none"
-                                style={{ color: getMarginColor(realMargin, mInfo.recMargin, mInfo.minMargin) }}
-                                title="Детальный расчёт маржи">
-                                {realMargin.toFixed(1)}%
-                              </button>
+                            {mInfo && base && (
+                              <div className="flex items-center justify-center gap-0.5 mt-0.5" onClick={e => e.stopPropagation()}>
+                                {marginEditing
+                                  ? <input
+                                      ref={inputRef}
+                                      value={editVal}
+                                      inputMode="decimal"
+                                      onChange={e => setEditVal(e.target.value)}
+                                      onFocus={e => e.target.select()}
+                                      onBlur={() => commitEdit(origName, `m${t}`)}
+                                      onKeyDown={e => handleKeyDown(e, origName, `m${t}`)}
+                                      className="w-[56px] text-center text-[11px] font-mono rounded px-1 py-0.5 outline-none border-2 border-[#059669]"
+                                    />
+                                  : <button
+                                      onClick={() => { setEditKey(makeKey(origName, `m${t}`, tab)); setEditVal(realMargin.toFixed(1)) }}
+                                      className="text-[10px] font-mono font-semibold rounded px-1 py-0.5 leading-none border border-dashed border-transparent hover:border-current transition-colors"
+                                      style={{ color: getMarginColor(realMargin, mInfo.recMargin, mInfo.minMargin) }}
+                                      title="Маржа: нажми и введи процент — цена пересчитается">
+                                      {realMargin.toFixed(1)}%
+                                    </button>}
+                                <button
+                                  onClick={() => setPopover({ name: origName, mm: t, salePrice: displayVal as number, info: mInfo })}
+                                  className="text-[10px] leading-none text-[#b0b0aa] hover:text-[#0071e3] px-0.5"
+                                  title="Детальный расчёт маржи">
+                                  ⓘ
+                                </button>
+                              </div>
                             )}
                             {isCostTab && dbVal != null && (
                               <button
