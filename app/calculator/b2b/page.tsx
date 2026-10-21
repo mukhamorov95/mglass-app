@@ -1792,7 +1792,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             </button>
             {!mglassOnly && variant !== 'mglass' && !clientId && (
               <p className="text-[11px] text-[#9a9a95] leading-snug lg:ml-auto">
-                Без заказчика цена — по общему прайсу; заказчика добавите на «заказываю», без него в работу не запускается.
+                Без заказчика цена — по общему прайсу; заказчика добавите на «заказываю», без него в работу не запускается (кроме просчёта с Авито).
               </p>
             )}
           </div>

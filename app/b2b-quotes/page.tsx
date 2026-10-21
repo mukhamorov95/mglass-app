@@ -26,7 +26,7 @@ import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/prod
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
 import RowMenu, { type MenuItem } from '@/components/RowMenu'
 import { buildTelegramWorkText } from '@/lib/b2b/telegramWorkText'
-import { LEAD_REPLY_TEMPLATES, clientQuoteTextFromOrder, quoteLeadChips, readQuoteLead } from '@/lib/b2b/leadQuote'
+import { LEAD_REPLY_TEMPLATES, clientQuoteTextFromOrder, clientRequiredToLaunch, quoteLeadChips, readQuoteLead } from '@/lib/b2b/leadQuote'
 import type { InvoiceOrder } from '@/lib/b2b/invoiceMath'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { filterFacets, filterToSearch, matchesFilter, readFilterFromUrl, type QuoteFilter } from '@/lib/b2b/quoteFilters'
@@ -1076,14 +1076,14 @@ export default function B2BQuotesPage() {
                         </button>
                       </>)}
                       {/* Согласование отключено: quote и agreed сразу запускаются в работу */}
-                      {(status === 'quote' || status === 'agreed') && quote.client_id == null && (
+                      {(status === 'quote' || status === 'agreed') && clientRequiredToLaunch(quote.client_id, parsed) && (
                         <Link href={`/calculator/b2b?orderId=${quote.id}`}
-                          title="Без заказчика в работу нельзя: выберите или создайте клиента и нажмите «Обновить просчёт»"
+                          title="Без заказчика в работу нельзя (кроме просчёта с Авито): выберите или создайте клиента и нажмите «Обновить просчёт»"
                           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                           ＋ Заказчик →
                         </Link>
                       )}
-                      {(status === 'quote' || status === 'agreed') && quote.client_id != null && (
+                      {(status === 'quote' || status === 'agreed') && !clientRequiredToLaunch(quote.client_id, parsed) && (
                         <button
                           onClick={() => openLaunch(quote)}
                           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">

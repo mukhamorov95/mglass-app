@@ -11,6 +11,7 @@ import {
 } from '@/lib/b2b/orderNotes'
 import type { OrderNotesAction } from '@/lib/b2b/orderNotesClient'
 import { pointLaunchGate, orderTotal, IN_WORK_STATUSES } from '@/lib/b2b/points'
+import { clientRequiredToLaunch } from '@/lib/b2b/leadQuote'
 import { allocateAdvances } from '@/lib/accounting/clientAdvance'
 import { recentPaidSince, syncPaidStages } from '@/lib/b2b/paidStage'
 
@@ -116,10 +117,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Заказ точки — в работу только после 100 % оплаты (решение владельца 01.10.2026).
   // Остальных партнёров правило не касается.
   if (body.action === 'launch' || (body.action === 'status' && IN_WORK_STATUSES.includes(body.to))) {
-    // Просчёт без заказчика (ответ ценой на Авито) в работу не идёт: заказчика привязывают в
-    // калькуляторе, когда человек говорит «заказываю», — иначе у заказа нет ни счёта, ни УПД.
+    // Просчёт без заказчика в работу не идёт, кроме просчёта с Авито (lib/b2b/leadQuote).
     // Уже запущенные заказы без клиента (1 657 до 06.07) правило не трогает.
-    if (o.client_id == null && !o.launched_at) return bad('Без заказчика в работу нельзя: откройте просчёт в калькуляторе, выберите или создайте клиента и нажмите «Обновить просчёт»', 409)
+    if (clientRequiredToLaunch(o.client_id, parseOrderNotes(o.notes)) && !o.launched_at) return bad('Без заказчика в работу нельзя (кроме просчёта с Авито): откройте просчёт в калькуляторе, выберите или создайте клиента и нажмите «Обновить просчёт»', 409)
     const gate = await pointLaunchGate(svc, { client_id: o.client_id, notes: o.notes, total: orderTotal(o) })
     if (!gate.ok) return bad(gate.error, gate.status)
   }

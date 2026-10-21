@@ -14,7 +14,7 @@ import { parseNotes } from '@/lib/b2b/publicQuote'
 import { isShipped } from '@/lib/b2b/todayPriorities'
 import { stageDayKey } from '@/lib/production/dayLists'
 import { paymentReminderText } from '@/lib/b2b/clientTexts'
-import { readQuoteLead } from '@/lib/b2b/leadQuote'
+import { clientRequiredToLaunch, readQuoteLead } from '@/lib/b2b/leadQuote'
 import { orderProgress, type TaskLite } from '@/lib/shopBoard/model'
 import DealActions from './DealActions'
 
@@ -160,6 +160,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           orderTotal={total}
           managerName={(order.created_by_name as string | null) ?? null}
           launched={launched}
+          clientRequired={clientRequiredToLaunch(order.client_id == null ? null : Number(order.client_id), notes)}
           productionDays={Number(notes.production_days) || null}
           phone={phone || null}
           contactName={contactName}

@@ -54,6 +54,12 @@ export function quoteLeadChips(lead: QuoteLead, hasClient: boolean): string[] {
   return out
 }
 
+// Без заказчика в работу нельзя — у заказа не будет ни счёта, ни УПД. Исключение (владелец 21.10):
+// просчёт с Авито — человек платит на месте, карточку клиента под него не заводят.
+export function clientRequiredToLaunch(clientId: number | null, notes: Record<string, unknown>): boolean {
+  return clientId == null && readQuoteLead(notes).source !== 'avito'
+}
+
 // Что мешает сохранить просчёт без заказчика: без отметки «откуда» и «кто» он не структурирован.
 export function noClientSaveBlocker(lead: QuoteLead): string | null {
   if (!lead.source) return 'Откуда пришёл?'

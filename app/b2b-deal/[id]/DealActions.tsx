@@ -23,13 +23,14 @@ type Props = {
   orderTotal: number
   managerName: string | null
   launched: boolean
+  clientRequired: boolean       // без заказчика в работу нельзя — кроме просчёта с Авито
   productionDays: number | null
   phone: string | null          // телефон клиента — ссылкой tel:, звонок в одно касание
   contactName: string | null
   payReminder: string | null    // готовый текст «напомнить об оплате»; null — оплачено или нечего напоминать
 }
 
-export default function DealActions({ dealId, quote, orderTotal, managerName, launched, productionDays, phone, contactName, payReminder }: Props) {
+export default function DealActions({ dealId, quote, orderTotal, managerName, launched, clientRequired, productionDays, phone, contactName, payReminder }: Props) {
   const router = useRouter()
   const [busy, setBusy] = useState<'share' | 'copy' | 'duplicate' | null>(null)
   const [launchOpen, setLaunchOpen] = useState(false)
@@ -88,9 +89,9 @@ export default function DealActions({ dealId, quote, orderTotal, managerName, la
   return (
     <div className="space-y-2">
     <div className="flex flex-wrap gap-2">
-      {!launched && (quote.client_id == null ? (
+      {!launched && (clientRequired ? (
         <Link href={`/calculator/b2b?orderId=${dealId}`} className={primary}
-          title="Без заказчика в работу нельзя: выберите или создайте клиента и нажмите «Обновить просчёт»">
+          title="Без заказчика в работу нельзя (кроме просчёта с Авито): выберите или создайте клиента и нажмите «Обновить просчёт»">
           ＋ Заказчик →
         </Link>
       ) : (
