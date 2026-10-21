@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   analyzeBreakeven, computeBreakeven, combineUnits, withoutDebt, revenueToCover, isDebtRow,
   splitFixed, suggestKind, kindOf, costKey, totalFromName, allocationCheck, companyLevelCosts, companyFixed, factVars,
-  applyFactEdits, factEditsFrom, type FactEdits,
+  applyFactEdits, factEditsFrom, partsSum, type FactEdits,
   BREAKEVEN_LABELS, type BreakevenModel,
 } from '@/lib/breakeven'
 import { computeBe } from '@/lib/cfo/factModel'
@@ -265,5 +265,25 @@ describe('правки на вкладке факта — поверх исхо�
     const m = applyFactEdits(base, { vars: { Налог: 6 } })
     m.incomes[0].vars[1].pct = 10.25
     expect(factEditsFrom(base, m)).toEqual({})
+  })
+})
+
+describe('состав статьи', () => {
+  it('сумма состава — сумма позиций, пустые и нечисловые — ноль, копейки не плывут', () => {
+    expect(partsSum([{ name: 'Менеджер ОП', value: 80000 }, { name: 'Замерщик', value: 70000 }, { name: '', value: 0 }])).toBe(150000)
+    expect(partsSum([{ name: 'Монтажники', value: 10.1 }, { name: 'Замерщики', value: 0.2 }])).toBe(10.3)
+    expect(partsSum(undefined)).toBe(0)
+  })
+
+  it('расчёт смотрит на сумму статьи, а не на состав: состав в синхроне — те же точки', () => {
+    const base: BreakevenModel = {
+      incomes: [{ name: 'Стекло', plan: 1000000, vars: [{ name: 'Сырьё', pct: 30 }] }],
+      funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 }, ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
+      fixed: [{ name: 'Оклады', amount: 150000, kind: 'step' }],
+    }
+    const withParts: BreakevenModel = structuredClone(base)
+    withParts.fixed[0].parts = [{ name: 'Менеджер ОП', value: 80000 }, { name: 'Замерщик', value: 70000 }]
+    withParts.incomes[0].vars[0].parts = [{ name: 'Стекло', value: 25 }, { name: 'Плёнка', value: 5 }]
+    expect(analyzeBreakeven(withParts).tb0).toBe(analyzeBreakeven(base).tb0)
   })
 })
