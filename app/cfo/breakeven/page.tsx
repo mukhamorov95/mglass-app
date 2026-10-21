@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import {
-  analyzeBreakeven, combineUnits, withoutDebt, kindOf, allocationCheck, companyLevelCosts, applyFactEdits, factEditsFrom,
+  analyzeBreakeven, combineUnits, withoutDebt, kindOf, allocationCheck, companyLevelCosts, applyFactEdits, factEditsFrom, partsSum,
   BREAKEVEN_LABELS, BREAKEVEN_HINTS, DISTRIBUTION_NOTE, FIXED_KIND_LABELS,
-  type BreakevenModel, type FixedRow, type FixedKind, type SharedCost, type FactEdits,
+  type BreakevenModel, type FixedRow, type FixedKind, type SharedCost, type FactEdits, type Part,
 } from '@/lib/breakeven'
 
 // Финансовое планирование (модель Хаббарда) — точки безубыточности.
@@ -18,19 +18,24 @@ import {
 // — фактические доли статей книги «Маржа» по закрытым заказам (/api/cfo/margin-shares).
 // Числа на ней владелец правит: правки (FactEdits) лежат поверх исходного в строке total
 // (mglassFact), исходное видно бледно слева от поля. В сводки «Компания» вкладка не входит.
+// «Производство · черновик» — копия «Производства» для проб (владелец 22.10.2026): своя строка
+// finplan_models, ни в сводки, ни в цех, ни в финнеделю не попадает.
+// У любой статьи — раскрывающийся состав (люди и оклады и т.п.), сумма статьи = сумма состава.
 
-type VarRow  = { name: string; pct: number }
+type VarRow  = { name: string; pct: number; parts?: Part[] }
 type Income  = { name: string; plan: number; vars: VarRow[] }
 type Funds   = { invest: number; training: number; reserve: number; prodBonus: number }
 type Model   = BreakevenModel & { incomes: Income[]; funds: Funds; fixed: FixedRow[] }
 
-type EditUnit = 'mglass' | 'production'
+const DRAFT = 'production_draft'
+type EditUnit = 'mglass' | 'production' | typeof DRAFT
 type Unit = 'total' | 'total1' | EditUnit | 'mglass_fact'
 const UNITS: { key: Unit; label: string }[] = [
   { key: 'total',       label: 'Компания 0' },
   { key: 'total1',      label: 'Компания 1 · без кредитов и лизинга' },
   { key: 'mglass',      label: 'M-Glass' },
   { key: 'production',  label: 'Производство' },
+  { key: DRAFT,         label: 'Производство · черновик' },
   { key: 'mglass_fact', label: 'M-Glass · факт «Маржи»' },
 ]
 type FactPeriod = 'year' | '12m'
@@ -89,7 +94,7 @@ const FIXED_REST: FixedRow[] = [
   { name: 'Вывоз мусора', amount: 10000 },
 ]
 const buildFixed = (head: FixedRow[]): FixedRow[] => [...head, ...FIXED_REST.map(f => ({ ...f }))]
-const DEFAULTS: Record<EditUnit, Model> = {
+const DEFAULTS: Record<'mglass' | 'production', Model> = {
   mglass: {
     incomes: [{ name: 'M-Glass (B2C) — изделия с монтажом', plan: 6300000, vars: PRODUCT_VARS }],
     funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
@@ -125,7 +130,9 @@ const inputEdited = inputBlue.replace('bg-white', 'bg-amber-50').replace('border
 export default function BreakevenPage() {
   const sb = createClient()
   const [unit, setUnit] = useState<Unit>('total')
-  const [models, setModels] = useState<Record<EditUnit, Model>>(DEFAULTS)
+  const [models, setModels] = useState<Record<EditUnit, Model>>(() => ({ ...DEFAULTS, [DRAFT]: structuredClone(DEFAULTS.production) }))
+  const [openParts, setOpenParts] = useState<Set<string>>(new Set())
+  const toggleParts = (k: string) => setOpenParts(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
@@ -168,6 +175,8 @@ export default function BreakevenPage() {
           const u = row.unit as EditUnit
           if (row.data && Object.keys(row.data).length) next[u] = row.data as Model
         }
+        // Черновик ещё не сохраняли — он копия «Производства»
+        if (!data.some(r => r.unit === DRAFT && r.data && Object.keys(r.data).length)) next[DRAFT] = structuredClone(next.production)
         return next
       })
       const tot = data.find(r => r.unit === 'total')?.data as { mglassFact?: FactEdits } | undefined
@@ -251,7 +260,10 @@ export default function BreakevenPage() {
         if (error || !wrote?.length) throw new Error(error?.message ?? 'запись не прошла — нет прав на финмодель')
         setFactEdits(clean); setSavedFactEdits(clean)
       } else {
-        await sb.from('finplan_models').upsert({ unit, data: models[unit as EditUnit], updated_by: meName || null, updated_at: new Date().toISOString() })
+        const { data: wrote, error } = await sb.from('finplan_models')
+          .upsert({ unit, data: models[unit as EditUnit], updated_by: meName || null, updated_at: new Date().toISOString() })
+          .select('unit')
+        if (error || !wrote?.length) throw new Error(error?.message ?? 'запись не прошла — нет прав на финмодель')
       }
       setSavedOk(true); setTimeout(() => setSavedOk(false), 2000)
     } catch (e) {
@@ -318,6 +330,18 @@ export default function BreakevenPage() {
   const debtLines = lines.filter(l => kindOf(l.f).kind === 'obligation')
   const suggestedCount = ro || isFact ? 0 : m.fixed.filter(f => !f.kind).length
   const setKind = (fi: number, kind: FixedKind) => patch(x => { x.fixed[fi].kind = kind; return x })
+  // Есть состав — сумма статьи считается из него; убрали последнюю позицию — сумма остаётся, правится руками.
+  const setFixedParts = (fi: number, next: Part[]) => patch(x => {
+    const r = x.fixed[fi]
+    if (next.length) { r.parts = next; r.amount = partsSum(next) } else delete r.parts
+    return x
+  })
+  const setVarParts = (ii: number, vi: number, next: Part[]) => patch(x => {
+    const r = x.incomes[ii].vars[vi]
+    if (next.length) { r.parts = next; r.pct = partsSum(next) } else delete r.parts
+    return x
+  })
+  const isDraft = unit === DRAFT
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
@@ -346,6 +370,14 @@ export default function BreakevenPage() {
           ))}
           {summary && <span className="text-[11px] text-[#9a9a95] ml-1">Σ автоматическая сумма вкладок M-Glass и Производство{unit === 'total1' ? ' БЕЗ кредитов и лизинга' : ''} — правки вносите там</span>}
         </div>
+        {isDraft && (
+          <div className="mt-3 text-[12px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-[920px] flex items-center gap-3 flex-wrap">
+            <span>Черновик «Производства» для проб: правки здесь ни на что не влияют — ни на «Компанию», ни на цех, ни на финнеделю. «Сохранить» запоминает черновик.</span>
+            <button onClick={() => {
+              if (window.confirm('Заменить черновик текущим «Производством»? Правки черновика пропадут после «Сохранить».')) setModels(prev => ({ ...prev, [DRAFT]: structuredClone(prev.production) }))
+            }} className="underline text-amber-800 hover:text-[#111110] whitespace-nowrap">Взять заново из «Производства»</button>
+          </div>
+        )}
         {unit === 'mglass_fact' && (
           <div className="mt-3 text-[12px] text-[#6b6b66] bg-[#fafaf8] border border-[#e4e4e0] rounded-lg px-3 py-2 space-y-1.5 max-w-[920px]">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -413,14 +445,19 @@ export default function BreakevenPage() {
                 // На вкладке факта первые строки — статьи «Маржи» (название не правится), дальше — свои.
                 const baseVar = isFact ? factBase.incomes[ii]?.vars[vi] : undefined
                 const varEdited = !!baseVar && v.pct !== baseVar.pct
+                const pk = `${unit}|v|${ii}|${vi}`
+                const hasParts = !!v.parts?.length
                 return (
-                <div key={vi} className="flex items-center gap-2 mb-1">
+                <div key={vi}>
+                <div className="flex items-center gap-2 mb-1">
+                  {isFact ? <span className="w-7 shrink-0" />
+                    : <PartsToggle count={v.parts?.length ?? 0} open={openParts.has(pk)} readOnly={ro} onClick={() => toggleParts(pk)} />}
                   <input value={v.name} disabled={ro || !!baseVar} placeholder={isFact ? 'Своя статья, например ГСМ' : undefined}
                     onChange={e => patch(x => { x.incomes[ii].vars[vi].name = e.target.value; return x })}
                     className={inputCls + ' flex-1'} />
                   {isFact && <Orig value={baseVar?.pct} edited={varEdited} onReset={() => dropEdit('vars', v.name)} pct />}
                   <div className="flex items-center gap-1 w-24 shrink-0">
-                    <input type="number" step="0.01" value={v.pct || ''} disabled={ro}
+                    <input type="number" step="0.01" value={v.pct || ''} disabled={ro || hasParts} title={hasParts ? 'Сумма состава — правьте позиции' : undefined}
                       onChange={e => patch(x => { x.incomes[ii].vars[vi].pct = Number(e.target.value) || 0; return x })}
                       className={(varEdited ? inputEdited : inputBlue) + ' w-full text-right'} />
                     <span className="text-[11px] text-[#9a9a95]">%</span>
@@ -429,6 +466,10 @@ export default function BreakevenPage() {
                   {!ro && !baseVar && <button onClick={() => patch(x => { x.incomes[ii].vars.splice(vi, 1); return x })}
                     className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
                   {!ro && baseVar && <span className="w-[9px]" />}
+                </div>
+                {!isFact && openParts.has(pk) && (
+                  <PartsEditor parts={v.parts ?? []} unit="%" disabled={ro} current={v.pct} onChange={next => setVarParts(ii, vi, next)} />
+                )}
                 </div>
                 )
               })}
@@ -469,19 +510,32 @@ export default function BreakevenPage() {
               )}
             </div>
             <p className="text-[11px] text-[#9a9a95] mb-2">Входят в операционную точку безубыточности. Тип статьи с пунктирной рамкой предложен по названию и не сохранён.</p>
-            {opexLines.map((l, i) => (
-              <div key={`${l.unitTitle ?? ''}${l.fi}-${i}`} className="flex items-center gap-2 mb-1">
+            {opexLines.map((l, i) => {
+              const pk = `${l.unitTitle ?? unit}|f|${l.fi >= 0 ? l.fi : i}`
+              const partsLocked = ro || isFact
+              return (
+              <div key={`${l.unitTitle ?? ''}${l.fi}-${i}`}>
+              <div className="flex items-center gap-2 mb-1">
                 {l.unitTitle && <span className="w-20 shrink-0 text-[10px] text-[#9a9a95] truncate">{l.unitTitle}</span>}
+                <PartsToggle count={l.f.parts?.length ?? 0} open={openParts.has(pk)} readOnly={partsLocked} onClick={() => toggleParts(pk)} />
                 <input value={l.f.name} disabled={ro || isFact} onChange={e => patch(x => { x.fixed[l.fi].name = e.target.value; return x })}
                   className={inputCls + ' flex-1'} />
                 <KindSelect f={l.f} disabled={ro || isFact} onChange={k => setKind(l.fi, k)} />
                 {isFact && <Orig value={factBase.fixed[l.fi]?.amount} edited={l.f.amount !== factBase.fixed[l.fi]?.amount} onReset={() => dropEdit('fixed', l.f.name)} />}
-                <input type="number" value={l.f.amount || ''} disabled={ro} onChange={e => patch(x => { x.fixed[l.fi].amount = Number(e.target.value) || 0; return x })}
+                <input type="number" value={l.f.amount || ''} disabled={ro || (!isFact && !!l.f.parts?.length)} title={!isFact && l.f.parts?.length ? 'Сумма состава — правьте позиции' : undefined}
+                  onChange={e => patch(x => { x.fixed[l.fi].amount = Number(e.target.value) || 0; return x })}
                   className={(isFact && l.f.amount !== factBase.fixed[l.fi]?.amount ? inputEdited : inputBlue) + ' w-28 shrink-0 text-right'} />
                 {!ro && !isFact && <button onClick={() => patch(x => { x.fixed.splice(l.fi, 1); return x })}
                   className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
               </div>
-            ))}
+              {openParts.has(pk) && (
+                <PartsEditor parts={l.f.parts ?? []} unit="₽" disabled={partsLocked} current={l.f.amount}
+                  note={isFact && l.f.parts?.length ? 'Состав — из вкладки M-Glass, правится там.' : undefined}
+                  onChange={next => setFixedParts(l.fi, next)} />
+              )}
+              </div>
+              )
+            })}
             {!ro && !isFact && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0, kind: 'fixed' }); return x })}
               className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>}
             <div className="border-t border-[#f0f0ec] pt-2 mt-2 space-y-1 text-[12px]">
@@ -567,15 +621,17 @@ export default function BreakevenPage() {
             ) : debtLines.map((l, i) => {
               const split = l.f.body != null || l.f.amortization != null
               const body = Math.min(Math.max(l.f.body || 0, 0), l.f.amount || 0)
+              const dk = `${l.unitTitle ?? unit}|d|${l.fi >= 0 ? l.fi : i}`
               return (
                 <div key={`${l.unitTitle ?? ''}${l.fi}-${i}`} className="mb-2 pb-2 border-b border-[#f5f5f3] last:border-0">
                   <div className="flex items-center gap-2">
                     {l.unitTitle && <span className="w-20 shrink-0 text-[10px] text-[#9a9a95] truncate">{l.unitTitle}</span>}
+                    <PartsToggle count={l.f.parts?.length ?? 0} open={openParts.has(dk)} readOnly={ro || isFact} onClick={() => toggleParts(dk)} />
                     <input value={l.f.name} disabled={ro || isFact} onChange={e => patch(x => { x.fixed[l.fi].name = e.target.value; return x })}
                       className={inputCls + ' flex-1'} />
                     <KindSelect f={l.f} disabled={ro || isFact} onChange={k => setKind(l.fi, k)} />
                 {isFact && <Orig value={factBase.fixed[l.fi]?.amount} edited={l.f.amount !== factBase.fixed[l.fi]?.amount} onReset={() => dropEdit('fixed', l.f.name)} />}
-                    <input type="number" value={l.f.amount || ''} disabled={ro} title="Платёж в месяц"
+                    <input type="number" value={l.f.amount || ''} disabled={ro || (!isFact && !!l.f.parts?.length)} title={!isFact && l.f.parts?.length ? 'Сумма состава — правьте позиции' : 'Платёж в месяц'}
                       onChange={e => patch(x => { x.fixed[l.fi].amount = Number(e.target.value) || 0; return x })}
                       className={(isFact && l.f.amount !== factBase.fixed[l.fi]?.amount ? inputEdited : inputBlue) + ' w-28 shrink-0 text-right'} />
                     {!ro && !isFact && <button onClick={() => patch(x => { x.fixed.splice(l.fi, 1); return x })}
@@ -592,6 +648,11 @@ export default function BreakevenPage() {
                         className={inputBlue + ' w-24 text-right'} /></label>
                     <span>проценты = платёж − тело: <span className="font-mono text-[#111110]">{fmt((l.f.amount || 0) - body)}</span></span>
                   </div>
+                  {openParts.has(dk) && (
+                    <div className="mt-1">
+                      <PartsEditor parts={l.f.parts ?? []} unit="₽" disabled={ro || isFact} current={l.f.amount} onChange={next => setFixedParts(l.fi, next)} />
+                    </div>
+                  )}
                   {!split && (
                     <p className="text-[11px] text-amber-700 mt-1">
                       Тело и проценты не разделены — вся сумма стоит в расходах P&amp;L, операционная точка завышена на тело долга.
@@ -732,7 +793,7 @@ export default function BreakevenPage() {
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[12px] text-emerald-800 flex-1">→ бонусы производства</span>
                   <div className="flex items-center gap-1 w-20 shrink-0">
-                    <input type="number" step="1" value={ovCfg.bonusPct || ''}
+                    <input type="number" step="1" value={ovCfg.bonusPct || ''} disabled={isDraft}
                       onChange={e => setOvCfg(c => ({ ...c, bonusPct: Number(e.target.value) || 0 }))}
                       className={inputBlue + ' w-full text-right'} />
                     <span className="text-[11px] text-emerald-700">%</span>
@@ -758,10 +819,14 @@ export default function BreakevenPage() {
                     )}
                   </>
                 )}
-                <button onClick={saveOverflow} disabled={ovSaving}
-                  className="text-[11px] font-semibold text-emerald-800 border border-emerald-300 rounded-lg px-2 py-1 hover:bg-emerald-100 disabled:opacity-40">
-                  {ovSaving ? '…' : ovSaved ? '✓ Сохранено' : '💾 Сохранить настройки перелива'}
-                </button>
+                {isDraft ? (
+                  <p className="text-[10px] text-emerald-600">В черновике % перелива не меняется — он общий для компании.</p>
+                ) : (
+                  <button onClick={saveOverflow} disabled={ovSaving}
+                    className="text-[11px] font-semibold text-emerald-800 border border-emerald-300 rounded-lg px-2 py-1 hover:bg-emerald-100 disabled:opacity-40">
+                    {ovSaving ? '…' : ovSaved ? '✓ Сохранено' : '💾 Сохранить настройки перелива'}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -794,5 +859,50 @@ function KindSelect({ f, disabled, onChange }: { f: FixedRow; disabled: boolean;
         <option key={k} value={k}>{FIXED_KIND_LABELS[k]}</option>
       ))}
     </select>
+  )
+}
+
+// Раскрыть состав статьи. Цифра — сколько позиций; без позиций на сводке кнопки нет.
+function PartsToggle({ count, open, readOnly, onClick }: { count: number; open: boolean; readOnly: boolean; onClick: () => void }) {
+  if (readOnly && count === 0) return <span className="w-7 shrink-0" />
+  return (
+    <button onClick={onClick} title={count ? `Состав статьи: ${count} поз.` : 'Состав статьи — из чего она складывается'}
+      className={`w-7 shrink-0 text-left text-[11px] leading-none ${count ? 'text-[#111110] font-semibold' : 'text-[#c4c4be]'} hover:text-[#111110]`}>
+      {open ? '▾' : '▸'}{count > 0 && <span className="ml-0.5">{count}</span>}
+    </button>
+  )
+}
+
+function PartsEditor({ parts, unit, disabled, current, note, onChange }: {
+  parts: Part[]; unit: '₽' | '%'; disabled: boolean; current: number; note?: string; onChange: (next: Part[]) => void
+}) {
+  const show = (v: number) => unit === '%' ? `${Number(v.toFixed(2)).toLocaleString('ru-RU')} %` : fmt(v)
+  const set = (pi: number, part: Partial<Part>) => onChange(parts.map((p, i) => i === pi ? { ...p, ...part } : p))
+  return (
+    <div className="ml-9 mb-2 pl-3 border-l-2 border-[#e4e4e0] space-y-1">
+      {parts.length === 0 && (
+        <p className="text-[11px] text-[#9a9a95]">
+          Состава нет{current ? ` — в строке ${show(current)}` : ''}.
+          {!disabled && ` С первой позицией сумма строки станет суммой состава${unit === '₽' ? ' — например, человек и его оклад' : ''}.`}
+        </p>
+      )}
+      {parts.map((p, pi) => (
+        <div key={pi} className="flex items-center gap-2">
+          <input value={p.name} disabled={disabled} placeholder={unit === '₽' ? 'Кто или что, например «Менеджер ОП»' : 'Из чего, например «Монтажники»'}
+            onChange={e => set(pi, { name: e.target.value })} className={inputCls + ' flex-1'} />
+          <input type="number" step={unit === '%' ? '0.01' : undefined} value={p.value || ''} disabled={disabled}
+            onChange={e => set(pi, { value: Number(e.target.value) || 0 })} className={inputBlue + ' w-28 shrink-0 text-right'} />
+          {unit === '%' && <span className="text-[11px] text-[#9a9a95]">%</span>}
+          {!disabled && <button onClick={() => onChange(parts.filter((_, i) => i !== pi))}
+            className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        {!disabled
+          ? <button onClick={() => onChange([...parts, { name: '', value: 0 }])} className="text-[#9a9a95] hover:text-[#111110]">+ позиция</button>
+          : <span className="text-[#9a9a95]">{note ?? ''}</span>}
+        {parts.length > 0 && <span className="text-[#6b6b66]">Σ состава <span className="font-mono text-[#111110]">{show(partsSum(parts))}</span></span>}
+      </div>
+    </div>
   )
 }

@@ -7,7 +7,7 @@
 // собственника — в числителе.
 
 export type BreakevenModel = {
-  incomes: { name: string; plan: number; vars: { name: string; pct: number }[] }[]
+  incomes: { name: string; plan: number; vars: { name: string; pct: number; parts?: Part[] }[] }[]
   funds: { invest: number; training: number; reserve: number; prodBonus: number }
   ownerPct: number
   ownerRub: number
@@ -26,6 +26,16 @@ export type FixedRow = {
   // Только для денежных обязательств (кредит, лизинг). Проценты = платёж − тело.
   body?: number           // погашение тела долга в платеже, ₽/мес
   amortization?: number   // амортизация предмета лизинга, ₽/мес — расход P&L без движения денег
+  parts?: Part[]
+}
+
+// Состав статьи (владелец 22.10.2026): из чего она складывается — люди и их оклады,
+// отдельные кредиты. Есть состав — сумма статьи (amount, у переменных pct) равна его сумме;
+// поле держится в синхроне при правке, поэтому расчёты о составе не знают.
+export type Part = { name: string; value: number }
+
+export function partsSum(parts: Part[] | undefined): number {
+  return Math.round((parts ?? []).reduce((s, p) => s + (Number(p.value) || 0), 0) * 100) / 100
 }
 
 export const FIXED_KIND_LABELS: Record<FixedKind, string> = {

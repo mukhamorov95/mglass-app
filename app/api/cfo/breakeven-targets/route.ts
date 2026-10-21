@@ -18,8 +18,9 @@ export async function GET() {
 
   const { data } = await sb.from('finplan_models').select('unit, data')
   const LABELS: Record<string, string> = { mglass: 'M-Glass', production: 'Производство', total: 'Компания', total1: 'Компания (без кредитов)' }
+  // Только юниты с подписью: черновик «Производства» (production_draft) — для проб, не для плана.
   const targets = (data ?? [])
-    .filter(r => (r.data as { incomes?: unknown[] } | null)?.incomes?.length)
+    .filter(r => r.unit in LABELS && (r.data as { incomes?: unknown[] } | null)?.incomes?.length)
     .map(r => ({
       unit: r.unit as string,
       label: LABELS[r.unit as string] ?? (r.unit as string),
