@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   LEAD_REPLY_TEMPLATES, buildClientQuoteText, clientQuoteTextFromOrder, leadNoteError, leadNotesPatch, noClientName,
-  noClientSaveBlocker, quoteLeadChips, readQuoteLead,
+  noClientSaveBlocker, quoteLeadChips, readQuoteLead, clientRequiredToLaunch,
 } from '@/lib/b2b/leadQuote'
 import type { InvoiceOrder } from '@/lib/b2b/invoiceMath'
 
@@ -93,5 +93,15 @@ describe('LEAD_REPLY_TEMPLATES — ответы вдогонку к расчёт
   it('партнёрство просит назвать цену, оплата — спрашивает форму оплаты', () => {
     expect(LEAD_REPLY_TEMPLATES[0].text).toMatch(/Назовите цену/)
     expect(LEAD_REPLY_TEMPLATES[1].text).toMatch(/как вам удобнее оплатить/)
+  })
+})
+
+describe('в работу без заказчика', () => {
+  it('нельзя, кроме просчёта с Авито (владелец 21.10); с заказчиком — всегда можно', () => {
+    expect(clientRequiredToLaunch(null, {})).toBe(true)
+    expect(clientRequiredToLaunch(null, { lead_source: 'website', customer_kind: 'retail' })).toBe(true)
+    expect(clientRequiredToLaunch(null, { lead_source: 'avito', customer_kind: 'retail', lead_contact: 'Юлия' })).toBe(false)
+    expect(clientRequiredToLaunch(null, { lead_source: 'avito', customer_kind: 'wholesale' })).toBe(false)
+    expect(clientRequiredToLaunch(12, {})).toBe(false)
   })
 })
