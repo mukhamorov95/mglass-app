@@ -2202,17 +2202,17 @@ export default function B2BOrdersPage() {
           </p>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-medium">
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-600"
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-red-50 text-red-600"
             title="Не начато + в процессе + к закалке + упаковка — всё, что ещё не упаковано целиком">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
             {inWorkCount} в работе
           </span>
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 text-blue-700"
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-blue-50 text-blue-700"
             title="Упакованы целиком, ждут отгрузки">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
             {packedCount} упаковано
           </span>
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-emerald-50 text-emerald-700">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             {shippedCount} отгружено
           </span>
