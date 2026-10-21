@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { CONTOURS, RARE, itemsOf, contourFor, matchLength } from '@/lib/nav/contours'
+import { CONTOURS, RARE, itemsOf, contourFor, matchLength, groupBlocks, groupOf, openGroups } from '@/lib/nav/contours'
 
 const root = join(__dirname, '..', '..')
 const src = (p: string) => readFileSync(join(root, p), 'utf8')
@@ -54,5 +54,24 @@ describe('меню по контурам', () => {
     expect(matchLength('/', '/')).toBeGreaterThan(0)
     expect(matchLength('/deals', '/')).toBe(0)
     expect(matchLength('/cfo/products', '/cfo')).toBe(4)
+  })
+})
+
+describe('разделы меню сворачиваются', () => {
+  it('B2B при входе: раскрыты «Главное» и «Продажи», остальное свёрнуто', () => {
+    expect(openGroups('/b2b-orders', 'b2b')).toEqual(['Главное', 'Продажи'])
+  })
+  it('раздел открытой страницы раскрыт, даже если по умолчанию свёрнут', () => {
+    expect(openGroups('/production-app/control', 'b2b')).toEqual(['Главное', 'Продажи', 'Производство'])
+    expect(groupOf('/production-app/docs', CONTOURS.b2b)).toBe('Производство')   // пункт внутри подменю «Цех подробно»
+  })
+  it('в CEO продаж нет — раскрыто всё', () => {
+    expect(openGroups('/cfo', 'ceo')).toEqual(groupBlocks(CONTOURS.ceo).map(b => b.label))
+  })
+  it('«Расчёт для M-Glass» — в контуре M-Glass, не в продажах B2B', () => {
+    const b2bSales = groupBlocks(CONTOURS.b2b).find(b => b.label === 'Продажи')!
+    expect(itemsOf(b2bSales.entries).map(i => i.href)).toEqual(
+      ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-invoices', '/b2b-crm', '/admin/b2b-access'])
+    expect(contourFor('/calculator/b2b-mglass', 'b2b')).toBe('mglass')
   })
 })

@@ -15,7 +15,9 @@ async function findByToken(token: string) {
   const svc = createServiceClient()
   const { data } = await svc.from('b2b_orders')
     .select(PUBLIC_QUOTE_COLS)
-    .ilike('notes', `%"public_token":"${token}"%`)
+    // Функции базы пишут notes через jsonb::text — с пробелом после двоеточия: после первого
+    // открытия (patch_order_notes_shallow) точная подстрока перестала бы находить ссылку
+    .ilike('notes', `%"public_token":%${token}%`)
     .is('archived_at', null)
     .limit(2)
   const rows = (data ?? []) as unknown as Parameters<typeof toPublicQuote>[0][]

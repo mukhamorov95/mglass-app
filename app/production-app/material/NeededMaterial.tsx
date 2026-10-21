@@ -31,7 +31,9 @@ async function loadNeeded(): Promise<{ orders: Order[]; reqStatus: ReqStatus }> 
     .gte('created_at', PROD_SINCE)
     .is('archived_at', null)
     .not('notes', 'ilike', '%"status":"quote"%')
+    .not('notes', 'ilike', '%"status": "quote"%')
     .not('notes', 'ilike', '%"historical":true%')
+    .not('notes', 'ilike', '%"historical": true%')
     .order('id').range(from, to))
   const flagged = all.filter(o => {
     const n = parseNotes(o.notes)

@@ -33,6 +33,7 @@ export default function DocsPage() {
       .from('b2b_orders')
       .select('id,client_name,custom_number,notes,created_at')
       .not('notes', 'ilike', '%"status":"quote"%')
+      .not('notes', 'ilike', '%"status": "quote"%')
       .is('archived_at', null)
       .order('created_at', { ascending: false })
       .limit(500)

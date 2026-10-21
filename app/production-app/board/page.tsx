@@ -100,6 +100,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     .from('b2b_orders')
     .select('id,client_id,client_name,custom_number,items,notes,created_at,launched_at')
     .not('notes', 'ilike', '%"status":"quote"%')
+    .not('notes', 'ilike', '%"status": "quote"%')
     .is('archived_at', null)
     .gte('created_at', PROD_SINCE)
     .order('created_at', { ascending: false })

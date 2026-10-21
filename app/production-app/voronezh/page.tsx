@@ -244,7 +244,9 @@ export default function VoronezhPage() {
         .select('id, custom_number, client_id, client_name, items, notes, total_after_discount, total_sale_inc_vat, created_at')
         .is('archived_at', null)
         .not('notes', 'ilike', '%"status":"quote"%')
+        .not('notes', 'ilike', '%"status": "quote"%')
         .not('notes', 'ilike', '%"historical":true%')
+        .not('notes', 'ilike', '%"historical": true%')
         .order('id', { ascending: false }),
       sb.from('delivery_shipments').select('*').eq('region', REGION).order('id', { ascending: false }),
       sb.from('delivery_shipment_orders').select('*'),

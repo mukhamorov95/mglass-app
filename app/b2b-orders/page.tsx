@@ -481,15 +481,15 @@ function classifyOrderForBoard(order: Order): { bucket: BoardBucket; problemCoun
 
 const BOARD_SLOTS: { bucket: BoardBucket; label: string; numCls: string; bgCls: string; borderCls: string; ringCls: string }[] = [
   { bucket: 'not_started',         label: 'Не начато',  numCls: 'text-[#6b6b66]',  bgCls: 'bg-[#f8f8f7]',  borderCls: 'border-[#e4e4e0]',   ringCls: 'ring-[#9a9a95]'   },
-  { bucket: 'in_progress',         label: 'В работе',   numCls: 'text-blue-700',    bgCls: 'bg-blue-50',     borderCls: 'border-blue-200',    ringCls: 'ring-blue-400'    },
+  { bucket: 'in_progress',         label: 'В процессе', numCls: 'text-amber-700',   bgCls: 'bg-amber-50',    borderCls: 'border-amber-200',   ringCls: 'ring-amber-400'   },
   { bucket: 'ready_for_tempering', label: 'К закалке',  numCls: 'text-orange-700',  bgCls: 'bg-orange-50',   borderCls: 'border-orange-200',  ringCls: 'ring-orange-400'  },
   { bucket: 'on_packaging',        label: 'Упаковка',   numCls: 'text-purple-700',  bgCls: 'bg-purple-50',   borderCls: 'border-purple-200',  ringCls: 'ring-purple-400'  },
-  { bucket: 'packed',              label: 'Упаковано',  numCls: 'text-emerald-700', bgCls: 'bg-emerald-50',  borderCls: 'border-emerald-200', ringCls: 'ring-emerald-400' },
+  { bucket: 'packed',              label: 'Упаковано',  numCls: 'text-blue-700',    bgCls: 'bg-blue-50',     borderCls: 'border-blue-200',    ringCls: 'ring-blue-400'    },
 ]
 
 const BOARD_FILTER_LABELS: Record<NonNullable<ProductionBoardFilter>, string> = {
   not_started:         'Не начато',
-  in_progress:         'В работе',
+  in_progress:         'В процессе',
   ready_for_tempering: 'К закалке',
   on_packaging:        'Упаковка',
   packed:              'Упаковано',
@@ -930,7 +930,9 @@ export default function B2BOrdersPage() {
             .from('b2b_orders')
             .select('*')
             .not('notes', 'ilike', '%"status":"quote"%')
+            .not('notes', 'ilike', '%"status": "quote"%')
             .not('notes', 'ilike', '%"historical":true%')   // история 2024/2025 — только в аналитике /cfo/b2b, не в операционном списке
+            .not('notes', 'ilike', '%"historical": true%')
             .is('archived_at', null)
             .order('created_at', { ascending: false })
             .range(from, from + 999)
@@ -1612,9 +1614,12 @@ export default function B2BOrdersPage() {
   const scope = summarizeOrders(scopeOrders, getFinalPrice, o => !!o.parsedNotes.stages?.shipped, getOrderPayStatus,
     o => !!o.parsedNotes.payment_source)
   const today = mskDayKey()
-  // Готовность производства: отгружен ли заказ. Не связано с тем, найден ли клиент в базе.
+  // Готовность производства тем же счётом, что табло ниже: отгружен → упакован целиком →
+  // всё остальное в работе. Упакованное лежит на складе — это не «в работе» (владелец 21.10).
   const shippedCount = orders.filter(o => !!o.parsedNotes.stages?.shipped).length
-  const notShippedCount = orders.length - shippedCount
+  const boardActive = orders.filter(o => !o.parsedNotes.stages?.shipped && o.parsedNotes.status !== 'quote')
+  const packedCount = boardActive.filter(o => classifyOrderForBoard(o).bucket === 'packed').length
+  const inWorkCount = boardActive.length - packedCount
 
   // ── Shared: expanded order body ─────────────────────────────────────────────
   function renderOrderBody(order: Order) {
@@ -2196,14 +2201,20 @@ export default function B2BOrdersPage() {
               : <>{orders.length} заказов · {rub(totalSum)} ₽</>}
           </p>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] font-medium" title="Готовность производства: отгружено / в работе">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium">
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-600"
+            title="Не начато + в процессе + к закалке + упаковка — всё, что ещё не упаковано целиком">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+            {inWorkCount} в работе
+          </span>
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 text-blue-700"
+            title="Упакованы целиком, ждут отгрузки">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            {packedCount} упаковано
+          </span>
           <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             {shippedCount} отгружено
-          </span>
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-600">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            {notShippedCount} в работе
           </span>
         </div>
         <div className="flex items-center gap-2">

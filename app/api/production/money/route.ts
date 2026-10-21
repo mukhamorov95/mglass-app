@@ -65,7 +65,9 @@ export async function GET() {
       .gte('created_at', '2026-01-01')
       .is('archived_at', null)
       .not('notes', 'ilike', '%"status":"quote"%')
+      .not('notes', 'ilike', '%"status": "quote"%')
       .not('notes', 'ilike', '%"historical":true%')
+      .not('notes', 'ilike', '%"historical": true%')
       .order('id')
       .range(from, from + 999)
     if (error) break
