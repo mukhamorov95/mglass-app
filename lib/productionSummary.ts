@@ -38,6 +38,7 @@ export type MatLight = {
   thickness: number
   sheet_width?: number | null
   sheet_height?: number | null
+  sheet_edge_mm?: number | null
   cost_price?: number | null
   waste_percent?: number | null
 }

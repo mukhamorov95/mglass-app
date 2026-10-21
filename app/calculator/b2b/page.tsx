@@ -1352,6 +1352,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           category: item.category,
           sheetWidth:  mat?.sheet_width  ?? 3210,
           sheetHeight: mat?.sheet_height ?? 2250,
+          sheetEdge: mat?.sheet_edge_mm ?? 0,
           sheetFormats: mat?.sheet_formats,
           patternDirection: (mat?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
         })

@@ -23,6 +23,7 @@ type MatLike = {
   sheet_width?: number | null
   sheet_height?: number | null
   sheet_formats?: { width: number; height: number }[] | null
+  sheet_edge_mm?: number | null
   pattern_direction?: string | null
   passthrough?: boolean | null
 }
@@ -62,6 +63,7 @@ export function applyAutoWasteToItems(items: B2BOrderItem[], materials: MatLike[
         costPerM2: it.costMaterial / it.totalAreaBilled,
         sheetWidth: m?.sheet_width ?? undefined, sheetHeight: m?.sheet_height ?? undefined,
         sheetFormats: m?.sheet_formats ?? undefined,
+        sheetEdge: m?.sheet_edge_mm ?? undefined,
         patternDirection: (m?.pattern_direction ?? 'none') as UsageItem['patternDirection'],
       }
     })

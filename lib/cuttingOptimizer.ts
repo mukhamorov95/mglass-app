@@ -46,6 +46,7 @@ export type MaterialCuttingResult = {
   category: string
   sheetWidth: number
   sheetHeight: number
+  sheetEdge?: number           // нерабочая полоса вдоль длинных сторон, мм (только если есть)
   patternDirection: 'none' | 'along_length' | 'along_width'
   sheets: CuttingSheet[]
   totalPieces: number
@@ -697,6 +698,9 @@ export type PieceGroup = {
   sheetWidth: number
   sheetHeight: number
   patternDirection: 'none' | 'along_length' | 'along_width'
+  // Нерабочая полоса вдоль длинных сторон листа, мм (b2b_materials.sheet_edge_mm): у матовых
+  // по 10 мм без покрытия, поле 3210×2230 (владелец 21.10.2026).
+  sheetEdge?: number
   // Доступные форматы листа (b2b_material_sheet_variants). Если заданы — раскрой
   // перебирает их и выбирает оптимальный; иначе кроит на sheetWidth×sheetHeight.
   sheetFormats?: SheetFormat[]
@@ -720,6 +724,31 @@ function candidateFormats(group: PieceGroup): SheetFormat[] {
 }
 
 type FormatTrial = { width: number; height: number; sheets: CuttingSheet[]; unplaced: CuttingPiece[] }
+
+// Раскрой идёт по полю без полос; координаты — в листе целиком, площадь и КПД — от целого
+// листа: покупают его, а полосу выбрасывают.
+function stripField(sheetW: number, sheetH: number, edge: number): { w: number; h: number; dx: number; dy: number } {
+  if (!(edge > 0)) return { w: sheetW, h: sheetH, dx: 0, dy: 0 }
+  return sheetW >= sheetH
+    ? { w: sheetW, h: sheetH - 2 * edge, dx: 0, dy: edge }
+    : { w: sheetW - 2 * edge, h: sheetH, dx: edge, dy: 0 }
+}
+
+function onFullSheet(sheets: CuttingSheet[], sheetW: number, sheetH: number, dx: number, dy: number): CuttingSheet[] {
+  if (!dx && !dy) return sheets
+  const total = sheetW * sheetH
+  return sheets.map(sh => ({
+    ...sh, totalArea: total, efficiency: Math.round(sh.usedArea / total * 100),
+    pieces: sh.pieces.map(p => ({ ...p, x: p.x + dx, y: p.y + dy })),
+    remnants: sh.remnants.map(r => ({ ...r, x: r.x + dx, y: r.y + dy })),
+  }))
+}
+
+// Где на листе можно класть детали: внутри кромки обрезки и вне нерабочих полос.
+export function workArea(sheetW: number, sheetH: number, edgeMargin: number, sheetEdge = 0): { x: number; y: number; w: number; h: number } {
+  const f = stripField(sheetW, sheetH, sheetEdge)
+  return { x: f.dx + edgeMargin, y: f.dy + edgeMargin, w: f.w - 2 * edgeMargin, h: f.h - 2 * edgeMargin }
+}
 
 // Лучший формат: сначала меньше нераскроенных (деталь может не влезть в мелкий
 // лист), затем меньше листов, затем меньше суммарная площадь листов (меньше
@@ -747,9 +776,10 @@ function buildResult(
   const totalUsedArea  = sheets.reduce((s, sh) => s + sh.usedArea, 0)
   const totalSheetArea = sheets.length * sheetWidth * sheetHeight
   const avgEfficiency  = totalSheetArea > 0 ? Math.round(totalUsedArea / totalSheetArea * 100) : 0
+  const edge = group.sheetEdge ?? 0
   return {
     materialKey, materialLabel: group.materialLabel, category: group.category,
-    sheetWidth, sheetHeight, patternDirection: group.patternDirection,
+    sheetWidth, sheetHeight, ...(edge > 0 ? { sheetEdge: edge } : {}), patternDirection: group.patternDirection,
     sheets, totalPieces: group.pieces.length, sheetsNeeded: sheets.length,
     totalUsedArea, totalSheetArea, avgEfficiency, strategiesChecked,
     unplacedPieces, unplacedCount: unplacedPieces.length,
@@ -804,9 +834,10 @@ export function runCuttingOptimizer(
     const trials: FormatTrial[] = candidateFormats(group).map(f => {
       const swap = eff.respect_pattern && patternSwap(group.patternDirection, f.width, f.height)
       const oriented = orientPieces(pieces, swap)
-      const { best } = tryBlocks(packQuick(oriented, f.width, f.height, eff), oriented, f.width, f.height, eff)
+      const s = stripField(f.width, f.height, group.sheetEdge ?? 0)
+      const { best } = tryBlocks(packQuick(oriented, s.w, s.h, eff), oriented, s.w, s.h, eff)
       const restored = restoreOrientation(best, pieces, swap)
-      return { width: f.width, height: f.height, sheets: restored.sheets, unplaced: restored.unplaced }
+      return { width: f.width, height: f.height, sheets: onFullSheet(restored.sheets, f.width, f.height, s.dx, s.dy), unplaced: restored.unplaced }
     })
     const chosen = pickBestFormat(trials)
     results.push(buildResult(materialKey, group, chosen.width, chosen.height, chosen.sheets, chosen.unplaced))
@@ -828,9 +859,10 @@ export function runCuttingOptimizerOptimized(
     const formats = candidateFormats(group)
     const trials = formats.map(f => {
       const swap = eff.respect_pattern && patternSwap(group.patternDirection, f.width, f.height)
-      const { sheets, unplaced, strategiesChecked } = optimizePack(orientPieces(pieces, swap), f.width, f.height, eff, timeLimitPerGroupMs)
+      const s = stripField(f.width, f.height, group.sheetEdge ?? 0)
+      const { sheets, unplaced, strategiesChecked } = optimizePack(orientPieces(pieces, swap), s.w, s.h, eff, timeLimitPerGroupMs)
       const restored = restoreOrientation({ sheets, unplaced }, pieces, swap)
-      return { width: f.width, height: f.height, sheets: restored.sheets, unplaced: restored.unplaced, strategiesChecked }
+      return { width: f.width, height: f.height, sheets: onFullSheet(restored.sheets, f.width, f.height, s.dx, s.dy), unplaced: restored.unplaced, strategiesChecked }
     })
     const chosen = pickBestFormat(trials)
     const checked = trials.reduce((s, t) => s + (t.strategiesChecked ?? 0), 0)

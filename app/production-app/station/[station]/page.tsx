@@ -33,7 +33,7 @@ type Item = {
   triplexGlasses?: { materialId?: number; materialName?: string; thickness?: number }[]
 }
 type OrderRow = { id: number; client_id: number | null; client_name: string; custom_number: string | null; items: Item[]; notes: string | null; launched_at: string | null }
-type MatRow = { name: string; thickness: number; sheet_width: number | null; sheet_height: number | null; pattern_direction: string | null }
+type MatRow = { name: string; thickness: number; sheet_width: number | null; sheet_height: number | null; sheet_edge_mm?: number | null; pattern_direction: string | null }
 
 // А4: срок отгрузки заказа (из А1). Партия кроится по срочности, а не по числу листов.
 function orderDeadlineMs(o: OrderRow): number | null {
@@ -91,7 +91,7 @@ export default function StationBatchesPage() {
     const orderIds = [...new Set(tasks.map(t => t.order_id))]
     const [{ data: orderRows }, { data: matRows }, { data: cfg }, { data: poRows }, points] = await Promise.all([
       sb.from('b2b_orders').select('id,client_id,client_name,custom_number,items,notes,launched_at').in('id', orderIds).gte('created_at', PROD_SINCE).is('archived_at', null),
-      isCutting ? sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,pattern_direction').eq('active', true) : Promise.resolve({ data: [] as MatRow[] }),
+      isCutting ? sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,sheet_edge_mm,pattern_direction').eq('active', true) : Promise.resolve({ data: [] as MatRow[] }),
       isCutting ? sb.from('cutting_settings').select('*').eq('id', 1).single() : Promise.resolve({ data: null }),
       // Заявки на материал по этим заказам (для гейта резки по приходу материала)
       isCutting ? sb.from('purchase_orders').select('b2b_order_ids,status').overlaps('b2b_order_ids', orderIds) : Promise.resolve({ data: [] as { b2b_order_ids: number[] | null; status: string | null }[] }),
@@ -137,7 +137,7 @@ export default function StationBatchesPage() {
       if (!groups.has(key)) {
         groups.set(key, {
           pieces: [], materialLabel: `${name}${thk > 0 ? ' ' + thk + ' мм' : ''}`, category: item.category ?? '',
-          sheetWidth: mat?.sheet_width ?? 3210, sheetHeight: mat?.sheet_height ?? 2250,
+          sheetWidth: mat?.sheet_width ?? 3210, sheetHeight: mat?.sheet_height ?? 2250, sheetEdge: mat?.sheet_edge_mm ?? 0,
           patternDirection: (mat?.pattern_direction ?? 'none') as PieceGroup['patternDirection'],
         })
         meta.set(key, { orders: [], area: 0, minDeadlineMs: null })
@@ -275,7 +275,7 @@ export default function StationBatchesPage() {
                       {b.result.sheets.map((sheet, si) => (
                         <div key={si}>
                           <p className="text-[11px] text-[#6b6b66] mb-1">Лист {si + 1} · КПД {sheet.efficiency}%</p>
-                          <SheetSVG sheet={sheet} sheetW={b.result!.sheetWidth} sheetH={b.result!.sheetHeight} edgeMargin={DEFAULT_CUTTING_SETTINGS.edge_margin} />
+                          <SheetSVG sheet={sheet} sheetW={b.result!.sheetWidth} sheetH={b.result!.sheetHeight} edgeMargin={DEFAULT_CUTTING_SETTINGS.edge_margin} sheetEdge={b.result!.sheetEdge} />
                         </div>
                       ))}
                     </div>

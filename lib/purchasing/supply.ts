@@ -88,6 +88,7 @@ export type PurchaseMaterial = {
   id: number; name: string; thickness: number | string; category?: string | null
   cost_price: number | string | null
   sheet_width: number | null; sheet_height: number | null
+  sheet_edge_mm?: number | null
   pattern_direction: string | null
 }
 export type SheetVariant = { material_id: number; sheet_width: number; sheet_height: number; active?: boolean | null }
@@ -220,6 +221,7 @@ export function buildPurchaseGroups(
             category: '',
             sheetWidth: mat.sheet_width ?? 3210,
             sheetHeight: mat.sheet_height ?? 2250,
+            sheetEdge: mat.sheet_edge_mm ?? 0,
             patternDirection: (mat.pattern_direction ?? 'none') as PieceGroup['patternDirection'],
             sheetFormats: formatsOf.get(mat.id),
           }

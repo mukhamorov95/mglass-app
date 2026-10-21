@@ -1,4 +1,4 @@
-import type { CuttingSheet } from '@/lib/cuttingOptimizer'
+import { workArea, type CuttingSheet } from '@/lib/cuttingOptimizer'
 
 // Визуальная карта раскроя листа (read-only). Раньше жила локально в
 // app/b2b-cutting/page.tsx; вынесена в общий компонент, чтобы её же показывать
@@ -19,23 +19,21 @@ export function pieceColor(idx: number, alpha = 1): string {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
-export function SheetSVG({ sheet, sheetW, sheetH, edgeMargin }: {
+export function SheetSVG({ sheet, sheetW, sheetH, edgeMargin, sheetEdge = 0 }: {
   sheet: CuttingSheet
   sheetW: number
   sheetH: number
   edgeMargin: number
+  sheetEdge?: number
 }) {
+  const area = workArea(sheetW, sheetH, edgeMargin, sheetEdge)
   return (
     <svg
       viewBox={`0 0 ${sheetW} ${sheetH}`}
       style={{ display: 'block', width: '100%', borderRadius: 6, border: '1px solid #e4e4e0' }}
     >
       <rect x={0} y={0} width={sheetW} height={sheetH} fill="#d8d8d4" />
-      <rect
-        x={edgeMargin} y={edgeMargin}
-        width={sheetW - 2 * edgeMargin} height={sheetH - 2 * edgeMargin}
-        fill="#f0f0ec" stroke="#b0b0aa" strokeWidth={3}
-      />
+      <rect x={area.x} y={area.y} width={area.w} height={area.h} fill="#f0f0ec" stroke="#b0b0aa" strokeWidth={3} />
       {sheet.pieces.map((p, i) => {
         const fill = pieceColor(p.colorIndex, 0.85)
         const minDim = Math.min(p.w, p.h)
@@ -84,7 +82,7 @@ export function SheetSVG({ sheet, sheetW, sheetH, edgeMargin }: {
         )
       })}
       <text x={sheetW / 2} y={sheetH - 30} textAnchor="middle" fontSize={55} fill="#888" fontFamily="Arial">
-        {sheetW}×{sheetH} мм
+        {sheetW}×{sheetH} мм{sheetEdge > 0 ? ` · без покрытия по ${sheetEdge} мм вдоль длинных сторон` : ''}
       </text>
     </svg>
   )
