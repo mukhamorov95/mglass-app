@@ -4,6 +4,7 @@ import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { parseStatement, dedupe } from '@/lib/bank/parseStatement'
+import { unitMismatch } from '@/lib/bank/accountUnit'
 import { applyBankOrderPayment, applyBankPayment, loadOpenInvoices, postBankRow, type BankRow } from '@/lib/accounting/bankPost'
 import { allocateAdvances, createAdvance, loadAdvanceSummaries, voidAdvance, type AdvanceSummary } from '@/lib/accounting/clientAdvance'
 import { recentPaidSince, syncPaidStages } from '@/lib/b2b/paidStage'
@@ -53,6 +54,8 @@ export async function POST(req: NextRequest) {
 
   const parsed = parseStatement(await decode(file))
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+  const wrongUnit = unitMismatch(parsed.accounts, unit)
+  if (wrongUnit) return NextResponse.json({ error: wrongUnit }, { status: 400 })
 
   const me = await whoAmI()
   const batch = `bank_${file.name}`.slice(0, 80)
