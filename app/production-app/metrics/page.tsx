@@ -63,7 +63,9 @@ export default function MetricsPage() {
           .gte('created_at', PROD_SINCE)
           .is('archived_at', null)
           .not('notes', 'ilike', '%"status":"quote"%')
-          .not('notes', 'ilike', '%"historical":true%'),
+          .not('notes', 'ilike', '%"status": "quote"%')
+          .not('notes', 'ilike', '%"historical":true%')
+          .not('notes', 'ilike', '%"historical": true%'),
       ])
       setTasks((data ?? []) as Task[])
       setDeadlines(new Map(((ords ?? []) as { id: number; notes: unknown }[])

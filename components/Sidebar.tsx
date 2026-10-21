@@ -13,7 +13,7 @@ import {
   MANAGER_AMO, MANAGER_MGLASS, MANAGER_B2B, OWNER_AI, isGroup, isSection, visibleFor,
   type NavItem, type NavEntry, type NavSection,
 } from '@/lib/nav/managerMenu'
-import { CONTOURS, CONTOUR_LABEL, RARE, contourFor, type Contour } from '@/lib/nav/contours'
+import { CONTOURS, CONTOUR_LABEL, RARE, contourFor, groupBlocks, groupOf, openGroups, type Contour } from '@/lib/nav/contours'
 
 type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions; canViewMoney?: boolean; referralRate?: number | null }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
@@ -409,10 +409,17 @@ function activeSections(pathname: string, entries: NavEntry[]): string[] {
     .map(sec => `sec:${sec.sectionLabel}`)
 }
 
-// Раскрытые подменю контура: то, где лежит адрес, и «Редкое», если адрес оттуда.
-function contourOpen(pathname: string, c: Contour): string[] {
+// Раскрытые подменю контура: то, где лежит адрес, и «Редкое», если адрес оттуда. Разделы
+// («Продажи», «Производство»…) — при входе по OPEN_GROUPS, при переходе — только раздел
+// открытой страницы: свёрнутое владельцем не раскрывается обратно на каждом клике.
+function contourOpen(pathname: string, c: Contour, withDefaults = true): string[] {
   const open = activeSections(pathname, CONTOURS[c])
   if (inSection(pathname, RARE.map(i => i.href))) open.push('rare')
+  if (withDefaults) open.push(...openGroups(pathname, c).map(g => `grp:${g}`))
+  else {
+    const g = groupOf(pathname, CONTOURS[c])
+    if (g !== null) open.push(`grp:${g}`)
+  }
   return open
 }
 
@@ -531,7 +538,9 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
   const [contour, setContour]       = useState<Contour | 'legacy'>(() => contourFor(pathname ?? '/', 'mglass'))
   // Закупщик с manager_workspace (Вера): две вкладки — Менеджер / Логист.
   const [buyerWs, setBuyerWs]       = useState<'manager' | 'logist'>('manager')
-  const [open, setOpen]             = useState<Set<string>>(new Set())
+  // Сразу с разделами контура — иначе меню мелькает свёрнутым до гидрации
+  const [open, setOpen]             = useState<Set<string>>(() =>
+    new Set(isAdmin ? contourOpen(pathname ?? '/', contourFor(pathname ?? '/', 'mglass')) : []))
   const [mobileOpen, setMobileOpen] = useState(false)
   const [syncState, setSyncState]   = useState<SyncState>('idle')
   const [isLocalhost, setIsLocalhost] = useState(false)
@@ -566,7 +575,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
       const c = contourFor(pathname, contour)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (c !== contour) setContour(c)
-      const auto = contourOpen(pathname, c)
+      const auto = contourOpen(pathname, c, c === contour)
       if (auto.length) setOpen(prev => new Set([...prev, ...auto]))
     } else if (isAdmin) {
       const auto = autoOpenAdmin(pathname, viewMode)
@@ -859,13 +868,25 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     const activeCls = 'bg-[#efefec] text-[#111110] font-medium'
     return (
       <>
-        {CONTOURS[c].map((entry, idx) =>
-          isGroup(entry) ? (
-            <div key={`g-${idx}`} className="px-2.5 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
-              {entry.groupLabel}
+        {groupBlocks(CONTOURS[c]).map(block => {
+          const key = `grp:${block.label}`
+          const isOpen = open.has(key)
+          const body = block.entries.map(entry => isGroup(entry) ? null : isSection(entry) ? navSection(entry, activeCls) : navItem(entry, activeCls))
+          if (!block.label) return <div key="grp-head">{body}</div>
+          return (
+            <div key={key}>
+              <button type="button" onClick={() => toggle(key)} aria-expanded={isOpen}
+                className="w-full flex items-center justify-between px-2.5 pt-3 pb-1 rounded-md text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2] hover:text-[#6b6b66] transition-colors">
+                <span>{block.label}</span>
+                <svg className={`w-3 h-3 text-[#c4c4be] transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {isOpen && <div className="space-y-px">{body}</div>}
             </div>
-          ) : isSection(entry) ? navSection(entry, activeCls) : navItem(entry, activeCls)
-        )}
+          )
+        })}
         <div className="pt-3">
           {accordion('rare', `Редкое · ${RARE.length}`, 'text-[#b8b8b2]', 'text-[#c4c4be]', RARE, activeCls)}
         </div>

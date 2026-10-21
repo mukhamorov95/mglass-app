@@ -1,4 +1,4 @@
-import type { NavEntry, NavItem } from '@/lib/nav/managerMenu'
+import type { NavEntry, NavGroup, NavItem } from '@/lib/nav/managerMenu'
 import { isGroup, isSection } from '@/lib/nav/managerMenu'
 
 // Меню владельца по контурам (docs/nav/NAV_CONTOURS_ROUTE.md): переключатель у логотипа
@@ -22,6 +22,7 @@ const MGLASS: NavEntry[] = [
   { sectionLabel: 'Калькулятор', icon: '🧮', items: [
     { href: '/calculator/build', label: 'Новый расчёт',      icon: '🚿' },
     { href: '/calculator/quick', label: 'Быстрый расчёт · черновик', icon: '⚡' },
+    { href: '/calculator/b2b-mglass', label: 'Расчёт для M-Glass', icon: '🧾' },
     { href: '/configurator',     label: 'Визуализатор 3D',   icon: '🧊' },
   ] },
   { sectionLabel: 'Расчёты и документы', icon: '📄', items: [
@@ -86,7 +87,6 @@ const B2B: NavEntry[] = [
   { href: '/b2b-crm/inquiries',  label: 'Входящие заявки',   icon: '📥' },
   { groupLabel: 'Продажи' },
   { href: '/calculator/b2b',     label: 'Калькулятор',       icon: '🧮' },
-  { href: '/calculator/b2b-mglass', label: 'Расчёт для M-Glass', icon: '🧾' },
   { href: '/b2b-quotes',         label: 'Просчёты',          icon: '📝' },
   { href: '/b2b-orders',         label: 'Заказы',            icon: '📦' },
   { href: '/b2b-invoices',       label: 'Счета',             icon: '📒' },
@@ -236,6 +236,48 @@ export const RARE: NavItem[] = [
 ]
 
 export const CONTOURS: Record<Contour, NavEntry[]> = { mglass: MGLASS, b2b: B2B, ceo: CEO }
+
+// Разделы, раскрытые при входе. Владелец 21.10 про B2B: «всё свёрнуто, раскрыты только
+// продажи» — «Главное» с входящими заявками тоже открыто. В CEO продаж нет — открыто всё.
+// Раздел с открытой страницей раскрывается всегда (groupOf).
+export const OPEN_GROUPS: Record<Contour, string[] | 'all'> = {
+  mglass: ['Главное', 'Продажи'],
+  b2b: ['Главное', 'Продажи'],
+  ceo: 'all',
+}
+
+export type GroupBlock = { label: string; entries: NavEntry[] }
+
+// Плоский список меню → разделы «заголовок + пункты до следующего заголовка».
+export function groupBlocks(entries: NavEntry[]): GroupBlock[] {
+  const out: GroupBlock[] = []
+  for (const e of entries) {
+    if ('groupLabel' in e) out.push({ label: (e as NavGroup).groupLabel, entries: [] })
+    else if (out.length) out[out.length - 1].entries.push(e)
+    else out.push({ label: '', entries: [e] })
+  }
+  return out
+}
+
+// Раздел, в котором лежит пункт открытой страницы (самое длинное совпадение адреса).
+export function groupOf(pathname: string, entries: NavEntry[]): string | null {
+  let best: string | null = null
+  let bestLen = 0
+  for (const b of groupBlocks(entries)) {
+    const len = bestMatch(pathname, b.entries)
+    if (len > bestLen) { best = b.label; bestLen = len }
+  }
+  return best
+}
+
+export function openGroups(pathname: string, c: Contour): string[] {
+  const blocks = groupBlocks(CONTOURS[c])
+  const conf = OPEN_GROUPS[c]
+  const open = conf === 'all' ? blocks.map(b => b.label) : blocks.map(b => b.label).filter(l => conf.includes(l))
+  const active = groupOf(pathname, CONTOURS[c])
+  if (active !== null && !open.includes(active)) open.push(active)
+  return open
+}
 
 const pathOf = (href: string) => href.split('?')[0]
 
