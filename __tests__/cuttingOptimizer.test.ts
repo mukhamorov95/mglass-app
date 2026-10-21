@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  runCuttingOptimizer, runCuttingOptimizerOptimized, DEFAULT_CUTTING_SETTINGS,
+  runCuttingOptimizer, runCuttingOptimizerOptimized, DEFAULT_CUTTING_SETTINGS, workArea,
   type PieceGroup, type CuttingPiece, type MaterialCuttingResult,
 } from '../lib/cuttingOptimizer'
 
@@ -219,5 +219,49 @@ describe('cuttingOptimizer — блочная раскладка одинако�
     const r = runCuttingOptimizer(oneGroup({ pieces: [piece('wide', 3300, 500), piece('ok', 1000, 1000)] }), DEFAULT_CUTTING_SETTINGS)[0]
     expect(r.unplacedPieces.map(p => p.id)).toEqual(['wide'])
     expect(layoutErrors(r)).toEqual([])
+  })
+})
+
+// Матовый лист: вдоль длинных сторон по 10 мм без покрытия — поле 3210×2230 (владелец 21.10.2026).
+describe('cuttingOptimizer — нерабочая полоса матового листа', () => {
+  const pair = () => [piece('a', 1115, 3000), piece('b', 1115, 3000)]
+
+  it('две детали 1115 рядом ложатся на обычный лист, а на матовый — нет', () => {
+    const plain = runCuttingOptimizer(oneGroup({ pieces: pair() }), DEFAULT_CUTTING_SETTINGS)[0]
+    const matte = runCuttingOptimizer(oneGroup({ pieces: pair(), sheetEdge: 10 }), DEFAULT_CUTTING_SETTINGS)[0]
+    expect(plain.sheetsNeeded).toBe(1)
+    expect(plain.sheetEdge).toBeUndefined()
+    expect(matte.sheetsNeeded).toBe(2)
+    expect(matte.sheetEdge).toBe(10)
+  })
+
+  it('детали и остатки — вне полос; площадь и КПД — от целого листа', () => {
+    for (const run of [runCuttingOptimizer, runCuttingOptimizerOptimized]) {
+      const pieces = [...pair(), piece('c', 600, 900), piece('d', 600, 900), piece('e', 2000, 500)]
+      const r = run(oneGroup({ pieces, sheetEdge: 10 }), DEFAULT_CUTTING_SETTINGS)[0]
+      const a = workArea(3210, 2250, DEFAULT_CUTTING_SETTINGS.edge_margin, 10)
+      expect(r.unplacedCount).toBe(0)
+      expect(layoutErrors(r)).toEqual([])
+      for (const sh of r.sheets) {
+        expect(sh.totalArea).toBe(3210 * 2250)
+        expect(sh.efficiency).toBe(Math.round(sh.usedArea / (3210 * 2250) * 100))
+        for (const p of [...sh.pieces, ...sh.remnants]) {
+          expect(p.y).toBeGreaterThanOrEqual(a.y)
+          expect(p.y + p.h).toBeLessThanOrEqual(a.y + a.h + DEFAULT_CUTTING_SETTINGS.gap_between_pieces)
+        }
+      }
+      expect(r.totalSheetArea).toBe(r.sheetsNeeded * 3210 * 2250)
+    }
+  })
+
+  it('деталь выше поля 2230 — в нераскроенных', () => {
+    const r = runCuttingOptimizer(oneGroup({ pieces: [piece('tall', 3000, 2240)], sheetEdge: 10 }), DEFAULT_CUTTING_SETTINGS)[0]
+    expect(r.unplacedPieces.map(p => p.id)).toEqual(['tall'])
+  })
+
+  it('рабочее поле: полосы вдоль длинных сторон в любой ориентации листа', () => {
+    expect(workArea(3210, 2250, 2, 10)).toEqual({ x: 2, y: 12, w: 3206, h: 2226 })
+    expect(workArea(2250, 3210, 2, 10)).toEqual({ x: 12, y: 2, w: 2226, h: 3206 })
+    expect(workArea(3210, 2250, 2)).toEqual({ x: 2, y: 2, w: 3206, h: 2246 })
   })
 })

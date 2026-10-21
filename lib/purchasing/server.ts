@@ -90,7 +90,7 @@ export async function loadOrders(svc: SupabaseClient, onlyIds?: number[]): Promi
 
 export async function computeNeeds(svc: SupabaseClient, orders: ActiveOrder[]) {
   const [{ data: mats }, { data: vars }, { data: settingsRow }] = await Promise.all([
-    svc.from('b2b_materials').select('id, name, thickness, category, cost_price, sheet_width, sheet_height, pattern_direction').eq('active', true),
+    svc.from('b2b_materials').select('id, name, thickness, category, cost_price, sheet_width, sheet_height, sheet_edge_mm, pattern_direction').eq('active', true),
     svc.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, active'),
     svc.from('cutting_settings').select('*').eq('id', 1).maybeSingle(),
   ])

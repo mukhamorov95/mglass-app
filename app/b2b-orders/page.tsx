@@ -950,7 +950,7 @@ export default function B2BOrdersPage() {
       const [ordersData, { data: mats }, { data: varData }, points, { data: srcRows, error: srcErr }] = await Promise.all([
         fetchAllOrders(),
         sb.from('b2b_materials')
-          .select('id,name,category,thickness,sheet_width,sheet_height,cost_price,waste_percent,supplier_id,supplier_material_name')
+          .select('id,name,category,thickness,sheet_width,sheet_height,sheet_edge_mm,cost_price,waste_percent,supplier_id,supplier_material_name')
           .eq('active', true),
         sb.from('b2b_material_sheet_variants')
           .select('id,material_id,sheet_width,sheet_height,supplier_id,supplier_material_name,is_default,active')
@@ -1568,6 +1568,7 @@ export default function B2BOrdersPage() {
           category: String(item.category ?? ''),
           sheetWidth:  mat?.sheet_width  ?? 3210,
           sheetHeight: mat?.sheet_height ?? 2250,
+          sheetEdge:   mat?.sheet_edge_mm ?? 0,
           patternDirection: 'none' as const,
         })
       }

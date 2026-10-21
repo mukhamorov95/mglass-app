@@ -69,6 +69,7 @@ export type UsageItem = {
   sheetWidth?: number
   sheetHeight?: number
   sheetFormats?: SheetFormat[]
+  sheetEdge?: number
   patternDirection?: 'none' | 'along_length' | 'along_width'
 }
 
@@ -103,6 +104,7 @@ function buildGroups(items: UsageItem[]): Map<string, PieceGroup> {
       sheetWidth: it.sheetWidth ?? DEFAULT_SHEET.width,
       sheetHeight: it.sheetHeight ?? DEFAULT_SHEET.height,
       sheetFormats: it.sheetFormats,
+      sheetEdge: it.sheetEdge,
       patternDirection: it.patternDirection ?? 'none',
     })
     const g = groups.get(key)!

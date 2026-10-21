@@ -10,6 +10,7 @@ import {
   runCuttingOptimizer,
   runCuttingOptimizerOptimized,
   DEFAULT_CUTTING_SETTINGS,
+  workArea,
   type CuttingSettings,
   type PieceGroup,
   type MaterialCuttingResult,
@@ -86,28 +87,32 @@ function mCollides(
   return false
 }
 
+type Area = { x: number; y: number; w: number; h: number }
+
 function findFreeSpot(
   piece: CuttingPiece, rotated: boolean, sheetIdx: number,
   pls: Record<string, ManualPlacement>, allPieces: CuttingPiece[],
-  sheetW: number, sheetH: number, e: number, gap: number,
+  area: Area, gap: number,
 ): { x: number; y: number } | null {
   const w = rotated ? piece.height : piece.width
   const h = rotated ? piece.width : piece.height
-  for (let y = e; y + h + e <= sheetH; y += SNAP) {
-    for (let x = e; x + w + e <= sheetW; x += SNAP) {
+  for (let y = area.y; y + h <= area.y + area.h; y += SNAP) {
+    for (let x = area.x; x + w <= area.x + area.w; x += SNAP) {
       if (!mCollides(piece.id, x, y, w, h, sheetIdx, pls, allPieces, gap)) return { x, y }
     }
   }
   return null
 }
 
-function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
+function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, sheetEdge = 0, gap }: {
   pieces: CuttingPiece[]
   sheetW: number
   sheetH: number
   edgeMargin: number
+  sheetEdge?: number
   gap: number
 }) {
+  const area = useMemo(() => workArea(sheetW, sheetH, edgeMargin, sheetEdge), [sheetW, sheetH, edgeMargin, sheetEdge])
   const [pls, setPls] = useState<Record<string, ManualPlacement>>({})
   const [sheetCount, setSheetCount] = useState(1)
   const [activeSheet, setActiveSheet] = useState(0)
@@ -178,8 +183,8 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
       const h = pl.rotated ? pc.width : pc.height
       let nx = snapMm(dr.origX + (e.clientX - dr.startMX) * scaleX)
       let ny = snapMm(dr.origY + (e.clientY - dr.startMY) * scaleY)
-      nx = Math.max(edgeMargin, Math.min(nx, sheetW - edgeMargin - w))
-      ny = Math.max(edgeMargin, Math.min(ny, sheetH - edgeMargin - h))
+      nx = Math.max(area.x, Math.min(nx, area.x + area.w - w))
+      ny = Math.max(area.y, Math.min(ny, area.y + area.h - h))
       if (!mCollides(dr.id, nx, ny, w, h, pl.sheetIdx, plsRef.current, piecesRef.current, gap)) {
         setPls(prev => ({ ...prev, [dr.id]: { ...prev[dr.id], x: nx, y: ny } }))
       }
@@ -194,10 +199,10 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
     }
-  }, [sheetW, sheetH, edgeMargin, gap])
+  }, [sheetW, sheetH, area, gap])
 
   function handleUnplacedClick(piece: CuttingPiece) {
-    const pos = findFreeSpot(piece, false, activeSheet, plsRef.current, piecesRef.current, sheetW, sheetH, edgeMargin, gap)
+    const pos = findFreeSpot(piece, false, activeSheet, plsRef.current, piecesRef.current, area, gap)
     if (pos) {
       setPls(prev => ({ ...prev, [piece.id]: { sheetIdx: activeSheet, x: pos.x, y: pos.y, rotated: false } }))
       return
@@ -205,7 +210,7 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
     const newIdx = sheetCount
     setSheetCount(c => c + 1)
     setActiveSheet(newIdx)
-    const pos2 = findFreeSpot(piece, false, newIdx, plsRef.current, piecesRef.current, sheetW, sheetH, edgeMargin, gap)
+    const pos2 = findFreeSpot(piece, false, newIdx, plsRef.current, piecesRef.current, area, gap)
     if (pos2) setPls(prev => ({ ...prev, [piece.id]: { sheetIdx: newIdx, x: pos2.x, y: pos2.y, rotated: false } }))
   }
 
@@ -223,8 +228,8 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
       const nr = !pl.rotated
       const w = nr ? pc.height : pc.width
       const h = nr ? pc.width : pc.height
-      const x = Math.max(edgeMargin, Math.min(pl.x, sheetW - edgeMargin - w))
-      const y = Math.max(edgeMargin, Math.min(pl.y, sheetH - edgeMargin - h))
+      const x = Math.max(area.x, Math.min(pl.x, area.x + area.w - w))
+      const y = Math.max(area.y, Math.min(pl.y, area.y + area.h - h))
       if (mCollides(id, x, y, w, h, pl.sheetIdx, prev, piecesRef.current, gap)) return prev
       return { ...prev, [id]: { ...pl, rotated: nr, x, y } }
     })
@@ -291,11 +296,7 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
           style={{ display: 'block', width: '100%', touchAction: 'none' }}
         >
           <rect x={0} y={0} width={sheetW} height={sheetH} fill="#d8d8d4" />
-          <rect
-            x={edgeMargin} y={edgeMargin}
-            width={sheetW - 2 * edgeMargin} height={sheetH - 2 * edgeMargin}
-            fill="#f0f0ec" stroke="#b0b0aa" strokeWidth={3}
-          />
+          <rect x={area.x} y={area.y} width={area.w} height={area.h} fill="#f0f0ec" stroke="#b0b0aa" strokeWidth={3} />
           {placed.map(([id, pl]) => {
             const pc = pieces.find(p => p.id === id)
             if (!pc) return null
@@ -426,7 +427,7 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
                 ))}
               </div>
               <p className="text-[10px] text-red-500 mt-2">
-                Эти детали превышают рабочую область листа с учётом кромки и зазора. Замените на другой формат листа или разбейте деталь.
+                Эти детали превышают рабочую область листа с учётом кромки{result.sheetEdge ? `, полос без покрытия по ${result.sheetEdge} мм` : ''} и зазора. Замените на другой формат листа или разбейте деталь.
               </p>
             </div>
           )}
@@ -461,7 +462,7 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
                       {sheet.efficiency}%
                     </span>
                   </div>
-                  <SheetSVG sheet={sheet} sheetW={result.sheetWidth} sheetH={result.sheetHeight} edgeMargin={edgeMargin} />
+                  <SheetSVG sheet={sheet} sheetW={result.sheetWidth} sheetH={result.sheetHeight} edgeMargin={edgeMargin} sheetEdge={result.sheetEdge} />
                   {sheet.remnants && sheet.remnants.length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-0.5">
                       <span className="text-[10px] text-amber-600 font-semibold">Остатки:</span>
@@ -487,6 +488,7 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
                 sheetW={result.sheetWidth}
                 sheetH={result.sheetHeight}
                 edgeMargin={edgeMargin}
+                sheetEdge={result.sheetEdge}
                 gap={gap}
               />
             </div>
@@ -612,6 +614,7 @@ export default function B2BCuttingPage() {
               category: mCat,
               sheetWidth:  mat?.sheet_width  ?? 3210,
               sheetHeight: mat?.sheet_height ?? 2250,
+              sheetEdge: mat?.sheet_edge_mm ?? 0,
               patternDirection: (mat?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
             })
           }
