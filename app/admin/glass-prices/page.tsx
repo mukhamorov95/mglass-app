@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { cellDelta, changeKey, fmtPct, fmtRub, summarize, type PriceChange, type PriceDelta } from '@/lib/glassPrice/priceDelta'
+import { applyDraft, moveName, orderedNames, sameOrder } from '@/lib/glass/materialOrder'
 
 const GLASS_MM  = [4, 5, 6, 8, 10] as const
 const MIRROR_MM = [4, 6] as const
@@ -167,6 +168,8 @@ export default function GlassPricesPage() {
 
   // Staged (unsaved) changes — key → entry
   const [dirty, setDirty] = useState<Record<string, DirtyEntry>>({})
+  // Черновик порядка материалов по категории — сохраняется той же кнопкой, что и цены
+  const [orderDraft, setOrderDraft] = useState<Partial<Record<Category, string[]>>>({})
 
   // Inline edit state
   const [editKey, setEditKey] = useState<EditKey | null>(null)
@@ -310,17 +313,21 @@ export default function GlassPricesPage() {
   const isCostTab = curPT === 'cost'
   const thicknesses = curCat === 'mirror' ? MIRROR_MM : GLASS_MM
   const prevDate = prevList ? ruDate(prevList.price_date) : null
-  const hasDirty = Object.keys(dirty).length > 0
 
   const rowCat = (r: GlassRow) => r.category ?? 'glass'
 
-  const allNames = Array.from(
-    new Set(rows.filter(r => rowCat(r) === curCat).map(r => r.name))
-  ).sort((a, b) => {
-    const sa = rows.find(r => r.name === a && rowCat(r) === curCat)?.sort_order ?? 0
-    const sb = rows.find(r => r.name === b && rowCat(r) === curCat)?.sort_order ?? 0
-    return sa !== sb ? sa - sb : a.localeCompare(b, 'ru')
-  })
+  // Порядок — по строке себестоимости (lib/glass/materialOrder): у двух продажных строк стоял 0,
+  // и они всплывали наверх. Поверх базы — несохранённый черновик стрелок ▲▼.
+  const dbOrder = (c: Category) => orderedNames(rows, c)
+  const allNames = applyDraft(dbOrder(curCat), orderDraft[curCat])
+  const orderChanged = (['glass', 'mirror'] as const).filter(c =>
+    orderDraft[c] && !sameOrder(applyDraft(dbOrder(c), orderDraft[c]), dbOrder(c)))
+  const dirtyCount = Object.keys(dirty).length + orderChanged.length
+  const hasDirty = dirtyCount > 0
+
+  function moveRow(name: string, delta: -1 | 1) {
+    setOrderDraft(prev => ({ ...prev, [curCat]: moveName(applyDraft(orderedNames(rows, curCat), prev[curCat]), name, delta) }))
+  }
 
   const costRow = (name: string) =>
     rows.find(r => r.name === name && r.price_type === 'cost' && rowCat(r) === curCat)
@@ -424,14 +431,28 @@ export default function GlassPricesPage() {
       )
     )
 
+    // 3. Порядок материалов — после переименований, уже под новыми именами
+    let orderError: string | null = null
+    for (const c of orderChanged) {
+      const renamed = (n: string) => entries.find(e => e.field === '__name__' && e.category === c && e.name === n)?.strVal ?? n
+      const names = applyDraft(orderedNames(rows, c), orderDraft[c]).map(renamed)
+      const res = await fetch('/api/admin/glass-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reorder', category: c, names }),
+      }).catch(() => null)
+      if (!res?.ok) orderError = res ? ((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}` : 'нет связи'
+    }
+
     setDirty({})
+    if (!orderError) setOrderDraft({})
     setSavingAll(false)
     const syncMsg = await autoSyncB2B()
-    showToast(`✅ Изменения сохранены${syncMsg}`)
+    showToast(orderError ? `⚠️ Цены сохранены, порядок — нет: ${orderError}` : `✅ Изменения сохранены${syncMsg}`)
     load()
   }
 
-  function discardAll() { setDirty({}) }
+  function discardAll() { setDirty({}); setOrderDraft({}) }
 
   async function addGlass() {
     const name = newName.trim()
@@ -897,6 +918,7 @@ export default function GlassPricesPage() {
             <p className="text-[13px] text-[#8a8a85] mt-0.5">
               Кликни по ячейке → введи значение → Enter. Нажми <span className="font-medium text-[#111110]">«Сохранить изменения»</span> чтобы записать в базу.
               <span className="ml-1 text-[#b45309]">Расход %</span> — базовый коэффициент потерь при раскрое.
+              {isOwner && <> Стрелки ▲▼ слева — порядок материалов в меню калькулятора B2B: выше — популярнее.</>}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -1054,6 +1076,7 @@ export default function GlassPricesPage() {
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="bg-[#f8f8f7] border-b border-[#e4e4e0]">
+                  {isOwner && <th className="w-14" title="Порядок в меню калькулятора: выше — популярнее" />}
                   <th className="w-8" />
                   <th className="px-4 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider w-[240px]">Наименование</th>
                   <th className="px-3 py-3 text-center font-semibold text-[#f59e0b] text-[11px] uppercase tracking-wider w-[90px]">Расход %</th>
@@ -1065,12 +1088,12 @@ export default function GlassPricesPage() {
               <tbody className="divide-y divide-[#f0f0ee]">
                 {allNames.length === 0 && (
                   <tr>
-                    <td colSpan={thicknesses.length + 3} className="px-4 py-8 text-center text-[#8a8a85]">
+                    <td colSpan={thicknesses.length + (isOwner ? 4 : 3)} className="px-4 py-8 text-center text-[#8a8a85]">
                       Нет данных. Добавьте позицию ниже.
                     </td>
                   </tr>
                 )}
-                {allNames.map(origName => {
+                {allNames.map((origName, idx) => {
                   const row        = tabRow(origName)
                   const cRow       = costRow(origName)
                   const waste      = cRow?.waste_pct ?? null
@@ -1080,6 +1103,24 @@ export default function GlassPricesPage() {
 
                   return (
                     <tr key={origName} className="hover:bg-[#fafaf9] group">
+
+                      {/* Порядок в меню калькулятора */}
+                      {isOwner && (() => {
+                        const moved = !!orderDraft[curCat] && dbOrder(curCat).indexOf(origName) !== idx
+                        return (
+                          <td className="pl-2">
+                            <div className="flex items-center gap-1">
+                              <span className={`w-5 text-right text-[11px] font-mono ${moved ? 'text-[#b45309] font-semibold' : 'text-[#b0b0aa]'}`}>{idx + 1}</span>
+                              <div className="flex flex-col">
+                                <button onClick={() => moveRow(origName, -1)} disabled={idx === 0} title="Выше — популярнее"
+                                  className="w-5 h-4 text-[9px] leading-none text-[#9a9a95] hover:text-[#0071e3] disabled:opacity-20 disabled:hover:text-[#9a9a95]">▲</button>
+                                <button onClick={() => moveRow(origName, 1)} disabled={idx === allNames.length - 1} title="Ниже"
+                                  className="w-5 h-4 text-[9px] leading-none text-[#9a9a95] hover:text-[#0071e3] disabled:opacity-20 disabled:hover:text-[#9a9a95]">▼</button>
+                              </div>
+                            </div>
+                          </td>
+                        )
+                      })()}
 
                       {/* Delete */}
                       <td className="pl-3 text-center">
@@ -1251,7 +1292,8 @@ export default function GlassPricesPage() {
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#e4e4e0] shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
           <div className="max-w-[1200px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
             <span className="text-[13px] text-[#8a8a85]">
-              {Object.keys(dirty).length === 1 ? '1 изменение' : `${Object.keys(dirty).length} изменения`} не сохранено
+              {dirtyCount} {dirtyCount % 10 === 1 && dirtyCount % 100 !== 11 ? 'изменение' : [2, 3, 4].includes(dirtyCount % 10) && ![12, 13, 14].includes(dirtyCount % 100) ? 'изменения' : 'изменений'} не сохранено
+              {orderChanged.length > 0 && ' · порядок материалов'}
             </span>
             <div className="flex items-center gap-2">
               <button onClick={discardAll}

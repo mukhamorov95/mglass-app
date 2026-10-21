@@ -425,6 +425,7 @@ export type B2BMaterial = {
   supplier_id?: string | null
   supplier_material_name?: string | null
   stock_sheets?: number          // остаток листов на складе (для сверки в раскрое)
+  sort_rank?: number             // место в справочнике стекла (glass_price_matrix.sort_order)
 }
 
 export const B2B_CATEGORIES = [
