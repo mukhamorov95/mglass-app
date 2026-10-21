@@ -2737,6 +2737,14 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       расч. {fmtN(items.reduce((s, i) => s + i.totalAreaBilled, 0))} м²
                     </p>
                     {(() => {
+                      const sheets = items.reduce((s, i) => s + (i.wholeSheets ?? 0), 0)
+                      return sheets > 0 ? (
+                        <p className="text-[11px] text-[#b45309]" title="Рядом с деталью вторая такая же на лист не ложится — лист в себестоимость целиком, остаток на склад">
+                          из них листов целиком: {sheets}
+                        </p>
+                      ) : null
+                    })()}
+                    {(() => {
                       const billed = items.reduce((s, i) => s + i.totalAreaBilled, 0)
                       return billed > 0 ? (
                         <p className="font-mono text-[11px] font-semibold text-[#6b6b66] pt-0.5 border-t border-[#f0f0ec] mt-0.5">

@@ -1,5 +1,6 @@
 import type { B2BMaterial, B2BService } from './types'
 import { DEFAULT_B2B_RATES, type B2BRates, type MinPriceReason } from './b2b/rates'
+import { sheetAreaM2, wholeSheetsFor } from './b2b/wholeSheet'
 
 export const VAT = 22  // ставка НДС, %
 
@@ -101,6 +102,7 @@ export type B2BOrderItem = {
   areaPiece: number
   totalAreaNet: number
   totalAreaBilled: number
+  wholeSheets?: number      // позиция берёт листы целиком — деталь занимает лист (lib/b2b/wholeSheet)
   perimeterM: number
   // вес
   weightPerM2: number
@@ -203,7 +205,11 @@ export function calcItem(
 ): Omit<B2BOrderItem, 'localId'> {
   const areaPiece       = r4(width * height / 1_000_000)
   const totalAreaNet    = r4(areaPiece * quantity)
-  const totalAreaBilled = r4(totalAreaNet * (1 + wastePercent / 100))
+  // Крупная деталь — целым листом (lib/b2b/wholeSheet); триплекс и проходной материал — по-старому
+  const wholeSheets = hasTriplex || mat.passthrough ? null : wholeSheetsFor(width, height, quantity, mat)
+  const totalAreaBilled = wholeSheets != null
+    ? r4(wholeSheets * sheetAreaM2(mat))
+    : r4(totalAreaNet * (1 + wastePercent / 100))
   const perimeterM      = r3(2 * (width + height) / 1000)
 
   // Триплекс: пакет из N стёкол (обычно 2), толщины могут отличаться (напр. 4+6).
@@ -312,6 +318,7 @@ export function calcItem(
       triplexGlasses: extraGlasses.map(g => ({ materialId: g.id, materialName: g.name, thickness: g.thickness })),
     } : {}),
     areaPiece, totalAreaNet, totalAreaBilled, perimeterM,
+    ...(wholeSheets != null ? { wholeSheets } : {}),
     weightPerM2, totalWeight,
     costMaterial, costTempering, costFacet, costEdge, costTransport, costPackaging, saleFacet,
     costWithVat: costWithVatFull, inputVat: inputVatFull, costExVat: costExVatFull,

@@ -18,6 +18,7 @@ export type OrderCostItem = CostPanelItem & {
   height?: unknown
   quantity?: unknown
   wastePercent?: unknown
+  wholeSheets?: unknown
   totalAreaNet?: unknown
   totalAreaBilled?: unknown
 }
@@ -51,7 +52,7 @@ export function orderCostBreakdown(items: OrderCostItem[], total: number, stored
   const add = (name: string, v: number) => { if (v) byName.set(name, (byName.get(name) ?? 0) + v) }
   const positions: OrderCostPosition[] = []
   let withVat = 0, exVat = 0
-  let netArea = 0, billedArea = 0
+  let netArea = 0, billedArea = 0, sheets = 0
   const wastes = new Set<number>()
 
   items.forEach((it, i) => {
@@ -68,7 +69,8 @@ export function orderCostBreakdown(items: OrderCostItem[], total: number, stored
     } else if (panel) {
       for (const l of panel.lines) { add(l.name, Math.round(l.total)); lines.push({ name: l.name, total: Math.round(l.total) }) }
       netArea += n(it.totalAreaNet); billedArea += n(it.totalAreaBilled)
-      if (n(it.costMaterial) > 0) wastes.add(n(it.wastePercent))
+      sheets += n(it.wholeSheets)
+      if (n(it.costMaterial) > 0 && !n(it.wholeSheets)) wastes.add(n(it.wastePercent))
     }
     // Что строки не объяснили — отдельной строкой, а не молча: итог обязан сойтись.
     // У изделия в сводку уже ушла вся его себестоимость, поэтому разница — только в позиции.
@@ -85,7 +87,9 @@ export function orderCostBreakdown(items: OrderCostItem[], total: number, stored
   if (mat && netArea > 0) {
     const w = wastes.size === 1 ? [...wastes][0] : null
     // Без знака «=»: 4,10 × 1,3 в показанной точности — 5,33, а сумма по позициям — 5,32.
-    mat.note = `в расчёте ${area(billedArea)} м² при чистых ${area(netArea)} м² — отход${w != null ? ` ${w}%` : ''} на раскрой`
+    const whole = sheets > 0 ? ` — ${sheets} ${sheets % 10 === 1 && sheets % 100 !== 11 ? 'лист' : [2, 3, 4].includes(sheets % 10) && ![12, 13, 14].includes(sheets % 100) ? 'листа' : 'листов'} целиком: вторая деталь на лист не ложится` : ''
+    const waste = wastes.size > 0 ? `${whole ? ', остальное —' : ' —'} отход${w != null ? ` ${w}%` : ''} на раскрой` : ''
+    mat.note = `в расчёте ${area(billedArea)} м² при чистых ${area(netArea)} м²${whole}${waste}`
   }
 
   const saleExVat = Math.round(total * 100 / (100 + VAT))
