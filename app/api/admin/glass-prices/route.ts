@@ -35,7 +35,8 @@ export async function POST(req: Request) {
   if (!role) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const body = await req.json() as {
-    action?: 'clear_tab'
+    action?: 'clear_tab' | 'reorder'
+    names?: unknown
     name?: string
     price_type: 'cost' | 'sale'
     category?: Category
@@ -54,6 +55,28 @@ export async function POST(req: Request) {
   }
 
   const supabase = db()
+
+  // Порядок материалов по популярности (владелец, 21.10): место = позиция в списке, одно на
+  // обе строки материала (себестоимость и продажа). По нему же калькулятор B2B строит меню.
+  if (body.action === 'reorder') {
+    const guard = await requireOwner()
+    if (guard instanceof NextResponse) return guard
+    if (category !== 'glass' && category !== 'mirror') return NextResponse.json({ error: 'category' }, { status: 400 })
+    const names = Array.isArray(body.names) ? body.names : null
+    if (!names || names.length === 0 || names.length > 200 || !names.every(n => typeof n === 'string' && n.length > 0)
+      || new Set(names).size !== names.length) {
+      return NextResponse.json({ error: 'names: нужен список разных названий' }, { status: 400 })
+    }
+    const missing: string[] = []
+    for (const [i, name] of (names as string[]).entries()) {
+      const { data, error } = await supabase.from('glass_price_matrix')
+        .update({ sort_order: i + 1, updated_at: new Date().toISOString() })
+        .eq('name', name).eq('category', category).select('id')
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (!data?.length) missing.push(name)
+    }
+    return NextResponse.json({ ok: missing.length === 0, missing }, { status: missing.length ? 409 : 200 })
+  }
 
   if (body.action === 'clear_tab') {
     const { error } = await supabase

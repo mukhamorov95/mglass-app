@@ -33,25 +33,9 @@ const DRAFT_KEY = 'mglass_calc_draft'
 // правила прайса AIG на 12 мм выключены. Не возвращать без нового решения.
 const EXCLUDED_THICKNESS = [12]
 
-const MATERIAL_ORDER = [
-  'Прозрачное М1',
-  'Осветлённое CrystalVision',
-  'Сатинированное бесцветное',
-  'CrystalVision Matelux',
-  'Тонированное (бронза/графит)',
-  'Сатин тонированный',
-]
-
-function sortByPriority<T extends { name: string }>(arr: T[]): T[] {
-  return [...arr].sort((a, b) => {
-    const ai = MATERIAL_ORDER.indexOf(a.name)
-    const bi = MATERIAL_ORDER.indexOf(b.name)
-    if (ai !== -1 && bi !== -1) return ai - bi
-    if (ai !== -1) return -1
-    if (bi !== -1) return 1
-    return a.name.localeCompare(b.name, 'ru')
-  })
-}
+// Порядок материалов в меню — из справочника стекла (/admin/glass-prices, стрелки ↑↓),
+// его задаёт владелец по популярности; раньше здесь был свой список из шести имён.
+const sortByPriority = sortByDirectory
 
 const DEFAULTS: Record<SuperCat, { thickness: number; name: string }> = {
   стекло:  { thickness: 8, name: 'Прозрачное М1' },
@@ -75,6 +59,7 @@ import {
   type B2BOrderItem, type B2BOrderTotals, type FacetPrice, type MinPriceReason,
 } from '@/lib/b2bCalculator'
 import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
+import { rankMap, sortByDirectory } from '@/lib/glass/materialOrder'
 
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
 const fmtN = (n: number, d = 3) => n.toLocaleString('ru-RU', { maximumFractionDigits: d })
@@ -409,7 +394,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
           sb.from('b2b_orders').select('client_id,total_after_discount').gte('created_at', '2026-01-01'),
-          sb.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
+          sb.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct,sort_order'),
           sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
           sb.from('b2b_films').select('*').eq('active', true).order('sort_order').order('name'),
           sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
@@ -483,6 +468,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
 
         // Override sale_price from glass_price_matrix where available
         const matrix = glassMatrix ?? []
+        const ranks = rankMap(matrix as { name: string; category: string | null; price_type: string; sort_order: number | null }[])
         const parsed = (mats ?? []).map(m => {
           const base = parseSalePrice(m)
           const mm = Math.round(m.thickness)
@@ -499,6 +485,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             // Справочник — первоисточник: его waste_pct всегда победает, passthrough снимается
             ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste, passthrough: false } : {}),
             ...(fmts && fmts.length ? { sheet_formats: fmts } : {}),
+            sort_rank: ranks.get(`${cat}|${m.name}`),
           }
         })
         // Дедуп: одна запись на (name|category|thickness). Защита от дублей в
