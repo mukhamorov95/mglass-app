@@ -59,6 +59,14 @@ export function SalesDynamics({ contour }: { contour: Contour }) {
   const partial = data.year === curYear
   const nowMonth = Number(data.today.slice(5, 7)) - 1
   const future = (m: number) => partial && m > nowMonth
+  // Месяц последней выписки известен не целиком (по 25.08 и т.п.) — сравнивать его с полным
+  // месяцем прошлого года нельзя, как и идущий месяц.
+  const cov = data.money?.coveredTo
+  const covM = cov ? Number(cov.slice(5, 7)) - 1 : -1
+  const covWhole = !!cov && new Date(Date.UTC(Number(cov.slice(0, 4)), covM + 1, 0)).getUTCDate() === Number(cov.slice(8))
+  const moneyCut = metric === 'money' && cov && !covWhole && Number(cov.slice(0, 4)) === data.year
+    && !(partial && covM === nowMonth) ? covM : -1
+  const incomplete = (m: number) => (partial && m === nowMonth) || m === moneyCut
   const windowLabel = data.cutoff === '12-31' ? 'за год' : `с 1 января по ${ddmm(data.cutoff)}`
   const metricOf = (s: YearSeries, m: number): number | null =>
     metric === 'sales' ? s.sales[m] : metric === 'count' ? s.count[m] : s.money ? s.money[m] : null
@@ -145,7 +153,7 @@ export function SalesDynamics({ contour }: { contour: Contour }) {
                   <div title={`${MONTHS[m]} ${data.prev}: ${show(p) ?? 'нет данных'}`}
                     className="w-1/2 max-w-[22px] bg-[#c9c9c3] rounded-t-sm" style={{ height: h(p) }} />
                   <div title={`${MONTHS[m]} ${data.year}: ${future(m) ? 'ещё не наступил' : show(c) ?? 'нет данных'}`}
-                    className={`w-1/2 max-w-[22px] rounded-t-sm ${partial && m === nowMonth ? 'bg-[#111110]/60' : 'bg-[#111110]'}`} style={{ height: h(c) }} />
+                    className={`w-1/2 max-w-[22px] rounded-t-sm ${incomplete(m) ? 'bg-[#111110]/60' : 'bg-[#111110]'}`} style={{ height: h(c) }} />
                 </div>
               )
             })}
@@ -182,6 +190,7 @@ export function SalesDynamics({ contour }: { contour: Contour }) {
                     </td>
                     <td className="px-4 py-1.5 text-right text-[12px]">
                       {future(m) ? '' : partial && m === nowMonth ? <span className="text-[#9a9a95]">месяц идёт</span>
+                        : m === moneyCut && cov ? <span className="text-[#9a9a95]">только по {cov.slice(8)}.{cov.slice(5, 7)}</span>
                         : c == null || p == null ? <span className="text-[#c4c4be]">—</span> : <Delta cur={c} prev={p} />}
                     </td>
                   </tr>
