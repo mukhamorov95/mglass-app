@@ -115,6 +115,7 @@ export default function SalesPage() {
             <h1 className="text-[18px] font-semibold text-[#111110]">💰 Продажи M-Glass</h1>
             {!canAll && <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">только мои</span>}
             <Link href="/crm" className="text-[12px] text-[#0071e3] hover:underline">→ Воронка</Link>
+            <Link href="/sales/dynamics" className="text-[12px] text-[#0071e3] hover:underline">→ Динамика по месяцам</Link>
           </div>
           <button onClick={() => setFormOpen(o => !o)} className="px-4 py-2 rounded-xl bg-[#111110] text-white text-[13px] font-semibold hover:opacity-90">＋ Продажа</button>
         </div>
