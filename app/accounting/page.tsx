@@ -23,6 +23,8 @@ import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { confirmDialog, promptDialog } from '@/lib/dialog'
 import { readPaged } from '@/lib/money/paged'
 import { queueCounts, queueTotal, type Count, type QueueSnapshot } from '@/lib/accounting/queue'
+import { fundPlan, parsePlan } from '@/lib/accounting/fundPlan'
+import { writeFailure } from '@/lib/rlsWrite'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -70,6 +72,9 @@ export default function AccountingPage() {
   const [subfunds, setSubfunds] = useState<Subfund[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [entries, setEntries] = useState<Entry[]>([])
+  // План подфонда в месяц (оклад человека и т.п.) — состав фонда; черновик ввода до ухода из поля
+  const [plans, setPlans] = useState<Map<number, number>>(new Map())
+  const [planDraft, setPlanDraft] = useState<Record<number, string>>({})
   const [open, setOpen] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
   const [loadErr, setLoadErr] = useState<string | null>(null)
@@ -124,12 +129,14 @@ export default function AccountingPage() {
       readPaged(() => sb.from('cashflow_subfunds').select('*').eq('active', true).order('sort').order('id')),
       readPaged(() => sb.from('cashflow_accounts').select('*').eq('active', true).order('sort').order('id')),
       readPaged(() => sb.from('cashflow_entries').select('*').gte('entry_date', from).lt('entry_date', to).order('id', { ascending: false })),
-    ]).then(([f, s, a, e]) => {
+      readPaged(() => sb.from('cashflow_subfund_plans').select('subfund_id,plan_monthly').order('subfund_id')),
+    ]).then(([f, s, a, e, pl]) => {
       if (!alive) return
       setFunds(f as Fund[])
       setSubfunds(s as Subfund[])
       setAccounts(a as Account[])
       setEntries(e as Entry[])
+      setPlans(new Map(pl.map(r => [Number(r.subfund_id), Number(r.plan_monthly)])))
       setLoadErr(null)
       setLoading(false)
     }).catch((e: unknown) => {
@@ -252,6 +259,25 @@ export default function AccountingPage() {
     reloadData()
   }
 
+  // План постоянный, а не помесячный: оклад вписывают один раз, закрытый месяц его не держит.
+  async function savePlan(subId: number) {
+    const raw = planDraft[subId]
+    if (raw === undefined) return
+    const v = parsePlan(raw)
+    if (Number.isNaN(v)) { toast.error('План — сумма числом, например 80 000'); return }
+    const was = plans.get(subId) ?? null
+    const dropDraft = () => setPlanDraft(d => { const n = { ...d }; delete n[subId]; return n })
+    if (v === was) { dropDraft(); return }
+    const res = v == null
+      ? await sb.from('cashflow_subfund_plans').delete().eq('subfund_id', subId).select('subfund_id')
+      : await sb.from('cashflow_subfund_plans').upsert({ subfund_id: subId, plan_monthly: v, updated_by: myName || null, updated_at: new Date().toISOString() }).select('subfund_id')
+    const fail = writeFailure(res, v == null ? 'delete' : 'save')
+    if (fail) { toast.error(fail); return }
+    setPlans(prev => { const n = new Map(prev); if (v == null) n.delete(subId); else n.set(subId, v); return n })
+    dropDraft()
+    toast.success(v == null ? 'План снят' : 'План сохранён')
+  }
+
   async function attach(entryId: number, file: File) {
     const body = new FormData()
     body.append('entry_id', String(entryId))
@@ -297,36 +323,67 @@ export default function AccountingPage() {
     const noSub = Math.round((total - subsSum) * 100) / 100
     const isOpen = open.has(f.id)
     const isVar = f.fund_class === 'variable'
+    // У поступлений плана подфондов нет — план выручки задаётся месяцем, не составом
+    const planOn = f.fund_class !== 'income'
+    const plan = planOn ? fundPlan(subs.map(x => x.id), plans) : null
+    const planCell = (subId: number) => {
+      const saved = plans.get(subId)
+      if (!isFin) return <span className="w-24 sm:w-28 shrink-0 text-right font-mono text-[#9a9a95]">{saved != null ? RUB(saved) : '—'}</span>
+      return (
+        <input inputMode="decimal" placeholder="—" title="План в месяц: оклад человека или сумма статьи"
+          value={planDraft[subId] ?? (saved != null ? String(saved) : '')}
+          onChange={e => setPlanDraft(d => ({ ...d, [subId]: e.target.value }))}
+          onBlur={() => savePlan(subId)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          className="w-24 sm:w-28 shrink-0 text-right font-mono text-[13px] text-blue-700 bg-white border border-[#e4e4e0] rounded-md px-2 py-0.5 outline-none focus:border-[#111110]" />
+      )
+    }
     const bg = f.fund_class === 'income' ? 'bg-emerald-50 border-emerald-200' : isVar ? 'bg-amber-50 border-amber-200' : 'bg-white border-[#e4e4e0]'
     return (
       <div key={f.id}>
         <button onClick={() => setOpen(prev => { const n = new Set(prev); if (n.has(f.id)) n.delete(f.id); else n.add(f.id); return n })}
           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border ${bg} mb-1`}>
           <span className="text-[13px] font-semibold text-[#111110]">{isOpen ? '▾' : '▸'} {f.name}</span>
-          <span className="text-[13px] font-mono text-[#4b4b47]">
+          <span className="text-[13px] font-mono text-[#4b4b47] text-right">
             {f.percent != null && <span className="text-[#9a9a95] mr-2">{f.percent}%</span>}
+            {plan != null && <span className="text-[#6b6b66] mr-2">план {RUB(plan)} · факт</span>}
             {RUB(total)}
           </span>
         </button>
         {isOpen && (
           <div className="pl-6 pr-2 pb-2">
+            {planOn && subs.length > 0 && (
+              <div className="flex items-center gap-2 pb-1 text-[11px] text-[#9a9a95]">
+                <span className="flex-1">План в месяц — оклад человека или сумма статьи; план фонда — их сумма</span>
+                <span className="w-24 sm:w-28 shrink-0 text-right">план в месяц</span>
+                <span className="w-24 sm:w-28 shrink-0 text-right">факт, {monthLabel(month).split(' ')[0]}</span>
+              </div>
+            )}
             {subs.map(s => (
-              <div key={s.id} className="flex justify-between py-1 text-[13px] text-[#4b4b47]">
-                <span>{s.name}</span>
-                <span className="font-mono">{RUB(sumSub(s.id))}</span>
+              <div key={s.id} className="flex items-center gap-2 py-1 text-[13px] text-[#4b4b47]">
+                <span className="flex-1 min-w-0 truncate">{s.name}</span>
+                {planOn && planCell(s.id)}
+                <span className={`font-mono text-right ${planOn ? 'w-24 sm:w-28 shrink-0' : ''}`}>{RUB(sumSub(s.id))}</span>
               </div>
             ))}
             {noSub !== 0 && (
-              <div className="flex justify-between py-1 text-[13px] text-amber-700">
-                <span>Без подфонда</span>
-                <span className="font-mono">{RUB(noSub)}</span>
+              <div className="flex items-center gap-2 py-1 text-[13px] text-amber-700">
+                <span className="flex-1">Без подфонда</span>
+                {planOn && <span className="w-24 sm:w-28 shrink-0" />}
+                <span className={`font-mono text-right ${planOn ? 'w-24 sm:w-28 shrink-0' : ''}`}>{RUB(noSub)}</span>
               </div>
             )}
             {(subs.length > 0 || noSub !== 0) && (
-              <div className="flex justify-between py-1 mt-1 border-t border-[#f0f0ec] text-[12px] text-[#9a9a95]">
-                <span>Итого по фонду</span>
-                <span className="font-mono">{RUB(subsSum + noSub)}</span>
+              <div className="flex items-center gap-2 py-1 mt-1 border-t border-[#f0f0ec] text-[12px] text-[#9a9a95]">
+                <span className="flex-1">Итого по фонду</span>
+                {planOn && <span className="w-24 sm:w-28 shrink-0 text-right font-mono">{plan != null ? RUB(plan) : '—'}</span>}
+                <span className={`font-mono text-right ${planOn ? 'w-24 sm:w-28 shrink-0' : ''}`}>{RUB(subsSum + noSub)}</span>
               </div>
+            )}
+            {plan != null && (
+              <p className="text-[12px] text-[#6b6b66] py-0.5">
+                {plan >= total ? `Осталось по плану за месяц: ${RUB(plan - total)}` : `Сверх плана: ${RUB(total - plan)}`}
+              </p>
             )}
             <button onClick={() => addSubfund(f.id)} className="text-[12px] text-blue-600 py-1">＋ добавить подфонд</button>
           </div>
