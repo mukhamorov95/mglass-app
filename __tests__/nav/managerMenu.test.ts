@@ -76,6 +76,8 @@ describe('структура по ТЗ (Н1)', () => {
       '/sales/margin',
       // Табло цеха — поручения по заказам видят и менеджеры (просьба владельца 08.10)
       '/production-app/control',
+      // Динамика продаж по месяцам, год против прошлого (просьба владельца 22.10)
+      '/sales/dynamics', '/b2b-crm/dynamics',
     ]
     expect(all.map(i => i.href).sort()).toEqual(before.sort())
   })

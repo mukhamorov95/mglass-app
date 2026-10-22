@@ -39,6 +39,8 @@ export const MANAGER_MGLASS: NavEntry[] = [
   { sectionLabel: 'Воронка и продажи', icon: '📊', items: [
     { href: '/crm',               label: 'Воронка продаж',        icon: '📊' },
     { href: '/sales',             label: 'Продажи M-Glass',       icon: '💰' },
+    // По месяцам: этот год против прошлого (владелец 22.10). Менеджер видит свои продажи.
+    { href: '/sales/dynamics',    label: 'Динамика продаж',       icon: '📊' },
     // Третий срез: не сделки и не деньги по заказам, а работа менеджера —
     // разговоры, замеры, оплаты и полученные деньги за период.
     { href: '/sales/managers',    label: 'Показатели менеджеров', icon: '🏆' },
@@ -89,6 +91,7 @@ export const MANAGER_B2B: NavItem[] = [
   { href: '/b2b-invoices',   label: 'Счета B2B',       icon: '📒' },
   { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
   { href: '/b2b-crm/report', label: 'Отчёт по клиентам', icon: '📈' },
+  { href: '/b2b-crm/dynamics', label: 'Динамика B2B',   icon: '📊' },
 ]
 
 

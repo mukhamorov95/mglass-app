@@ -354,6 +354,11 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
           </div>
           <div className="flex gap-2">
             <button
+              onClick={() => router.push('/b2b-crm/dynamics')}
+              className="text-[12px] text-[#6b6b66] border border-[#e4e4e0] px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
+              Динамика продаж
+            </button>
+            <button
               onClick={() => router.push('/b2b-crm/inquiries')}
               className="text-[12px] text-[#6b6b66] border border-[#e4e4e0] px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
               Входящие заявки
