@@ -64,10 +64,16 @@ export default function CeoPage() {
               {new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
           </div>
-          <Link href="/commercial"
-            className="px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-[12px] text-[#6b6b66] hover:bg-white hover:text-[#111110] transition-colors">
-            Детальная аналитика →
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/ceo/sales"
+              className="px-3 py-1.5 bg-[#111110] rounded-lg text-[12px] text-white hover:bg-[#2a2a28] transition-colors">
+              Продажи по периодам →
+            </Link>
+            <Link href="/commercial"
+              className="px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-[12px] text-[#6b6b66] hover:bg-white hover:text-[#111110] transition-colors">
+              Детальная аналитика →
+            </Link>
+          </div>
         </div>
 
         <MoneyPulse />
