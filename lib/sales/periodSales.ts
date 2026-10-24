@@ -85,6 +85,17 @@ export function b2bExact(p: Period): boolean {
   return p.from.slice(8) === '01' && addDays(end, 1).slice(8) === '01'
 }
 
+// Окно сравнения с прошлым годом: будущие дни и дни после последней продажи в книге
+// не сравниваются — у этого года там пусто не потому, что продаж не было (24.10 экран
+// показал «−100%» за сегодня: книга M-Glass была заполнена по 20.10).
+export function compareWindow(p: Period, today: string, lastBookDay?: string | null): Period | null {
+  let to = p.to < today ? p.to : today
+  if (lastBookDay != null && lastBookDay < to) to = lastBookDay
+  return to < p.from ? null : { from: p.from, to }
+}
+
+export const within = <T extends Sale>(rows: T[], p: Period): T[] => rows.filter(r => r.date >= p.from && r.date <= p.to)
+
 export const bucketOf = (p: Period): Bucket => (dayCount(p) <= MAX_DAY_ROWS ? 'day' : 'month')
 export const keyOf = (date: string, b: Bucket) => (b === 'day' ? date : date.slice(0, 7))
 

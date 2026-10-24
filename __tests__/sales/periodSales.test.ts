@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  isDay, addDays, dayCount, presetPeriod, resolvePeriod, lastYear, bucketOf, bucketKeys, b2bExact,
+  isDay, addDays, dayCount, presetPeriod, resolvePeriod, lastYear, bucketOf, bucketKeys, b2bExact, compareWindow, within,
   split, b2bAll, companySum, avg, byBucket, periodLabel, type B2BSale, type Sale,
 } from '@/lib/sales/periodSales'
 
@@ -53,6 +53,18 @@ describe('периоды экрана «Продажи по периодам»',
     expect(b2bExact({ from: '2025-11-01', to: '2026-01-10' })).toBe(true)              // до 2026 — ноябрь и декабрь целиком
     expect(b2bExact({ from: '2025-11-02', to: '2026-01-10' })).toBe(false)
     expect(b2bExact({ from: '2025-02-01', to: '2025-02-28' })).toBe(true)
+  })
+
+  it('сравнение — только по дням, что уже есть в книге и наступили', () => {
+    const month = presetPeriod('month', TODAY)
+    expect(compareWindow(month, TODAY, '2026-10-20')).toEqual({ from: '2026-10-01', to: '2026-10-20' })
+    expect(compareWindow(month, TODAY)).toEqual(month)
+    expect(compareWindow(presetPeriod('today', TODAY), TODAY, '2026-10-20')).toBeNull()
+    expect(compareWindow({ from: '2026-10-20', to: '2026-12-31' }, TODAY)).toEqual({ from: '2026-10-20', to: TODAY })
+    expect(compareWindow({ from: '2026-11-01', to: '2026-11-30' }, TODAY)).toBeNull()
+    expect(compareWindow(presetPeriod('prev_month', TODAY), TODAY, '2026-10-20')).toEqual(presetPeriod('prev_month', TODAY))
+    const rows = [{ date: '2026-10-19', amount: 1 }, { date: '2026-10-21', amount: 2 }]
+    expect(within(rows, { from: '2026-10-01', to: '2026-10-20' })).toEqual([rows[0]])
   })
 
   it('до двух месяцев — по дням, дальше — по месяцам', () => {
