@@ -7,7 +7,7 @@ import { pageAll, type PageResult } from '@/lib/supabase/pageAll'
 import { deltaPct } from '@/lib/sales/dynamics'
 import { mskDayKey } from '@/lib/time'
 import {
-  PRESETS, B2B_DAILY_FROM, resolvePeriod, lastYear, b2bExact, bucketOf, byBucket, split, b2bAll, companySum, avg,
+  PRESETS, B2B_DAILY_FROM, resolvePeriod, lastYear, b2bExact, compareWindow, within, bucketOf, byBucket, split, b2bAll, companySum, avg,
   periodLabel, ddmm, weekday, monthName, type B2BSale, type Period, type Sale, type Split,
 } from '@/lib/sales/periodSales'
 
@@ -55,21 +55,25 @@ async function lastBookDay(sb: Svc, today: string): Promise<string | null> {
   return (data as { sale_date: string } | null)?.sale_date ?? null
 }
 
-function Delta({ cur, prev }: { cur: number; prev: number }) {
+// Сравнение с тем же окном прошлого года. Окно короче периода — когда в конце периода у этого
+// года данных ещё нет (будущие дни, продажи после последней в книге); тогда видны обе суммы.
+type Cmp = { ok: true; year: number; cur: number; prev: number; trimmedTo: string | null } | { ok: false; year: number; why: string }
+
+function Delta({ cur, prev, dark }: { cur: number; prev: number; dark?: boolean }) {
   const d = deltaPct(cur, prev)
-  if (d == null) return <span className="text-[#9a9a95]">—</span>
-  return (
-    <span className={`font-semibold ${d > 0 ? 'text-emerald-700' : d < 0 ? 'text-red-600' : 'text-[#6b6b66]'}`}>
-      {d > 0 ? '+' : ''}{d.toLocaleString('ru-RU')}%
-    </span>
-  )
+  if (d == null) return <span className={dark ? 'text-white/50' : 'text-[#9a9a95]'}>—</span>
+  const tone = d > 0 ? (dark ? 'text-emerald-300' : 'text-emerald-700') : d < 0 ? (dark ? 'text-red-300' : 'text-red-600') : (dark ? 'text-white/70' : 'text-[#6b6b66]')
+  return <span className={`font-semibold ${tone}`}>{d > 0 ? '+' : ''}{d.toLocaleString('ru-RU')}%</span>
 }
 
-function Compare({ label, cur, prev, ok, why }: { label: string; cur: number; prev: number; ok: boolean; why: string }) {
-  if (!ok) return <p className="text-[12px] text-[#9a9a95] mt-1">{label}: сравнения нет — {why}</p>
+function Compare({ c, dark }: { c: Cmp; dark?: boolean }) {
+  if (!c.ok) return <p className={`text-[12px] mt-1 ${dark ? 'text-white/50' : 'text-[#9a9a95]'}`}>{c.year}: сравнения нет — {c.why}</p>
   return (
-    <p className="text-[12px] text-[#6b6b66] mt-1">
-      {label}: <span className="font-mono">{rub(prev)}</span> · <Delta cur={cur} prev={prev} />
+    <p className={`text-[12px] mt-1 ${dark ? 'text-white/70' : 'text-[#6b6b66]'}`}>
+      {c.trimmedTo
+        ? <>по {ddmm(c.trimmedTo)}: <span className="font-mono">{rub(c.cur)}</span> против <span className="font-mono">{rub(c.prev)}</span> в {c.year}</>
+        : <>{c.year}: <span className="font-mono">{rub(c.prev)}</span></>}
+      {' · '}<Delta cur={c.cur} prev={c.prev} dark={dark} />
     </p>
   )
 }
@@ -99,12 +103,27 @@ export default async function CeoSalesPage({ searchParams }: { searchParams: Pro
   }
 
   const s: Split = split(cur.m, cur.b)
-  const ps: Split = split(prev.m, prev.b)
-  const b2bNow = b2bAll(s), b2bPrev = b2bAll(ps)
-  const curExact = b2bExact(period), prevExact = b2bExact(prevPeriod)
-  const monthlyWhy = `B2B ${prevYear} перенесён помесячно, все заказы месяца стоят на 15-м`
+  const b2bNow = b2bAll(s)
+  const curExact = b2bExact(period)
   const shownTo = period.to < today ? period.to : today
   const bookBehind = bookDay != null && bookDay < shownTo
+
+  const bWin = compareWindow(period, today)
+  const mWin = compareWindow(period, today, bookDay)
+  const futureWhy = 'период ещё не наступил'
+  const mWhy = !bWin ? futureWhy : bookDay ? `продаж M-Glass после ${ddmm(bookDay)} ещё нет в книге` : 'в книге M-Glass нет продаж'
+  const cmp = (w: Period | null, needB2B: boolean, f: (x: Split) => number, whyNone: string): Cmp => {
+    if (!w) return { ok: false, year: prevYear, why: whyNone }
+    const pw = lastYear(w)
+    if (needB2B && !b2bExact(pw)) return { ok: false, year: prevYear, why: `B2B ${prevYear} перенесён помесячно, все заказы месяца стоят на 15-м` }
+    return {
+      ok: true, year: prevYear, trimmedTo: w.to === period.to ? null : w.to,
+      cur: f(split(within(cur.m, w), within(cur.b, w))), prev: f(split(within(prev.m, pw), within(prev.b, pw))),
+    }
+  }
+  const cmpM = cmp(mWin, false, x => x.mglass.sum, mWhy)
+  const cmpB = cmp(bWin, true, x => b2bAll(x).sum, futureWhy)
+  const cmpT = cmp(mWin, true, companySum, mWhy)
   const rows = byBucket(cur.m, cur.b, period)
   const bucket = bucketOf(period)
   const maxRow = Math.max(1, ...rows.map(r => companySum(r) + r.b2bOwn.sum))
@@ -170,7 +189,7 @@ export default async function CeoSalesPage({ searchParams }: { searchParams: Pro
               {int(s.mglass.count)} {plural(s.mglass.count, 'продажа', 'продажи', 'продаж')}
               {s.mglass.count > 0 && <> · средний чек <span className="font-mono">{rub(avg(s.mglass))}</span></>}
             </p>
-            <Compare label={String(prevYear)} cur={s.mglass.sum} prev={ps.mglass.sum} ok why="" />
+            <Compare c={cmpM} />
             <p className="text-[11px] text-[#9a9a95] mt-1">Книга продаж, по дате продажи</p>
             {canSales && <Link href="/sales" className="text-[11px] text-[#6b6b66] underline underline-offset-2 hover:text-[#111110] mt-1 inline-block">Продажи M-Glass →</Link>}
           </div>
@@ -185,7 +204,7 @@ export default async function CeoSalesPage({ searchParams }: { searchParams: Pro
             <p className="text-[12px] text-[#6b6b66] mt-1">
               из них для M-Glass: <span className="font-mono">{rub(s.b2bOwn.sum)}</span> · {int(s.b2bOwn.count)} {plural(s.b2bOwn.count, 'заказ', 'заказа', 'заказов')}
             </p>
-            <Compare label={String(prevYear)} cur={b2bNow.sum} prev={b2bPrev.sum} ok={prevExact} why={monthlyWhy} />
+            <Compare c={cmpB} />
             <p className="text-[11px] text-[#9a9a95] mt-1">Запущенные в работу заказы, по дате запуска</p>
             {canB2BReport && (
               <Link href={`/b2b-crm/report?from=${period.from}&to=${period.to}`}
@@ -199,13 +218,7 @@ export default async function CeoSalesPage({ searchParams }: { searchParams: Pro
             <p className="text-[12px] text-white/70 mt-1">
               M-Glass <span className="font-mono">{rub(s.mglass.sum)}</span> + B2B внешним клиентам <span className="font-mono">{rub(s.b2bExternal.sum)}</span>
             </p>
-            {prevExact ? (
-              <p className="text-[12px] text-white/70 mt-1">
-                {prevYear}: <span className="font-mono">{rub(companySum(ps))}</span> · <DeltaDark cur={companySum(s)} prev={companySum(ps)} />
-              </p>
-            ) : (
-              <p className="text-[12px] text-white/50 mt-1">{prevYear}: сравнения нет — {monthlyWhy}</p>
-            )}
+            <Compare c={cmpT} dark />
             <p className="text-[11px] text-white/50 mt-1">
               Заказы цеха для M-Glass ({rub(s.b2bOwn.sum)}) не прибавляются: они уже в продаже M-Glass клиенту
             </p>
@@ -278,10 +291,4 @@ export default async function CeoSalesPage({ searchParams }: { searchParams: Pro
       </div>
     </div>
   )
-}
-
-function DeltaDark({ cur, prev }: { cur: number; prev: number }) {
-  const d = deltaPct(cur, prev)
-  if (d == null) return <span className="text-white/50">—</span>
-  return <span className={`font-semibold ${d > 0 ? 'text-emerald-300' : d < 0 ? 'text-red-300' : 'text-white/70'}`}>{d > 0 ? '+' : ''}{d.toLocaleString('ru-RU')}%</span>
 }
