@@ -131,6 +131,7 @@ const CFO_ITEMS: NavItem[] = [
 
 
 const CEO_ANALYTICS: NavItem[] = [
+  { href: '/ceo/sales',     label: 'Продажи по периодам', icon: '💰' },
   { href: '/marketing/seo', label: 'SEO · Заявки сайта', icon: '🌐' },
   { href: '/b2b-analytics', label: 'B2B Аналитика', icon: '📊' },
   { href: '/vladislav',     label: 'Vladislav AI',  icon: '💬' },
@@ -940,6 +941,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
           {navItem({ href: '/commercial/churn', label: 'Отток клиентов',  icon: '📉' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/sales',      label: 'Продажи M-Glass',      icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/sales/dynamics', label: 'Динамика продаж', icon: '📊' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/ceo/sales',  label: 'Продажи по периодам', icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/ceo',        label: 'CEO Обзор',            icon: '👑' }, 'bg-indigo-50 text-indigo-700 font-medium')}
         </div>
       </>

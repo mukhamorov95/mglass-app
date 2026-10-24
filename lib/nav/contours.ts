@@ -150,6 +150,7 @@ const CEO: NavEntry[] = [
   { href: '/admin/owner',        label: 'Owner Center',      icon: '🏛️' },
   { href: '/admin/owner-tasks',  label: 'Задачи владельца',  icon: '📋' },
   { href: '/ceo',                label: 'CEO — обзор бизнеса', icon: '👑' },
+  { href: '/ceo/sales',          label: 'Продажи по периодам', icon: '💰' },
   { href: '/sales/dynamics',     label: 'Динамика M-Glass',  icon: '📊' },
   { href: '/b2b-crm/dynamics',   label: 'Динамика B2B',      icon: '📊' },
   { href: '/admin/sales-control', label: 'Контроль продаж',  icon: '🎯' },
