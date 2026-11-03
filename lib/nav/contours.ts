@@ -101,6 +101,7 @@ const B2B: NavEntry[] = [
   { href: '/b2b-cutting',            label: 'Раскрой стекла', icon: '✂️' },
   { href: '/production-app/shipping', label: 'Отгрузка',     icon: '📦' },
   { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
+  { href: '/production-app/shower-glass', label: 'Отгрузка Шовер Гласс', icon: '🚛' },
   { sectionLabel: 'Цех подробно', icon: '🏭', items: [
     { href: '/production-app',          label: 'Главная цеха',  icon: '📱' },
     { href: '/production-app/my-queue', label: 'Мои задачи',    icon: '✅' },

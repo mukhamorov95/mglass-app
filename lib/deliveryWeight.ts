@@ -8,11 +8,13 @@ export type WeighableItem = {
   thickness?: number
 }
 
+export function itemWeight(it: WeighableItem): number {
+  if (typeof it.totalWeight === 'number' && it.totalWeight > 0) return it.totalWeight
+  const area = (it.areaPiece ?? 0) * (it.quantity ?? 1)
+  return area * (it.thickness ?? 0) * 2.5
+}
+
 export function itemsWeight(items: WeighableItem[] | null | undefined): number {
   if (!Array.isArray(items)) return 0
-  return items.reduce((s, it) => {
-    if (typeof it.totalWeight === 'number' && it.totalWeight > 0) return s + it.totalWeight
-    const area = (it.areaPiece ?? 0) * (it.quantity ?? 1)
-    return s + area * (it.thickness ?? 0) * 2.5
-  }, 0)
+  return items.reduce((s, it) => s + itemWeight(it), 0)
 }

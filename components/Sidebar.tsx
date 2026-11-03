@@ -282,6 +282,7 @@ const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app/load',     label: 'Загрузка',         icon: '📊' },
   { href: '/production-app/shipping', label: 'Отгрузка',            icon: '📦' },
   { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
+  { href: '/production-app/shower-glass', label: 'Отгрузка Шовер Гласс', icon: '🚛' },
   { href: '/production-app/scan',     label: 'Скан',             icon: '📷' },
   { href: '/production-app/activity', label: 'Кто что делал',    icon: '👥' },
   { href: '/production-app/no-marks', label: 'Без отметок',      icon: '🕳' },
