@@ -11,6 +11,7 @@ import type { B2BMaterial, B2BService } from '@/lib/types'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { previewWriteGuard } from '@/lib/partnerPreview'
 import { canEditQuote, quoteLockReason, quoteState } from '@/lib/partner/quoteState'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // Партнёрский просчёт. КРИТИЧНО: считает СЕРВЕР через ЕДИНЫЙ движок computeQuoteItem —
 // тот же, что у менеджера (/calculator/b2b). Включает авто-надбавки за габариты/
@@ -127,7 +128,7 @@ export async function POST(req: NextRequest) {
   // Наружу — только безопасное: по позициям цена клиента (с НДС) до скидки, итог
   // позиции после скидки (по нему прилавок считает розницу точки) и итог заказа.
   const safeItems = items.map(it => ({
-    material: it.materialName,
+    material: materialWithKind(it),
     category: it.category,
     thickness: it.thickness,
     width: it.width, height: it.height, quantity: it.quantity,

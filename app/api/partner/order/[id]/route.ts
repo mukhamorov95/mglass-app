@@ -8,6 +8,7 @@ import { partnerProgress, partnerDeadline, noteStatus } from '@/lib/partner/orde
 import { quoteState } from '@/lib/partner/quoteState'
 import { loadInvoicedOrders, loadPaidByOrders, paymentView } from '@/lib/partner/orderMoney'
 import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { materialWithKind } from '@/lib/materialLabel'
 import { invoiceState } from '@/lib/partner/documents'
 import { pointStage } from '@/lib/partner/pointPay'
 import { decisionOf, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
@@ -53,7 +54,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // индивидуального прайса (clientPriced) — без повторной скидки.
     const price = Number(effectiveItemTotal(it as unknown as B2BOrderItem, discount)) || 0
     return {
-      material: String(it.materialName ?? ''),
+      material: materialWithKind(it as { materialName?: string | null; category?: string | null }),
       thickness: Number(it.thickness ?? 0),
       width: Number(it.width ?? 0),
       height: Number(it.height ?? 0),

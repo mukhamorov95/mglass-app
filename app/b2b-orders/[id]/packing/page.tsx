@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // А16: упаковочный лист. Печатается на отгрузке — что едет, кому, куда и сколько мест.
 // Цены здесь не нужны: лист видят грузчики и водитель, деньги в счёте.
 
 type Item = {
-  materialName?: string; thickness?: number; width?: number; height?: number
+  materialName?: string; category?: string; thickness?: number; width?: number; height?: number
   quantity?: number; totalWeight?: number; hasTempering?: boolean; comment?: string
 }
 type Order = {
@@ -106,7 +107,7 @@ export default function PackingListPage() {
               <tr key={i} className="border-b border-[#f0f0ec] align-top">
                 <td className="py-1.5 text-[#9a9a95]">{i + 1}</td>
                 <td className="py-1.5">
-                  {it.materialName ?? 'Стекло'}{it.thickness ? `, ${it.thickness} мм` : ''}{it.hasTempering ? ', закалённое' : ''}
+                  {materialWithKind(it, 'Стекло')}{it.thickness ? `, ${it.thickness} мм` : ''}{it.hasTempering ? ', закалённое' : ''}
                   {it.comment && <span className="block text-[10px] text-[#9a9a95] italic">{it.comment}</span>}
                 </td>
                 <td className="py-1.5 text-right font-mono">{it.width ?? '—'}×{it.height ?? '—'}</td>

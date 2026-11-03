@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { type DetailStageKey, type DetailStageState, type DetailStages, itemNeedsTempering, getApplicableStages } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
+import { materialWithKind } from '@/lib/materialLabel'
 
 type OrderItem = {
   materialName?: string
@@ -155,7 +156,7 @@ function ItemCard({
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[11px] font-bold text-[#c4c4be]">#{index + 1}</span>
                   <span className="text-[14px] font-bold text-[#111110] leading-tight">
-                    {item.materialName ?? '—'}
+                    {materialWithKind(item, '—')}
                     {item.thickness ? (
                       <span className="text-[12px] font-normal text-[#6b6b66] ml-1">
                         {item.thickness} мм

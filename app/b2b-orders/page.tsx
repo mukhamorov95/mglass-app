@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
-import { materialLabelShort } from '@/lib/materialLabel'
+import { materialLabelShort, materialWithKind } from '@/lib/materialLabel'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { buildProductionMessage, productionMessageSummary } from '@/lib/b2b/productionMessage'
 import { duplicateOrder } from '@/lib/b2b/duplicateOrder'
@@ -3048,7 +3048,7 @@ export default function B2BOrdersPage() {
                         {groups.map(g => (
                           <tr key={g.materialKey} className={`hover:bg-[#fafaf9] ${g.unmatched ? 'bg-amber-50/30' : ''}`}>
                             <td className="px-3 py-2.5 min-w-[160px]">
-                              <p className="font-medium text-[#111110]">{g.materialName}</p>
+                              <p className="font-medium text-[#111110]">{materialWithKind(g)}</p>
                               {g.category && <p className="text-[10px] text-[#9a9a95]">{g.category}</p>}
                               {g.unmatched && (
                                 <p className="text-[10px] text-amber-700 mt-0.5">⚠ Не найден в справочнике</p>

@@ -8,6 +8,7 @@ import { paymentQrStringFor } from '@/lib/paymentQr'
 import { rublesInWords } from '@/lib/numToWords'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // Единый счёт на несколько B2B-заказов. Заказы идут на своих заказчиков, но
 // плательщик выбирается один (напр. MR GLASS выставляет счёт за заказы Дмитрия
@@ -37,7 +38,7 @@ const fmtDateLong = (s: string) => new Date(s).toLocaleDateString('ru-RU', { tim
 const orderNo = (o: Order) => o.custom_number?.trim() || String(o.id).padStart(5, '0')
 
 function itemName(it: OrderItem): string {
-  const parts: string[] = [it.materialName || 'Стекло']
+  const parts: string[] = [materialWithKind(it, 'Стекло')]
   if (it.thickness) parts.push(`${it.thickness} мм`)
   if (it.hasTempering) parts.push('закалённое')
   if (it.hasFacet) parts.push(it.facetTypeMm ? `фацет ${it.facetTypeMm} мм` : 'фацет')

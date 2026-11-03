@@ -6,6 +6,7 @@ import { orderCutFacts, type CutRow, type CutRemnant } from '@/lib/production/cu
 import { loadFactoryData } from '@/lib/b2bFactoryProducts'
 import { mirrorBreakdown } from '@/lib/b2b/mirrorBreakdown'
 import { VAT } from '@/lib/b2bCalculator'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // Экономика ОДНОГО заказа — только владелец, под /cfo. Все цифры — из lib/unitEconomics
 // (одно определение на всю систему). Цех на окладе: работу цеха на заказ не делим и
@@ -295,7 +296,7 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
               <tbody>
                 {rawItems.map((it, i) => (
                   <tr key={i} className="border-b border-[#f5f5f3] last:border-0">
-                    <td className="px-3 py-2 text-[#111110]">{String(it.materialName ?? '')}</td>
+                    <td className="px-3 py-2 text-[#111110]">{materialWithKind(it as { materialName?: string | null; category?: string | null })}</td>
                     <td className="px-3 py-2 font-mono text-[#6b6b66]">{num(it.width)}×{num(it.height)}</td>
                     <td className="px-3 py-2 font-mono">{num(it.quantity)}</td>
                     <td className="px-3 py-2 font-mono text-[#9a9a95]">{num(it.thickness)}</td>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PRODUCTION_DAYS, matchProductionDays } from '@/lib/kp/importCheck'
 import type { KpSourceFile } from '@/lib/kp/sourceFile'
 import type { KpSection } from './[id]/print/KpDocument'
+import { specLacksKind } from '@/lib/materialLabel'
 
 interface ISpeechRecognition extends EventTarget {
   lang: string; continuous: boolean; interimResults: boolean
@@ -520,6 +521,7 @@ export default function KpPage() {
                       <button onClick={() => rmItem(i)} className="px-2 py-1.5 text-[#c4c4be] hover:text-red-500">✕</button>
                     </div>
                     <input className={`${I} mb-2`} value={it.desc ?? ''} onChange={e => updItem(i, { desc: e.target.value })} placeholder="Описание позиции" />
+                    {specLacksKind(it) && <p className="text-[11px] text-amber-700 -mt-1 mb-2">Не указано, стекло это или зеркало: допишите в название или описание.</p>}
                     <div className="flex items-center gap-2">
                       <div className="flex-1"><label className={L}>Кол-во</label><input className={I} value={it.qty ?? ''} onChange={e => updItem(i, { qty: e.target.value })} /></div>
                       <div className="flex-1"><label className={L}>Цена, ₽</label><input className={I} value={it.price ?? ''} onChange={e => updItem(i, { price: e.target.value })} /></div>

@@ -7,6 +7,7 @@ import { saveOrderNotes } from '@/lib/b2b/orderNotesClient'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import AssignInstallationButton from '@/components/AssignInstallationButton'
 import DocSkeleton from '@/components/DocSkeleton'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -295,7 +296,7 @@ export default function KPPrintPage() {
                     <tr key={`item-${idx}`} className="border-b border-[#f0f0ec]">
                       <td className="py-2.5 pr-2 text-[#9b9b96]">{idx + 1}</td>
                       <td className="py-2.5 pr-2">
-                        <span className="font-medium">{item.materialName ?? '—'}</span>
+                        <span className="font-medium">{materialWithKind(item, '—')}</span>
                         {item.hasTempering && (
                           <span className="ml-1.5 text-[10px] text-[#6b6b66] bg-[#f0f0ec] px-1 rounded">закалка</span>
                         )}

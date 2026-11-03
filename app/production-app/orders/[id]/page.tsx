@@ -11,6 +11,7 @@ import { toast as toastError, responseError, NETWORK_ERROR, sendOrToast } from '
 import { confirmDialog } from '@/lib/dialog'
 import { REWORK_REASONS, REWORK_REASON_LABELS, REWORK_COMMENT_MAX, type ReworkReason } from '@/lib/production/rework'
 import { reworkPreviewLine, reworkResultText, type ReworkPreview, type ReworkResult } from '@/lib/production/reworkText'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -468,7 +469,7 @@ function ItemCard({
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[11px] font-bold text-[#c4c4be]">#{index + 1}</span>
                   <span className="text-[14px] font-bold text-[#111110] leading-tight">
-                    {item.materialName ?? '—'}
+                    {materialWithKind(item, '—')}
                     {item.thickness ? (
                       <span className="text-[12px] font-normal text-[#6b6b66] ml-1">{item.thickness} мм</span>
                     ) : null}

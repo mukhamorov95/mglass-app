@@ -7,6 +7,7 @@
 
 import { B2B_SOURCES, sourceLabel } from '@/lib/types'
 import { computeInvoiceTotals, type InvoiceOrder } from '@/lib/b2b/invoiceMath'
+import { materialWithKind } from '@/lib/materialLabel'
 
 export const CUSTOMER_KINDS = [
   { value: 'retail', label: 'Розница' },
@@ -69,13 +70,13 @@ export function noClientSaveBlocker(lead: QuoteLead): string | null {
 
 // Общее у позиции калькулятора и сохранённого заказа — ровно эти поля.
 export type ClientTextItem = {
-  materialName?: string | null; thickness?: number | null; width?: number | null; height?: number | null
+  materialName?: string | null; category?: string | null; thickness?: number | null; width?: number | null; height?: number | null
   quantity?: number | null; hasTempering?: boolean | null; hasFacet?: boolean | null; facetTypeMm?: number | null
   services?: { name: string; cost?: number | null }[] | null
 }
 
 export function clientItemName(it: ClientTextItem): string {
-  const parts = [`${(it.materialName || 'Стекло').trim()}${it.thickness ? ` ${it.thickness} мм` : ''}`]
+  const parts = [`${materialWithKind(it, 'Стекло')}${it.thickness ? ` ${it.thickness} мм` : ''}`]
   if (it.hasTempering) parts.push('закалённое')
   if (it.hasFacet) parts.push(it.facetTypeMm ? `фацет ${it.facetTypeMm} мм` : 'фацет')
   for (const s of it.services ?? []) if (s.name && (s.cost ?? 0) > 0) parts.push(s.name.trim().toLowerCase())
