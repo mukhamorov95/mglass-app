@@ -1,6 +1,8 @@
 import ProductionTabs from '@/components/ProductionTabs'
 import { mskTime, mskDayShort, mskDayKey, mskDayKeyAgo } from '@/lib/time'
 import CrewInviteButton from './CrewInviteButton'
+import WorkerCards from './WorkerCards'
+import { addDays, resolvePeriod, type Resolved } from '@/lib/sales/periodSales'
 import { getUserProfile, isOwnerRole } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
 import { stageLabel } from '@/lib/productionStages'
@@ -44,7 +46,7 @@ function daysAgoISO(n: number): string { return new Date(Date.now() - n * 86_400
 const fmtDay = mskDayShort
 const timeOf = mskTime
 
-export default async function ShopActivityPage() {
+export default async function ShopActivityPage({ searchParams }: { searchParams: Promise<{ p?: string; from?: string; to?: string }> }) {
   const svc = createServiceClient()
   const { data } = await svc.from('production_tasks')
     .select('stage_key, completed_at, completed_by_name, order_id, auto_closed')
@@ -68,6 +70,11 @@ export default async function ShopActivityPage() {
   const isOwner = isOwnerRole((await getUserProfile())?.role)
 
   const today = todayKey()
+  // Без выбора — последние 30 дней: за неделю тот, кто перестал отмечать, не виден вовсе.
+  const sp = await searchParams
+  const resolved: Resolved = sp.p || sp.from || sp.to
+    ? resolvePeriod(sp, today)
+    : { preset: 'range', period: { from: addDays(today, -29), to: today } }
   const yesterday = daysAgoKey(1)
 
   // Кто сколько закрыл: сегодня / вчера / за неделю + разбивка по этапам за сегодня.
@@ -124,7 +131,9 @@ export default async function ShopActivityPage() {
                 const stations = (c.stations ?? []).map(stageLabel).join(', ')
                 return (
                   <div key={c.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 border-b border-[#f5f5f3] last:border-0 text-[12.5px]">
-                    <span className="font-medium text-[#111110] w-24 shrink-0 truncate">{c.name ?? '—'}</span>
+                    {isOwner
+                      ? <a href={`#w-${c.user_id}`} className="font-medium text-[#111110] w-24 shrink-0 truncate underline decoration-[#d4d4ce] underline-offset-2">{c.name ?? '—'}</a>
+                      : <span className="font-medium text-[#111110] w-24 shrink-0 truncate">{c.name ?? '—'}</span>}
                     <span className="text-[#6b6b66] flex-1 truncate">{stations || 'станция не назначена'}</span>
                     {never ? (
                       <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5 shrink-0">
@@ -156,13 +165,16 @@ export default async function ShopActivityPage() {
           </div>
         )}
 
+        {isOwner && crew.length > 0 && <WorkerCards crew={crew} resolved={resolved} path="/production-app/activity" />}
+
         {people.length === 0 && (
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 text-center">
             <p className="text-[14px] text-[#6b6b66]">За неделю отметок нет.</p>
           </div>
         )}
 
-        {people.map(([who, p]) => (
+        {/* Владелец видит людей в блоке «По работникам»; здесь у него остаётся только каскад. */}
+        {people.filter(([who]) => !isOwner || who === CASCADE_ROW).map(([who, p]) => (
           <div key={who} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
             <div className="flex items-baseline justify-between gap-3 mb-2">
               <p className="text-[15px] font-semibold text-[#111110]">{who}</p>
