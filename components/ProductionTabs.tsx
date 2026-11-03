@@ -21,6 +21,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/remnants', label: '✂️ Остатки',     match: p => p.startsWith('/production-app/remnants') },
   { href: '/production-app/shipping', label: '📦 Отгрузка',    match: p => p.startsWith('/production-app/shipping') },
   { href: '/production-app/voronezh', label: '🚚 Воронеж',     match: p => p.startsWith('/production-app/voronezh') },
+  { href: '/production-app/shower-glass', label: '🚛 Шовер Гласс', match: p => p.startsWith('/production-app/shower-glass') },
   { href: '/production-app/docs',     label: 'Документы',      match: p => p.startsWith('/production-app/docs') },
   { href: '/production-app/buy',      label: '🛒 Купить',      match: p => p.startsWith('/production-app/buy') },
   { href: '/production-app/ideas',    label: '💡 Идеи',        match: p => p.startsWith('/production-app/ideas') },
