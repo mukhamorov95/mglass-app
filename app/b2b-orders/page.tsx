@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { confirmDialog, promptDialog } from '@/lib/dialog'
@@ -24,6 +24,7 @@ import { updCardState, type UpdStatus } from '@/lib/b2b/updStatus'
 import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import { DAY_PRESETS, clientKeyer, clientOptions, dayPresetRange, summarizeOrders } from '@/lib/b2b/ordersFilter'
 import { mskDayKey } from '@/lib/time'
+import { daysInWork, daysInWorkLabel, oldestFirst } from '@/lib/b2b/inWorkOrders'
 import PointBadge from '@/components/PointBadge'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { filterFacets, filterToSearch, matchesFilter, readFilterFromUrl, type QuoteFilter } from '@/lib/b2b/quoteFilters'
@@ -441,7 +442,7 @@ function lastStageLabel(stages: Partial<Record<StageKey, string | null>> | undef
 // Uses calcOrderProgress — single source of truth. No new API calls.
 
 type BoardBucket = 'not_started' | 'in_progress' | 'ready_for_tempering' | 'on_packaging' | 'packed'
-type ProductionBoardFilter = BoardBucket | 'problems' | null
+type ProductionBoardFilter = BoardBucket | 'problems' | 'in_work' | null
 
 function classifyOrderForBoard(order: Order): { bucket: BoardBucket; problemCount: number } {
   const prog = calcOrderProgress(
@@ -494,7 +495,22 @@ const BOARD_FILTER_LABELS: Record<NonNullable<ProductionBoardFilter>, string> = 
   on_packaging:        'Упаковка',
   packed:              'Упаковано',
   problems:            'Проблемы',
+  in_work:             'В работе — сверху самые старые',
 }
+
+// «В работе» — одна функция для цифры в шапке и для списка по клику: всё, что ещё не отгружено
+// и не упаковано целиком. Упакованное лежит на складе — это не «в работе» (владелец 21.10).
+function isInWork(o: Order): boolean {
+  return !o.parsedNotes.stages?.shipped && o.parsedNotes.status !== 'quote' && classifyOrderForBoard(o).bucket !== 'packed'
+}
+
+function matchesBoardFilter(o: Order, f: NonNullable<ProductionBoardFilter>): boolean {
+  if (f === 'in_work') return isInWork(o)
+  const { bucket, problemCount } = classifyOrderForBoard(o)
+  return f === 'problems' ? problemCount > 0 : bucket === f
+}
+
+const launchDayOf = (o: Order) => effectiveLaunchDate(o) ?? mskDayKey(o.created_at)
 
 function ProductionBoard({
   orders,
@@ -859,7 +875,28 @@ export default function B2BOrdersPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineStatus | 'all'>('all')
-  const [boardFilter, setBoardFilter] = useState<ProductionBoardFilter>(null)
+  // «В работе» — в адресе (?board=in_work): кнопка «назад» из карточки заказа возвращает в тот же список.
+  const [boardFilter, setBoardFilterState] = useState<ProductionBoardFilter>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('board') === 'in_work' ? 'in_work' : null)
+  function setBoardFilter(next: ProductionBoardFilter) {
+    setBoardFilterState(next)
+    const q = new URLSearchParams(window.location.search)
+    if (next === 'in_work') q.set('board', 'in_work'); else q.delete('board')
+    const qs = q.toString()
+    window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+  }
+  const listTopRef = useRef<HTMLDivElement>(null)
+  // Цифры в шапке считают ВСЕ заказы, поэтому нажатие снимает поиск, покупателя и даты:
+  // иначе «185 в работе» при выбранном покупателе открыли бы 25. Повторное нажатие выключает.
+  function toggleHeaderSlice(slice: 'in_work' | 'packed' | 'shipped') {
+    const isOn = slice === 'shipped' ? stageFilter === 'shipped' && boardFilter === null : boardFilter === slice
+    setSearch(''); setClientKey(''); setDateFrom(''); setDateTo(''); setDeadlineFilter('all')
+    setFilter({ by: null, src: null })
+    setProductionDayMode(false); setShowOnlyNeedsControl(false)
+    setStageFilter(slice === 'shipped' && !isOn ? 'shipped' : 'all_active')
+    setBoardFilter(slice === 'shipped' || isOn ? null : slice)
+    if (!isOn) requestAnimationFrame(() => listTopRef.current?.scrollIntoView({ block: 'start' }))
+  }
 
   // Пачками по 1000 id: длинный адрес запроса режут прокси, а сервер берёт не больше 2000.
   async function loadPaid(ids: number[]) {
@@ -1057,21 +1094,11 @@ export default function B2BOrdersPage() {
       const sorted = [...filtered].sort((a, b) =>
         DEADLINE_RISK_ORDER[getDeadlineStatus(a).status] - DEADLINE_RISK_ORDER[getDeadlineStatus(b).status]
       )
-      if (boardFilter !== null) {
-        return sorted.filter(o => {
-          const { bucket, problemCount } = classifyOrderForBoard(o)
-          return boardFilter === 'problems' ? problemCount > 0 : bucket === boardFilter
-        })
-      }
+      if (boardFilter !== null) return sorted.filter(o => matchesBoardFilter(o, boardFilter))
       return sorted
     }
 
-    if (boardFilter !== null) {
-      return filtered.filter(o => {
-        const { bucket, problemCount } = classifyOrderForBoard(o)
-        return boardFilter === 'problems' ? problemCount > 0 : bucket === boardFilter
-      })
-    }
+    if (boardFilter !== null) return filtered.filter(o => matchesBoardFilter(o, boardFilter))
 
     return filtered
   }, [orders, search, clientKey, clientKeyOf, stageFilter, deadlineFilter, dateFrom, dateTo, boardFilter])
@@ -1079,9 +1106,12 @@ export default function B2BOrdersPage() {
   const facets = useMemo(() => filterFacets(stageFiltered, filter, clientSource), [stageFiltered, filter, clientSource])
 
   // Заказы точек — первыми внутри выбранного этапа/фильтра, дальше порядок как был.
+  // «В работе» — строго по возрасту: владелец смотрит, что застряло, точки тут не поднимаются.
   const filteredOrders = useMemo(
-    () => pointsFirst(filteredOrdersBase, o => o.client_id != null && pointClients.has(o.client_id)),
-    [filteredOrdersBase, pointClients],
+    () => boardFilter === 'in_work'
+      ? oldestFirst(filteredOrdersBase, launchDayOf)
+      : pointsFirst(filteredOrdersBase, o => o.client_id != null && pointClients.has(o.client_id)),
+    [filteredOrdersBase, pointClients, boardFilter],
   )
 
   // Internal B2B registry: group by month of effective launch date (column
@@ -1620,7 +1650,7 @@ export default function B2BOrdersPage() {
   const shippedCount = orders.filter(o => !!o.parsedNotes.stages?.shipped).length
   const boardActive = orders.filter(o => !o.parsedNotes.stages?.shipped && o.parsedNotes.status !== 'quote')
   const packedCount = boardActive.filter(o => classifyOrderForBoard(o).bucket === 'packed').length
-  const inWorkCount = boardActive.length - packedCount
+  const inWorkCount = orders.filter(isInWork).length
 
   // ── Shared: expanded order body ─────────────────────────────────────────────
   function renderOrderBody(order: Order) {
@@ -2203,20 +2233,24 @@ export default function B2BOrdersPage() {
           </p>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-medium">
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-red-50 text-red-600"
-            title="Не начато + в процессе + к закалке + упаковка — всё, что ещё не упаковано целиком">
+          <button type="button" onClick={() => toggleHeaderSlice('in_work')} aria-pressed={boardFilter === 'in_work'}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-red-50 text-red-600 cursor-pointer transition-all hover:brightness-95 ${boardFilter === 'in_work' ? 'ring-2 ring-offset-1 ring-red-400' : ''}`}
+            title="Показать списком, сверху самые старые. Не начато + в процессе + к закалке + упаковка — всё, что ещё не упаковано целиком">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
             {inWorkCount} в работе
-          </span>
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-blue-50 text-blue-700"
-            title="Упакованы целиком, ждут отгрузки">
+          </button>
+          <button type="button" onClick={() => toggleHeaderSlice('packed')} aria-pressed={boardFilter === 'packed'}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-blue-50 text-blue-700 cursor-pointer transition-all hover:brightness-95 ${boardFilter === 'packed' ? 'ring-2 ring-offset-1 ring-blue-400' : ''}`}
+            title="Показать списком. Упакованы целиком, ждут отгрузки">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
             {packedCount} упаковано
-          </span>
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-emerald-50 text-emerald-700">
+          </button>
+          <button type="button" onClick={() => toggleHeaderSlice('shipped')} aria-pressed={stageFilter === 'shipped' && boardFilter === null}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap bg-emerald-50 text-emerald-700 cursor-pointer transition-all hover:brightness-95 ${stageFilter === 'shipped' && boardFilter === null ? 'ring-2 ring-offset-1 ring-emerald-400' : ''}`}
+            title="Показать списком">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             {shippedCount} отгружено
-          </span>
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -2425,6 +2459,7 @@ export default function B2BOrdersPage() {
       )}
 
       {/* Результат */}
+      <div ref={listTopRef} className="scroll-mt-4" />
       {productionDayMode ? (() => {
         const groups = productionDayGroups
         const totalCritical = groups.overdue.length + groups.today.length + groups.tomorrow.length + groups.ready.length
@@ -2615,6 +2650,7 @@ export default function B2BOrdersPage() {
         <div>
           <p className="text-[11px] text-[#8a8a85] mb-2 px-1">
             {filteredOrders.length === 0 ? 'Заказов не найдено' : `Найдено: ${filteredOrders.length} заказов на ${rub(filteredSum)} ₽`}
+            {boardFilter === 'in_work' && filteredOrders.length > 0 && ` · сверху самые старые, первый — ${daysInWorkLabel(daysInWork(launchDayOf(filteredOrders[0]), today))}`}
           </p>
           {filteredOrders.length === 0 ? (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center text-[13px] text-[#8a8a85]">
@@ -2685,6 +2721,7 @@ export default function B2BOrdersPage() {
                             ) : null })()}
                           </div>
                           <p className="text-[11px] text-[#9a9a95] mt-0.5">
+                            {boardFilter === 'in_work' && <span className="font-semibold text-[#111110]">{daysInWorkLabel(daysInWork(launchDayOf(order), today))} · </span>}
                             {launchedDate}
                             {' · '}{order.items.length} поз.
                             {(order.total_area ?? 0) > 0 && ` · ${order.total_area.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²`}
