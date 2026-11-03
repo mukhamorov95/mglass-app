@@ -2,6 +2,8 @@
 // помечен 'use client', и его функции нельзя вызвать в API-маршруте (там они — клиентские
 // ссылки). Выдача УПД строит документ на сервере, поэтому расчёт живёт здесь.
 
+import { materialWithKind } from '@/lib/materialLabel'
+
 export type InvoiceOrderItem = {
   materialName?: string; category?: string; thickness?: number; width?: number; height?: number
   quantity?: number; saleIncVat?: number; hasTempering?: boolean; hasFacet?: boolean
@@ -23,7 +25,7 @@ export type InvoiceRequisites = {
 }
 
 export function itemName(it: InvoiceOrderItem): string {
-  const parts: string[] = [it.materialName || 'Стекло']
+  const parts: string[] = [materialWithKind(it, 'Стекло')]
   if (it.thickness) parts.push(`${it.thickness} мм`)
   if (it.hasTempering) parts.push('закалённое')
   if (it.hasFacet) parts.push(it.facetTypeMm ? `фацет ${it.facetTypeMm} мм` : 'фацет')

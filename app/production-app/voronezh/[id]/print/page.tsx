@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { itemsWeight, type WeighableItem } from '@/lib/deliveryWeight'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import { toast } from '@/lib/toast'
+import { materialWithKind } from '@/lib/materialLabel'
 
 type OrderItem = WeighableItem & { width?: number; height?: number; materialName?: string; category?: string }
 type Order = {
@@ -25,7 +26,7 @@ const orderNo = (o: { custom_number: string | null; id: number }) => o.custom_nu
 
 function itemLine(it: OrderItem): string {
   const size = it.width && it.height ? `${it.width}×${it.height}` : ''
-  const mat = it.materialName ?? it.category ?? ''
+  const mat = materialWithKind(it, it.category ?? '')
   const t = it.thickness ? `${it.thickness} мм` : ''
   return [`${it.quantity ?? 1} шт`, size, mat, t].filter(Boolean).join(' · ')
 }

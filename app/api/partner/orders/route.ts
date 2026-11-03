@@ -9,6 +9,7 @@ import { invoiceState, type UpdShort } from '@/lib/partner/documents'
 import { loadUpdByOrders } from '@/lib/partner/updByOrders'
 import { loadInvoicedOrders, loadPaidByOrders, paymentView } from '@/lib/partner/orderMoney'
 import { pointStage } from '@/lib/partner/pointPay'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // Кабинет партнёра — «мои заказы» (read-only, строго по своему клиенту).
 // Клиент определяется по b2b_clients.user_id = auth.uid(). Никогда не отдаёт
@@ -80,7 +81,7 @@ export async function GET() {
     // Что внутри — материалы + толщины (кратко) и число позиций.
     const items = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
     const matLabels = [...new Set(items.map(it => {
-      const nm = String(it.materialName ?? '').trim()
+      const nm = materialWithKind(it as { materialName?: string | null; category?: string | null })
       const th = it.thickness ? `${it.thickness}мм` : ''
       return [nm, th].filter(Boolean).join(' ')
     }).filter(Boolean))]

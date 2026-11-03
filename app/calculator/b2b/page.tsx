@@ -60,6 +60,7 @@ import {
 } from '@/lib/b2bCalculator'
 import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
 import { rankMap, sortByDirectory } from '@/lib/glass/materialOrder'
+import { materialWithKind } from '@/lib/materialLabel'
 
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
 const fmtN = (n: number, d = 3) => n.toLocaleString('ru-RU', { maximumFractionDigits: d })
@@ -1388,8 +1389,8 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     const lines = items.map((item, i) => {
       const facetDesc = item.hasFacet && item.facetTypeMm ? `, фацет ${item.facetTypeMm}мм` : ''
       const matDesc = item.hasTempering
-        ? `${item.materialName} ${item.thickness}мм, закалённое${facetDesc}`
-        : `${item.materialName} ${item.thickness}мм${facetDesc}`
+        ? `${materialWithKind(item)} ${item.thickness}мм, закалённое${facetDesc}`
+        : `${materialWithKind(item)} ${item.thickness}мм${facetDesc}`
       const price = effectiveItemTotal(item, discount)
       const svcNames = item.services.filter(s => s.cost > 0).map(s => s.name)
       const parts = [
@@ -3044,7 +3045,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                             </td>
                             <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
                             <td className="px-3 py-2.5">
-                              <div className="font-medium text-[#111110]">{item.materialName}</div>
+                              <div className="font-medium text-[#111110]">{materialWithKind(item)}</div>
                               {(item.hasTempering || item.hasFacet || item.hasTriplex || item.services.length > 0 || item.minPriceApplied) && (
                                 <div className="flex gap-1 mt-0.5 flex-wrap">
                                   {item.hasTempering && (
@@ -3264,7 +3265,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
               const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
               // Название изделия для КП — из позиций расчёта производства.
               const mgTitle = items.length === 0 ? 'Изделие'
-                : items.map(i => `${i.materialName} ${i.thickness} мм ${i.width}×${i.height}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`).join(' + ')
+                : items.map(i => `${materialWithKind(i)} ${i.thickness} мм ${i.width}×${i.height}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`).join(' + ')
               return (
                 <div className="ac-card p-4 space-y-2.5">
                   <div className="flex items-baseline justify-between gap-2">

@@ -31,6 +31,7 @@ import type { InvoiceOrder } from '@/lib/b2b/invoiceMath'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { filterFacets, filterToSearch, matchesFilter, readFilterFromUrl, type QuoteFilter } from '@/lib/b2b/quoteFilters'
 import { sourceLabel } from '@/lib/types'
+import { materialWithKind } from '@/lib/materialLabel'
 
 
 const PAGE_SIZE = 50
@@ -1359,7 +1360,7 @@ export default function B2BQuotesPage() {
                               <tr key={idx} className="hover:bg-[#fafaf9]">
                                 <td className="px-2 py-1 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
                                 <td className="px-2 py-1">
-                                  <div className="font-medium text-[#111110]">{String(item.materialName ?? '')}</div>
+                                  <div className="font-medium text-[#111110]">{materialWithKind(item)}</div>
                                   {(item.hasTempering || (item.services?.length ?? 0) > 0) && (
                                     <div className="flex gap-0.5 flex-wrap mt-0.5">
                                       {item.hasTempering && <span className="text-[8px] font-medium px-1 py-px rounded bg-orange-50 text-orange-600">закалка</span>}

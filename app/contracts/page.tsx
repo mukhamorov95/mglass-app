@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { PRODUCT_DEADLINES, deadlineFor, type ProductKind } from '@/lib/contractDeadlines'
 import ContractPaymentsPanel from '@/components/ContractPaymentsPanel'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
+import { SERVICE_LINE_RE, specLacksKind } from '@/lib/materialLabel'
 
 type Customer = Record<string, string>
 type Spec = { name: string; desc?: string; dimensions?: string; qty?: string }
@@ -17,7 +18,7 @@ type Form = {
   product_kind: ProductKind; make_days: number; install_days: number; draft_days: number
   vat_rate: number
 }
-const SERVICE_RE = /монтаж|демонтаж|доставк|подъ[её]м|замер|выезд/i
+const SERVICE_RE = SERVICE_LINE_RE
 const INSTALL_RE = /монтаж|демонтаж/i
 const DELIVERY_RE = /доставк/i
 const LIFT_RE = /подъ[её]м/i
@@ -428,6 +429,7 @@ export default function ContractsPage() {
                       <button onClick={() => rmSpec(i)} className="px-2 text-[#c4c4be] hover:text-red-500">✕</button>
                     </div>
                     <input className={`${I} w-full`} value={s.desc ?? ''} onChange={e => updSpec(i, { desc: e.target.value })} placeholder="Описание: стекло, толщина, обработка, фурнитура…" />
+                    {specLacksKind(s) && <p className="text-[11px] text-amber-700">Не указано, стекло это или зеркало: допишите в название или описание.</p>}
                   </div>
                 ))}
                 {!form.spec.length && <p className="text-[12px] text-[#9a9a95]">Выберите КП сверху — позиции подтянутся, или добавьте вручную.</p>}

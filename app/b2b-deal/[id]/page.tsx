@@ -17,6 +17,7 @@ import { paymentReminderText } from '@/lib/b2b/clientTexts'
 import { clientRequiredToLaunch, readQuoteLead } from '@/lib/b2b/leadQuote'
 import { orderProgress, type TaskLite } from '@/lib/shopBoard/model'
 import DealActions from './DealActions'
+import { materialWithKind } from '@/lib/materialLabel'
 
 const TONE_TEXT: Record<MarginTone, string> = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-500' }
 
@@ -358,7 +359,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               {items.map((it, i) => (
                 <tr key={i} className="border-b border-[#f8f8f7]">
                   <td className="py-1.5">
-                    {it.materialName ?? 'Стекло'}{it.thickness ? `, ${it.thickness} мм` : ''}{it.hasTempering ? ', закалка' : ''}
+                    {materialWithKind(it, 'Стекло')}{it.thickness ? `, ${it.thickness} мм` : ''}{it.hasTempering ? ', закалка' : ''}
                     {it.manualTotal != null && <span className="ml-1 text-[10px] text-amber-600">✏️</span>}
                     {it.clientPriced && <span className="ml-1 text-[10px] text-blue-600" title="Цена из прайса клиента">₽</span>}
                     {it.comment && <span className="block text-[10px] text-[#9a9a95] italic">{it.comment}</span>}

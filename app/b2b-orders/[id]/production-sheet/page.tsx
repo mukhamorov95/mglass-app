@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import QRCode from 'qrcode'
 import Link from 'next/link'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -307,7 +308,7 @@ export default function ProductionSheetPage() {
                 <tr key={idx} style={{ background: rowBg }}>
                   <td style={{ ...tdS, textAlign: 'center', color: '#bbb', fontWeight: 700 }}>{idx + 1}</td>
                   <td style={tdS}>
-                    <span style={{ fontWeight: 600 }}>{item.materialName ?? '—'}</span>
+                    <span style={{ fontWeight: 600 }}>{materialWithKind(item, '—')}</span>
                     {item.category ? (
                       <span style={{ fontSize: 9, color: '#aaa', marginLeft: 4 }}>{item.category}</span>
                     ) : null}

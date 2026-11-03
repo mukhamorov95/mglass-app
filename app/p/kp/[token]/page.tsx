@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react'
 import type { PublicQuote } from '@/lib/b2b/publicQuote'
+import { materialWithKind } from '@/lib/materialLabel'
 
 // А5: страница КП для клиента по ссылке. Без логина, только по токену.
 // Клиент видит цены и состав, может согласовать или задать вопрос — ответ
@@ -11,7 +12,7 @@ const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const date = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
 
 function itemTitle(it: PublicQuote['items'][number]): string {
-  const parts = [it.materialName || 'Стекло']
+  const parts = [materialWithKind(it, 'Стекло')]
   if (it.thickness) parts.push(`${it.thickness} мм`)
   if (it.hasTempering) parts.push('закалённое')
   if (it.hasFacet) parts.push(it.facetTypeMm ? `фацет ${it.facetTypeMm} мм` : 'фацет')
