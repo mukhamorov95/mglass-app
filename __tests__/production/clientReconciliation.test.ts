@@ -102,6 +102,14 @@ describe('акт сверки: даты и период', () => {
   })
 })
 
+describe('поступления', () => {
+  it('сводятся по дням, итог тот же', () => {
+    const d = build([], [{ day: '2026-10-09', amount: 100, source: 'bank' }, { day: '2026-10-09', amount: 50.5, source: 'bank' }, { day: '2026-10-02', amount: 7, source: 'bank' }])
+    expect(d.moneyInPeriod.rows).toEqual([{ day: '2026-10-02', amount: 7, source: 'bank' }, { day: '2026-10-09', amount: 150.5, source: 'bank' }])
+    expect(d.moneyInPeriod.total).toBe(157.5)
+  })
+})
+
 describe('что считать деньгами', () => {
   const counts = (p: { source: string; method?: string; paid_at: string; linkedToBank?: boolean }) =>
     paymentCountsAsMoney({ linkedToBank: false, ...p }, '2026-09-01', '2026-10-30', isTransferMark)

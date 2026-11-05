@@ -36,9 +36,12 @@ function dayOf(v: unknown): string | null {
 }
 
 async function loadDoc(svc: Svc, from: string, to: string) {
-  const raw = await readPaged<RawOrder>((a, b) => svc.from('b2b_orders')
+  const all = await readPaged<RawOrder>((a, b) => svc.from('b2b_orders')
     .select('id, custom_number, items, notes, launched_at, archived_at, discount_percent, total_after_discount, total_sale_inc_vat')
     .eq('client_id', CLIENT.id).order('id', { ascending: true }).range(a, b) as never)
+  // Архив не считаем: 30.06 туда ушли дубли импортированной истории, отмеченные отгруженными, и клиент выходил должником на 800 тысяч.
+  const raw = all.filter(o => !o.archived_at)
+  const inArchive = all.filter(o => o.archived_at)
   const ids = raw.map(o => o.id)
 
   const items = await readIn<{ shipment_id: number; order_id: number; line_key: string; qty: number; amount: number | null }, number>(ids, (part, a, b) =>
@@ -114,7 +117,10 @@ async function loadDoc(svc: Svc, from: string, to: string) {
       .map(p => ({ day: p.paid_at, amount: Number(p.amount), source: 'mark' as const })),
   ]
   const ledgerFrom = heads.map(h => h.ship_date).filter((d): d is string => !!d).sort()[0] ?? null
-  return buildReconciliation({ clientName: CLIENT.name, from, to, orders, money, bankFrom, bankTo, ledgerFrom })
+  return buildReconciliation({
+    clientName: CLIENT.name, from, to, orders, money, bankFrom, bankTo, ledgerFrom,
+    archived: { orders: inArchive.length, amount: inArchive.reduce((s, o) => s + orderAmount(o as never), 0) },
+  })
 }
 
 async function history(svc: Svc) {

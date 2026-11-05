@@ -58,7 +58,7 @@ export default function ReconciliationDoc({ doc, caption }: { doc: ReconDoc; cap
               <tr className="border-b border-[#e4e4e0]"><td className="py-1.5 px-1.5 pl-4">из них не оплачено</td><td /><td className="py-1.5 px-1.5 text-right whitespace-nowrap">{fmtMoney(launched.unpaid)}</td></tr>
               <tr className="border-b border-[#e4e4e0]"><td className="py-1.5 px-1.5 font-medium">Отгружено изделий</td><td className="py-1.5 px-1.5 text-right whitespace-nowrap">{items.shippedPieces} шт.</td><td className="py-1.5 px-1.5 text-right whitespace-nowrap font-medium">{fmtMoney(items.shipped)}</td></tr>
               <tr className="border-b border-[#e4e4e0]"><td className="py-1.5 px-1.5 pl-4">заказов закрыто целиком</td><td className="py-1.5 px-1.5 text-right whitespace-nowrap">{closedOrders.orders} зак.</td><td className="py-1.5 px-1.5 text-right whitespace-nowrap">{fmtMoney(closedOrders.amount)}</td></tr>
-              <tr className="border-b border-[#e4e4e0]"><td className="py-1.5 px-1.5 font-medium">Поступило денег</td><td className="py-1.5 px-1.5 text-right whitespace-nowrap">{moneyInPeriod.rows.length} плат.</td><td className="py-1.5 px-1.5 text-right whitespace-nowrap font-medium">{fmtMoney(moneyInPeriod.total)}</td></tr>
+              <tr className="border-b border-[#e4e4e0]"><td className="py-1.5 px-1.5 font-medium">Поступило денег</td><td className="py-1.5 px-1.5 text-right whitespace-nowrap">{new Set(moneyInPeriod.rows.map(m => m.day)).size} дн.</td><td className="py-1.5 px-1.5 text-right whitespace-nowrap font-medium">{fmtMoney(moneyInPeriod.total)}</td></tr>
               <tr className="border-b border-[#e4e4e0]"><td className="py-1.5 px-1.5 text-[#4b4b47]">Все запущенные к концу периода, ещё не оплачено</td><td /><td className="py-1.5 px-1.5 text-right whitespace-nowrap">{fmtMoney(launched.openUnpaid)}</td></tr>
             </tbody>
           </table>
@@ -145,7 +145,7 @@ export default function ReconciliationDoc({ doc, caption }: { doc: ReconDoc; cap
         {notes.bankFrom && notes.bankTo && <p>Деньги: выписка ООО с {fmtDay(notes.bankFrom)} по {fmtDay(notes.bankTo)}. До и после этих дат берутся отметки об оплате.{doc.to > notes.bankTo ? ` Переводы после ${fmtDay(notes.bankTo)} появятся, когда загрузят выписку.` : ''}</p>}
         {notes.ledgerFrom && <p>По изделиям отгрузка записывается с {fmtDay(notes.ledgerFrom)}. Раньше заказ отмечался отгруженным целиком.</p>}
         {notes.undatedOrders > 0 && <p>{notes.undatedOrders} зак. на {fmtMoney(notes.undatedAmount)} отмечены отгруженными без даты: в итог они входят, в отгрузку конкретного дня нет.</p>}
-        {notes.archivedWithMoney.length > 0 && <p>В архиве, но с оплатой или отгрузкой: {notes.archivedWithMoney.join(', ')}. В долге они учтены, в «запущено» нет.</p>}
+        {notes.archived.orders > 0 && <p>Заказы в архиве не считаются: {notes.archived.orders} зак. на {fmtMoney(notes.archived.amount)}.</p>}
       </section>
     </div>
   )
