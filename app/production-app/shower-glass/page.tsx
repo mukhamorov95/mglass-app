@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import OrderLookup from '@/components/OrderLookup'
+import Reconciliation from './Reconciliation'
 import { confirmDialog } from '@/lib/dialog'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { daysWord, oldestFirst } from '@/lib/b2b/inWorkOrders'
@@ -22,15 +23,15 @@ const STATE_CLS: Record<OrderShipState, string> = {
 }
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
 
-type Tab = OrderStage | 'overdue' | 'shipments' | 'history'
-type OrderTab = Exclude<Tab, 'shipments' | 'history'>
+type Tab = OrderStage | 'overdue' | 'shipments' | 'history' | 'recon'
+type OrderTab = Exclude<Tab, 'shipments' | 'history' | 'recon'>
 const ORDER_TABS: { key: OrderTab; label: string; hint: string; empty: string }[] = [
   { key: 'in_work', label: 'В работе', hint: 'Не упакованы целиком и ещё не уехали.', empty: 'Заказов в работе нет.' },
   { key: 'packed', label: 'Упакованы', hint: 'Цех упаковал все позиции, заказ ещё не уехал.', empty: 'Заказов, упакованных целиком, нет. Заказ попадает сюда, когда цех закрыл упаковку по всем позициям.' },
   { key: 'shipped', label: 'Отгружены', hint: 'Уехали полностью или отмечены отгруженными (с 01.07). Отмеченный без этого экрана заказ можно занести в отгрузку: отметьте его изделия.', empty: 'Отгруженных заказов нет.' },
   { key: 'overdue', label: 'Просроченные', hint: 'Срок прошёл, а заказ уехал не полностью. Эти же заказы есть во вкладках «В работе» и «Упакованы».', empty: 'Просроченных заказов нет.' },
 ]
-const TAB_KEYS: Tab[] = [...ORDER_TABS.map(t => t.key), 'shipments', 'history']
+const TAB_KEYS: Tab[] = [...ORDER_TABS.map(t => t.key), 'shipments', 'history', 'recon']
 const inTab = (o: PoolOrder, tab: OrderTab) => !o.hidden && (tab === 'overdue' ? o.overdue_days > 0 : o.stage === tab)
 const matches = (o: PoolOrder, q: string) => numberMatches(q, o.no, o.id)
 const overdueLabel = (days: number) => `Просрочен на ${days} ${daysWord(days)}`
@@ -104,6 +105,7 @@ export default function ShowerGlassShipmentsPage() {
   const visible = useMemo(() => {
     const list = tab === 'history' ? orders
       : tab === 'shipments' ? orders.filter(o => !o.hidden && (sentTarget || o.stage !== 'shipped') && o.lines.some(l => l.free > 0))
+      : tab === 'recon' ? []
       : orders.filter(o => inTab(o, tab))
     return oldestFirst(list.filter(o => matches(o, q)), o => o.launch_day)
   }, [orders, tab, q, sentTarget])
@@ -312,9 +314,12 @@ export default function ShowerGlassShipmentsPage() {
               })}
               <button onClick={() => setTab('shipments')} aria-pressed={tab === 'shipments'} className={tabCls('shipments')}>Отгрузки · {data.shipments.length}</button>
               <button onClick={() => { setTab('history'); setComposing(false) }} aria-pressed={tab === 'history'} className={tabCls('history')}>История заказов · {orders.length}</button>
+              {canMoney && <button onClick={() => { setTab('recon'); setComposing(false) }} aria-pressed={tab === 'recon'} className={tabCls('recon')}>Акт сверки</button>}
               <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Номер заказа"
                 className="ml-auto h-10 w-36 rounded-lg border border-[#e4e4e0] bg-white px-2.5 text-[13px]" />
             </div>
+
+            {tab === 'recon' && canMoney && <Reconciliation today={data.today} client={data.title} />}
 
             {orderTab && (
               <section className="space-y-2">
