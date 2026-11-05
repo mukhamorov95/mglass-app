@@ -223,6 +223,52 @@ describe('отгрузка Шовер Гласс: маршрут', () => {
     expect(h.db.delivery_shipments.find(x => x.id === s)).toBeUndefined()
   })
 
+  it('уехало раньше: последняя отметка закрывает заказ датой отгрузки, снятая возвращает прежнюю дату; больше остатка нельзя', async () => {
+    const prev = '2026-11-02'
+    h.db.b2b_orders[0] = order(1, { shipped: prev })
+    const past = '2026-11-04'
+    const s = await create([[1, 'a', 1]], past)
+    await call({ action: 'dispatch', shipment_id: s })
+    expect(notesOf(1).stages.shipped).toBe(prev)
+
+    const over = await call({ action: 'earlier', shipment_id: s, order_id: 1, lines: [{ line_key: 'a', qty: 3 }] })
+    expect(over.body.error).toContain('не больше 2')
+
+    const first = await call({ action: 'earlier', shipment_id: s, order_id: 1, lines: [{ line_key: 'a', qty: 2 }] })
+    expect(first.body.shipped_orders).toEqual([])
+    expect(notesOf(1).stages.shipped).toBe(prev)
+
+    const last = await call({ action: 'earlier', shipment_id: s, order_id: 1, lines: [{ line_key: 'b', qty: 1 }] })
+    expect(last.body.shipped_orders).toEqual([1])
+    expect(notesOf(1).stages.shipped).toBe(`${past}T12:00:00+03:00`)
+    expect(notesOf(1).client_shipment).toMatchObject({ id: s, date: past, prev_shipped: prev })
+    const view = (await GET()).json()
+    const o = (await view as { orders: { id: number; stage: string; lines: { key: string; earlier: number; free: number }[] }[] }).orders.find(x => x.id === 1)!
+    expect(o.stage).toBe('shipped')
+    expect(o.lines.find(l => l.key === 'a')).toMatchObject({ earlier: 2, free: 0 })
+
+    const undo = await call({ action: 'earlier', shipment_id: s, order_id: 1, lines: [{ line_key: 'b', qty: 0 }] })
+    expect(undo.body.reverted_orders).toEqual([1])
+    expect(notesOf(1).stages.shipped).toBe(prev)
+    expect(notesOf(1).client_shipment).toBeNull()
+  })
+
+  it('уехало раньше и галочка: не в своей отгрузке и не цехом нельзя, галочка пишется в заказ', async () => {
+    const s = await create([[1, 'a', 1]])
+    expect((await call({ action: 'earlier', shipment_id: s, order_id: 1, lines: [{ line_key: 'a', qty: 1 }] })).status).toBe(409)
+    await call({ action: 'dispatch', shipment_id: s })
+    h.db.b2b_orders.push(order(9))
+    expect((await call({ action: 'earlier', shipment_id: s, order_id: 9, lines: [{ line_key: 'a', qty: 1 }] })).status).toBe(409)
+    expect((await call({ action: 'rest', order_id: 3, show: false })).status).toBe(409)
+    expect((await call({ action: 'rest', order_id: 1, show: false })).status).toBe(200)
+    expect((notesOf(1) as unknown as { ship_rest_off: boolean }).ship_rest_off).toBe(true)
+    const body = await (await GET()).json() as { orders: { id: number; rest_off: boolean }[] }
+    expect(body.orders.find(x => x.id === 1)?.rest_off).toBe(true)
+    expect((await call({ action: 'rest', order_id: 1, show: true })).status).toBe(200)
+    h.role = 'manager'
+    expect((await call({ action: 'rest', order_id: 1, show: false })).status).toBe(403)
+  })
+
   it('добавление складывает штуки, удаление строки её убирает', async () => {
     const s = await create([[1, 'a', 1]])
     expect((await call({ action: 'add', shipment_id: s, lines: [{ order_id: 1, line_key: 'a', qty: 1 }, { order_id: 1, line_key: 'b', qty: 1 }] })).status).toBe(200)

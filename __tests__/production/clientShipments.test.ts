@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { lineKeyOf, numberMatches, orderHidden, orderInShipment, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, shipmentTotals, takenByLine } from '@/lib/production/clientShipments'
+import type { LineTaken } from '@/lib/production/clientShipments'
+import { addEarlier, lineKeyOf, numberMatches, orderHidden, orderInShipment, orderInShipmentText, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, shipmentTotals, takenByLine } from '@/lib/production/clientShipments'
 
 describe('отгрузка по изделиям: расчёт', () => {
   it('строка: название со словом стекло или зеркало, вес и сумма всей строки', () => {
@@ -83,7 +84,7 @@ describe('отгрузка по изделиям: расчёт', () => {
 
   it('заказ в отгрузке: довезли одно из трёх — отгрузка частичная, заказ уехал полностью', () => {
     const lines = [{ key: 'a', label: 'Стекло', qty: 2, shipped: 2 }, { key: 'b', label: 'Зеркало', size: '600×800', qty: 1, shipped: 1 }]
-    expect(orderInShipment(lines, k => (k === 'b' ? 1 : 0), true)).toEqual({ total: 3, here: 1, remaining: 0, wholeHere: false, rest: [] })
+    expect(orderInShipment(lines, k => (k === 'b' ? 1 : 0), true)).toEqual({ total: 3, here: 1, remaining: 0, earlier: 0, wholeHere: false, rest: [] })
   })
 
   it('заказ в отгрузке: часть уехала, остаток назван по изделиям, черновик считает свои штуки', () => {
@@ -92,6 +93,24 @@ describe('отгрузка по изделиям: расчёт', () => {
     expect(draft).toMatchObject({ total: 3, here: 1, remaining: 2, wholeHere: false })
     expect(draft.rest).toEqual([{ key: 'a', label: 'Стекло', left: 1 }, { key: 'b', label: 'Зеркало, 600×800 мм', left: 1 }])
     expect(orderInShipment(lines, k => (k === 'a' ? 2 : 1), false)).toMatchObject({ here: 3, remaining: 0, wholeHere: true })
+  })
+
+  it('уехало раньше: 3 из 4 стёкол до учёта и одно отгрузкой — заказ отгружен полностью', () => {
+    const taken = new Map<string, LineTaken>([['7:d', { shipped: 1, drafted: 0 }]])
+    addEarlier(taken, 7, { a: 1, b: 1, c: 1, z: 0 })
+    expect(taken.get('7:a')).toEqual({ shipped: 1, drafted: 0, earlier: 1 })
+    expect(taken.has('7:z')).toBe(false)
+    const lines = ['a', 'b', 'c', 'd'].map(key => ({ key, label: 'Стекло', qty: 1, shipped: taken.get(`7:${key}`)?.shipped ?? 0, earlier: taken.get(`7:${key}`)?.earlier ?? 0 }))
+    const v = orderInShipment(lines, k => (k === 'd' ? 1 : 0), true)
+    expect(v).toMatchObject({ total: 4, here: 1, remaining: 0, earlier: 3, wholeHere: false })
+    expect(orderInShipmentText(v, true, false)).toEqual({ here: 'В этой отгрузке 1 из 4 шт.', earlier: 'Раньше отгружено 3 шт.', after: 'Заказ отгружен полностью' })
+  })
+
+  it('галочка снята: об остатке ничего не утверждаем; иначе отгружен частично с остатком', () => {
+    const v = { total: 18, here: 2, remaining: 16, earlier: 0, wholeHere: false }
+    expect(orderInShipmentText(v, true, true)).toEqual({ here: 'В этой отгрузке 2 из 18 шт.', earlier: null, after: null })
+    expect(orderInShipmentText(v, true, false).after).toBe('Заказ отгружен частично, осталось 16 из 18 шт.')
+    expect(orderInShipmentText(v, false, false).after).toBe('После отправки останется 16 из 18 шт.')
   })
 
   it('номер находится с нулями и без них', () => {

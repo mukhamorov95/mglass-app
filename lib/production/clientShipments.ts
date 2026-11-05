@@ -45,7 +45,7 @@ export function shareOf(total: number, qty: number, from: number, take: number):
 }
 
 export type ShipRow = { shipment_id: number; order_id: number; line_key: string; qty: number }
-export type LineTaken = { shipped: number; drafted: number }
+export type LineTaken = { shipped: number; drafted: number; earlier?: number }
 
 // statusOf: статус отгрузки, к которой относится строка; строку чужой отгрузки не считаем дважды.
 export function takenByLine(rows: ShipRow[], statusOf: (shipmentId: number) => string | undefined, exceptShipment?: number) {
@@ -61,6 +61,18 @@ export function takenByLine(rows: ShipRow[], statusOf: (shipmentId: number) => s
     out.set(k, cur)
   }
   return out
+}
+
+// Уехало до учёта по отгрузкам (владелец 05.11.2026): заказ из 4 стёкол, 3 уехали раньше, отгрузки на них нет.
+// Считается отгруженным, но без даты, веса и суммы: их никто не записывал.
+export type EarlierLines = Record<string, number>
+export function addEarlier(taken: Map<string, LineTaken>, orderId: number, lines: EarlierLines | null | undefined) {
+  for (const [key, qty] of Object.entries(lines ?? {})) {
+    if (!(qty > 0)) continue
+    const k = `${orderId}:${key}`
+    const cur = taken.get(k) ?? { shipped: 0, drafted: 0 }
+    taken.set(k, { ...cur, shipped: cur.shipped + qty, earlier: (cur.earlier ?? 0) + qty })
+  }
 }
 
 export type OrderShipState = 'none' | 'partial' | 'full'
@@ -127,7 +139,7 @@ export function requestProblem(req: LineRequest, line: Pick<ShipLine, 'qty' | 'l
 
 // Заказ внутри отгрузки (владелец 05.11.2026): сколько уехало этой отгрузкой и что осталось по заказу.
 // sent: отгрузка уже отправлена, её штуки входят в shipped; у черновика их надо прибавить.
-type OrderViewLine = { key: string; label: string; size?: string; qty: number; shipped: number }
+type OrderViewLine = { key: string; label: string; size?: string; qty: number; shipped: number; earlier?: number }
 export function orderInShipment(lines: OrderViewLine[], hereOf: (lineKey: string) => number, sent: boolean) {
   const left = (l: OrderViewLine) => Math.max(0, l.qty - l.shipped - (sent ? 0 : hereOf(l.key)))
   const total = lines.reduce((s, l) => s + l.qty, 0)
@@ -135,9 +147,21 @@ export function orderInShipment(lines: OrderViewLine[], hereOf: (lineKey: string
   const remaining = lines.reduce((s, l) => s + left(l), 0)
   return {
     total, here, remaining,
+    earlier: lines.reduce((s, l) => s + (l.earlier ?? 0), 0),
     wholeHere: total > 0 && here >= total,
     rest: lines.filter(l => left(l) > 0).map(l => ({ key: l.key, label: l.size ? `${l.label}, ${l.size} мм` : l.label, left: left(l) })),
   }
+}
+
+// Две отметки заказа одной функцией для карточки и листа. Галочка снята: об остатке ничего не утверждаем.
+export function orderInShipmentText(v: Pick<ReturnType<typeof orderInShipment>, 'total' | 'here' | 'remaining' | 'earlier' | 'wholeHere'>, sent: boolean, restOff: boolean) {
+  const here = v.wholeHere ? 'В этой отгрузке весь заказ' : `В этой отгрузке ${v.here} из ${v.total} шт.`
+  const earlier = v.earlier > 0 ? `Раньше отгружено ${v.earlier} шт.` : null
+  if (restOff) return { here, earlier, after: null }
+  const after = v.remaining === 0
+    ? sent ? 'Заказ отгружен полностью' : 'После отправки заказ отгружен полностью'
+    : sent ? `Заказ отгружен частично, осталось ${v.remaining} из ${v.total} шт.` : `После отправки останется ${v.remaining} из ${v.total} шт.`
+  return { here, earlier, after }
 }
 
 export type ShipmentLineView = { order_id: number; key: string; qty: number; lineQty: number; weight: number; amount: number }
