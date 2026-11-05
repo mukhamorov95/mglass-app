@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { lineKeyOf, orderShipState, requestProblem, shareOf, shipLines, shipmentTotals, takenByLine } from '@/lib/production/clientShipments'
+import { lineKeyOf, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, shipmentTotals, takenByLine } from '@/lib/production/clientShipments'
 
 describe('отгрузка по изделиям: расчёт', () => {
   it('строка: название со словом стекло или зеркало, вес и сумма всей строки', () => {
@@ -53,6 +53,32 @@ describe('отгрузка по изделиям: расчёт', () => {
     expect(orderShipState(lines, k => (k === 'a' ? 2 : 0))).toBe('partial')
     expect(orderShipState(lines, k => (k === 'a' ? 2 : 1))).toBe('full')
     expect(orderShipState([], () => 0)).toBe('none')
+  })
+
+  it('вкладка заказа: в работе, упакован, отгружен', () => {
+    const line = (qty: number, shipped: number, packed: boolean) => ({ qty, shipped, packed })
+    expect(orderStage([line(2, 0, false), line(1, 0, true)], 'none', false)).toBe('in_work')
+    expect(orderStage([line(2, 0, true), line(1, 0, true)], 'none', false)).toBe('packed')
+    expect(orderStage([line(2, 2, true), line(1, 1, true)], 'full', false)).toBe('shipped')
+    expect(orderStage([line(2, 0, false)], 'none', true)).toBe('shipped')
+    expect(orderStage([], 'none', false)).toBe('in_work')
+  })
+
+  it('частичная отгрузка: заказ остаётся в работе, пока остаток не упакован', () => {
+    const lines = [{ qty: 2, shipped: 2, packed: false }, { qty: 3, shipped: 1, packed: false }]
+    expect(orderStage(lines, 'partial', false)).toBe('in_work')
+    expect(packedLineCount(lines)).toBe(1)
+    const packedRest = [lines[0], { qty: 3, shipped: 1, packed: true }]
+    expect(orderStage(packedRest, 'partial', false)).toBe('packed')
+    expect(packedLineCount(packedRest)).toBe(2)
+  })
+
+  it('просрочка: день срока ещё не просрочка, уехавший заказ не просрочен, без срока нет просрочки', () => {
+    expect(overdueDays('2026-11-05', '2026-11-05', 'in_work')).toBe(0)
+    expect(overdueDays('2026-11-04', '2026-11-05', 'in_work')).toBe(1)
+    expect(overdueDays('2026-10-26', '2026-11-05', 'packed')).toBe(10)
+    expect(overdueDays('2026-10-26', '2026-11-05', 'shipped')).toBe(0)
+    expect(overdueDays(null, '2026-11-05', 'in_work')).toBe(0)
   })
 
   it('больше, чем есть, взять нельзя', () => {

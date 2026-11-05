@@ -1,6 +1,7 @@
 // Отгрузка клиенту по изделиям (владелец 03.11.2026): какие заказы и изделия уехали, заказ уехал
 // полностью или нет, какой вес, на какую сумму. Здесь только расчёт, запись — в API-маршруте.
 import { computeInvoiceTotals, type InvoiceOrder, type InvoiceOrderItem } from '@/lib/b2b/invoiceMath'
+import { daysInWork } from '@/lib/b2b/inWorkOrders'
 import { itemWeight, type WeighableItem } from '@/lib/deliveryWeight'
 import { materialWithKind } from '@/lib/materialLabel'
 
@@ -73,6 +74,24 @@ export function orderShipState(lines: Pick<ShipLine, 'key' | 'qty'>[], shippedOf
 
 export const ORDER_STATE_LABEL: Record<OrderShipState, string> = {
   none: 'Не отгружен', partial: 'Отгружен частично', full: 'Отгружен полностью',
+}
+
+// Вкладки экрана (владелец 05.11.2026): заказ лежит ровно в одной из трёх, просрочка — поверх них.
+export type OrderStage = 'in_work' | 'packed' | 'shipped'
+type StageLine = { qty: number; shipped: number; packed: boolean }
+
+// Позиция, уехавшая целиком, упакована, даже если цех не закрыл задачу: иначе читается «упаковано 0, отгружено всё».
+const lineReady = (l: StageLine) => l.packed || l.shipped >= l.qty
+export const packedLineCount = (lines: StageLine[]) => lines.filter(lineReady).length
+
+export function orderStage(lines: StageLine[], state: OrderShipState, markedShipped: boolean): OrderStage {
+  if (state === 'full' || markedShipped) return 'shipped'
+  return lines.length > 0 && lines.every(lineReady) ? 'packed' : 'in_work'
+}
+
+// Дни просрочки по календарю: день срока ещё не просрочка. Уехавший заказ не просрочен.
+export function overdueDays(deadlineDay: string | null, today: string, stage: OrderStage): number {
+  return stage === 'shipped' || !deadlineDay ? 0 : daysInWork(deadlineDay, today)
 }
 
 export type LineRequest = { order_id: number; line_key: string; qty: number }
