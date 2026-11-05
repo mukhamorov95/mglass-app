@@ -191,6 +191,25 @@ describe('отгрузка Шовер Гласс: маршрут', () => {
     expect(h.db.delivery_shipment_items).toHaveLength(1)
   })
 
+  it('вкладки: частично уехавший и просроченный заказ остаётся в работе, уехавший целиком — в отгруженных', async () => {
+    const row = h.db.b2b_orders.find(o => o.id === 1)!
+    row.launched_at = '2026-10-01T10:00:00Z'
+    row.notes = JSON.stringify({ stages: {}, deadline_date: '2026-10-08' })
+    const read = async (id: number) => ((await (await GET()).json()) as { orders: (Row & { id: number })[] }).orders.find(o => o.id === id)!
+
+    expect(await read(1)).toMatchObject({ stage: 'in_work', state: 'none', launch_day: '2026-10-01', deadline_day: '2026-10-08', packed_lines: 0 })
+    expect(Number((await read(1)).overdue_days)).toBeGreaterThan(0)
+
+    await call({ action: 'dispatch', shipment_id: await create([[1, 'b', 1]]) })
+    expect(await read(1)).toMatchObject({ stage: 'in_work', state: 'partial', packed_lines: 1 })
+    expect(Number((await read(1)).overdue_days)).toBeGreaterThan(0)
+
+    await call({ action: 'dispatch', shipment_id: await create([[1, 'a', 3]]) })
+    expect(await read(1)).toMatchObject({ stage: 'shipped', state: 'full', overdue_days: 0, marked_day: today })
+
+    expect(await read(2)).toMatchObject({ stage: 'shipped', state: 'none', marked_outside: true, deadline_day: null, overdue_days: 0 })
+  })
+
   it('чтение: сумма только с правом на деньги, сырых заметок и позиций наружу нет', async () => {
     await create([[1, 'a', 1]])
     const withMoney = await (await GET()).json() as { orders: { id: number; state: string; lines: Row[] }[]; shipments: { lines: Row[] }[] }

@@ -12,9 +12,12 @@ export function oldestFirst<T extends { id: number }>(list: readonly T[], launch
   return [...list].sort((a, b) => launchDayOf(a).slice(0, 10).localeCompare(launchDayOf(b).slice(0, 10)) || a.id - b.id)
 }
 
+export function daysWord(days: number): string {
+  const m10 = days % 10, m100 = days % 100
+  return m10 === 1 && m100 !== 11 ? 'день' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'дня' : 'дней'
+}
+
 export function daysInWorkLabel(days: number): string {
   if (days === 0) return 'запущен сегодня'
-  const m10 = days % 10, m100 = days % 100
-  const word = m10 === 1 && m100 !== 11 ? 'день' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'дня' : 'дней'
-  return `${days} ${word} в работе`
+  return `${days} ${daysWord(days)} в работе`
 }

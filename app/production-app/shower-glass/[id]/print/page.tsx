@@ -31,7 +31,7 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
       <div className="max-w-3xl mx-auto space-y-4">
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           <button onClick={() => window.print()} className="h-10 px-4 rounded-lg bg-[#111110] text-white text-[13px] font-medium">Печать</button>
-          <a href="/production-app/shower-glass" className="h-10 px-3 inline-flex items-center rounded-lg border border-[#e4e4e0] text-[13px] text-[#4b4b47]">К отгрузкам</a>
+          <a href="/production-app/shower-glass?tab=shipments" className="h-10 px-3 inline-flex items-center rounded-lg border border-[#e4e4e0] text-[13px] text-[#4b4b47]">К отгрузкам</a>
         </div>
         <div>
           <h1 className="text-[18px] font-semibold">Лист отгрузки от {fmtDay(s.ship_date)}</h1>

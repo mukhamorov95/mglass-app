@@ -7,8 +7,9 @@ import { CASCADE_FROM } from '@/lib/production/managerCascade'
 import { closeOpenTasksOnOrderMark, reopenTasksOnOrderUnmark } from '@/lib/production/closeOnOrderMark'
 import { readIn, readPaged } from '@/lib/production/paged'
 import { mskDayKey } from '@/lib/time'
+import { isLaunched, isShipped, orderDeadline, type TodayOrder } from '@/lib/b2b/todayPriorities'
 import {
-  SHOWER_GLASS, orderShipState, requestProblem, shareOf, shipLines, takenByLine,
+  SHOWER_GLASS, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, takenByLine,
   type LineRequest, type ShipOrder, type ShipRow,
 } from '@/lib/production/clientShipments'
 
@@ -21,13 +22,18 @@ const REGION = SHOWER_GLASS.region
 const SHIPPED_MARKS_SINCE = '2026-07-01'
 
 type Svc = ReturnType<typeof createServiceClient>
-type RawOrder = ShipOrder & { id: number; custom_number: string | null; notes: string | null; created_at: string; client_id?: number | null }
+type RawOrder = ShipOrder & { id: number; custom_number: string | null; notes: string | null; created_at: string; launched_at?: string | null; client_id?: number | null }
 type Head = { id: number; ship_date: string | null; status: string; shipped_at: string | null; created_at: string; total_weight_kg: number | null; title: string | null }
 type ItemRow = ShipRow & { label: string | null; weight_kg: number | null; amount: number | null }
-type Notes = { status?: string; historical?: boolean; stages?: Record<string, string | null>; client_shipment?: { id: number; date: string; prev_shipped: string | null } | null }
+type Notes = { status?: string; historical?: boolean; launched_at?: string | null; stages?: Record<string, string | null>; client_shipment?: { id: number; date: string; prev_shipped: string | null } | null }
 
-const ORDER_COLS = 'id, custom_number, items, notes, created_at, client_id, discount_percent, total_after_discount, total_sale_inc_vat'
+const ORDER_COLS = 'id, custom_number, items, notes, created_at, launched_at, client_id, discount_percent, total_after_discount, total_sale_inc_vat'
 const orderNo = (o: { custom_number: string | null; id: number }) => o.custom_number?.trim() || `00${o.id}`
+// Дата из notes бывает кривой: один заказ не должен ронять весь экран.
+function dayOf(v: Date | string | null | undefined): string | null {
+  const t = v ? new Date(v) : null
+  return t && !Number.isNaN(t.getTime()) ? mskDayKey(t) : null
+}
 
 function notesOf(raw: string | null): Notes {
   try { return raw ? JSON.parse(raw) as Notes : {} } catch { return {} }
@@ -81,6 +87,7 @@ export async function GET() {
 
     const money = (n: number | null | undefined) => (canMoney ? Number(n ?? 0) : undefined)
 
+    const today = mskDayKey()
     const views = orders.flatMap(o => {
       const notes = notesOf(o.notes)
       const stages = notes.stages ?? {}
@@ -97,7 +104,15 @@ export async function GET() {
       const state = orderShipState(lines, k => lines.find(l => l.key === k)?.shipped ?? 0)
       const markedOutside = !!stages.shipped && !notes.client_shipment && !inShipment
       if (markedOutside && o.created_at.slice(0, 10) < SHIPPED_MARKS_SINCE) return []
-      return [{ id: o.id, no: orderNo(o), created_at: o.created_at, paid: !!stages.invoice_paid, state, marked_shipped: stages.shipped ?? null, marked_outside: markedOutside, lines }]
+      const stage = orderStage(lines, state, isShipped(notes))
+      // Срок только у запущенного: у незапущенного он считался бы от даты создания, а это выдумка.
+      const asToday = o as unknown as TodayOrder
+      const deadlineDay = isLaunched(asToday, notes) ? dayOf(orderDeadline(asToday, notes)) : null
+      return [{
+        id: o.id, no: orderNo(o), launch_day: dayOf(o.launched_at ?? notes.launched_at) ?? o.created_at.slice(0, 10), deadline_day: deadlineDay,
+        overdue_days: overdueDays(deadlineDay, today, stage), paid: !!stages.invoice_paid, state, stage, packed_lines: packedLineCount(lines),
+        marked_day: typeof stages.shipped === 'string' ? dayOf(stages.shipped) : null, marked_outside: markedOutside, lines,
+      }]
     })
 
     const shipments = heads.map(h => ({
@@ -118,7 +133,7 @@ export async function GET() {
       }),
     }))
 
-    return NextResponse.json({ canMoney, title: SHOWER_GLASS.title, today: mskDayKey(), orders: views, shipments })
+    return NextResponse.json({ canMoney, title: SHOWER_GLASS.title, today, orders: views, shipments })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Ошибка загрузки' }, { status: 500 })
   }
