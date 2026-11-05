@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardOverdue, boardSort, boardStage, doneBy, idleDays, inBoardTab, lastMarkOf, markLine, stageCounts, type BoardTask } from '@/lib/production/ordersBoard'
+import { boardOverdue, boardSort, boardStage, doneBy, idleDays, inBoardTab, lastMarkOf, markLine, shipMarkOf, stageCounts, type BoardTask } from '@/lib/production/ordersBoard'
 
 const task = (o: Partial<BoardTask>): BoardTask => ({ item_index: 0, stage_key: 'cutting', status: 'queued', sequence_order: 1, completed_at: null, completed_by_name: null, ...o })
 const done = (at: string, o: Partial<BoardTask> = {}) => task({ status: 'done', completed_at: at, completed_by_name: 'Никита', ...o })
@@ -96,6 +96,18 @@ describe('кто поставил этап', () => {
   })
   it('автора нет: пусто, не выдумываем', () => {
     expect(markLine(done('x', { completed_by_name: null }), label).by).toBeNull()
+  })
+})
+
+describe('кто поставил «Отгружен»', () => {
+  it('последняя отметка важнее следа задним числом', () => {
+    expect(shipMarkOf({ shipped_mark: { by: 'Никита', at: 'a' }, ship_backfill: { by: 'Вера', at: 'b' } })).toEqual({ by: 'Никита', at: 'a' })
+    expect(shipMarkOf({ ship_backfill: { by: 'Вера', at: 'b' } })).toEqual({ by: 'Вера', at: 'b' })
+    expect(shipMarkOf({ client_shipment: { by: 'Эльзат', at: 'c' } })).toEqual({ by: 'Эльзат', at: 'c' })
+  })
+  it('след без автора и старый след отгрузки: не выдумываем', () => {
+    expect(shipMarkOf({ client_shipment: { at: 'c' } })).toBeNull()
+    expect(shipMarkOf({})).toBeNull()
   })
 })
 

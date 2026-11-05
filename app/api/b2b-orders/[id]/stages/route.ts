@@ -102,8 +102,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // (сервис-ключ/крон) — честный системный ярлык, не выдуманный человек.
   const mark = orderMarkOf(stages)
   const unmarks = orderUnmarksOf(stages)
+  const shippedTouched = 'shipped' in stages
   let by: { userId?: string; name?: string } = { name: 'b2b-orders (авто)' }
-  if (mark || unmarks.length) {
+  if (mark || unmarks.length || shippedTouched) {
     try {
       const server = await createServerClient()
       const { data: { user } } = await server.auth.getUser()
@@ -119,6 +120,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // уехавшие заказы месяцами висели в очередях. Снятие отметки (null) возвращает в очередь
   // то, что закрыл этот каскад, — «Упакован» ставится одним кликом, и ошибочный клик
   // иначе молча выкидывал заказ в работе из очередей рабочих.
+  if (shippedTouched) {
+    const { error: markErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { shipped_mark: stages.shipped ? { by: by.name ?? null, at: new Date().toISOString() } : null } })
+    if (markErr) console.error(`[stages] автор отметки не записан order=${orderId}: ${markErr.message}`)
+  }
+
   let shopClosed = 0
   let shopReopened = 0
   let shopError: string | undefined
