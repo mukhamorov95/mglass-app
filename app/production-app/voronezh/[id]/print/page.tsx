@@ -6,7 +6,7 @@
 import { useEffect, useState, use, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { itemsWeight, type WeighableItem } from '@/lib/deliveryWeight'
-import { renderDocCanvas } from '@/lib/pdfCapture'
+import { saveSheetPdf } from '@/lib/pdfCapture'
 import { toast } from '@/lib/toast'
 import { materialWithKind } from '@/lib/materialLabel'
 
@@ -67,42 +67,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
     if (!docRef.current) return
     setPdfBusy(true)
     try {
-      const el = docRef.current
-      const jspdf = await import('jspdf')
-      const scale = 2
-      // Фиксированная десктопная ширина листа + windowWidth → PDF одинаков с телефона и ПК.
-      const canvas = await renderDocCanvas(el, { scale })
-      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      const margin = 10
-      const pwMm = 210 - margin * 2
-      const phMm = 297 - margin * 2
-      const pxPerMm = canvas.width / pwMm
-      const pageHpx = phMm * pxPerMm
-
-      // Резать можно только по низу неразрывного блока — тогда заказ не разорвётся
-      const top = el.getBoundingClientRect().top
-      const stops = [...el.querySelectorAll('tr, .client-head, .signatures')]
-        .map(b => (b.getBoundingClientRect().bottom - top) * scale)
-        .filter(y => y > 0)
-        .sort((a, b) => a - b)
-
-      let y = 0, first = true
-      while (y < canvas.height - 1) {
-        const limit = y + pageHpx
-        let cut = stops.filter(s => s > y + 1 && s <= limit).pop() ?? 0
-        if (!cut) cut = limit                    // блок выше страницы — режем по границе
-        cut = Math.min(cut, canvas.height)
-        const h = Math.ceil(cut - y)
-        const part = document.createElement('canvas')
-        part.width = canvas.width
-        part.height = h
-        part.getContext('2d')?.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h)
-        if (!first) pdf.addPage()
-        pdf.addImage(part.toDataURL('image/jpeg', 0.94), 'JPEG', margin, margin, pwMm, h / pxPerMm)
-        first = false
-        y = cut
-      }
-      pdf.save(`Рейс-Воронеж-${ship?.ship_date ?? ship?.id ?? ''}.pdf`)
+      await saveSheetPdf(docRef.current, `Рейс-Воронеж-${ship?.ship_date ?? ship?.id ?? ''}.pdf`, 'tr, .client-head, .signatures')
     } catch (e) {
       toast.error('Не удалось сформировать PDF', { detail: `${e instanceof Error ? e.message : 'ошибка'}. Используйте «Печать» → Сохранить как PDF.` })
     } finally { setPdfBusy(false) }

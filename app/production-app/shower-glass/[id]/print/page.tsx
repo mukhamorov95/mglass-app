@@ -2,7 +2,8 @@
 
 // Лист отгрузки Шовер Гласс: что уехало, по заказам, с весом и графами подписи.
 
-import { use, useEffect, useState } from 'react'
+import { use, useEffect, useRef, useState } from 'react'
+import SheetActions from '@/components/SheetActions'
 import { loadJson } from '@/lib/toast'
 import { orderInShipment, orderInShipmentText, shipmentTotals } from '@/lib/production/clientShipments'
 import { fmtDay, fmtKg, fmtRub, type ShipmentsData } from '../../types'
@@ -11,6 +12,7 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
   const { id } = use(params)
   const [data, setData] = useState<ShipmentsData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const sheet = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void loadJson<ShipmentsData>('/api/production/client-shipments').then(r => {
@@ -28,12 +30,12 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
   const money = data.canMoney
   const orderIds = [...new Set(s.lines.map(l => l.order_id))]
   return (
-    <div className="min-h-screen bg-white p-6 text-[#111110] print:p-0">
-      <div className="max-w-3xl mx-auto space-y-4">
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <button onClick={() => window.print()} className="h-10 px-4 rounded-lg bg-[#111110] text-white text-[13px] font-medium">Печать</button>
-          <a href="/production-app/shower-glass?tab=shipments" className="h-10 px-3 inline-flex items-center rounded-lg border border-[#e4e4e0] text-[13px] text-[#4b4b47]">К отгрузкам</a>
-        </div>
+    <div className="min-h-screen bg-white p-4 sm:p-6 text-[#111110] print:p-0">
+      <div className="max-w-[210mm] mx-auto space-y-4 print:max-w-none">
+        <SheetActions sheet={sheet} fileName={`Лист отгрузки ${data.title} ${fmtDay(s.ship_date)}, №${s.id}.pdf`} backHref="/production-app/shower-glass?tab=shipments" backLabel="К отгрузкам" />
+        {/* Ширина листа не зависит от экрана: с телефона файл выходит таким же, как с компьютера. */}
+        <div className="overflow-x-auto print:overflow-visible">
+        <div ref={sheet} className="w-[190mm] mx-auto bg-white space-y-4 print:w-auto">
         <div>
           <h1 className="text-[18px] font-semibold">Лист отгрузки от {fmtDay(s.ship_date)}</h1>
           <p className="text-[13px] text-[#4b4b47]">Получатель: {data.title}{s.status === 'draft' ? ' · черновик, ещё не отправлена' : ''}</p>
@@ -77,16 +79,18 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
             const text = v ? orderInShipmentText(v, s.status === 'shipped', !!order?.rest_off) : null
             const parts = text ? [text.here, text.earlier, text.after].filter(Boolean).map(x => String(x).charAt(0).toLowerCase() + String(x).slice(1)) : []
             return (
-              <p key={id}>
+              <p key={id} className="pdf-keep">
                 <span className="font-medium">{here[0].order_no}</span>
                 {parts.length ? `: ${parts.join(', ')}` : ''}
               </p>
             )
           })}
         </div>
-        <div className="grid grid-cols-2 gap-8 pt-10 text-[12px]">
+        <div className="pdf-keep grid grid-cols-2 gap-8 pt-10 text-[12px]">
           <p className="border-t border-[#111110] pt-1">Отгрузил</p>
           <p className="border-t border-[#111110] pt-1">Принял</p>
+        </div>
+        </div>
         </div>
       </div>
     </div>
