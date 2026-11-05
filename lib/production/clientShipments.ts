@@ -125,6 +125,21 @@ export function requestProblem(req: LineRequest, line: Pick<ShipLine, 'qty' | 'l
   return null
 }
 
+// Заказ внутри отгрузки (владелец 05.11.2026): сколько уехало этой отгрузкой и что осталось по заказу.
+// sent: отгрузка уже отправлена, её штуки входят в shipped; у черновика их надо прибавить.
+type OrderViewLine = { key: string; label: string; size?: string; qty: number; shipped: number }
+export function orderInShipment(lines: OrderViewLine[], hereOf: (lineKey: string) => number, sent: boolean) {
+  const left = (l: OrderViewLine) => Math.max(0, l.qty - l.shipped - (sent ? 0 : hereOf(l.key)))
+  const total = lines.reduce((s, l) => s + l.qty, 0)
+  const here = lines.reduce((s, l) => s + hereOf(l.key), 0)
+  const remaining = lines.reduce((s, l) => s + left(l), 0)
+  return {
+    total, here, remaining,
+    wholeHere: total > 0 && here >= total,
+    rest: lines.filter(l => left(l) > 0).map(l => ({ key: l.key, label: l.size ? `${l.label}, ${l.size} мм` : l.label, left: left(l) })),
+  }
+}
+
 export type ShipmentLineView = { order_id: number; key: string; qty: number; lineQty: number; weight: number; amount: number }
 
 // Итог отгрузки: заказов, штук, вес, сумма — одна функция и для карточки, и для листа.

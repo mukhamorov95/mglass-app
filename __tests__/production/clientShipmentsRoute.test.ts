@@ -188,7 +188,39 @@ describe('отгрузка Шовер Гласс: маршрут', () => {
     expect((await call({ action: 'dispatch', shipment_id: s })).status).toBe(200)
     expect((await call({ action: 'dispatch', shipment_id: s })).status).toBe(409)
     expect((await call({ action: 'delete', shipment_id: s })).status).toBe(409)
-    expect((await call({ action: 'add', shipment_id: s, lines: [{ order_id: 1, line_key: 'b', qty: 1 }] })).status).toBe(409)
+  })
+
+  it('отправленная отгрузка: довезли остаток в неё, заказ стал отгруженным её датой; убрали — отметка снята', async () => {
+    const past = '2026-11-01'
+    const s = await create([[1, 'a', 2]], past)
+    await call({ action: 'dispatch', shipment_id: s })
+    expect(notesOf(1).stages.shipped).toBeUndefined()
+    const head = () => h.db.delivery_shipments.find(x => x.id === s)!
+
+    expect((await call({ action: 'add', shipment_id: s, lines: [{ order_id: 1, line_key: 'a', qty: 2 }] })).status).toBe(409)
+    const add1 = await call({ action: 'add', shipment_id: s, lines: [{ order_id: 1, line_key: 'a', qty: 1 }] })
+    expect(add1.body.shipped_orders).toEqual([])
+    expect(h.db.delivery_shipment_items.find(r => r.line_key === 'a')).toMatchObject({ qty: 3, weight_kg: 30, amount: 700 })
+    expect(head()).toMatchObject({ status: 'shipped', total_weight_kg: 30 })
+
+    const add2 = await call({ action: 'add', shipment_id: s, lines: [{ order_id: 1, line_key: 'b', qty: 1 }] })
+    expect(add2.body.shipped_orders).toEqual([1])
+    expect(notesOf(1).stages.shipped).toBe(`${past}T12:00:00+03:00`)
+    expect(notesOf(1).client_shipment).toMatchObject({ id: s, date: past, prev_shipped: null })
+    expect(h.db.delivery_shipment_items.find(r => r.line_key === 'b')).toMatchObject({ weight_kg: 5, amount: 300 })
+    expect(head().total_weight_kg).toBe(35)
+    expect(h.closed).toEqual([1])
+
+    const rm = await call({ action: 'remove', shipment_id: s, order_id: 1, line_key: 'b' })
+    expect(rm.body.reverted_orders).toEqual([1])
+    expect(notesOf(1).stages.shipped).toBeNull()
+    expect(notesOf(1).client_shipment).toBeNull()
+    expect(h.reopened).toEqual([1])
+    expect(head().total_weight_kg).toBe(30)
+
+    const last = await call({ action: 'remove', shipment_id: s, order_id: 1, line_key: 'a' })
+    expect(last.body.deleted).toBe(true)
+    expect(h.db.delivery_shipments.find(x => x.id === s)).toBeUndefined()
   })
 
   it('добавление складывает штуки, удаление строки её убирает', async () => {

@@ -11,7 +11,7 @@ import OrderLookup from '@/components/OrderLookup'
 import { confirmDialog } from '@/lib/dialog'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { daysWord, oldestFirst } from '@/lib/b2b/inWorkOrders'
-import { ORDER_HIDDEN_LABEL, ORDER_STATE_LABEL, numberMatches, orderShipState, shareOf, shipmentTotals, stripZeros, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
+import { ORDER_HIDDEN_LABEL, ORDER_STATE_LABEL, numberMatches, orderInShipment, shareOf, shipmentTotals, stripZeros, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
 import { fmtDay, fmtKg, fmtRub, type OrderLine, type PoolOrder, type Shipment, type ShipmentsData } from './types'
 
 const API = '/api/production/client-shipments'
@@ -50,7 +50,7 @@ function summaryText(t: ReturnType<typeof shipmentTotals>, canMoney: boolean) {
 async function post(failTitle: string, body: Record<string, unknown>) {
   const r = await sendOrToast(failTitle, API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   if (!r) return null
-  return await r.json().catch(() => ({})) as { id?: number; shipped_orders?: number[]; reverted_orders?: number[]; warnings?: string[] }
+  return await r.json().catch(() => ({})) as { id?: number; shipped_orders?: number[]; reverted_orders?: number[]; deleted?: boolean; warnings?: string[] }
 }
 
 function warn(title: string, warnings?: string[]) {
@@ -94,15 +94,19 @@ export default function ShowerGlassShipmentsPage() {
   const history = useMemo(() => (data?.shipments ?? []).filter(s => s.status === 'shipped' && shipmentMatches(s))
     .sort((a, b) => (b.ship_date ?? '').localeCompare(a.ship_date ?? '') || b.id - a.id), [data, shipmentMatches])
 
+  const allSent = useMemo(() => (data?.shipments ?? []).filter(s => s.status === 'shipped')
+    .sort((a, b) => (b.ship_date ?? '').localeCompare(a.ship_date ?? '') || b.id - a.id), [data])
+  const sentTarget = target === 'new' ? undefined : allSent.find(s => s.id === target)
+
   // Цифры на вкладках и списки по клику считаются одним условием inTab.
   const orders = useMemo(() => data?.orders ?? [], [data])
   const tabCount = (t: OrderTab) => orders.filter(o => inTab(o, t)).length
   const visible = useMemo(() => {
     const list = tab === 'history' ? orders
-      : tab === 'shipments' ? orders.filter(o => !o.hidden && o.stage !== 'shipped' && o.lines.some(l => l.free > 0))
+      : tab === 'shipments' ? orders.filter(o => !o.hidden && (sentTarget || o.stage !== 'shipped') && o.lines.some(l => l.free > 0))
       : orders.filter(o => inTab(o, tab))
     return oldestFirst(list.filter(o => matches(o, q)), o => o.launch_day)
-  }, [orders, tab, q])
+  }, [orders, tab, q, sentTarget])
   const elsewhere = useMemo(() => (q ? ORDER_TABS.filter(t => t.key !== tab && orders.some(o => inTab(o, t.key) && matches(o, q))) : []), [orders, tab, q])
   const inHistory = useMemo(() => !!q && orders.some(o => matches(o, q)), [orders, q])
 
@@ -152,6 +156,14 @@ export default function ShowerGlassShipmentsPage() {
 
   const collect = () => run(async () => {
     const lines = picked.map(p => ({ order_id: p.order.id, line_key: p.line.key, qty: p.qty }))
+    if (sentTarget) {
+      const ok = await confirmDialog({
+        title: `Добавить в отправленную отгрузку от ${fmtDay(sentTarget.ship_date)}?`,
+        text: `${summaryText(pickedTotals, !!data?.canMoney)}. Изделия сразу станут отгруженными этой датой. Заказ, у которого уедет всё, станет отгруженным, его открытые задачи цеха закроются.`,
+        confirmLabel: 'Добавить',
+      })
+      if (!ok) return
+    }
     const res = target === 'new'
       ? await post('Отгрузка не создана', { action: 'create', ship_date: newDate, lines })
       : await post('Изделия не добавлены', { action: 'add', shipment_id: target, lines })
@@ -160,6 +172,11 @@ export default function ShowerGlassShipmentsPage() {
     setTarget('new')
     setComposing(false)
     setTab('shipments')
+    if (sentTarget) {
+      toast.success('Изделия добавлены в отправленную отгрузку', { detail: `Лежат в блоке «Отправленные». Заказов отгружено полностью: ${res.shipped_orders?.length ?? 0}.` })
+      warn('Изделия добавлены, но не всё записалось', res.warnings)
+      return
+    }
     toast.success(target === 'new' ? 'Отгрузка собрана' : 'Изделия добавлены', { detail: 'Она ждёт в блоке «К отправке». Заказы станут отгруженными после кнопки «Отправить».' })
   })
 
@@ -209,6 +226,26 @@ export default function ShowerGlassShipmentsPage() {
     })
     warn('Записалось не всё', res.warnings)
   })
+
+  const removeSentLine = (s: Shipment, orderId: number, key: string, label: string) => run(async () => {
+    const ok = await confirmDialog({
+      title: `Убрать изделие из отправленной отгрузки от ${fmtDay(s.ship_date)}?`,
+      text: `${label}. Изделие снова можно будет выбрать. Если заказ был отгружен полностью, отметка снимется и задачи цеха, закрытые отгрузкой, вернутся.${s.lines.length === 1 ? ' Это последняя строка: отгрузка удалится.' : ''}`,
+      confirmLabel: 'Убрать', danger: true,
+    })
+    if (!ok) return
+    const res = await post('Строка не убрана', { action: 'remove', shipment_id: s.id, order_id: orderId, line_key: key })
+    if (!res) return
+    toast.success(res.deleted ? 'Строка убрана, отгрузка удалена' : 'Строка убрана из отправленной отгрузки', { detail: `Отметка снята с заказов: ${res.reverted_orders?.length ?? 0}.` })
+    warn('Строка убрана, но не всё записалось', res.warnings)
+  })
+
+  const addToSent = (s: Shipment) => {
+    setTarget(s.id)
+    setComposing(true)
+    setTab('shipments')
+    window.scrollTo({ top: 0 })
+  }
 
   const removeLine = (s: Shipment, orderId: number, key: string) => run(async () => {
     if (await post('Строка не убрана', { action: 'remove', shipment_id: s.id, order_id: orderId, line_key: key })) toast.success('Строка убрана из отгрузки')
@@ -317,13 +354,16 @@ export default function ShowerGlassShipmentsPage() {
             {tab === 'shipments' && (
               <>
                 <section className="space-y-2">
-                  <button onClick={() => setComposing(c => !c)} aria-expanded={composing}
+                  <button onClick={() => { if (composing) setTarget('new'); setComposing(c => !c) }} aria-expanded={composing}
                     className={`h-10 px-4 rounded-lg text-[13px] font-medium ${composing ? 'border border-[#e4e4e0] bg-white text-[#4b4b47]' : 'bg-[#111110] text-white'}`}>
                     {composing ? 'Скрыть список заказов' : '+ Новая отгрузка'}
                   </button>
                   {composing && (
                     <>
-                      <p className="text-[12px] text-[#6b6b66]">Отметьте заказы или изделия: внизу появится панель с датой и итогом. Сверху самые старые заказы, снизу новые.</p>
+                      <p className="text-[12px] text-[#6b6b66]">
+                        {sentTarget ? `Добавляем в отправленную отгрузку от ${fmtDay(sentTarget.ship_date)}. Отмеченные без этого экрана заказы тоже в списке. ` : 'Отметьте заказы или изделия: внизу появится панель с датой и итогом. '}
+                        Сверху самые старые заказы, снизу новые.
+                      </p>
                       {visible.length === 0 && <p className="text-[13px] text-[#9a9a95]">{q ? 'По этому номеру заказов к отгрузке нет.' : 'Заказов, которые можно отгрузить, нет.'}</p>}
                       {orderRows(visible)}
                     </>
@@ -339,7 +379,7 @@ export default function ShowerGlassShipmentsPage() {
                   ))}
                 </section>
 
-                <History shipments={history} orderById={orderById} canMoney={canMoney} busy={busy} onUndo={undo} emptyText={q ? 'С этим заказом отправленных отгрузок нет.' : 'Отправленных отгрузок пока нет.'} />
+                <History shipments={history} orderById={orderById} canMoney={canMoney} busy={busy} onUndo={undo} onAdd={addToSent} onRemoveLine={removeSentLine} emptyText={q ? 'С этим заказом отправленных отгрузок нет.' : 'Отправленных отгрузок пока нет.'} />
               </>
             )}
           </>
@@ -354,6 +394,7 @@ export default function ShowerGlassShipmentsPage() {
               className="h-10 rounded-lg border border-[#e4e4e0] bg-white px-2 text-[13px] min-w-0">
               <option value="new">Новая отгрузка</option>
               {drafts.map(d => <option key={d.id} value={d.id}>В отгрузку от {fmtDay(d.ship_date)}</option>)}
+              {allSent.map(d => <option key={d.id} value={d.id}>В отправленную от {fmtDay(d.ship_date)}</option>)}
             </select>
             {target === 'new' && (
               <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="h-10 rounded-lg border border-[#e4e4e0] bg-white px-2 text-[13px]" />
@@ -479,16 +520,36 @@ function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked
   )
 }
 
-// Что будет с заказом после этой отгрузки: «уедет полностью» или «частично, 2 из 5».
-function afterShipment(order: PoolOrder | undefined, s: Shipment) {
-  if (!order) return { state: 'none' as OrderShipState, shippedAfter: 0, total: 0 }
-  const here = (key: string) => s.lines.find(l => l.order_id === order.id && l.key === key)?.qty ?? 0
-  const state = orderShipState(order.lines, key => (order.lines.find(l => l.key === key)?.shipped ?? 0) + here(key))
-  return {
-    state,
-    shippedAfter: order.lines.reduce((sum, l) => sum + l.shipped + here(l.key), 0),
-    total: order.lines.reduce((sum, l) => sum + l.qty, 0),
-  }
+// Две отметки у заказа в отгрузке: что уехало этой отгрузкой и что осталось по заказу.
+function viewOf(order: PoolOrder | undefined, s: Shipment) {
+  if (!order) return null
+  return orderInShipment(order.lines, key => s.lines.filter(l => l.order_id === order.id && l.key === key).reduce((n, l) => n + l.qty, 0), s.status === 'shipped')
+}
+
+function OrderInShipment({ order, s, no }: { order: PoolOrder | undefined; s: Shipment; no: string }) {
+  const v = viewOf(order, s)
+  const sent = s.status === 'shipped'
+  const after = !v ? '' : v.remaining === 0
+    ? sent ? 'Заказ отгружен полностью' : 'После отправки заказ отгружен полностью'
+    : sent
+      ? order?.marked_day ? `Заказ отмечен отгруженным, по изделиям осталось ${v.remaining} из ${v.total} шт.` : `Заказ отгружен частично, осталось ${v.remaining} из ${v.total} шт.`
+      : `После отправки останется ${v.remaining} из ${v.total} шт.`
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[13px] font-semibold text-[#111110]">{no}</span>
+        {v && (
+          <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[v.wholeHere ? 'full' : 'none']}`}>
+            {v.wholeHere ? 'В этой отгрузке весь заказ' : `В этой отгрузке ${v.here} из ${v.total} шт.`}
+          </span>
+        )}
+        {v && <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[v.remaining === 0 ? 'full' : 'partial']}`}>{after}</span>}
+      </div>
+      {v && v.rest.length > 0 && (
+        <p className="text-[12px] text-amber-700 mt-0.5">Осталось отгрузить: {v.rest.map(r => `${r.label} — ${r.left} шт.`).join('; ')}</p>
+      )}
+    </>
+  )
 }
 
 function groupByOrder(s: Shipment) {
@@ -504,7 +565,7 @@ function DraftCard({ s, orderById, canMoney, today, busy, onDispatch, onRemove, 
 }) {
   const groups = groupByOrder(s)
   const future = !!s.ship_date && s.ship_date > today
-  const fullOrders = groups.filter(([id]) => afterShipment(orderById.get(id), s).state === 'full').map(([, ls]) => ls[0].order_no)
+  const fullOrders = groups.filter(([id]) => viewOf(orderById.get(id), s)?.remaining === 0).map(([, ls]) => ls[0].order_no)
   return (
     <div className="rounded-lg border border-[#e4e4e0] bg-white p-3 space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
@@ -517,15 +578,9 @@ function DraftCard({ s, orderById, canMoney, today, busy, onDispatch, onRemove, 
       </div>
       <div className="divide-y divide-[#f4f4f0]">
         {groups.map(([orderId, lines]) => {
-          const after = afterShipment(orderById.get(orderId), s)
           return (
             <div key={orderId} className="py-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[13px] font-semibold text-[#111110]">{lines[0].order_no}</span>
-                <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[after.state === 'full' ? 'full' : 'partial']}`}>
-                  {after.state === 'full' ? 'уедет полностью' : `уедет частично: ${after.shippedAfter} из ${after.total}`}
-                </span>
-              </div>
+              <OrderInShipment order={orderById.get(orderId)} s={s} no={lines[0].order_no} />
               {lines.map(l => (
                 <div key={l.key} className="flex items-start gap-2 text-[12px] text-[#6b6b66] mt-1">
                   <p className="flex-1 min-w-0">{l.label}{l.size ? `, ${l.size} мм` : ''} · {l.qty} из {l.lineQty} шт. · {fmtKg(l.weight)}{canMoney ? ` · ${fmtRub(l.amount)}` : ''}</p>
@@ -546,10 +601,12 @@ function DraftCard({ s, orderById, canMoney, today, busy, onDispatch, onRemove, 
   )
 }
 
-function History({ shipments, orderById, canMoney, busy, onUndo, emptyText }: {
-  shipments: Shipment[]; orderById: Map<number, PoolOrder>; canMoney: boolean; busy: boolean; onUndo: (s: Shipment) => void; emptyText: string
+function History({ shipments, orderById, canMoney, busy, onUndo, onAdd, onRemoveLine, emptyText }: {
+  shipments: Shipment[]; orderById: Map<number, PoolOrder>; canMoney: boolean; busy: boolean; onUndo: (s: Shipment) => void
+  onAdd: (s: Shipment) => void; onRemoveLine: (s: Shipment, orderId: number, key: string, label: string) => void; emptyText: string
 }) {
   const [openId, setOpenId] = useState<number | null>(null)
+  const [editId, setEditId] = useState<number | null>(null)
   const months = useMemo(() => {
     const m = new Map<string, Shipment[]>()
     for (const s of shipments) {
@@ -574,24 +631,34 @@ function History({ shipments, orderById, canMoney, busy, onUndo, emptyText }: {
               <button onClick={() => setOpenId(openId === s.id ? null : s.id)} className="w-full text-left px-3 py-2.5 flex flex-wrap items-center gap-x-2">
                 <span className="text-[13px] font-semibold text-[#111110]">{fmtDay(s.ship_date)}</span>
                 <span className="text-[12px] text-[#6b6b66]">{summaryText(shipmentTotals(s.lines), canMoney)}</span>
+                {(() => {
+                  const debt = groupByOrder(s).reduce((n, [id]) => n + (viewOf(orderById.get(id), s)?.remaining ?? 0), 0)
+                  return <span className={`text-[12px] font-medium ${debt > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{debt > 0 ? `Осталось отгрузить по заказам: ${debt} шт.` : 'По заказам всё отгружено'}</span>
+                })()}
               </button>
               {openId === s.id && (
                 <div className="border-t border-[#f0f0ec] px-3 py-2 space-y-2">
                   {groupByOrder(s).map(([orderId, lines]) => {
-                    const o = orderById.get(orderId)
                     return (
                       <div key={orderId}>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[13px] font-semibold text-[#111110]">{lines[0].order_no}</span>
-                          {o && <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[o.state]}`}>Сейчас: {ORDER_STATE_LABEL[o.state].toLowerCase()}</span>}
-                        </div>
+                        <OrderInShipment order={orderById.get(orderId)} s={s} no={lines[0].order_no} />
                         {lines.map(l => (
-                          <p key={l.key} className="text-[12px] text-[#6b6b66] mt-0.5">{l.label} · {l.qty} из {l.lineQty} шт. · {fmtKg(l.weight)}{canMoney ? ` · ${fmtRub(l.amount)}` : ''}</p>
+                          <div key={l.key} className="flex items-start gap-2 text-[12px] text-[#6b6b66] mt-0.5">
+                            <p className="flex-1 min-w-0">{l.label} · {l.qty} из {l.lineQty} шт. · {fmtKg(l.weight)}{canMoney ? ` · ${fmtRub(l.amount)}` : ''}</p>
+                            {editId === s.id && (
+                              <button disabled={busy} onClick={() => onRemoveLine(s, l.order_id, l.key, l.label)} aria-label="Убрать изделие из отгрузки" className="px-1.5 text-[#9a9a95] hover:text-red-500">✕</button>
+                            )}
+                          </div>
                         ))}
                       </div>
                     )
                   })}
                   <div className="flex flex-wrap gap-2 pt-1">
+                    <button onClick={() => setEditId(editId === s.id ? null : s.id)} aria-pressed={editId === s.id}
+                      className={`h-9 px-3 rounded-lg border text-[13px] ${editId === s.id ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] text-[#111110]'}`}>
+                      {editId === s.id ? 'Закончить правку' : 'Редактировать'}
+                    </button>
+                    {editId === s.id && <button disabled={busy} onClick={() => onAdd(s)} className="h-9 px-3 rounded-lg border border-[#e4e4e0] text-[13px] text-[#111110]">+ Добавить изделия</button>}
                     <Link href={`/production-app/shower-glass/${s.id}/print`} className="h-9 px-3 inline-flex items-center rounded-lg border border-[#e4e4e0] text-[13px] text-[#4b4b47]">Лист отгрузки</Link>
                     <button disabled={busy} onClick={() => onUndo(s)} className="h-9 px-3 rounded-lg border border-[#e4e4e0] text-[13px] text-red-600">Вернуть в черновик</button>
                   </div>

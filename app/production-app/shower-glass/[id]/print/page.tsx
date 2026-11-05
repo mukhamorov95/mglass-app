@@ -4,7 +4,7 @@
 
 import { use, useEffect, useState } from 'react'
 import { loadJson } from '@/lib/toast'
-import { shipmentTotals } from '@/lib/production/clientShipments'
+import { orderInShipment, shipmentTotals } from '@/lib/production/clientShipments'
 import { fmtDay, fmtKg, fmtRub, type ShipmentsData } from '../../types'
 
 export default function ShipmentPrintPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,6 +26,7 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
 
   const t = shipmentTotals(s.lines)
   const money = data.canMoney
+  const orderIds = [...new Set(s.lines.map(l => l.order_id))]
   return (
     <div className="min-h-screen bg-white p-6 text-[#111110] print:p-0">
       <div className="max-w-3xl mx-auto space-y-4">
@@ -66,6 +67,20 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
               </tr>
             </tfoot>
           </table>
+        </div>
+        <div className="text-[12px] space-y-1">
+          <p className="font-semibold">По заказам</p>
+          {orderIds.map(id => {
+            const order = data.orders.find(o => o.id === id)
+            const here = s.lines.filter(l => l.order_id === id)
+            const v = order ? orderInShipment(order.lines, key => here.filter(l => l.key === key).reduce((n, l) => n + l.qty, 0), s.status === 'shipped') : null
+            return (
+              <p key={id}>
+                <span className="font-medium">{here[0].order_no}</span>
+                {v ? `: в этой отгрузке ${v.wholeHere ? 'весь заказ' : `${v.here} из ${v.total} шт.`}, ${v.remaining === 0 ? 'заказ отгружен полностью' : `осталось отгрузить ${v.remaining} шт.`}` : ''}
+              </p>
+            )
+          })}
         </div>
         <div className="grid grid-cols-2 gap-8 pt-10 text-[12px]">
           <p className="border-t border-[#111110] pt-1">Отгрузил</p>
