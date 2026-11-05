@@ -276,6 +276,7 @@ const ADMIN_OPERATIONS: NavEntry[] = [
 const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app/control',  label: 'Табло цеха',       icon: '🔥' },
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
+  { href: '/production-app/tempering', label: 'Закалка',         icon: '♨️' },
   { href: '/production-app/orders',   label: 'Заказы',           icon: '📋' },
   { href: '/production-app/problems', label: 'Проблемы',         icon: '⚠️' },
   { href: '/production-app/board',    label: 'Обзор цеха',       icon: '🔧' },

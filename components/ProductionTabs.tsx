@@ -12,6 +12,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app',          label: '🏠 Сегодня',     match: p => p === '/production-app' },
   { href: '/production-app/control',  label: '🔥 Табло',       match: p => p.startsWith('/production-app/control') },
   { href: '/production-app/my-queue', label: '✅ Мои задачи',   match: p => p.startsWith('/production-app/my-queue') },
+  { href: '/production-app/tempering', label: '♨️ Закалка',    match: p => p.startsWith('/production-app/tempering') },
   { href: '/production-app/load',     label: '📊 Загрузка',    match: p => p.startsWith('/production-app/load') },
   { href: '/production-app/activity', label: '👥 Кто что делал', match: p => p.startsWith('/production-app/activity') },
   { href: '/production-app/orders',   label: '📋 Заказы',      match: p => p === '/production-app/orders' },
@@ -32,7 +33,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
 // Рабочему цеха с телефона 16 вкладок отодвигали очередь на пол-экрана. Ему — основные
 // крупно и «Ещё ▸»; владелец и начальник видят всё, как раньше. Табло — среди основных:
 // поручение ставит любой из цеха (решение владельца 08.10), путь к нему не прячем.
-export const MAIN_FOR_SHOP = ['/production-app', '/production-app/control', '/production-app/my-queue', '/production-app/orders', '/production-app/shipping', '/production-app/scan']
+export const MAIN_FOR_SHOP = ['/production-app', '/production-app/control', '/production-app/my-queue', '/production-app/tempering', '/production-app/orders', '/production-app/shipping', '/production-app/scan']
 
 // Открыта вкладка из «Ещё» — список раскрыт, иначе человек не видит, где он.
 export function shopTabsView(path: string, more: boolean) {
