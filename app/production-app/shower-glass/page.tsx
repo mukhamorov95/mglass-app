@@ -11,7 +11,7 @@ import OrderLookup from '@/components/OrderLookup'
 import { confirmDialog } from '@/lib/dialog'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { daysWord, oldestFirst } from '@/lib/b2b/inWorkOrders'
-import { ORDER_HIDDEN_LABEL, ORDER_STATE_LABEL, numberMatches, orderInShipment, shareOf, shipmentTotals, stripZeros, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
+import { ORDER_HIDDEN_LABEL, ORDER_STATE_LABEL, numberMatches, orderInShipment, orderInShipmentText, shareOf, shipmentTotals, stripZeros, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
 import { fmtDay, fmtKg, fmtRub, type OrderLine, type PoolOrder, type Shipment, type ShipmentsData } from './types'
 
 const API = '/api/production/client-shipments'
@@ -240,6 +240,19 @@ export default function ShowerGlassShipmentsPage() {
     warn('Строка убрана, но не всё записалось', res.warnings)
   })
 
+  const setRest = (order: PoolOrder, show: boolean) => run(async () => {
+    const res = await post('Галочка не сохранилась', { action: 'rest', order_id: order.id, show })
+    if (res) toast.success(show ? `Заказ ${order.no}: остаток показывается` : `Заказ ${order.no}: остаток скрыт`, { detail: 'На листе отгрузки так же.' })
+  })
+
+  const setEarlier = (s: Shipment, order: PoolOrder, lines: { line_key: string; qty: number }[]) => run(async () => {
+    const res = await post('Отметка не сохранилась', { action: 'earlier', shipment_id: s.id, order_id: order.id, lines: lines.map(l => ({ ...l, order_id: order.id })) })
+    if (!res) return
+    const full = !!res.shipped_orders?.length
+    toast.success(full ? `Заказ ${order.no} отгружен полностью` : 'Отметка сохранена', { detail: full ? `Датой этой отгрузки: ${fmtDay(s.ship_date)}.` : res.reverted_orders?.length ? 'Заказ больше не отгружен целиком, прежняя отметка возвращена.' : undefined })
+    warn('Отметка сохранена, но не всё записалось', res.warnings)
+  })
+
   const addToSent = (s: Shipment) => {
     setTarget(s.id)
     setComposing(true)
@@ -375,11 +388,11 @@ export default function ShowerGlassShipmentsPage() {
                   {drafts.length === 0 && <p className="text-[13px] text-[#9a9a95]">{q ? 'С этим заказом собранных отгрузок нет.' : 'Собранных отгрузок нет.'}</p>}
                   {drafts.map(s => (
                     <DraftCard key={s.id} s={s} orderById={orderById} canMoney={canMoney} today={data.today} busy={busy}
-                      onDispatch={dispatch} onRemove={remove} onRemoveLine={removeLine} onDate={setDate} />
+                      onDispatch={dispatch} onRemove={remove} onRemoveLine={removeLine} onDate={setDate} onRest={setRest} />
                   ))}
                 </section>
 
-                <History shipments={history} orderById={orderById} canMoney={canMoney} busy={busy} onUndo={undo} onAdd={addToSent} onRemoveLine={removeSentLine} emptyText={q ? 'С этим заказом отправленных отгрузок нет.' : 'Отправленных отгрузок пока нет.'} />
+                <History shipments={history} orderById={orderById} canMoney={canMoney} busy={busy} onUndo={undo} onAdd={addToSent} onRemoveLine={removeSentLine} onRest={setRest} onEarlier={setEarlier} emptyText={q ? 'С этим заказом отправленных отгрузок нет.' : 'Отправленных отгрузок пока нет.'} />
               </>
             )}
           </>
@@ -526,27 +539,55 @@ function viewOf(order: PoolOrder | undefined, s: Shipment) {
   return orderInShipment(order.lines, key => s.lines.filter(l => l.order_id === order.id && l.key === key).reduce((n, l) => n + l.qty, 0), s.status === 'shipped')
 }
 
-function OrderInShipment({ order, s, no }: { order: PoolOrder | undefined; s: Shipment; no: string }) {
+function OrderInShipment({ order, s, no, busy, onRest, editing, onEarlier }: {
+  order: PoolOrder | undefined; s: Shipment; no: string; busy: boolean; onRest: (o: PoolOrder, show: boolean) => void
+  editing?: boolean; onEarlier?: (s: Shipment, o: PoolOrder, lines: { line_key: string; qty: number }[]) => void
+}) {
   const v = viewOf(order, s)
   const sent = s.status === 'shipped'
-  const after = !v ? '' : v.remaining === 0
-    ? sent ? 'Заказ отгружен полностью' : 'После отправки заказ отгружен полностью'
-    : sent
-      ? order?.marked_day ? `Заказ отмечен отгруженным, по изделиям осталось ${v.remaining} из ${v.total} шт.` : `Заказ отгружен частично, осталось ${v.remaining} из ${v.total} шт.`
-      : `После отправки останется ${v.remaining} из ${v.total} шт.`
+  const restOff = !!order?.rest_off
+  const text = v ? orderInShipmentText(v, sent, restOff) : null
+  const hereOf = (key: string) => s.lines.filter(l => l.order_id === order?.id && l.key === key).reduce((n, l) => n + l.qty, 0)
+  // Что можно отметить уехавшим раньше: всё, что не уехало этой и другими отгрузками.
+  const room = (l: OrderLine) => Math.max(0, l.qty - (l.shipped - l.earlier) - l.drafted)
+  const candidates = order?.lines.filter(l => room(l) > 0 && !(hereOf(l.key) >= l.qty)) ?? []
+  const label = (l: OrderLine) => (l.size ? `${l.label}, ${l.size} мм` : l.label)
   return (
     <>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[13px] font-semibold text-[#111110]">{no}</span>
-        {v && (
-          <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[v.wholeHere ? 'full' : 'none']}`}>
-            {v.wholeHere ? 'В этой отгрузке весь заказ' : `В этой отгрузке ${v.here} из ${v.total} шт.`}
-          </span>
-        )}
-        {v && <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[v.remaining === 0 ? 'full' : 'partial']}`}>{after}</span>}
+        {v && text && <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[v.wholeHere ? 'full' : 'none']}`}>{text.here}</span>}
+        {text?.earlier && <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS.none}`}>{text.earlier}</span>}
+        {v && text?.after && <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[v.remaining === 0 ? 'full' : 'partial']}`}>{text.after}</span>}
       </div>
-      {v && v.rest.length > 0 && (
+      {order && v && !v.wholeHere && (
+        <label className="flex items-center gap-1.5 text-[12px] text-[#4b4b47] mt-1 w-fit">
+          <input type="checkbox" disabled={busy} checked={!restOff} onChange={e => onRest(order, e.target.checked)} className="w-4 h-4" />
+          Показывать, сколько отгружено и сколько осталось
+        </label>
+      )}
+      {v && !restOff && !editing && v.rest.length > 0 && (
         <p className="text-[12px] text-amber-700 mt-0.5">Осталось отгрузить: {v.rest.map(r => `${r.label} — ${r.left} шт.`).join('; ')}</p>
+      )}
+      {editing && order && onEarlier && candidates.length > 0 && (
+        <div className="rounded-lg bg-[#f5f5f3] p-2 mt-1 space-y-1">
+          <p className="text-[12px] font-medium text-[#111110]">Уехало раньше, до этой отгрузки:</p>
+          {candidates.map(l => (
+            <label key={l.key} className="flex items-center gap-1.5 text-[12px] text-[#4b4b47]">
+              {room(l) === 1
+                ? <input type="checkbox" disabled={busy} checked={l.earlier > 0} onChange={e => onEarlier(s, order, [{ line_key: l.key, qty: e.target.checked ? 1 : 0 }])} className="w-4 h-4 shrink-0" />
+                : (
+                  <select disabled={busy} value={l.earlier} aria-label="Сколько штук уехало раньше" onChange={e => onEarlier(s, order, [{ line_key: l.key, qty: Number(e.target.value) }])} className="h-7 px-1 rounded border border-[#e4e4e0] bg-white">
+                    {Array.from({ length: room(l) + 1 }, (_, n) => <option key={n} value={n}>{n} шт.</option>)}
+                  </select>
+                )}
+              {label(l)}, {l.qty} шт.
+            </label>
+          ))}
+          {candidates.some(l => l.earlier < room(l)) && (
+            <button disabled={busy} onClick={() => onEarlier(s, order, candidates.map(l => ({ line_key: l.key, qty: room(l) })))} className="h-8 px-2 rounded-lg border border-[#e4e4e0] bg-white text-[12px] text-[#111110]">Отметить всё остальное</button>
+          )}
+        </div>
       )}
     </>
   )
@@ -558,7 +599,8 @@ function groupByOrder(s: Shipment) {
   return [...m.entries()]
 }
 
-function DraftCard({ s, orderById, canMoney, today, busy, onDispatch, onRemove, onRemoveLine, onDate }: {
+function DraftCard({ s, orderById, canMoney, today, busy, onDispatch, onRemove, onRemoveLine, onDate, onRest }: {
+  onRest: (o: PoolOrder, show: boolean) => void
   s: Shipment; orderById: Map<number, PoolOrder>; canMoney: boolean; today: string; busy: boolean
   onDispatch: (s: Shipment, fullOrders: string[]) => void; onRemove: (s: Shipment) => void
   onRemoveLine: (s: Shipment, orderId: number, key: string) => void; onDate: (s: Shipment, date: string) => void
@@ -580,7 +622,7 @@ function DraftCard({ s, orderById, canMoney, today, busy, onDispatch, onRemove, 
         {groups.map(([orderId, lines]) => {
           return (
             <div key={orderId} className="py-2">
-              <OrderInShipment order={orderById.get(orderId)} s={s} no={lines[0].order_no} />
+              <OrderInShipment order={orderById.get(orderId)} s={s} no={lines[0].order_no} busy={busy} onRest={onRest} />
               {lines.map(l => (
                 <div key={l.key} className="flex items-start gap-2 text-[12px] text-[#6b6b66] mt-1">
                   <p className="flex-1 min-w-0">{l.label}{l.size ? `, ${l.size} мм` : ''} · {l.qty} из {l.lineQty} шт. · {fmtKg(l.weight)}{canMoney ? ` · ${fmtRub(l.amount)}` : ''}</p>
@@ -601,7 +643,8 @@ function DraftCard({ s, orderById, canMoney, today, busy, onDispatch, onRemove, 
   )
 }
 
-function History({ shipments, orderById, canMoney, busy, onUndo, onAdd, onRemoveLine, emptyText }: {
+function History({ shipments, orderById, canMoney, busy, onUndo, onAdd, onRemoveLine, onRest, onEarlier, emptyText }: {
+  onRest: (o: PoolOrder, show: boolean) => void; onEarlier: (s: Shipment, o: PoolOrder, lines: { line_key: string; qty: number }[]) => void
   shipments: Shipment[]; orderById: Map<number, PoolOrder>; canMoney: boolean; busy: boolean; onUndo: (s: Shipment) => void
   onAdd: (s: Shipment) => void; onRemoveLine: (s: Shipment, orderId: number, key: string, label: string) => void; emptyText: string
 }) {
@@ -632,8 +675,13 @@ function History({ shipments, orderById, canMoney, busy, onUndo, onAdd, onRemove
                 <span className="text-[13px] font-semibold text-[#111110]">{fmtDay(s.ship_date)}</span>
                 <span className="text-[12px] text-[#6b6b66]">{summaryText(shipmentTotals(s.lines), canMoney)}</span>
                 {(() => {
-                  const debt = groupByOrder(s).reduce((n, [id]) => n + (viewOf(orderById.get(id), s)?.remaining ?? 0), 0)
-                  return <span className={`text-[12px] font-medium ${debt > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{debt > 0 ? `Осталось отгрузить по заказам: ${debt} шт.` : 'По заказам всё отгружено'}</span>
+                  const groups = groupByOrder(s).map(([id]) => orderById.get(id))
+                  const hidden = groups.filter(o => o?.rest_off).length
+                  const debt = groups.reduce((n, o) => n + (o?.rest_off ? 0 : viewOf(o, s)?.remaining ?? 0), 0)
+                  const tail = hidden > 0 ? ` · остаток скрыт: ${hidden} зак.` : ''
+                  return <span className={`text-[12px] font-medium ${debt > 0 ? 'text-amber-700' : hidden > 0 ? 'text-[#6b6b66]' : 'text-emerald-700'}`}>
+                    {debt > 0 ? `Осталось отгрузить по заказам: ${debt} шт.${tail}` : hidden > 0 ? `Остаток скрыт: ${hidden} зак.` : 'По заказам всё отгружено'}
+                  </span>
                 })()}
               </button>
               {openId === s.id && (
@@ -641,7 +689,7 @@ function History({ shipments, orderById, canMoney, busy, onUndo, onAdd, onRemove
                   {groupByOrder(s).map(([orderId, lines]) => {
                     return (
                       <div key={orderId}>
-                        <OrderInShipment order={orderById.get(orderId)} s={s} no={lines[0].order_no} />
+                        <OrderInShipment order={orderById.get(orderId)} s={s} no={lines[0].order_no} busy={busy} onRest={onRest} editing={editId === s.id} onEarlier={onEarlier} />
                         {lines.map(l => (
                           <div key={l.key} className="flex items-start gap-2 text-[12px] text-[#6b6b66] mt-0.5">
                             <p className="flex-1 min-w-0">{l.label} · {l.qty} из {l.lineQty} шт. · {fmtKg(l.weight)}{canMoney ? ` · ${fmtRub(l.amount)}` : ''}</p>

@@ -4,7 +4,7 @@
 
 import { use, useEffect, useState } from 'react'
 import { loadJson } from '@/lib/toast'
-import { orderInShipment, shipmentTotals } from '@/lib/production/clientShipments'
+import { orderInShipment, orderInShipmentText, shipmentTotals } from '@/lib/production/clientShipments'
 import { fmtDay, fmtKg, fmtRub, type ShipmentsData } from '../../types'
 
 export default function ShipmentPrintPage({ params }: { params: Promise<{ id: string }> }) {
@@ -74,10 +74,12 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
             const order = data.orders.find(o => o.id === id)
             const here = s.lines.filter(l => l.order_id === id)
             const v = order ? orderInShipment(order.lines, key => here.filter(l => l.key === key).reduce((n, l) => n + l.qty, 0), s.status === 'shipped') : null
+            const text = v ? orderInShipmentText(v, s.status === 'shipped', !!order?.rest_off) : null
+            const parts = text ? [text.here, text.earlier, text.after].filter(Boolean).map(x => String(x).charAt(0).toLowerCase() + String(x).slice(1)) : []
             return (
               <p key={id}>
                 <span className="font-medium">{here[0].order_no}</span>
-                {v ? `: в этой отгрузке ${v.wholeHere ? 'весь заказ' : `${v.here} из ${v.total} шт.`}, ${v.remaining === 0 ? 'заказ отгружен полностью' : `осталось отгрузить ${v.remaining} шт.`}` : ''}
+                {parts.length ? `: ${parts.join(', ')}` : ''}
               </p>
             )
           })}

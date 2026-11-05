@@ -12,8 +12,8 @@ import { actorName } from '@/lib/production/executor'
 import { mskDayKey } from '@/lib/time'
 import { isLaunched, isShipped, orderDeadline, type TodayOrder } from '@/lib/b2b/todayPriorities'
 import {
-  ORDER_HIDDEN_LABEL, SHOWER_GLASS, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, takenByLine,
-  type LineRequest, type ShipOrder, type ShipRow,
+  ORDER_HIDDEN_LABEL, SHOWER_GLASS, addEarlier, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, takenByLine,
+  type EarlierLines, type LineRequest, type ShipOrder, type ShipRow,
 } from '@/lib/production/clientShipments'
 
 // Отгрузка Шовер Гласс: заказы и изделия к отгрузке, отгрузки к дате, история.
@@ -30,7 +30,7 @@ type Svc = ReturnType<typeof createServiceClient>
 type RawOrder = ShipOrder & { id: number; custom_number: string | null; notes: string | null; created_at: string; launched_at?: string | null; archived_at?: string | null; client_id?: number | null }
 type Head = { id: number; ship_date: string | null; status: string; shipped_at: string | null; created_at: string; total_weight_kg: number | null; title: string | null }
 type ItemRow = ShipRow & { label: string | null; weight_kg: number | null; amount: number | null }
-type Notes = { status?: string; historical?: boolean; launched_at?: string | null; stages?: Record<string, string | null>; client_shipment?: { id: number; date: string; prev_shipped: string | null } | null }
+type Notes = { shipped_earlier?: { lines?: EarlierLines; by?: string; at?: string } | null; ship_rest_off?: boolean | null; status?: string; historical?: boolean; launched_at?: string | null; stages?: Record<string, string | null>; client_shipment?: { id: number; date: string; prev_shipped: string | null } | null }
 
 const ORDER_COLS = 'id, custom_number, items, notes, created_at, launched_at, archived_at, client_id, discount_percent, total_after_discount, total_sale_inc_vat'
 const orderNo = (o: { custom_number: string | null; id: number }) => o.custom_number?.trim() || `00${o.id}`
@@ -42,6 +42,11 @@ function dayOf(v: Date | string | null | undefined): string | null {
 
 function notesOf(raw: string | null): Notes {
   try { return raw ? JSON.parse(raw) as Notes : {} } catch { return {} }
+}
+
+function withEarlier(taken: ReturnType<typeof takenByLine>, orders: RawOrder[]) {
+  for (const o of orders) addEarlier(taken, o.id, notesOf(o.notes).shipped_earlier?.lines)
+  return taken
 }
 
 async function loadHeads(svc: Svc): Promise<Head[]> {
@@ -83,6 +88,7 @@ export async function GET() {
     const extraIds = [...new Set(rows.map(r => r.order_id))].filter(id => !known.has(id))
     const orders = [...clientOrders, ...await loadOrders(svc, extraIds)]
     const byId = new Map(orders.map(o => [o.id, o]))
+    withEarlier(taken, orders)
 
     // Упаковано по строке: задача упаковки закрыта или заказ целиком отмечен упакованным.
     const packedKeys = new Set<string>()
@@ -102,7 +108,7 @@ export async function GET() {
         const t = taken.get(`${o.id}:${l.key}`) ?? { shipped: 0, drafted: 0 }
         return {
           key: l.key, label: l.label, size: l.size, qty: l.qty, weight: l.weight, amount: money(l.amount),
-          shipped: t.shipped, drafted: t.drafted, free: Math.max(0, l.qty - t.shipped - t.drafted),
+          shipped: t.shipped, drafted: t.drafted, earlier: t.earlier ?? 0, free: Math.max(0, l.qty - t.shipped - t.drafted),
           packed: !!stages.packaged || packedKeys.has(`${o.id}:${l.index}`),
         }
       })
@@ -117,7 +123,7 @@ export async function GET() {
         id: o.id, no: orderNo(o), launch_day: dayOf(o.launched_at ?? notes.launched_at) ?? o.created_at.slice(0, 10), deadline_day: deadlineDay,
         overdue_days: overdueDays(deadlineDay, today, stage), paid: !!stages.invoice_paid, state, stage, packed_lines: packedLineCount(lines),
         marked_day: typeof stages.shipped === 'string' ? dayOf(stages.shipped) : null, marked_outside: markedOutside,
-        hidden, archived_day: dayOf(o.archived_at), lines,
+        hidden, archived_day: dayOf(o.archived_at), rest_off: !!notes.ship_rest_off, lines,
       }]
     })
 
@@ -153,6 +159,7 @@ async function checkRequests(svc: Svc, requests: LineRequest[], exceptShipment?:
   const statusById = new Map(heads.map(h => [h.id, h.status]))
   const taken = takenByLine(rows, id => statusById.get(id), exceptShipment)
   const orders = await loadOrders(svc, [...new Set(requests.map(r => Number(r.order_id)))])
+  withEarlier(taken, orders)
   const byId = new Map(orders.map(o => [o.id, o]))
   for (const r of requests) {
     const o = byId.get(Number(r.order_id))
@@ -194,7 +201,7 @@ export async function POST(req: NextRequest) {
   const user = await getSessionUser()
   if (!user) return fail('Не авторизован', 401)
   const body = await req.json().catch(() => ({})) as {
-    action?: string; shipment_id?: number; ship_date?: string; lines?: LineRequest[]; order_id?: number; line_key?: string
+    action?: string; shipment_id?: number; ship_date?: string; lines?: LineRequest[]; order_id?: number; line_key?: string; show?: boolean
   }
   const svc = await serviceAsMe()
   const shipmentId = Number(body.shipment_id)
@@ -205,6 +212,19 @@ export async function POST(req: NextRequest) {
   if (body.action === 'pack' || body.action === 'unpack') {
     if (!PACK_ROLES.includes(guard)) return fail('Отмечать упаковку может цех или владелец.', 403)
     return packLine(svc, body.action, Number(body.order_id), String(body.line_key ?? ''), { id: user.id, email: user.email })
+  }
+
+  if (body.action === 'earlier' || body.action === 'rest') {
+    if (!PACK_ROLES.includes(guard)) return fail('Это отмечает цех или владелец.', 403)
+    const [order] = await loadOrders(svc, [Number(body.order_id)])
+    if (!order) return fail('Заказ не найден.', 404)
+    if (Number(order.client_id) !== SHOWER_GLASS.clientId) return fail(`Заказ ${orderNo(order)} другого клиента.`, 409)
+    if (body.action === 'rest') {
+      const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { ship_rest_off: body.show === false ? true : null } })
+      if (error) return fail(error.message, 500)
+      return NextResponse.json({ ok: true })
+    }
+    return markEarlier(svc, order, shipmentId, requests, user.id, await whoOf(svc, user))
   }
 
   if (body.action === 'create') {
@@ -294,7 +314,7 @@ async function packLine(svc: Svc, action: 'pack' | 'unpack', orderId: number, li
     const heads = await loadHeads(svc)
     const rows = await loadRows(svc, heads.map(h => h.id))
     const statusById = new Map(heads.map(h => [h.id, h.status]))
-    const t = takenByLine(rows, id => statusById.get(id)).get(`${orderId}:${lineKey}`)
+    const t = withEarlier(takenByLine(rows, id => statusById.get(id)), [order]).get(`${orderId}:${lineKey}`)
     if (t && t.shipped + t.drafted > 0) return fail(`${line.label}: изделие уже в отгрузке, сначала уберите его оттуда.`, 409)
   }
 
@@ -371,6 +391,50 @@ async function revertOrders(svc: Svc, orders: RawOrder[], taken: ReturnType<type
 
 const money2 = (n: number) => Math.round(n * 100) / 100
 
+// Отмечаем, что часть заказа уехала раньше учёта: только из отправленной отгрузки, где заказ есть.
+// Заказ, который этим закрылся, становится отгруженным её датой; снятая галочка возвращает прежнюю отметку.
+async function markEarlier(svc: Svc, order: RawOrder, shipmentId: number, requests: LineRequest[], userId: string, who: string) {
+  const head = await headOf(svc, shipmentId)
+  if (!head || head.status !== 'shipped' || !isDay(head.ship_date)) return fail('Отгрузка не отправлена или удалена. Обновите экран.', 409)
+  const heads = await loadHeads(svc)
+  const allRows = await loadRows(svc, heads.map(h => h.id))
+  if (!allRows.some(r => r.shipment_id === head.id && r.order_id === order.id)) return fail(`Заказа ${orderNo(order)} нет в этой отгрузке. Обновите экран.`, 409)
+  const statusById = new Map(heads.map(h => [h.id, h.status]))
+  const inShipments = takenByLine(allRows, id => statusById.get(id))
+  const lines = shipLines(order)
+
+  const notes = notesOf(order.notes)
+  const next: EarlierLines = { ...notes.shipped_earlier?.lines }
+  for (const r of requests) {
+    const line = lines.find(l => l.key === r.line_key)
+    if (!line) return fail('Строка не найдена, заказ могли изменить. Обновите экран.', 409)
+    if (!Number.isInteger(r.qty) || r.qty < 0) return fail(`${line.label}: количество должно быть целым.`)
+    const t = inShipments.get(`${order.id}:${r.line_key}`)
+    const room = line.qty - (t?.shipped ?? 0) - (t?.drafted ?? 0)
+    if (r.qty > room) return fail(`${line.label}: раньше могло уехать не больше ${Math.max(0, room)} шт., остальное уже в отгрузках.`, 409)
+    if (r.qty === 0) delete next[r.line_key]
+    else next[r.line_key] = r.qty
+  }
+  const hasAny = Object.keys(next).length > 0
+  const { error } = await svc.rpc('patch_order_notes_shallow', {
+    p_order_id: order.id,
+    p_patch: { shipped_earlier: hasAny ? { lines: next, by: who, at: new Date().toISOString() } : null },
+  })
+  if (error) return fail(error.message, 500)
+
+  const warnings: string[] = []
+  const [fresh] = await loadOrders(svc, [order.id])
+  const taken = withEarlier(inShipments, [fresh])
+  const shippedOf = (orderId: number, key: string) => taken.get(`${orderId}:${key}`)?.shipped ?? 0
+  const full = orderShipState(lines, key => shippedOf(order.id, key)) === 'full'
+  // След уже есть: заказ закрыт отгрузкой раньше, второй раз отмечать нельзя, иначе потеряется прежняя дата.
+  const shipped = full && !notesOf(fresh.notes).client_shipment
+    ? await markFullOrders(svc, [fresh], head.id, head.ship_date as string, shippedOf, userId, who, new Date().toISOString(), warnings)
+    : []
+  const reverted = full ? [] : await revertOrders(svc, [fresh], taken, userId, warnings)
+  return NextResponse.json({ ok: true, shipped_orders: shipped, reverted_orders: reverted, warnings })
+}
+
 // Довезли изделие в уже отправленной отгрузке: строка сразу со снимком веса и суммы, заказ — по факту уехавшего.
 async function addToSent(svc: Svc, head: Head, requests: LineRequest[], current: ItemRow[], userId: string, who: string) {
   const date = head.ship_date
@@ -381,6 +445,7 @@ async function addToSent(svc: Svc, head: Head, requests: LineRequest[], current:
   const taken = takenByLine(allRows, id => statusById.get(id), head.id)
   const orders = await loadOrders(svc, [...new Set(requests.map(r => r.order_id))])
   const byId = new Map(orders.map(o => [o.id, o]))
+  withEarlier(taken, orders)
 
   const merged = requests.map(r => {
     const o = byId.get(r.order_id)!
@@ -421,7 +486,7 @@ async function removeFromSent(svc: Svc, head: Head, orderId: number, lineKey: st
   const allRows = await loadRows(svc, heads.map(h => h.id))
   const statusById = new Map(heads.map(h => [h.id, h.status]))
   const orders = await loadOrders(svc, [orderId])
-  const reverted = await revertOrders(svc, orders, takenByLine(allRows, id => statusById.get(id)), userId, warnings)
+  const reverted = await revertOrders(svc, orders, withEarlier(takenByLine(allRows, id => statusById.get(id)), orders), userId, warnings)
 
   const left = allRows.filter(r => r.shipment_id === head.id)
   if (left.length === 0) {
@@ -450,6 +515,7 @@ async function dispatch(svc: Svc, shipmentId: number, userId: string, who: strin
   const taken = takenByLine(allRows, id => statusById.get(id), shipmentId)
   const orders = await loadOrders(svc, [...new Set(current.map(r => r.order_id))])
   const byId = new Map(orders.map(o => [o.id, o]))
+  withEarlier(taken, orders)
 
   // Снимок: заказ потом могут поправить, а уехавшее уже уехало.
   const snapshot: { order_id: number; line_key: string; label: string; weight_kg: number; amount: number }[] = []
@@ -503,6 +569,7 @@ async function undo(svc: Svc, shipmentId: number, userId: string) {
   const statusById = new Map(heads.map(h => [h.id, h.status]))
   const taken = takenByLine(allRows, id => statusById.get(id))
   const orders = await loadOrders(svc, [...new Set(current.map(r => r.order_id))])
+  withEarlier(taken, orders)
   const reverted = await revertOrders(svc, orders, taken, userId, warnings)
   return NextResponse.json({ ok: true, reverted_orders: reverted, warnings })
 }
