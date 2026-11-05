@@ -6,6 +6,9 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { CASCADE_FROM } from '@/lib/production/managerCascade'
 import { closeOpenTasksOnOrderMark, reopenTasksOnOrderUnmark } from '@/lib/production/closeOnOrderMark'
 import { readIn, readPaged } from '@/lib/production/paged'
+import { applyStageUpdates } from '@/lib/production/syncStages'
+import { STAGE_TO_FLAG } from '@/lib/productionOrderMirror'
+import { actorName } from '@/lib/production/executor'
 import { mskDayKey } from '@/lib/time'
 import { isLaunched, isShipped, orderDeadline, type TodayOrder } from '@/lib/b2b/todayPriorities'
 import {
@@ -20,6 +23,8 @@ import {
 const PAGE = '/production-app/shower-glass'
 const REGION = SHOWER_GLASS.region
 const SHIPPED_MARKS_SINCE = '2026-07-01'
+// Кто отмечает этапы мимо очереди цеха: те же роли, что у карточки заказа (sync-stages).
+const PACK_ROLES: readonly string[] = ['production', 'admin', 'ceo', 'buyer']
 
 type Svc = ReturnType<typeof createServiceClient>
 type RawOrder = ShipOrder & { id: number; custom_number: string | null; notes: string | null; created_at: string; launched_at?: string | null; client_id?: number | null }
@@ -133,7 +138,7 @@ export async function GET() {
       }),
     }))
 
-    return NextResponse.json({ canMoney, title: SHOWER_GLASS.title, today, orders: views, shipments })
+    return NextResponse.json({ canMoney, canPack: PACK_ROLES.includes(guard), title: SHOWER_GLASS.title, today, orders: views, shipments })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Ошибка загрузки' }, { status: 500 })
   }
@@ -182,6 +187,11 @@ export async function POST(req: NextRequest) {
   const requests = Array.isArray(body.lines)
     ? body.lines.map(l => ({ order_id: Number(l.order_id), line_key: String(l.line_key), qty: Number(l.qty) }))
     : []
+
+  if (body.action === 'pack' || body.action === 'unpack') {
+    if (!PACK_ROLES.includes(guard)) return fail('Отмечать упаковку может цех или владелец.', 403)
+    return packLine(svc, body.action, Number(body.order_id), String(body.line_key ?? ''), { id: user.id, email: user.email })
+  }
 
   if (body.action === 'create') {
     if (!isDay(body.ship_date)) return fail('Укажите дату отгрузки.')
@@ -248,6 +258,55 @@ export async function POST(req: NextRequest) {
   }
   if (body.action === 'undo') return undo(svc, shipmentId, user.id)
   return fail('Неизвестное действие.')
+}
+
+// Кнопка у позиции. Запись та же, что у карточки заказа: задача упаковки, каскад резки и закалки,
+// склад, зеркала. Снятие возвращает ровно то, что закрыла эта отметка.
+async function packLine(svc: Svc, action: 'pack' | 'unpack', orderId: number, lineKey: string, user: { id: string; email?: string | null }) {
+  const [order] = await loadOrders(svc, [orderId])
+  if (!order) return fail('Заказ не найден.', 404)
+  if (Number(order.client_id) !== SHOWER_GLASS.clientId) return fail(`Заказ ${orderNo(order)} другого клиента.`, 409)
+  const notes = notesOf(order.notes)
+  if (isShipped(notes)) return fail(`Заказ ${orderNo(order)} уже отгружен, упаковку не меняем. Обновите экран.`, 409)
+  const line = shipLines(order).find(l => l.key === lineKey)
+  if (!line) return fail('Строка не найдена, заказ могли изменить. Обновите экран.', 409)
+
+  if (action === 'unpack') {
+    const heads = await loadHeads(svc)
+    const rows = await loadRows(svc, heads.map(h => h.id))
+    const statusById = new Map(heads.map(h => [h.id, h.status]))
+    const t = takenByLine(rows, id => statusById.get(id)).get(`${orderId}:${lineKey}`)
+    if (t && t.shipped + t.drafted > 0) return fail(`${line.label}: изделие уже в отгрузке, сначала уберите его оттуда.`, 409)
+  }
+
+  const { data: prof } = await svc.from('users').select('name').eq('id', user.id).maybeSingle()
+  const actor = { id: user.id, email: user.email, name: actorName((prof as { name: string | null } | null)?.name, user.email) }
+  const res = await applyStageUpdates(svc, orderId, [{ item_index: line.index, stage_key: 'packaging', action: action === 'pack' ? 'done' : 'unset' }], actor)
+  if (res.failed.length) return fail(`Не записалось: ${res.failed.join('; ')}`, 500)
+  if (res.updated === 0) return fail(`${line.label}: у позиции нет задачи упаковки в цехе. Заказ запущен в цех?`, 409)
+
+  const now = new Date().toISOString()
+  const status = action === 'pack' ? 'done' : 'queued'
+  const entry = { status, updated_at: now, updated_by: user.id, ...(action === 'pack' ? { updated_by_email: user.email ?? undefined } : {}) }
+  const back = res.reopened.flatMap(r => r.stages)
+  const warnings: string[] = []
+  const { error: detailErr } = await svc.rpc('mark_detail_stages', {
+    p_order_id: orderId,
+    p_updates: ['packaging', ...back].map((stage, i) => ({ item: String(line.index), stage, entry: i === 0 ? entry : { ...entry, auto: true } })),
+  })
+  if (detailErr) warnings.push(`Карточка заказа не обновилась: ${detailErr.message}`)
+
+  // Зеркало заказа только продвигает флаги: снятую упаковку и вернувшиеся этапы снимаем сами,
+  // иначе заказ остался бы «упакован» с неупакованной позицией.
+  if (action === 'unpack') {
+    const stages = notes.stages ?? {}
+    const clear = Object.fromEntries(['packaging', ...back].map(k => STAGE_TO_FLAG[k]).filter(f => f && stages[f]).map(f => [f, null]))
+    if (Object.keys(clear).length) {
+      const { error } = await svc.rpc('mark_order_stages', { p_order_id: orderId, p_stages: clear })
+      if (error) warnings.push(`Отметка заказа не снята: ${error.message}`)
+    }
+  }
+  return NextResponse.json({ ok: true, cascaded: res.cascaded.length, reopened: back.length, warnings })
 }
 
 async function dispatch(svc: Svc, shipmentId: number, userId: string, who: string) {

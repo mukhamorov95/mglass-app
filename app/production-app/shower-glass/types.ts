@@ -18,7 +18,7 @@ export type Shipment = {
   id: number; ship_date: string | null; status: 'draft' | 'shipped'; shipped_at: string | null
   lines: ShipmentLine[]
 }
-export type ShipmentsData = { canMoney: boolean; title: string; today: string; orders: PoolOrder[]; shipments: Shipment[] }
+export type ShipmentsData = { canMoney: boolean; canPack: boolean; title: string; today: string; orders: PoolOrder[]; shipments: Shipment[] }
 
 export const fmtDay = (day: string | null | undefined) => (day ? `${day.slice(8, 10)}.${day.slice(5, 7)}.${day.slice(0, 4)}` : 'без даты')
 export const fmtKg = (n: number) => `${(Math.round(n * 10) / 10).toLocaleString('ru-RU')} кг`
