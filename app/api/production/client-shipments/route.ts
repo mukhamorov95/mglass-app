@@ -171,6 +171,17 @@ async function checkRequests(svc: Svc, requests: LineRequest[], exceptShipment?:
 const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 const fail = (error: string, status = 400) => NextResponse.json({ error }, { status })
 
+async function whoOf(svc: Svc, user: { id: string; email?: string | null }): Promise<string> {
+  const { data: prof } = await svc.from('users').select('name').eq('id', user.id).maybeSingle()
+  return (prof as { name: string | null } | null)?.name ?? user.email ?? 'Цех'
+}
+
+async function headOf(svc: Svc, id: number): Promise<Head | null> {
+  const { data } = await svc.from('delivery_shipments').select('id, ship_date, status, shipped_at, created_at, total_weight_kg, title')
+    .eq('id', id).eq('region', REGION).maybeSingle()
+  return (data as Head | null) ?? null
+}
+
 async function draftOf(svc: Svc, id: number): Promise<Head | null> {
   const { data } = await svc.from('delivery_shipments').select('id, ship_date, status, shipped_at, created_at, total_weight_kg, title')
     .eq('id', id).eq('region', REGION).eq('status', 'draft').maybeSingle()
@@ -215,10 +226,12 @@ export async function POST(req: NextRequest) {
   if (!shipmentId) return fail('Не указана отгрузка.')
 
   if (body.action === 'add') {
-    if (!await draftOf(svc, shipmentId)) return fail('Отгрузка уже отправлена или удалена. Обновите экран.', 409)
+    const head = await headOf(svc, shipmentId)
+    if (!head) return fail('Отгрузка удалена. Обновите экран.', 409)
     const current = await loadRows(svc, [shipmentId])
     const problem = await checkRequests(svc, requests, shipmentId, current)
     if (problem) return fail(problem, 409)
+    if (head.status === 'shipped') return addToSent(svc, head, requests, current, user.id, await whoOf(svc, user))
     const merged = requests.map(r => ({
       shipment_id: shipmentId, ...r,
       qty: r.qty + (current.find(c => c.order_id === r.order_id && c.line_key === r.line_key)?.qty ?? 0),
@@ -229,7 +242,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === 'remove') {
-    if (!await draftOf(svc, shipmentId)) return fail('Отгрузка уже отправлена или удалена. Обновите экран.', 409)
+    const head = await headOf(svc, shipmentId)
+    if (!head) return fail('Отгрузка удалена. Обновите экран.', 409)
+    if (head.status === 'shipped') return removeFromSent(svc, head, Number(body.order_id), String(body.line_key ?? ''), user.id)
     let q = svc.from('delivery_shipment_items').delete().eq('shipment_id', shipmentId).eq('order_id', Number(body.order_id))
     if (body.line_key) q = q.eq('line_key', body.line_key)
     const { data, error } = await q.select('order_id')
@@ -256,8 +271,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === 'dispatch') {
-    const { data: prof } = await svc.from('users').select('name').eq('id', user.id).maybeSingle()
-    return dispatch(svc, shipmentId, user.id, (prof as { name: string | null } | null)?.name ?? user.email ?? 'Цех')
+    return dispatch(svc, shipmentId, user.id, await whoOf(svc, user))
   }
   if (body.action === 'undo') return undo(svc, shipmentId, user.id)
   return fail('Неизвестное действие.')
@@ -314,6 +328,113 @@ async function packLine(svc: Svc, action: 'pack' | 'unpack', orderId: number, li
   return NextResponse.json({ ok: true, cascaded: res.cascaded.length, reopened: back.length, warnings })
 }
 
+// Заказ, у которого уехало всё, становится отгруженным той датой, что в отгрузке.
+async function markFullOrders(
+  svc: Svc, orders: RawOrder[], shipmentId: number, date: string,
+  shippedOf: (orderId: number, key: string) => number, userId: string, who: string, nowIso: string, warnings: string[],
+): Promise<number[]> {
+  const out: number[] = []
+  for (const o of orders) {
+    if (orderShipState(shipLines(o), key => shippedOf(o.id, key)) !== 'full') continue
+    const prev = notesOf(o.notes).stages?.shipped ?? null
+    const { error: markErr } = await svc.rpc('mark_order_stages', { p_order_id: o.id, p_stages: { shipped: `${date}T12:00:00+03:00` } })
+    if (markErr) { warnings.push(`Заказ ${orderNo(o)}: отметка не поставлена, ${markErr.message}`); continue }
+    const { error: traceErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: o.id, p_patch: { client_shipment: { id: shipmentId, date, prev_shipped: prev } } })
+    if (traceErr) warnings.push(`Заказ ${orderNo(o)}: след отгрузки не записан, ${traceErr.message}`)
+    await svc.from('b2b_orders').update({ updated_by_name: who, updated_at: nowIso }).eq('id', o.id)
+    const shop = await closeOpenTasksOnOrderMark(svc, o.id, 'shipped', CASCADE_FROM.shipping.shipped, { id: userId, name: who })
+    if (shop.error) warnings.push(`Заказ ${orderNo(o)}: задачи цеха не закрыты, ${shop.error}`)
+    out.push(o.id)
+  }
+  return out
+}
+
+// Заказ перестал быть уехавшим целиком: возвращаем прежнюю отметку. Только тем, кого отметила отгрузка (след).
+async function revertOrders(svc: Svc, orders: RawOrder[], taken: ReturnType<typeof takenByLine>, userId: string, warnings: string[]): Promise<number[]> {
+  const out: number[] = []
+  for (const o of orders) {
+    const trace = notesOf(o.notes).client_shipment
+    if (!trace) continue
+    if (orderShipState(shipLines(o), k => taken.get(`${o.id}:${k}`)?.shipped ?? 0) === 'full') continue
+    const { error: markErr } = await svc.rpc('mark_order_stages', { p_order_id: o.id, p_stages: { shipped: trace.prev_shipped } })
+    if (markErr) { warnings.push(`Заказ ${orderNo(o)}: отметка не снята, ${markErr.message}`); continue }
+    const { error: traceErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: o.id, p_patch: { client_shipment: null } })
+    if (traceErr) warnings.push(`Заказ ${orderNo(o)}: след отгрузки не снят, ${traceErr.message}`)
+    if (!trace.prev_shipped) {
+      const shop = await reopenTasksOnOrderUnmark(svc, o.id, [CASCADE_FROM.shipping.shipped], { id: userId })
+      if (shop.error) warnings.push(`Заказ ${orderNo(o)}: задачи цеха не возвращены, ${shop.error}`)
+    }
+    out.push(o.id)
+  }
+  return out
+}
+
+const money2 = (n: number) => Math.round(n * 100) / 100
+
+// Довезли изделие в уже отправленной отгрузке: строка сразу со снимком веса и суммы, заказ — по факту уехавшего.
+async function addToSent(svc: Svc, head: Head, requests: LineRequest[], current: ItemRow[], userId: string, who: string) {
+  const date = head.ship_date
+  if (!isDay(date)) return fail('У отгрузки нет даты.')
+  const heads = await loadHeads(svc)
+  const allRows = await loadRows(svc, heads.map(h => h.id))
+  const statusById = new Map(heads.map(h => [h.id, h.status]))
+  const taken = takenByLine(allRows, id => statusById.get(id), head.id)
+  const orders = await loadOrders(svc, [...new Set(requests.map(r => r.order_id))])
+  const byId = new Map(orders.map(o => [o.id, o]))
+
+  const merged = requests.map(r => {
+    const o = byId.get(r.order_id)!
+    const line = shipLines(o).find(l => l.key === r.line_key)!
+    const cur = current.find(c => c.order_id === r.order_id && c.line_key === r.line_key)
+    const before = (taken.get(`${r.order_id}:${r.line_key}`)?.shipped ?? 0) + (cur?.qty ?? 0)
+    return {
+      shipment_id: head.id, order_id: r.order_id, line_key: r.line_key, qty: r.qty + (cur?.qty ?? 0),
+      label: cur?.label ?? (line.size ? `${line.label}, ${line.size} мм` : line.label),
+      weight_kg: money2(Number(cur?.weight_kg ?? 0) + shareOf(line.weight, line.qty, before, r.qty)),
+      amount: money2(Number(cur?.amount ?? 0) + shareOf(line.amount, line.qty, before, r.qty)),
+    }
+  })
+  const { error } = await svc.from('delivery_shipment_items').upsert(merged, { onConflict: 'shipment_id,order_id,line_key' })
+  if (error) return fail(error.message, 500)
+
+  const warnings: string[] = []
+  const after = [...current.filter(c => !merged.some(m => m.order_id === c.order_id && m.line_key === c.line_key)), ...merged]
+  const { error: totalErr } = await svc.from('delivery_shipments')
+    .update({ total_weight_kg: money2(after.reduce((sum, x) => sum + Number(x.weight_kg ?? 0), 0)) }).eq('id', head.id)
+  if (totalErr) warnings.push(`Итоговый вес не обновлён: ${totalErr.message}`)
+
+  const shippedOf = (orderId: number, key: string) => (taken.get(`${orderId}:${key}`)?.shipped ?? 0) + (after.find(x => x.order_id === orderId && x.line_key === key)?.qty ?? 0)
+  const shippedOrders = await markFullOrders(svc, orders, head.id, date, shippedOf, userId, who, new Date().toISOString(), warnings)
+  return NextResponse.json({ ok: true, id: head.id, shipped_orders: shippedOrders, warnings })
+}
+
+// Убрали строку из отправленной: изделие снова свободно, заказ, переставший быть целиком уехавшим, теряет отметку.
+async function removeFromSent(svc: Svc, head: Head, orderId: number, lineKey: string, userId: string) {
+  if (!lineKey) return fail('Не указана строка.')
+  const { data, error } = await svc.from('delivery_shipment_items').delete()
+    .eq('shipment_id', head.id).eq('order_id', orderId).eq('line_key', lineKey).select('order_id')
+  if (error) return fail(error.message, 500)
+  if (!data?.length) return fail('Строка уже убрана. Обновите экран.', 409)
+
+  const warnings: string[] = []
+  const heads = await loadHeads(svc)
+  const allRows = await loadRows(svc, heads.map(h => h.id))
+  const statusById = new Map(heads.map(h => [h.id, h.status]))
+  const orders = await loadOrders(svc, [orderId])
+  const reverted = await revertOrders(svc, orders, takenByLine(allRows, id => statusById.get(id)), userId, warnings)
+
+  const left = allRows.filter(r => r.shipment_id === head.id)
+  if (left.length === 0) {
+    const { error: delErr } = await svc.from('delivery_shipments').delete().eq('id', head.id).eq('status', 'shipped')
+    if (delErr) warnings.push(`Пустая отгрузка не удалена: ${delErr.message}`)
+    return NextResponse.json({ ok: true, deleted: !delErr, reverted_orders: reverted, warnings })
+  }
+  const { error: totalErr } = await svc.from('delivery_shipments')
+    .update({ total_weight_kg: money2(left.reduce((sum, x) => sum + Number(x.weight_kg ?? 0), 0)) }).eq('id', head.id)
+  if (totalErr) warnings.push(`Итоговый вес не обновлён: ${totalErr.message}`)
+  return NextResponse.json({ ok: true, reverted_orders: reverted, warnings })
+}
+
 async function dispatch(svc: Svc, shipmentId: number, userId: string, who: string) {
   const head = await draftOf(svc, shipmentId)
   if (!head) return fail('Отгрузка уже отправлена или удалена. Обновите экран.', 409)
@@ -360,22 +481,8 @@ async function dispatch(svc: Svc, shipmentId: number, userId: string, who: strin
     if (error) warnings.push(`Снимок строки заказа ${s.order_id}: ${error.message}`)
   }
 
-  // Заказ, у которого уехало всё, становится отгруженным той датой, что в отгрузке.
-  const shippedOrders: number[] = []
-  for (const o of orders) {
-    const lines = shipLines(o)
-    const shippedOf = (key: string) => (taken.get(`${o.id}:${key}`)?.shipped ?? 0) + (current.find(r => r.order_id === o.id && r.line_key === key)?.qty ?? 0)
-    if (orderShipState(lines, shippedOf) !== 'full') continue
-    const prev = notesOf(o.notes).stages?.shipped ?? null
-    const { error: markErr } = await svc.rpc('mark_order_stages', { p_order_id: o.id, p_stages: { shipped: `${date}T12:00:00+03:00` } })
-    if (markErr) { warnings.push(`Заказ ${orderNo(o)}: отметка не поставлена, ${markErr.message}`); continue }
-    const { error: traceErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: o.id, p_patch: { client_shipment: { id: shipmentId, date, prev_shipped: prev } } })
-    if (traceErr) warnings.push(`Заказ ${orderNo(o)}: след отгрузки не записан, ${traceErr.message}`)
-    await svc.from('b2b_orders').update({ updated_by_name: who, updated_at: nowIso }).eq('id', o.id)
-    const shop = await closeOpenTasksOnOrderMark(svc, o.id, 'shipped', CASCADE_FROM.shipping.shipped, { id: userId, name: who })
-    if (shop.error) warnings.push(`Заказ ${orderNo(o)}: задачи цеха не закрыты, ${shop.error}`)
-    shippedOrders.push(o.id)
-  }
+  const shippedOf = (orderId: number, key: string) => (taken.get(`${orderId}:${key}`)?.shipped ?? 0) + (current.find(r => r.order_id === orderId && r.line_key === key)?.qty ?? 0)
+  const shippedOrders = await markFullOrders(svc, orders, shipmentId, date, shippedOf, userId, who, nowIso, warnings)
   return NextResponse.json({ ok: true, shipped_orders: shippedOrders, warnings })
 }
 
@@ -396,20 +503,6 @@ async function undo(svc: Svc, shipmentId: number, userId: string) {
   const statusById = new Map(heads.map(h => [h.id, h.status]))
   const taken = takenByLine(allRows, id => statusById.get(id))
   const orders = await loadOrders(svc, [...new Set(current.map(r => r.order_id))])
-  const reverted: number[] = []
-  for (const o of orders) {
-    const trace = notesOf(o.notes).client_shipment
-    if (!trace) continue
-    if (orderShipState(shipLines(o), k => taken.get(`${o.id}:${k}`)?.shipped ?? 0) === 'full') continue
-    const { error: markErr } = await svc.rpc('mark_order_stages', { p_order_id: o.id, p_stages: { shipped: trace.prev_shipped } })
-    if (markErr) { warnings.push(`Заказ ${orderNo(o)}: отметка не снята, ${markErr.message}`); continue }
-    const { error: traceErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: o.id, p_patch: { client_shipment: null } })
-    if (traceErr) warnings.push(`Заказ ${orderNo(o)}: след отгрузки не снят, ${traceErr.message}`)
-    if (!trace.prev_shipped) {
-      const shop = await reopenTasksOnOrderUnmark(svc, o.id, [CASCADE_FROM.shipping.shipped], { id: userId })
-      if (shop.error) warnings.push(`Заказ ${orderNo(o)}: задачи цеха не возвращены, ${shop.error}`)
-    }
-    reverted.push(o.id)
-  }
+  const reverted = await revertOrders(svc, orders, taken, userId, warnings)
   return NextResponse.json({ ok: true, reverted_orders: reverted, warnings })
 }

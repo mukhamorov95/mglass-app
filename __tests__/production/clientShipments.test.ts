@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { lineKeyOf, numberMatches, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, shipmentTotals, takenByLine } from '@/lib/production/clientShipments'
+import { lineKeyOf, numberMatches, orderHidden, orderInShipment, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, shipmentTotals, takenByLine } from '@/lib/production/clientShipments'
 
 describe('отгрузка по изделиям: расчёт', () => {
   it('строка: название со словом стекло или зеркало, вес и сумма всей строки', () => {
@@ -79,6 +79,19 @@ describe('отгрузка по изделиям: расчёт', () => {
     expect(overdueDays('2026-10-26', '2026-11-05', 'packed')).toBe(10)
     expect(overdueDays('2026-10-26', '2026-11-05', 'shipped')).toBe(0)
     expect(overdueDays(null, '2026-11-05', 'in_work')).toBe(0)
+  })
+
+  it('заказ в отгрузке: довезли одно из трёх — отгрузка частичная, заказ уехал полностью', () => {
+    const lines = [{ key: 'a', label: 'Стекло', qty: 2, shipped: 2 }, { key: 'b', label: 'Зеркало', size: '600×800', qty: 1, shipped: 1 }]
+    expect(orderInShipment(lines, k => (k === 'b' ? 1 : 0), true)).toEqual({ total: 3, here: 1, remaining: 0, wholeHere: false, rest: [] })
+  })
+
+  it('заказ в отгрузке: часть уехала, остаток назван по изделиям, черновик считает свои штуки', () => {
+    const lines = [{ key: 'a', label: 'Стекло', qty: 2, shipped: 0 }, { key: 'b', label: 'Зеркало', size: '600×800', qty: 1, shipped: 0 }]
+    const draft = orderInShipment(lines, k => (k === 'a' ? 1 : 0), false)
+    expect(draft).toMatchObject({ total: 3, here: 1, remaining: 2, wholeHere: false })
+    expect(draft.rest).toEqual([{ key: 'a', label: 'Стекло', left: 1 }, { key: 'b', label: 'Зеркало, 600×800 мм', left: 1 }])
+    expect(orderInShipment(lines, k => (k === 'a' ? 2 : 1), false)).toMatchObject({ here: 3, remaining: 0, wholeHere: true })
   })
 
   it('номер находится с нулями и без них', () => {
