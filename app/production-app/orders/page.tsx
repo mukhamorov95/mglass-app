@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import OrderLookup from '@/components/OrderLookup'
 import { shopScopeOf, inShopScope } from '@/lib/production/shopScope'
 import ShopScopeBanner from '@/components/production/ShopScopeBanner'
 import ProductionTabs from '@/components/ProductionTabs'
@@ -54,6 +55,7 @@ function OrdersScreen() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const [problemFor, setProblemFor] = useState<number | null>(null)
   const [pReason, setPReason] = useState(ANDON_REASONS[0].code)
   const [pComment, setPComment] = useState('')
@@ -179,10 +181,13 @@ function OrdersScreen() {
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Заказы</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5">{orderIds.length} в работе · точки первыми, дальше по срочности · клик — раскрыть{me.production_lead ? ' · вы ответственный' : ''}</p>
         <ShopScopeBanner scope={scope} allHref="/production-app/orders" />
+        <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Номер заказа или клиент: ищет по всем заказам"
+          className="mt-2 w-full max-w-md h-10 rounded-lg border border-[#e4e4e0] bg-white px-3 text-[13px] outline-none focus:border-[#111110]" />
         <ProductionTabs />
       </div>
 
       <div className="px-4 pt-4 space-y-2 max-w-[760px] mx-auto">
+        <OrderLookup query={query} linkBase="/production-app/orders" />
         {loadError && (
           <div className="bg-red-50 rounded-xl border border-red-200 p-4 text-center">
             <p className="text-[14px] font-semibold text-red-800">Не загрузилось: {loadError}</p>
@@ -190,7 +195,7 @@ function OrdersScreen() {
           </div>
         )}
         {!loadError && orderIds.length === 0 && <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center text-[13px] text-[#9a9a95]">Нет заказов в работе</div>}
-        {orderIds.map(oid => {
+        {!query.trim() && orderIds.map(oid => {
           const o = orders.get(oid)
           const oTasks = tasks.filter(t => t.order_id === oid)
           const done = oTasks.filter(t => t.status === 'done').length

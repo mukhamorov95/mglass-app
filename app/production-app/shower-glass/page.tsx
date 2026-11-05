@@ -7,11 +7,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
+import OrderLookup from '@/components/OrderLookup'
 import { confirmDialog } from '@/lib/dialog'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { daysWord, oldestFirst } from '@/lib/b2b/inWorkOrders'
 import { ORDER_HIDDEN_LABEL, ORDER_STATE_LABEL, numberMatches, orderShipState, shareOf, shipmentTotals, stripZeros, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
-import { fmtDay, fmtKg, fmtRub, type FoundOrder, type OrderLine, type PoolOrder, type Shipment, type ShipmentsData } from './types'
+import { fmtDay, fmtKg, fmtRub, type OrderLine, type PoolOrder, type Shipment, type ShipmentsData } from './types'
 
 const API = '/api/production/client-shipments'
 const STATE_CLS: Record<OrderShipState, string> = {
@@ -105,20 +106,9 @@ export default function ShowerGlassShipmentsPage() {
   const elsewhere = useMemo(() => (q ? ORDER_TABS.filter(t => t.key !== tab && orders.some(o => inTab(o, t.key) && matches(o, q))) : []), [orders, tab, q])
   const inHistory = useMemo(() => !!q && orders.some(o => matches(o, q)), [orders, q])
 
-  // Номера нет на экране: спрашиваем базу, чей он и что с ним. Ответ хранит свой номер, чужой не показываем.
-  const [found, setFound] = useState<{ q: string; rows: FoundOrder[] | null; error?: string } | null>(null)
+  // Номера нет на экране: старый заказ или другой клиент, отвечает общий поиск.
   const digits = /^\d+$/.test(q) ? stripZeros(q) : ''
   const askBase = !!data && !!digits && !inHistory
-  useEffect(() => {
-    if (!askBase) return
-    const timer = setTimeout(() => {
-      void loadJson<{ found: FoundOrder[] }>(`${API}?find=${digits}`).then(r => {
-        setFound(r.error !== null ? { q: digits, rows: null, error: r.error } : { q: digits, rows: r.data.found })
-      })
-    }, 350)
-    return () => clearTimeout(timer)
-  }, [askBase, digits])
-  const foundNow = askBase && found?.q === digits ? found : null
 
   const picked = useMemo(() => {
     const out: { order: PoolOrder; line: OrderLine; qty: number }[] = []
@@ -297,7 +287,7 @@ export default function ShowerGlassShipmentsPage() {
                     {inHistory && elsewhere.length === 0 && (
                       <button onClick={() => setTab('history')} className="underline text-[#111110]">Есть в истории заказов</button>
                     )}
-                    {askBase && <FoundList found={foundNow} />}
+                    {askBase && <OrderLookup query={digits} linkBase="/production-app/orders" />}
                   </div>
                 )}
                 {orderRows(visible)}
@@ -310,7 +300,7 @@ export default function ShowerGlassShipmentsPage() {
                 {visible.length === 0 && (
                   <div className="text-[13px] text-[#9a9a95] space-y-1.5">
                     <p>{q ? 'В истории такого номера нет.' : 'Заказов нет.'}</p>
-                    {askBase && <FoundList found={foundNow} />}
+                    {askBase && <OrderLookup query={digits} linkBase="/production-app/orders" />}
                   </div>
                 )}
                 {monthsOf(visible).map(([month, list]) => (
@@ -384,23 +374,6 @@ function monthsOf(list: PoolOrder[]) {
   const m = new Map<string, PoolOrder[]>()
   for (const o of list) m.set(o.launch_day.slice(0, 7), [...(m.get(o.launch_day.slice(0, 7)) ?? []), o])
   return [...m.entries()]
-}
-
-// Ответ базы на номер, которого нет на экране: старый заказ, чужой клиент или такого номера нет вовсе.
-function FoundList({ found }: { found: { rows: FoundOrder[] | null; error?: string } | null }) {
-  if (!found) return <p>Ищу этот номер в базе…</p>
-  if (found.error) return <p className="text-red-700">Не удалось проверить номер в базе: {found.error}</p>
-  if (!found.rows?.length) return <p>В базе заказа с таким номером не нашлось, либо ваша роль не видит заказы других клиентов.</p>
-  return (
-    <div className="space-y-1">
-      {found.rows.map(f => (
-        <p key={f.id} className="text-[#111110]">
-          Заказ {f.no} от {fmtDay(f.created_day)}: {f.own ? 'Шовер Гласс, старше 01.07' : `другой клиент, ${f.client ?? 'без названия'}`}. {f.status}.{' '}
-          <Link href={`/production-app/orders/${f.id}`} className="underline">Открыть</Link>
-        </p>
-      ))}
-    </div>
-  )
 }
 
 function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked, onExpand, onToggle, onLine }: {

@@ -20,6 +20,7 @@ import { packedOn, shippedOn, unpackedPieces, stageDayKey } from '@/lib/producti
 import DayReport from './DayReport'
 import { readPaged, readIn, errorText } from '@/lib/production/paged'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
+import OrderLookup from '@/components/OrderLookup'
 
 const PROD_SINCE = '2026-07-01'
 
@@ -183,6 +184,7 @@ export default function ShippingPage() {
       </div>
 
       <div className="px-4 py-4 max-w-3xl">
+        {q.trim() && !loading && searched.length === 0 && <div className="mb-4"><OrderLookup query={q} linkBase="/production-app/orders" /></div>}
         {loadError && (
           <div className="bg-red-50 rounded-xl border border-red-200 p-4 mb-4 text-center">
             <p className="text-[14px] font-semibold text-red-800">Не загрузилось: {loadError}</p>
