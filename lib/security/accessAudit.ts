@@ -33,6 +33,8 @@ export type Finding = { severity: Severity; code: string; table: string; title: 
 // риск, а не замечание. Список ведём руками: он короткий и должен быть осознанным.
 export const SENSITIVE_TABLES = new Set([
   'delivery_shipment_items',   // суммы отгруженных строк
+  'tempering_batches',         // листы на закалку: кто и когда отправил
+  'tempering_batch_items',     // себестоимость закалки и продажная сумма строк
   'users', 'b2b_clients', 'b2b_client_legal_entities', 'b2b_orders', 'b2b_materials', 'b2b_inquiries',
   'materials', 'hardware_items', 'services', 'b2b_services', 'financial_settings',
   'supplier_price_rows', 'glass_price_matrix', 'purchase_orders', 'calculations',

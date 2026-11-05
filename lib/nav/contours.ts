@@ -95,6 +95,7 @@ const B2B: NavEntry[] = [
   { href: '/admin/b2b-access',   label: 'Доступ в кабинет клиенту', icon: '🔑' },
   { groupLabel: 'Производство' },
   { href: '/production-app/control', label: 'Табло цеха',    icon: '🔥' },
+  { href: '/production-app/tempering', label: 'Закалка',     icon: '♨️' },
   { href: '/production-app/orders',  label: 'Заказы в цеху', icon: '📋' },
   { href: '/production-app/load',    label: 'Планирование',  icon: '🗓️' },
   { href: '/production-app/board',   label: 'Участки цеха',  icon: '🔧' },
