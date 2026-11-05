@@ -4,6 +4,8 @@ import { fmtDay } from './types'
 
 export const fmtMoney = (n: number) => `${n.toLocaleString('ru-RU', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })} ₽`
 const weekday = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'UTC' })
+// Внутри фразы строчная только у служебного начала: название клиента остаётся как есть.
+const inSentence = (text: string, client: string) => (text.startsWith(client) ? text : text.charAt(0).toLowerCase() + text.slice(1))
 const STATE = { none: 'не отгружен', partial: 'частично', full: 'отгружен' } as const
 
 function Debt({ n, client }: { n: number; client: string }) {
@@ -43,8 +45,8 @@ export default function ReconciliationDoc({ doc, caption }: { doc: ReconDoc; cap
 
       <div className="pdf-keep rounded-lg border border-[#e4e4e0] bg-white p-3 text-[13px] space-y-1">
         <p className="font-semibold">На {fmtDay(doc.to)}</p>
-        <p>Считая только заказы, отгруженные целиком: {debtText(whole.closing, client).toLowerCase()} {fmtMoney(Math.abs(whole.closing))}.</p>
-        <p>Считая и отгруженные части заказов: {debtText(items.closing, client).toLowerCase()} {fmtMoney(Math.abs(items.closing))}.</p>
+        <p>Считая только заказы, отгруженные целиком: {inSentence(debtText(whole.closing, client), client)} {fmtMoney(Math.abs(whole.closing))}.</p>
+        <p>Считая и отгруженные части заказов: {inSentence(debtText(items.closing, client), client)} {fmtMoney(Math.abs(items.closing))}.</p>
         {parts !== 0 && <p className="text-[#6b6b66]">Разница {fmtMoney(Math.abs(parts))}: части заказов, которые уехали, а заказ ещё не закрыт.</p>}
       </div>
 
