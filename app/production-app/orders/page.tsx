@@ -24,7 +24,7 @@ import { loadJson, toast as errorToast, sendOrToast, responseError, NETWORK_ERRO
 
 type Item = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; hasTempering?: boolean; hasFacet?: boolean; hasHoles?: boolean; shape?: 'rect' | 'curved'; hasTriplex?: boolean }
 type Task = BoardTask & { id: number; station: string; rework_count: number | null; problem_reason_code: string | null; problem_comment: string | null; problem_at: string | null; problem_by_name: string | null }
-type Detail = { id: number; items: Item[]; drawing_url: string | null; launched_at: string | null; tasks: Task[]; shipments: { day: string | null; pieces: number }[]; earlier_pieces: number }
+type Detail = { id: number; items: Item[]; drawing_url: string | null; launched_at: string | null; tasks: Task[]; shipments: { day: string | null; pieces: number }[]; earlier_pieces: number; ship_mark: { by: string; at: string | null } | null }
 type Me = { role: string | null; production_stations: string[] | null; production_lead: boolean }
 type Period = { from: string; to: string }
 
@@ -46,6 +46,14 @@ function specLine(it?: Item): string {
   const qty = it.quantity && it.quantity > 1 ? `${it.quantity} шт` : ''
   return [dims, materialLabelShort(it), qty].filter(Boolean).join(' · ')
 }
+// Список считается секунды, поэтому при открытии показываем прошлый и сразу обновляем. Сумму в браузере не храним: за этим компьютером может работать другой человек.
+const cacheKey = (scope: string | null) => `orders-board:v1:${scope ?? 'all'}`
+function readCache(scope: string | null): BoardOrder[] | null {
+  try { const v = localStorage.getItem(cacheKey(scope)); return v ? JSON.parse(v) as BoardOrder[] : null } catch { return null }
+}
+function writeCache(scope: string | null, list: BoardOrder[]) {
+  try { localStorage.setItem(cacheKey(scope), JSON.stringify(list.map(o => ({ ...o, amount: undefined })))) } catch { /* место кончилось или хранилище закрыто: просто без кэша */ }
+}
 const shift = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10)
 
 export default function OrdersPage() {
@@ -60,6 +68,7 @@ function OrdersScreen() {
   const [orders, setOrders] = useState<BoardOrder[] | null>(null)
   const [today, setToday] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [tab, setTabState] = useState<BoardTab>(BOARD_TAB_KEYS.includes(initialTab as BoardTab) ? initialTab as BoardTab : 'in_work')
   const [period, setPeriod] = useState<Period | null>(null)
   const [stageFilter, setStageFilter] = useState<string | null>(null)
@@ -89,14 +98,21 @@ function OrdersScreen() {
     const q = new URLSearchParams()
     if (scope) q.set('client', scope)
     if (to) q.set('to', to)
+    setRefreshing(true)
     const r = await loadJson<{ today: string; orders: BoardOrder[] }>(`${API}?${q}`)
+    setRefreshing(false)
     if (r.error !== null) { setLoadError(r.error); return }
     setLoadError(null)
     setToday(r.data.today)
     setOrders(r.data.orders)
+    if (!to) writeCache(scope, r.data.orders)
   }
-  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { void load() }, [scope, to])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!to) setOrders(prev => prev ?? readCache(scope))
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, to])
 
   async function loadDetail(id: number) {
     const r = await loadJson<Detail>(`${API}?id=${id}`)
@@ -126,7 +142,8 @@ function OrdersScreen() {
     void loadDetail(id)
   }
 
-  const refreshOpen = async () => { await load(); if (open) await loadDetail(open) }
+  // Раскрытый заказ сначала: человек смотрит на него, список догонит.
+  const refreshOpen = async () => { if (open) await loadDetail(open); void load() }
   const isLead = me.production_lead || (me.role != null && OWNER.has(me.role))
   const canMark = (station: string) => isLead || (me.production_stations ?? []).includes(station)
 
@@ -218,6 +235,7 @@ function OrdersScreen() {
           </div>
         )}
         {!orders && !loadError && <p className="text-[13px] text-[#9a9a95]">Загружаю…</p>}
+        {orders && refreshing && <p className="text-[12px] text-[#9a9a95]">Обновляю цифры…</p>}
 
         {orders && (
           <>
@@ -327,8 +345,8 @@ function OrderDetail({ o, detail, error, scope, canMark, isLead, onRetry, onMark
   return (
     <>
       <div className="text-[12px] text-[#4b4b47] space-y-0.5">
-        <p>Запущен: {detail.launched_at ? fmtStamp(detail.launched_at) : 'дата не записана'}. Срок: {fmtDay(o.deadline_day)}.</p>
-        {o.state === 'full' && <p>Отгружен: {fmtDay(o.ship_day)}.</p>}
+        <p>Запущен: {fmtDay(o.launch_day)}. Срок: {fmtDay(o.deadline_day)}.</p>
+        {o.state === 'full' && <p>Отгружен: {fmtDay(o.ship_day)}. {detail.ship_mark ? `Отметил: ${detail.ship_mark.by}${detail.ship_mark.at ? `, ${fmtStamp(detail.ship_mark.at)}` : ''}.` : <span className="text-[#9a9a95]">Кто отметил, не записано.</span>}</p>}
         {detail.earlier_pieces > 0 && <p>Уехало раньше, без даты: {detail.earlier_pieces} шт.</p>}
         {detail.shipments.map(s => <p key={s.day ?? 'x'}>Отгрузка {fmtDay(s.day)}: {s.pieces} шт.</p>)}
         <div className="flex flex-wrap gap-x-3 pt-0.5">

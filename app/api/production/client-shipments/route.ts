@@ -359,7 +359,7 @@ async function markFullOrders(
     const prev = notesOf(o.notes).stages?.shipped ?? null
     const { error: markErr } = await svc.rpc('mark_order_stages', { p_order_id: o.id, p_stages: { shipped: `${date}T12:00:00+03:00` } })
     if (markErr) { warnings.push(`Заказ ${orderNo(o)}: отметка не поставлена, ${markErr.message}`); continue }
-    const { error: traceErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: o.id, p_patch: { client_shipment: { id: shipmentId, date, prev_shipped: prev } } })
+    const { error: traceErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: o.id, p_patch: { client_shipment: { id: shipmentId, date, prev_shipped: prev, by: who, at: nowIso } } })
     if (traceErr) warnings.push(`Заказ ${orderNo(o)}: след отгрузки не записан, ${traceErr.message}`)
     await svc.from('b2b_orders').update({ updated_by_name: who, updated_at: nowIso }).eq('id', o.id)
     const shop = await closeOpenTasksOnOrderMark(svc, o.id, 'shipped', CASCADE_FROM.shipping.shipped, { id: userId, name: who })

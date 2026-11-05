@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
     p_stages: { shipped: undo ? null : nowIso },
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const { error: markErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { shipped_mark: undo ? null : { by: who, at: nowIso } } })
+  if (markErr) console.error(`[ship] автор отметки не записан order=${orderId}: ${markErr.message}`)
 
   await svc.from('b2b_orders')
     .update({ updated_by_name: who, updated_at: nowIso })

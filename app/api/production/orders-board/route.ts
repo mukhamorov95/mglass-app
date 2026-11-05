@@ -7,7 +7,7 @@ import { isShipped, orderDeadline, type TodayOrder } from '@/lib/b2b/todayPriori
 import { orderAmount } from '@/lib/liveOrders'
 import { PROD_SINCE, isUrgent, parseNotes } from '@/lib/orderFlags'
 import { orderHidden, orderShipState, shipLines, type EarlierLines, type ShipOrder } from '@/lib/production/clientShipments'
-import { boardOverdue, boardStage, idleDays, lastMarkOf, stageCounts, type BoardOrder, type BoardTask } from '@/lib/production/ordersBoard'
+import { boardOverdue, boardStage, idleDays, lastMarkOf, shipMarkOf, stageCounts, type BoardOrder, type BoardTask } from '@/lib/production/ordersBoard'
 import { readIn, readPaged } from '@/lib/production/paged'
 import { inShopScope, shopScopeOf } from '@/lib/production/shopScope'
 import { mskDayKey } from '@/lib/time'
@@ -124,6 +124,6 @@ async function detail(svc: Svc, id: number) {
     id: o.id, items: Array.isArray(o.items) ? o.items : [], drawing_url: typeof notes.drawing_url === 'string' ? notes.drawing_url : null,
     launched_at: o.launched_at, tasks: tasks ?? [],
     shipments: [...byDay.entries()].map(([day, pieces]) => ({ day: day || null, pieces })).sort((a, b) => (a.day ?? '').localeCompare(b.day ?? '')),
-    earlier_pieces: earlier,
+    earlier_pieces: earlier, ship_mark: shipMarkOf(notes as Parameters<typeof shipMarkOf>[0]),
   })
 }

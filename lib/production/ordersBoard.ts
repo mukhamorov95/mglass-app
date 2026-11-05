@@ -100,3 +100,10 @@ export const idleDays = (last: { at: string } | null, launchDay: string | null, 
   const since = last ? dayKey(last.at) : launchDay
   return since ? Math.max(0, daysBetween(since, to)) : null
 }
+
+// Кто поставил «Отгружен»: этапа-задачи у него нет, след пишут те, кто ставит отметку. До 05.11 след оставляли только отметка задним числом и отгрузка по изделиям.
+type ShipTrace = { by?: string | null; at?: string | null } | null | undefined
+export function shipMarkOf(notes: { shipped_mark?: ShipTrace; ship_backfill?: ShipTrace; client_shipment?: ShipTrace }): { by: string; at: string | null } | null {
+  for (const t of [notes.shipped_mark, notes.client_shipment, notes.ship_backfill]) if (t?.by) return { by: t.by, at: t.at ?? null }
+  return null
+}
