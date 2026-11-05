@@ -10,8 +10,8 @@ import ProductionTabs from '@/components/ProductionTabs'
 import { confirmDialog } from '@/lib/dialog'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { daysWord, oldestFirst } from '@/lib/b2b/inWorkOrders'
-import { ORDER_STATE_LABEL, orderShipState, shareOf, shipmentTotals, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
-import { fmtDay, fmtKg, fmtRub, type OrderLine, type PoolOrder, type Shipment, type ShipmentsData } from './types'
+import { ORDER_HIDDEN_LABEL, ORDER_STATE_LABEL, numberMatches, orderShipState, shareOf, shipmentTotals, stripZeros, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
+import { fmtDay, fmtKg, fmtRub, type FoundOrder, type OrderLine, type PoolOrder, type Shipment, type ShipmentsData } from './types'
 
 const API = '/api/production/client-shipments'
 const STATE_CLS: Record<OrderShipState, string> = {
@@ -21,17 +21,17 @@ const STATE_CLS: Record<OrderShipState, string> = {
 }
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
 
-type Tab = OrderStage | 'overdue' | 'shipments'
-type OrderTab = Exclude<Tab, 'shipments'>
+type Tab = OrderStage | 'overdue' | 'shipments' | 'history'
+type OrderTab = Exclude<Tab, 'shipments' | 'history'>
 const ORDER_TABS: { key: OrderTab; label: string; hint: string; empty: string }[] = [
   { key: 'in_work', label: 'В работе', hint: 'Не упакованы целиком и ещё не уехали.', empty: 'Заказов в работе нет.' },
   { key: 'packed', label: 'Упакованы', hint: 'Цех упаковал все позиции, заказ ещё не уехал.', empty: 'Заказов, упакованных целиком, нет. Заказ попадает сюда, когда цех закрыл упаковку по всем позициям.' },
   { key: 'shipped', label: 'Отгружены', hint: 'Уехали полностью или отмечены отгруженными (с 01.07). Отмеченный без этого экрана заказ можно занести в отгрузку: отметьте его изделия.', empty: 'Отгруженных заказов нет.' },
   { key: 'overdue', label: 'Просроченные', hint: 'Срок прошёл, а заказ уехал не полностью. Эти же заказы есть во вкладках «В работе» и «Упакованы».', empty: 'Просроченных заказов нет.' },
 ]
-const TAB_KEYS: Tab[] = [...ORDER_TABS.map(t => t.key), 'shipments']
-const inTab = (o: PoolOrder, tab: OrderTab) => (tab === 'overdue' ? o.overdue_days > 0 : o.stage === tab)
-const matches = (o: PoolOrder, q: string) => !q || o.no.toLowerCase().includes(q) || String(o.id).includes(q)
+const TAB_KEYS: Tab[] = [...ORDER_TABS.map(t => t.key), 'shipments', 'history']
+const inTab = (o: PoolOrder, tab: OrderTab) => !o.hidden && (tab === 'overdue' ? o.overdue_days > 0 : o.stage === tab)
+const matches = (o: PoolOrder, q: string) => numberMatches(q, o.no, o.id)
 const overdueLabel = (days: number) => `Просрочен на ${days} ${daysWord(days)}`
 
 function tabFromUrl(): Tab {
@@ -88,7 +88,7 @@ export default function ShowerGlassShipmentsPage() {
   const orderById = useMemo(() => new Map((data?.orders ?? []).map(o => [o.id, o])), [data])
   const q = query.trim().toLowerCase()
   const allDrafts = useMemo(() => (data?.shipments ?? []).filter(s => s.status === 'draft'), [data])
-  const shipmentMatches = useCallback((s: Shipment) => !q || s.lines.some(l => l.order_no.toLowerCase().includes(q) || String(l.order_id).includes(q)), [q])
+  const shipmentMatches = useCallback((s: Shipment) => !q || s.lines.some(l => numberMatches(q, l.order_no, l.order_id)), [q])
   const drafts = useMemo(() => allDrafts.filter(shipmentMatches), [allDrafts, shipmentMatches])
   const history = useMemo(() => (data?.shipments ?? []).filter(s => s.status === 'shipped' && shipmentMatches(s))
     .sort((a, b) => (b.ship_date ?? '').localeCompare(a.ship_date ?? '') || b.id - a.id), [data, shipmentMatches])
@@ -97,12 +97,28 @@ export default function ShowerGlassShipmentsPage() {
   const orders = useMemo(() => data?.orders ?? [], [data])
   const tabCount = (t: OrderTab) => orders.filter(o => inTab(o, t)).length
   const visible = useMemo(() => {
-    const list = tab === 'shipments'
-      ? orders.filter(o => o.stage !== 'shipped' && o.lines.some(l => l.free > 0))
+    const list = tab === 'history' ? orders
+      : tab === 'shipments' ? orders.filter(o => !o.hidden && o.stage !== 'shipped' && o.lines.some(l => l.free > 0))
       : orders.filter(o => inTab(o, tab))
     return oldestFirst(list.filter(o => matches(o, q)), o => o.launch_day)
   }, [orders, tab, q])
   const elsewhere = useMemo(() => (q ? ORDER_TABS.filter(t => t.key !== tab && orders.some(o => inTab(o, t.key) && matches(o, q))) : []), [orders, tab, q])
+  const inHistory = useMemo(() => !!q && orders.some(o => matches(o, q)), [orders, q])
+
+  // Номера нет на экране: спрашиваем базу, чей он и что с ним. Ответ хранит свой номер, чужой не показываем.
+  const [found, setFound] = useState<{ q: string; rows: FoundOrder[] | null; error?: string } | null>(null)
+  const digits = /^\d+$/.test(q) ? stripZeros(q) : ''
+  const askBase = !!data && !!digits && !inHistory
+  useEffect(() => {
+    if (!askBase) return
+    const timer = setTimeout(() => {
+      void loadJson<{ found: FoundOrder[] }>(`${API}?find=${digits}`).then(r => {
+        setFound(r.error !== null ? { q: digits, rows: null, error: r.error } : { q: digits, rows: r.data.found })
+      })
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [askBase, digits])
+  const foundNow = askBase && found?.q === digits ? found : null
 
   const picked = useMemo(() => {
     const out: { order: PoolOrder; line: OrderLine; qty: number }[] = []
@@ -255,6 +271,7 @@ export default function ShowerGlassShipmentsPage() {
                 )
               })}
               <button onClick={() => setTab('shipments')} aria-pressed={tab === 'shipments'} className={tabCls('shipments')}>Отгрузки · {data.shipments.length}</button>
+              <button onClick={() => { setTab('history'); setComposing(false) }} aria-pressed={tab === 'history'} className={tabCls('history')}>История заказов · {orders.length}</button>
               <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Номер заказа"
                 className="ml-auto h-10 w-36 rounded-lg border border-[#e4e4e0] bg-white px-2.5 text-[13px]" />
             </div>
@@ -277,9 +294,33 @@ export default function ShowerGlassShipmentsPage() {
                         {elsewhere.map(t => <button key={t.key} onClick={() => setTab(t.key)} className="underline text-[#111110]">{t.label}</button>)}
                       </div>
                     )}
+                    {inHistory && elsewhere.length === 0 && (
+                      <button onClick={() => setTab('history')} className="underline text-[#111110]">Есть в истории заказов</button>
+                    )}
+                    {askBase && <FoundList found={foundNow} />}
                   </div>
                 )}
                 {orderRows(visible)}
+              </section>
+            )}
+
+            {tab === 'history' && (
+              <section className="space-y-2">
+                <p className="text-[12px] text-[#6b6b66]">Все заказы Шовер Гласс с 01.07.2026, в том числе в архиве и незапущенные просчёты. Сверху самые старые, снизу новые. Более ранний номер найдётся через поиск.</p>
+                {visible.length === 0 && (
+                  <div className="text-[13px] text-[#9a9a95] space-y-1.5">
+                    <p>{q ? 'В истории такого номера нет.' : 'Заказов нет.'}</p>
+                    {askBase && <FoundList found={foundNow} />}
+                  </div>
+                )}
+                {monthsOf(visible).map(([month, list]) => (
+                  <div key={month} className="space-y-1.5">
+                    <p className="text-[12px] text-[#6b6b66] pt-1">
+                      <span className="font-semibold text-[#111110]">{MONTHS[Number(month.slice(5, 7)) - 1]} {month.slice(0, 4)}</span> · {list.length} зак.
+                    </p>
+                    {orderRows(list)}
+                  </div>
+                ))}
               </section>
             )}
 
@@ -339,12 +380,35 @@ export default function ShowerGlassShipmentsPage() {
   )
 }
 
+function monthsOf(list: PoolOrder[]) {
+  const m = new Map<string, PoolOrder[]>()
+  for (const o of list) m.set(o.launch_day.slice(0, 7), [...(m.get(o.launch_day.slice(0, 7)) ?? []), o])
+  return [...m.entries()]
+}
+
+// Ответ базы на номер, которого нет на экране: старый заказ, чужой клиент или такого номера нет вовсе.
+function FoundList({ found }: { found: { rows: FoundOrder[] | null; error?: string } | null }) {
+  if (!found) return <p>Ищу этот номер в базе…</p>
+  if (found.error) return <p className="text-red-700">Не удалось проверить номер в базе: {found.error}</p>
+  if (!found.rows?.length) return <p>В базе заказа с таким номером не нашлось, либо ваша роль не видит заказы других клиентов.</p>
+  return (
+    <div className="space-y-1">
+      {found.rows.map(f => (
+        <p key={f.id} className="text-[#111110]">
+          Заказ {f.no} от {fmtDay(f.created_day)}: {f.own ? 'Шовер Гласс, старше 01.07' : `другой клиент, ${f.client ?? 'без названия'}`}. {f.status}.{' '}
+          <Link href={`/production-app/orders/${f.id}`} className="underline">Открыть</Link>
+        </p>
+      ))}
+    </div>
+  )
+}
+
 function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked, onExpand, onToggle, onLine }: {
   order: PoolOrder; selected: Map<string, number>; canMoney: boolean; canPack: boolean; busy: boolean; expanded: boolean
   onPacked: (l: OrderLine, on: boolean) => void
   onExpand: () => void; onToggle: (on: boolean) => void; onLine: (l: OrderLine, qty: number) => void
 }) {
-  const freeLines = order.lines.filter(l => l.free > 0)
+  const freeLines = order.hidden ? [] : order.lines.filter(l => l.free > 0)
   const pickedCount = freeLines.filter(l => selected.has(selKey(order.id, l.key))).length
   const totalPieces = order.lines.reduce((s, l) => s + l.qty, 0)
   const shippedPieces = order.lines.reduce((s, l) => s + l.shipped, 0)
@@ -353,7 +417,8 @@ function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked
   const amount = order.lines.reduce((s, l) => s + (l.amount ?? 0), 0)
   const isShipped = order.stage === 'shipped'
   const shippedDay = order.marked_day ? ` · ${fmtDay(order.marked_day)}` : ''
-  const stateLabel = order.state === 'full' ? `${ORDER_STATE_LABEL.full}${shippedDay}`
+  const stateLabel = order.hidden ? `${ORDER_HIDDEN_LABEL[order.hidden]}${order.hidden === 'archived' && order.archived_day ? ` с ${fmtDay(order.archived_day)}` : ''}`
+    : order.state === 'full' ? `${ORDER_STATE_LABEL.full}${shippedDay}`
     : isShipped ? `Отмечен отгруженным${shippedDay}`
     : order.state === 'partial' ? `${ORDER_STATE_LABEL.partial} · ${shippedPieces} из ${totalPieces} шт.`
     : ORDER_STATE_LABEL.none
@@ -378,7 +443,7 @@ function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked
             {order.lines.length} поз. · {pieces(totalPieces)} · {fmtKg(weight)}{canMoney ? ` · ${fmtRub(amount)}` : ''}
           </p>
           <p className="text-[12px] font-medium mt-0.5">
-            {order.state === 'full' ? <span className="text-emerald-700">Отгружено полностью</span> : isShipped && shippedPieces === 0 ? (
+            {order.hidden ? <span className="text-[#6b6b66]">В работу и отгрузку не идёт</span> : order.state === 'full' ? <span className="text-emerald-700">Отгружено полностью</span> : isShipped && shippedPieces === 0 ? (
               <span className="text-emerald-700">Отгружен по отметке, по изделиям не разнесён</span>
             ) : (
               <>
@@ -393,11 +458,14 @@ function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked
       </div>
       {expanded && (
         <div className="border-t border-[#f0f0ec] divide-y divide-[#f4f4f0]">
+          <div className="px-3 py-1.5">
+            <Link href={`/production-app/orders/${order.id}`} className="text-[12px] text-[#6b6b66] underline">Открыть карточку заказа</Link>
+          </div>
           {order.lines.map(l => {
             const qty = selected.get(selKey(order.id, l.key)) ?? 0
             return (
               <div key={l.key} className="flex items-start gap-2.5 px-3 py-2">
-                <input type="checkbox" className="mt-1 h-4 w-4" aria-label={`Выбрать ${l.label}`} disabled={l.free === 0} checked={qty > 0}
+                <input type="checkbox" className="mt-1 h-4 w-4" aria-label={`Выбрать ${l.label}`} disabled={l.free === 0 || !!order.hidden} checked={qty > 0}
                   onChange={e => onLine(l, e.target.checked ? l.free : 0)} />
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] text-[#111110]">{l.label}{l.size ? `, ${l.size} мм` : ''}</p>
@@ -405,16 +473,16 @@ function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked
                     {pieces(l.qty)} · {fmtKg(l.weight)}{canMoney ? ` · ${fmtRub(l.amount ?? 0)}` : ''}
                     {l.drafted > 0 ? ` · в отгрузке ${l.drafted}` : ''}
                   </p>
-                  <p className="text-[12px] font-medium mt-0.5">
+                  {!order.hidden && <p className="text-[12px] font-medium mt-0.5">
                     {l.shipped >= l.qty ? <span className="text-emerald-700">Отгружено</span> : (
                       <>
                         {l.packed ? <span className="text-emerald-700">Упаковано</span> : <span className="text-amber-700">Не упаковано</span>}
                         {l.shipped > 0 && <span className="text-amber-700"> · отгружено {l.shipped} из {l.qty}</span>}
                       </>
                     )}
-                  </p>
+                  </p>}
                 </div>
-                {canPack && !isShipped && l.shipped < l.qty && (
+                {canPack && !isShipped && !order.hidden && l.shipped < l.qty && (
                   l.packed
                     ? l.shipped + l.drafted === 0 && (
                         <button disabled={busy} onClick={() => onPacked(l, false)} className="h-8 px-2 text-[12px] text-[#6b6b66] underline disabled:opacity-50">Снять упаковку</button>

@@ -1,5 +1,5 @@
 // Ответ /api/production/client-shipments: один тип на экран и на лист отгрузки.
-import type { OrderShipState, OrderStage } from '@/lib/production/clientShipments'
+import type { OrderHidden, OrderShipState, OrderStage } from '@/lib/production/clientShipments'
 
 export type OrderLine = {
   key: string; label: string; size: string; qty: number; weight: number; amount?: number
@@ -8,7 +8,7 @@ export type OrderLine = {
 export type PoolOrder = {
   id: number; no: string; launch_day: string; deadline_day: string | null; overdue_days: number
   paid: boolean; state: OrderShipState; stage: OrderStage; packed_lines: number
-  marked_day: string | null; marked_outside: boolean; lines: OrderLine[]
+  marked_day: string | null; marked_outside: boolean; hidden: OrderHidden | null; archived_day: string | null; lines: OrderLine[]
 }
 export type ShipmentLine = {
   order_id: number; order_no: string; key: string; label: string; size: string
@@ -19,6 +19,8 @@ export type Shipment = {
   lines: ShipmentLine[]
 }
 export type ShipmentsData = { canMoney: boolean; canPack: boolean; title: string; today: string; orders: PoolOrder[]; shipments: Shipment[] }
+
+export type FoundOrder = { id: number; no: string; client: string | null; own: boolean; created_day: string; status: string }
 
 export const fmtDay = (day: string | null | undefined) => (day ? `${day.slice(8, 10)}.${day.slice(5, 7)}.${day.slice(0, 4)}` : 'без даты')
 export const fmtKg = (n: number) => `${(Math.round(n * 10) / 10).toLocaleString('ru-RU')} кг`

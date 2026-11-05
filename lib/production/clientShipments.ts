@@ -94,6 +94,26 @@ export function overdueDays(deadlineDay: string | null, today: string, stage: Or
   return stage === 'shipped' || !deadlineDay ? 0 : daysInWork(deadlineDay, today)
 }
 
+// Почему заказа нет в рабочих вкладках: он виден только в истории и не собирается в отгрузку.
+export type OrderHidden = 'archived' | 'quote' | 'historical'
+export const ORDER_HIDDEN_LABEL: Record<OrderHidden, string> = {
+  archived: 'В архиве', quote: 'Просчёт, не запущен', historical: 'Старый заказ, импорт',
+}
+
+type HiddenNotes = { status?: string; historical?: boolean }
+export function orderHidden(archivedAt: string | null | undefined, notes: HiddenNotes): OrderHidden | null {
+  if (archivedAt) return 'archived'
+  if (notes.status === 'quote') return 'quote'
+  return notes.historical ? 'historical' : null
+}
+
+// Номер ищем без ведущих нулей: один заказ пишут и 05792, и 005792, и 5792.
+export const stripZeros = (s: string) => s.trim().replace(/^0+(?=\d)/, '')
+export function numberMatches(query: string, no: string, id: number): boolean {
+  const q = stripZeros(query.toLowerCase())
+  return !q || stripZeros(no.toLowerCase()).includes(q) || String(id).includes(q)
+}
+
 export type LineRequest = { order_id: number; line_key: string; qty: number }
 
 // Нельзя отгрузить больше, чем есть: возвращает текст отказа или null.

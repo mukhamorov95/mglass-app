@@ -221,14 +221,38 @@ describe('отгрузка Шовер Гласс: маршрут', () => {
 
     h.role = 'manager'
     expect((await call({ action: 'pack', order_id: 1, line_key: 'a' })).status).toBe(403)
-    expect(((await (await GET()).json()) as { canPack: boolean }).canPack).toBe(false)
+    expect(((await (await GET(new NextRequest('http://t/api'))).json()) as { canPack: boolean }).canPack).toBe(false)
+  })
+
+  it('история: архив и просчёт видны, но не собираются; номер вне экрана объясняется', async () => {
+    h.db.b2b_orders.push(
+      { ...order(4), archived_at: '2026-10-09T10:00:00Z' },
+      { ...order(5), notes: JSON.stringify({ status: 'quote' }) },
+      { ...order(6), created_at: '2026-05-01T10:00:00Z', archived_at: '2026-06-01T10:00:00Z', custom_number: '006' },
+      { ...order(7), client_id: 99, client_name: 'Другой', custom_number: '0777' },
+    )
+    const list = ((await (await GET(new NextRequest('http://t/api'))).json()) as { orders: (Row & { id: number })[] }).orders
+    expect(list.find(o => o.id === 4)).toMatchObject({ hidden: 'archived', archived_day: '2026-10-09', deadline_day: null, overdue_days: 0 })
+    expect(list.find(o => o.id === 5)).toMatchObject({ hidden: 'quote' })
+    expect(list.some(o => o.id === 6)).toBe(false)
+    expect((await call({ action: 'create', ship_date: today, lines: [{ order_id: 4, line_key: 'a', qty: 1 }] })).body.error).toContain('в архиве')
+    expect((await call({ action: 'create', ship_date: today, lines: [{ order_id: 5, line_key: 'a', qty: 1 }] })).body.error).toContain('просчёт')
+    expect((await call({ action: 'pack', order_id: 4, line_key: 'a' })).body.error).toContain('в архиве')
+
+    const find = async (n: string) => ((await (await GET(new NextRequest(`http://t/api?find=${n}`))).json()) as { found: Row[] }).found
+    expect(await find('00777')).toMatchObject([{ id: 7, own: false, client: 'Другой', status: 'Не отгружен' }])
+    expect(await find('6')).toMatchObject([{ id: 6, own: true, status: 'В архиве с 01.06.2026' }])
+    expect(JSON.stringify(await find('6'))).not.toContain('notes')
+    expect(await find('abc')).toEqual([])
+    h.role = 'manager'
+    expect(await find('00777')).toEqual([])
   })
 
   it('вкладки: частично уехавший и просроченный заказ остаётся в работе, уехавший целиком — в отгруженных', async () => {
     const row = h.db.b2b_orders.find(o => o.id === 1)!
     row.launched_at = '2026-10-01T10:00:00Z'
     row.notes = JSON.stringify({ stages: {}, deadline_date: '2026-10-08' })
-    const read = async (id: number) => ((await (await GET()).json()) as { orders: (Row & { id: number })[] }).orders.find(o => o.id === id)!
+    const read = async (id: number) => ((await (await GET(new NextRequest('http://t/api'))).json()) as { orders: (Row & { id: number })[] }).orders.find(o => o.id === id)!
 
     expect(await read(1)).toMatchObject({ stage: 'in_work', state: 'none', launch_day: '2026-10-01', deadline_day: '2026-10-08', packed_lines: 0 })
     expect(Number((await read(1)).overdue_days)).toBeGreaterThan(0)
@@ -245,11 +269,11 @@ describe('отгрузка Шовер Гласс: маршрут', () => {
 
   it('чтение: сумма только с правом на деньги, сырых заметок и позиций наружу нет', async () => {
     await create([[1, 'a', 1]])
-    const withMoney = await (await GET()).json() as { orders: { id: number; state: string; lines: Row[] }[]; shipments: { lines: Row[] }[] }
+    const withMoney = await (await GET(new NextRequest('http://t/api'))).json() as { orders: { id: number; state: string; lines: Row[] }[]; shipments: { lines: Row[] }[] }
     expect(withMoney.orders.find(o => o.id === 1)?.lines[0]).toMatchObject({ qty: 3, drafted: 1, free: 2, amount: 700 })
     expect(withMoney.shipments[0].lines[0]).toMatchObject({ qty: 1, lineQty: 3, weight: 10, amount: 233.33 })
     h.canMoney = false
-    const noMoney = await (await GET()).text()
+    const noMoney = await (await GET(new NextRequest('http://t/api'))).text()
     expect(noMoney).not.toContain('"amount"')
     expect(noMoney).not.toContain('saleIncVat')
     expect(noMoney).not.toContain('"notes"')

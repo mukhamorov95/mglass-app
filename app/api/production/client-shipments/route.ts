@@ -12,7 +12,7 @@ import { actorName } from '@/lib/production/executor'
 import { mskDayKey } from '@/lib/time'
 import { isLaunched, isShipped, orderDeadline, type TodayOrder } from '@/lib/b2b/todayPriorities'
 import {
-  SHOWER_GLASS, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, takenByLine,
+  ORDER_HIDDEN_LABEL, SHOWER_GLASS, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, stripZeros, takenByLine,
   type LineRequest, type ShipOrder, type ShipRow,
 } from '@/lib/production/clientShipments'
 
@@ -27,12 +27,12 @@ const SHIPPED_MARKS_SINCE = '2026-07-01'
 const PACK_ROLES: readonly string[] = ['production', 'admin', 'ceo', 'buyer']
 
 type Svc = ReturnType<typeof createServiceClient>
-type RawOrder = ShipOrder & { id: number; custom_number: string | null; notes: string | null; created_at: string; launched_at?: string | null; client_id?: number | null }
+type RawOrder = ShipOrder & { id: number; custom_number: string | null; notes: string | null; created_at: string; launched_at?: string | null; archived_at?: string | null; client_id?: number | null }
 type Head = { id: number; ship_date: string | null; status: string; shipped_at: string | null; created_at: string; total_weight_kg: number | null; title: string | null }
 type ItemRow = ShipRow & { label: string | null; weight_kg: number | null; amount: number | null }
 type Notes = { status?: string; historical?: boolean; launched_at?: string | null; stages?: Record<string, string | null>; client_shipment?: { id: number; date: string; prev_shipped: string | null } | null }
 
-const ORDER_COLS = 'id, custom_number, items, notes, created_at, launched_at, client_id, discount_percent, total_after_discount, total_sale_inc_vat'
+const ORDER_COLS = 'id, custom_number, items, notes, created_at, launched_at, archived_at, client_id, discount_percent, total_after_discount, total_sale_inc_vat'
 const orderNo = (o: { custom_number: string | null; id: number }) => o.custom_number?.trim() || `00${o.id}`
 // Дата из notes бывает кривой: один заказ не должен ронять весь экран.
 function dayOf(v: Date | string | null | undefined): string | null {
@@ -63,9 +63,44 @@ async function loadOrders(svc: Svc, ids: number[]): Promise<RawOrder[]> {
     .select(ORDER_COLS).in('id', part).range(from, to) as never)
 }
 
-export async function GET() {
+// Номера, которых нет в истории экрана: старые заказы и заказы других клиентов. Только статус и клиент,
+// и только тем, кто и так видит все заказы цеха: менеджеру чужого клиента показывать нельзя.
+async function findByNumber(svc: Svc, raw: string) {
+  const d = stripZeros(raw)
+  if (!/^\d{1,9}$/.test(d)) return []
+  const cols = 'id, custom_number, client_id, client_name, created_at, archived_at, notes'
+  type Found = RawOrder & { client_name: string | null }
+  const [byId, byNo] = await Promise.all([
+    svc.from('b2b_orders').select(cols).eq('id', Number(d)),
+    svc.from('b2b_orders').select(cols).in('custom_number', [d, `0${d}`, `00${d}`]),
+  ])
+  if (byId.error || byNo.error) throw new Error(byId.error?.message ?? byNo.error?.message)
+  const rows = new Map([...(byId.data ?? []), ...(byNo.data ?? [])].map(o => [(o as Found).id, o as Found]))
+  return [...rows.values()].map(o => {
+    const notes = notesOf(o.notes)
+    const hidden = orderHidden(o.archived_at, notes)
+    const stages = notes.stages ?? {}
+    const ru = (v: string | null | undefined) => { const d = dayOf(v); return d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '' }
+    const status = hidden === 'archived' && ru(o.archived_at) ? `${ORDER_HIDDEN_LABEL.archived} с ${ru(o.archived_at)}`
+      : hidden ? ORDER_HIDDEN_LABEL[hidden]
+      : isShipped(notes) ? `Отмечен отгруженным ${typeof stages.shipped === 'string' ? ru(stages.shipped) : ''}`.trim()
+      : 'Не отгружен'
+    return { id: o.id, no: orderNo(o), client: o.client_name, own: Number(o.client_id) === SHOWER_GLASS.clientId, created_day: o.created_at.slice(0, 10), status }
+  })
+}
+
+export async function GET(req: NextRequest) {
   const guard = await requirePageAccess(PAGE)
   if (guard instanceof NextResponse) return guard
+  const find = req.nextUrl.searchParams.get('find')
+  if (find !== null) {
+    if (!PACK_ROLES.includes(guard)) return NextResponse.json({ found: [] })
+    try {
+      return NextResponse.json({ found: await findByNumber(createServiceClient(), find) })
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : 'Ошибка поиска' }, { status: 500 })
+    }
+  }
   const profile = await getUserProfile()
   const canMoney = profile?.canViewMoney === true
   const svc = createServiceClient()
@@ -77,7 +112,7 @@ export async function GET() {
     const taken = takenByLine(rows, id => statusById.get(id))
 
     const clientOrders = await readPaged<RawOrder>((from, to) => svc.from('b2b_orders')
-      .select(ORDER_COLS).eq('client_id', SHOWER_GLASS.clientId).is('archived_at', null)
+      .select(ORDER_COLS).eq('client_id', SHOWER_GLASS.clientId)
       .order('id', { ascending: true }).range(from, to) as never)
     const known = new Set(clientOrders.map(o => o.id))
     const extraIds = [...new Set(rows.map(r => r.order_id))].filter(id => !known.has(id))
@@ -97,7 +132,7 @@ export async function GET() {
       const notes = notesOf(o.notes)
       const stages = notes.stages ?? {}
       const inShipment = rows.some(r => r.order_id === o.id)
-      if (!inShipment && (notes.status === 'quote' || notes.historical)) return []
+      const hidden = inShipment ? null : orderHidden(o.archived_at, notes)
       const lines = shipLines(o).map(l => {
         const t = taken.get(`${o.id}:${l.key}`) ?? { shipped: 0, drafted: 0 }
         return {
@@ -108,15 +143,16 @@ export async function GET() {
       })
       const state = orderShipState(lines, k => lines.find(l => l.key === k)?.shipped ?? 0)
       const markedOutside = !!stages.shipped && !notes.client_shipment && !inShipment
-      if (markedOutside && o.created_at.slice(0, 10) < SHIPPED_MARKS_SINCE) return []
+      if ((markedOutside || hidden) && o.created_at.slice(0, 10) < SHIPPED_MARKS_SINCE) return []
       const stage = orderStage(lines, state, isShipped(notes))
       // Срок только у запущенного: у незапущенного он считался бы от даты создания, а это выдумка.
       const asToday = o as unknown as TodayOrder
-      const deadlineDay = isLaunched(asToday, notes) ? dayOf(orderDeadline(asToday, notes)) : null
+      const deadlineDay = !hidden && isLaunched(asToday, notes) ? dayOf(orderDeadline(asToday, notes)) : null
       return [{
         id: o.id, no: orderNo(o), launch_day: dayOf(o.launched_at ?? notes.launched_at) ?? o.created_at.slice(0, 10), deadline_day: deadlineDay,
         overdue_days: overdueDays(deadlineDay, today, stage), paid: !!stages.invoice_paid, state, stage, packed_lines: packedLineCount(lines),
-        marked_day: typeof stages.shipped === 'string' ? dayOf(stages.shipped) : null, marked_outside: markedOutside, lines,
+        marked_day: typeof stages.shipped === 'string' ? dayOf(stages.shipped) : null, marked_outside: markedOutside,
+        hidden, archived_day: dayOf(o.archived_at), lines,
       }]
     })
 
@@ -157,6 +193,8 @@ async function checkRequests(svc: Svc, requests: LineRequest[], exceptShipment?:
     const o = byId.get(Number(r.order_id))
     if (!o) return `Заказ ${r.order_id} не найден.`
     if (Number(o.client_id) !== SHOWER_GLASS.clientId) return `Заказ ${orderNo(o)} другого клиента.`
+    const hidden = orderHidden(o.archived_at, notesOf(o.notes))
+    if (hidden) return `Заказ ${orderNo(o)}: ${ORDER_HIDDEN_LABEL[hidden].toLowerCase()}, в отгрузку не идёт.`
     const line = shipLines(o).find(l => l.key === r.line_key)
     const already = alreadyInThis?.find(x => x.order_id === o.id && x.line_key === r.line_key)?.qty ?? 0
     const problem = requestProblem(r, line, taken.get(`${o.id}:${r.line_key}`), already)
@@ -268,6 +306,8 @@ async function packLine(svc: Svc, action: 'pack' | 'unpack', orderId: number, li
   if (Number(order.client_id) !== SHOWER_GLASS.clientId) return fail(`Заказ ${orderNo(order)} другого клиента.`, 409)
   const notes = notesOf(order.notes)
   if (isShipped(notes)) return fail(`Заказ ${orderNo(order)} уже отгружен, упаковку не меняем. Обновите экран.`, 409)
+  const hiddenReason = orderHidden(order.archived_at, notes)
+  if (hiddenReason) return fail(`Заказ ${orderNo(order)}: ${ORDER_HIDDEN_LABEL[hiddenReason].toLowerCase()}, упаковку не меняем.`, 409)
   const line = shipLines(order).find(l => l.key === lineKey)
   if (!line) return fail('Строка не найдена, заказ могли изменить. Обновите экран.', 409)
 
