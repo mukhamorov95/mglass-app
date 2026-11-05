@@ -72,7 +72,7 @@ export type ReconOrderRow = {
 }
 export type ReconNotes = {
   bankFrom: string | null; bankTo: string | null; undatedOrders: number; undatedAmount: number
-  ledgerFrom: string | null; archivedWithMoney: string[]
+  ledgerFrom: string | null; archived: { orders: number; amount: number }
 }
 export type ReconDoc = {
   clientName: string; from: string; to: string
@@ -84,9 +84,19 @@ export type ReconDoc = {
   notes: ReconNotes
 }
 
+// Поступления сводятся по дням: 14 платежей одного дня это один приход денег, а сроки оплаты видны по дням.
+function byDay(money: ReconMoney[]): ReconMoney[] {
+  const m = new Map<string, ReconMoney>()
+  for (const r of money) {
+    const k = `${r.day}:${r.source}`
+    m.set(k, { ...r, amount: round2((m.get(k)?.amount ?? 0) + r.amount) })
+  }
+  return [...m.values()].sort((a, b) => a.day.localeCompare(b.day))
+}
+
 export function buildReconciliation(input: {
   clientName: string; from: string; to: string; orders: ReconOrder[]; money: ReconMoney[]
-  bankFrom: string | null; bankTo: string | null; ledgerFrom: string | null
+  bankFrom: string | null; bankTo: string | null; ledgerFrom: string | null; archived?: { orders: number; amount: number }
 }): ReconDoc {
   const { orders, money, from, to } = input
   const launchedHere = orders.filter(o => o.live && o.launchDay && inRange(o.launchDay, from, to))
@@ -119,7 +129,7 @@ export function buildReconciliation(input: {
     closedOrders: { orders: closed.length, amount: sum(closed.map(o => o.amount)) },
     moneyInPeriod: {
       total: sum(money.filter(m => inRange(m.day, from, to)).map(m => m.amount)),
-      rows: money.filter(m => inRange(m.day, from, to)).sort((a, b) => a.day.localeCompare(b.day)),
+      rows: byDay(money.filter(m => inRange(m.day, from, to))),
     },
     whole: column(orders, money, from, to, 'whole'),
     items: column(orders, money, from, to, 'items'),
@@ -127,7 +137,7 @@ export function buildReconciliation(input: {
     notes: {
       bankFrom: input.bankFrom, bankTo: input.bankTo, ledgerFrom: input.ledgerFrom,
       undatedOrders: undated.length, undatedAmount: sum(undated.map(o => o.amount)),
-      archivedWithMoney: orders.filter(o => !o.live && o.launchDay && (paidBy(o, to) > 0 || shippedBy(o, to, 'items') > 0)).map(o => o.no),
+      archived: input.archived ?? { orders: 0, amount: 0 },
     },
   }
 }
