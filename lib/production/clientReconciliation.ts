@@ -73,6 +73,7 @@ export type ReconOrderRow = {
 export type ReconNotes = {
   bankFrom: string | null; bankTo: string | null; undatedOrders: number; undatedAmount: number
   ledgerFrom: string | null; archived: { orders: number; amount: number }
+  settled: { before: string; orders: number; amount: number } | null
 }
 export type ReconDoc = {
   clientName: string; from: string; to: string
@@ -97,6 +98,7 @@ function byDay(money: ReconMoney[]): ReconMoney[] {
 export function buildReconciliation(input: {
   clientName: string; from: string; to: string; orders: ReconOrder[]; money: ReconMoney[]
   bankFrom: string | null; bankTo: string | null; ledgerFrom: string | null; archived?: { orders: number; amount: number }
+  settled?: { before: string; orders: number; amount: number }
 }): ReconDoc {
   const { orders, money, from, to } = input
   const launchedHere = orders.filter(o => o.live && o.launchDay && inRange(o.launchDay, from, to))
@@ -138,6 +140,7 @@ export function buildReconciliation(input: {
       bankFrom: input.bankFrom, bankTo: input.bankTo, ledgerFrom: input.ledgerFrom,
       undatedOrders: undated.length, undatedAmount: sum(undated.map(o => o.amount)),
       archived: input.archived ?? { orders: 0, amount: 0 },
+      settled: input.settled ?? null,
     },
   }
 }

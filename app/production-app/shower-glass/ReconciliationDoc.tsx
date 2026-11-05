@@ -145,6 +145,7 @@ export default function ReconciliationDoc({ doc, caption }: { doc: ReconDoc; cap
         {notes.bankFrom && notes.bankTo && <p>Деньги: выписка ООО с {fmtDay(notes.bankFrom)} по {fmtDay(notes.bankTo)}. До и после этих дат берутся отметки об оплате.{doc.to > notes.bankTo ? ` Переводы после ${fmtDay(notes.bankTo)} появятся, когда загрузят выписку.` : ''}</p>}
         {notes.ledgerFrom && <p>По изделиям отгрузка записывается с {fmtDay(notes.ledgerFrom)}. Раньше заказ отмечался отгруженным целиком.</p>}
         {notes.undatedOrders > 0 && <p>{notes.undatedOrders} зак. на {fmtMoney(notes.undatedAmount)} отмечены отгруженными без даты: в итог они входят, в отгрузку конкретного дня нет.</p>}
+        {notes.settled && notes.settled.orders > 0 && <p>Заказы, запущенные до {fmtDay(notes.settled.before)}, считаются закрытыми: с этой даты начат акт бухгалтера, а оплат тех месяцев в приложении нет. Это {notes.settled.orders} зак. на {fmtMoney(notes.settled.amount)}.</p>}
         {notes.archived.orders > 0 && <p>Заказы в архиве не считаются: {notes.archived.orders} зак. на {fmtMoney(notes.archived.amount)}.</p>}
       </section>
     </div>

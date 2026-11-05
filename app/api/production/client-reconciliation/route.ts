@@ -17,7 +17,9 @@ import { mskDayKey } from '@/lib/time'
 // Клиент пока один, расчёт от него не зависит: другого клиента добавит одна строка.
 
 const PAGE = '/production-app/shower-glass'
-const CLIENT = { id: SHOWER_GLASS.clientId, name: SHOWER_GLASS.title }
+// settledBefore: заказы старше акта бухгалтера (он начат с этой даты) закрыты. Оплат тех месяцев в приложении нет,
+// и 10 таких заказов показывали клиента должником на 276 333 ₽, хотя по акту на эту дату остатка нет.
+const CLIENT = { id: SHOWER_GLASS.clientId, name: SHOWER_GLASS.title, settledBefore: '2026-07-01' }
 const BANK_UNIT = 'ooo'  // производство работает через ООО
 
 type Svc = ReturnType<typeof createServiceClient>
@@ -40,7 +42,10 @@ async function loadDoc(svc: Svc, from: string, to: string) {
     .select('id, custom_number, items, notes, launched_at, archived_at, discount_percent, total_after_discount, total_sale_inc_vat')
     .eq('client_id', CLIENT.id).order('id', { ascending: true }).range(a, b) as never)
   // Архив не считаем: 30.06 туда ушли дубли импортированной истории, отмеченные отгруженными, и клиент выходил должником на 800 тысяч.
-  const raw = all.filter(o => !o.archived_at)
+  const launchOf = (o: RawOrder) => dayOf(o.launched_at ?? notesOf(o.notes).launched_at)
+  const isSettled = (o: RawOrder) => { const d = launchOf(o); return !!d && d < CLIENT.settledBefore }
+  const settled = all.filter(o => !o.archived_at && isSettled(o))
+  const raw = all.filter(o => !o.archived_at && !isSettled(o))
   const inArchive = all.filter(o => o.archived_at)
   const ids = raw.map(o => o.id)
 
@@ -120,6 +125,7 @@ async function loadDoc(svc: Svc, from: string, to: string) {
   return buildReconciliation({
     clientName: CLIENT.name, from, to, orders, money, bankFrom, bankTo, ledgerFrom,
     archived: { orders: inArchive.length, amount: inArchive.reduce((s, o) => s + orderAmount(o as never), 0) },
+    settled: { before: CLIENT.settledBefore, orders: settled.length, amount: settled.reduce((s, o) => s + orderAmount(o as never), 0) },
   })
 }
 
