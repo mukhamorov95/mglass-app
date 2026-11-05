@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { lineKeyOf, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, shipmentTotals, takenByLine } from '@/lib/production/clientShipments'
+import { lineKeyOf, numberMatches, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, shipmentTotals, takenByLine } from '@/lib/production/clientShipments'
 
 describe('отгрузка по изделиям: расчёт', () => {
   it('строка: название со словом стекло или зеркало, вес и сумма всей строки', () => {
@@ -79,6 +79,21 @@ describe('отгрузка по изделиям: расчёт', () => {
     expect(overdueDays('2026-10-26', '2026-11-05', 'packed')).toBe(10)
     expect(overdueDays('2026-10-26', '2026-11-05', 'shipped')).toBe(0)
     expect(overdueDays(null, '2026-11-05', 'in_work')).toBe(0)
+  })
+
+  it('номер находится с нулями и без них', () => {
+    expect(numberMatches('5792', '005792', 5792)).toBe(true)
+    expect(numberMatches('005674', '05674', 5674)).toBe(true)
+    expect(numberMatches('05674', '05674', 5674)).toBe(true)
+    expect(numberMatches('5674', '05682', 5682)).toBe(false)
+    expect(numberMatches('', '05682', 5682)).toBe(true)
+  })
+
+  it('заказ вне работы: архив важнее просчёта, обычный заказ не скрыт', () => {
+    expect(orderHidden('2026-10-09', { status: 'quote' })).toBe('archived')
+    expect(orderHidden(null, { status: 'quote' })).toBe('quote')
+    expect(orderHidden(null, { historical: true })).toBe('historical')
+    expect(orderHidden(null, { status: 'sent' })).toBeNull()
   })
 
   it('больше, чем есть, взять нельзя', () => {
