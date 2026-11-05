@@ -12,7 +12,7 @@ import { actorName } from '@/lib/production/executor'
 import { mskDayKey } from '@/lib/time'
 import { isLaunched, isShipped, orderDeadline, type TodayOrder } from '@/lib/b2b/todayPriorities'
 import {
-  ORDER_HIDDEN_LABEL, SHOWER_GLASS, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, stripZeros, takenByLine,
+  ORDER_HIDDEN_LABEL, SHOWER_GLASS, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, takenByLine,
   type LineRequest, type ShipOrder, type ShipRow,
 } from '@/lib/production/clientShipments'
 
@@ -63,44 +63,9 @@ async function loadOrders(svc: Svc, ids: number[]): Promise<RawOrder[]> {
     .select(ORDER_COLS).in('id', part).range(from, to) as never)
 }
 
-// Номера, которых нет в истории экрана: старые заказы и заказы других клиентов. Только статус и клиент,
-// и только тем, кто и так видит все заказы цеха: менеджеру чужого клиента показывать нельзя.
-async function findByNumber(svc: Svc, raw: string) {
-  const d = stripZeros(raw)
-  if (!/^\d{1,9}$/.test(d)) return []
-  const cols = 'id, custom_number, client_id, client_name, created_at, archived_at, notes'
-  type Found = RawOrder & { client_name: string | null }
-  const [byId, byNo] = await Promise.all([
-    svc.from('b2b_orders').select(cols).eq('id', Number(d)),
-    svc.from('b2b_orders').select(cols).in('custom_number', [d, `0${d}`, `00${d}`]),
-  ])
-  if (byId.error || byNo.error) throw new Error(byId.error?.message ?? byNo.error?.message)
-  const rows = new Map([...(byId.data ?? []), ...(byNo.data ?? [])].map(o => [(o as Found).id, o as Found]))
-  return [...rows.values()].map(o => {
-    const notes = notesOf(o.notes)
-    const hidden = orderHidden(o.archived_at, notes)
-    const stages = notes.stages ?? {}
-    const ru = (v: string | null | undefined) => { const d = dayOf(v); return d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '' }
-    const status = hidden === 'archived' && ru(o.archived_at) ? `${ORDER_HIDDEN_LABEL.archived} с ${ru(o.archived_at)}`
-      : hidden ? ORDER_HIDDEN_LABEL[hidden]
-      : isShipped(notes) ? `Отмечен отгруженным ${typeof stages.shipped === 'string' ? ru(stages.shipped) : ''}`.trim()
-      : 'Не отгружен'
-    return { id: o.id, no: orderNo(o), client: o.client_name, own: Number(o.client_id) === SHOWER_GLASS.clientId, created_day: o.created_at.slice(0, 10), status }
-  })
-}
-
-export async function GET(req: NextRequest) {
+export async function GET() {
   const guard = await requirePageAccess(PAGE)
   if (guard instanceof NextResponse) return guard
-  const find = req.nextUrl.searchParams.get('find')
-  if (find !== null) {
-    if (!PACK_ROLES.includes(guard)) return NextResponse.json({ found: [] })
-    try {
-      return NextResponse.json({ found: await findByNumber(createServiceClient(), find) })
-    } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : 'Ошибка поиска' }, { status: 500 })
-    }
-  }
   const profile = await getUserProfile()
   const canMoney = profile?.canViewMoney === true
   const svc = createServiceClient()

@@ -25,6 +25,7 @@ import { loadPointClientIds, pointsFirst } from '@/lib/b2b/points'
 import { DAY_PRESETS, clientKeyer, clientOptions, dayPresetRange, summarizeOrders } from '@/lib/b2b/ordersFilter'
 import { mskDayKey } from '@/lib/time'
 import { daysInWork, daysInWorkLabel, oldestFirst } from '@/lib/b2b/inWorkOrders'
+import OrderLookup from '@/components/OrderLookup'
 import PointBadge from '@/components/PointBadge'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { filterFacets, filterToSearch, matchesFilter, readFilterFromUrl, type QuoteFilter } from '@/lib/b2b/quoteFilters'
@@ -47,6 +48,7 @@ const STAGES = [
 type StageKey = typeof STAGES[number]['key']
 
 const STAGE_FILTERS = [
+  { key: 'all',         label: 'Все заказы',   desc: '' },
   { key: 'all_active',  label: 'Все активные', desc: '' },
   { key: 'cut',         label: 'Нарезка',      prev: 'printed'          as StageKey, curr: 'cut'           as StageKey },
   { key: 'edge',        label: 'Кромка',        prev: 'cut'              as StageKey, curr: 'edge_processed' as StageKey },
@@ -870,6 +872,8 @@ export default function B2BOrdersPage() {
   }
 
   const [search, setSearch] = useState('')
+  // Поиск всегда идёт по всем заказам (владелец 05.11): начало ввода снимает фильтры, очистка возвращает их.
+  const filtersBeforeSearch = useRef<{ stage: string; deadline: DeadlineStatus | 'all'; board: ProductionBoardFilter } | null>(null)
   const [clientKey, setClientKey] = useState('')
   const [stageFilter, setStageFilter] = useState('all_active')
   const [dateFrom, setDateFrom] = useState('')
@@ -878,6 +882,19 @@ export default function B2BOrdersPage() {
   // «В работе» — в адресе (?board=in_work): кнопка «назад» из карточки заказа возвращает в тот же список.
   const [boardFilter, setBoardFilterState] = useState<ProductionBoardFilter>(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('board') === 'in_work' ? 'in_work' : null)
+  function changeSearch(next: string) {
+    const was = search.trim() !== '', now = next.trim() !== ''
+    if (!was && now) {
+      filtersBeforeSearch.current = { stage: stageFilter, deadline: deadlineFilter, board: boardFilter }
+      setStageFilter('all'); setDeadlineFilter('all'); setBoardFilter(null)
+    }
+    if (was && !now && filtersBeforeSearch.current) {
+      const saved = filtersBeforeSearch.current
+      setStageFilter(saved.stage); setDeadlineFilter(saved.deadline); setBoardFilter(saved.board)
+      filtersBeforeSearch.current = null
+    }
+    setSearch(next)
+  }
   function setBoardFilter(next: ProductionBoardFilter) {
     setBoardFilterState(next)
     const q = new URLSearchParams(window.location.search)
@@ -890,6 +907,7 @@ export default function B2BOrdersPage() {
   // иначе «185 в работе» при выбранном покупателе открыли бы 25. Повторное нажатие выключает.
   function toggleHeaderSlice(slice: 'in_work' | 'packed' | 'shipped') {
     const isOn = slice === 'shipped' ? stageFilter === 'shipped' && boardFilter === null : boardFilter === slice
+    filtersBeforeSearch.current = null
     setSearch(''); setClientKey(''); setDateFrom(''); setDateTo(''); setDeadlineFilter('all')
     setFilter({ by: null, src: null })
     setProductionDayMode(false); setShowOnlyNeedsControl(false)
@@ -1080,6 +1098,7 @@ export default function B2BOrdersPage() {
       const sf = STAGE_FILTERS.find(f => f.key === stageFilter)
       if (!sf) return true
 
+      if (stageFilter === 'all') return true
       if (stageFilter === 'all_active') return !isShipped
       if (stageFilter === 'shipped') return isShipped
 
@@ -2315,7 +2334,7 @@ export default function B2BOrdersPage() {
               type="text"
               placeholder="Номер заказа…"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => changeSearch(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg outline-none focus:border-[#111110] text-[#111110] placeholder:text-[#b4b4ae]"
             />
           </div>
@@ -2338,7 +2357,7 @@ export default function B2BOrdersPage() {
           </div>
           {isFiltered && (
             <button
-              onClick={() => { setSearch(''); setClientKey(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all'); setBoardFilter(null); setFilter({ by: null, src: null }) }}
+              onClick={() => { filtersBeforeSearch.current = null; setSearch(''); setClientKey(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all'); setBoardFilter(null); setFilter({ by: null, src: null }) }}
               className="text-[11px] text-[#8a8a85] hover:text-[#111110] px-2 py-1.5 rounded-lg hover:bg-[#f0f0ec] transition-colors whitespace-nowrap">
               Сбросить
             </button>
@@ -2663,6 +2682,13 @@ export default function B2BOrdersPage() {
                deadlineFilter === 'shipped'  ? 'Отгруженных заказов нет' :
                deadlineFilter === 'unknown'  ? 'Заказов без определённого срока нет' :
                'Нет заказов по выбранным фильтрам'}
+              {scopeOrders.length > 0 && (
+                <button type="button" onClick={() => { setStageFilter('all'); setDeadlineFilter('all'); setBoardFilter(null) }}
+                  className="block mx-auto mt-3 text-[#111110] underline">Показать во всех заказах: {scopeOrders.length}</button>
+              )}
+              {search.trim() !== '' && scopeOrders.length === 0 && (
+                <div className="mt-3 max-w-xl mx-auto"><OrderLookup query={search} title="Вне этого списка: архив, просчёты, старые заказы" /></div>
+              )}
             </div>
           ) : (
             <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden divide-y divide-[#f8f8f7]">
