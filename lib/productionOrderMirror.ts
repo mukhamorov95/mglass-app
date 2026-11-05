@@ -19,7 +19,7 @@ import { packagedNotice, orderLink } from '@/lib/production/managerNotices'
 // из-за чего в notes.stages сосуществовали три формата разом и сравнения дат
 // в отчётах вели себя непредсказуемо.
 
-const STAGE_TO_FLAG: Record<string, string> = {
+export const STAGE_TO_FLAG: Record<string, string> = {
   cutting: 'cut',
   polishing: 'edge_processed',
   drilling: 'drilled',

@@ -10,6 +10,9 @@ const h = vi.hoisted(() => ({
   canMoney: true,
   closed: [] as number[],
   reopened: [] as number[],
+  role: 'admin',
+  packCalls: [] as Record<string, unknown>[],
+  packUpdated: 1,
 }))
 
 function query(table: string) {
@@ -74,7 +77,13 @@ function rpc(name: string, args: { p_order_id: number; p_stages?: Row; p_patch?:
 }
 
 vi.mock('server-only', () => ({}))
-vi.mock('@/lib/apiAuth', () => ({ requirePageAccess: async () => 'admin' }))
+vi.mock('@/lib/apiAuth', () => ({ requirePageAccess: async () => h.role }))
+vi.mock('@/lib/production/syncStages', () => ({
+  applyStageUpdates: async (_s: unknown, orderId: number, updates: Row[]) => {
+    h.packCalls.push({ orderId, ...updates[0] })
+    return { updated: h.packUpdated, failed: [], cascaded: [], reopened: updates[0].action === 'unset' ? [{ item_index: updates[0].item_index, stages: ['cutting', 'custom'] }] : [] }
+  },
+}))
 vi.mock('@/lib/getRole', () => ({
   getSessionUser: async () => ({ id: 'u1', email: 'x@test' }),
   getUserProfile: async () => ({ canViewMoney: h.canMoney }),
@@ -111,7 +120,7 @@ const create = async (lines: [number, string, number][], date = today) => {
 
 beforeEach(() => {
   h.db = { b2b_orders: [order(1), order(2, { shipped: '2026-10-31T13:51:31.115Z' }), order(3, {}, 99)], delivery_shipments: [], delivery_shipment_items: [], production_tasks: [] }
-  h.canMoney = true; h.closed = []; h.reopened = []
+  h.canMoney = true; h.closed = []; h.reopened = []; h.role = 'admin'; h.packCalls = []; h.packUpdated = 1
 })
 
 describe('отгрузка Шовер Гласс: маршрут', () => {
@@ -189,6 +198,30 @@ describe('отгрузка Шовер Гласс: маршрут', () => {
     expect((await call({ action: 'add', shipment_id: s, lines: [{ order_id: 1, line_key: 'a', qty: 2 }] })).status).toBe(409)
     expect((await call({ action: 'remove', shipment_id: s, order_id: 1, line_key: 'b' })).status).toBe(200)
     expect(h.db.delivery_shipment_items).toHaveLength(1)
+  })
+
+  it('кнопка упаковки: пишет этап позиции, снятие снимает флаг заказа, ограничения', async () => {
+    expect((await call({ action: 'pack', order_id: 1, line_key: 'b' })).status).toBe(200)
+    expect(h.packCalls[0]).toEqual({ orderId: 1, item_index: 1, stage_key: 'packaging', action: 'done' })
+
+    const row = h.db.b2b_orders.find(o => o.id === 1)!
+    row.notes = JSON.stringify({ stages: { packaged: '2026-11-05', cut: '2026-11-05', tempering: '2026-11-04' } })
+    expect((await call({ action: 'unpack', order_id: 1, line_key: 'b' })).body).toMatchObject({ ok: true, reopened: 2 })
+    expect(h.packCalls[1]).toMatchObject({ action: 'unset', item_index: 1 })
+    expect(notesOf(1).stages).toMatchObject({ packaged: null, cut: null, tempering: '2026-11-04' })
+
+    await create([[1, 'b', 1]])
+    expect((await call({ action: 'unpack', order_id: 1, line_key: 'b' })).body.error).toContain('уже в отгрузке')
+    expect((await call({ action: 'pack', order_id: 1, line_key: 'нет' })).status).toBe(409)
+    expect((await call({ action: 'pack', order_id: 2, line_key: 'a' })).body.error).toContain('уже отгружен')
+    expect((await call({ action: 'pack', order_id: 3, line_key: 'a' })).body.error).toContain('другого клиента')
+
+    h.packUpdated = 0
+    expect((await call({ action: 'pack', order_id: 1, line_key: 'a' })).body.error).toContain('нет задачи упаковки')
+
+    h.role = 'manager'
+    expect((await call({ action: 'pack', order_id: 1, line_key: 'a' })).status).toBe(403)
+    expect(((await (await GET()).json()) as { canPack: boolean }).canPack).toBe(false)
   })
 
   it('вкладки: частично уехавший и просроченный заказ остаётся в работе, уехавший целиком — в отгруженных', async () => {

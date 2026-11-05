@@ -195,6 +195,15 @@ export default function ShowerGlassShipmentsPage() {
     if (await post('Отгрузка не расформирована', { action: 'delete', shipment_id: s.id })) toast.success('Отгрузка расформирована')
   })
 
+  const setPacked = (order: PoolOrder, line: OrderLine, on: boolean) => run(async () => {
+    const res = await post(on ? 'Упаковка не отмечена' : 'Упаковка не снята', { action: on ? 'pack' : 'unpack', order_id: order.id, line_key: line.key })
+    if (!res) return
+    toast.success(on ? `Упаковано: заказ ${order.no}` : `Упаковка снята: заказ ${order.no}`, {
+      detail: on ? `${line.label}. Этапы цеха до упаковки по этой позиции тоже закрыты.` : `${line.label}. Позиция вернулась в очередь цеха.`,
+    })
+    warn('Записалось не всё', res.warnings)
+  })
+
   const removeLine = (s: Shipment, orderId: number, key: string) => run(async () => {
     if (await post('Строка не убрана', { action: 'remove', shipment_id: s.id, order_id: orderId, line_key: key })) toast.success('Строка убрана из отгрузки')
   })
@@ -208,7 +217,8 @@ export default function ShowerGlassShipmentsPage() {
   const orderRows = (list: PoolOrder[]) => (
     <div className="space-y-1.5">
       {list.map(o => (
-        <OrderRow key={o.id} order={o} selected={selected} canMoney={canMoney} expanded={open.has(o.id)}
+        <OrderRow key={o.id} order={o} selected={selected} canMoney={canMoney} canPack={!!data?.canPack} busy={busy} expanded={open.has(o.id)}
+          onPacked={(l, on) => setPacked(o, l, on)}
           onExpand={() => setOpen(prev => { const n = new Set(prev); if (n.has(o.id)) n.delete(o.id); else n.add(o.id); return n })}
           onToggle={on => toggleOrder(o, on)} onLine={(l, n) => setLine(o, l, n)} />
       ))}
@@ -329,8 +339,9 @@ export default function ShowerGlassShipmentsPage() {
   )
 }
 
-function OrderRow({ order, selected, canMoney, expanded, onExpand, onToggle, onLine }: {
-  order: PoolOrder; selected: Map<string, number>; canMoney: boolean; expanded: boolean
+function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked, onExpand, onToggle, onLine }: {
+  order: PoolOrder; selected: Map<string, number>; canMoney: boolean; canPack: boolean; busy: boolean; expanded: boolean
+  onPacked: (l: OrderLine, on: boolean) => void
   onExpand: () => void; onToggle: (on: boolean) => void; onLine: (l: OrderLine, qty: number) => void
 }) {
   const freeLines = order.lines.filter(l => l.free > 0)
@@ -403,6 +414,13 @@ function OrderRow({ order, selected, canMoney, expanded, onExpand, onToggle, onL
                     )}
                   </p>
                 </div>
+                {canPack && !isShipped && l.shipped < l.qty && (
+                  l.packed
+                    ? l.shipped + l.drafted === 0 && (
+                        <button disabled={busy} onClick={() => onPacked(l, false)} className="h-8 px-2 text-[12px] text-[#6b6b66] underline disabled:opacity-50">Снять упаковку</button>
+                      )
+                    : <button disabled={busy} onClick={() => onPacked(l, true)} className="h-8 px-2.5 shrink-0 rounded-lg border border-[#111110] text-[12px] font-medium text-[#111110] disabled:opacity-50">Упаковано</button>
+                )}
                 {l.free > 1 && qty > 0 && (
                   <label className="flex items-center gap-1 text-[12px] text-[#6b6b66]">
                     <input type="number" min={1} max={l.free} value={qty} aria-label="Сколько штук отгрузить"
