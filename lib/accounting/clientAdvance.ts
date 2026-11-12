@@ -6,6 +6,7 @@ import { readIn, readPaged, num, type Row } from '@/lib/money/paged'
 import { manualPaymentKind, fmtRub } from '@/lib/money/invoiceStatus'
 import { syncInvoiceStatus } from '@/lib/money/invoiceManualPayment'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { billableTotal } from '@/lib/b2b/ownCostRemake'
 
 // Аванс клиента: деньги пришли раньше заказов, запущенные заказы списываются с него
 // (14.10, ГлассДекор: 400 000 ₽). Списание — платёж по заказу с ключом advance:<аванс>:<заказ>,
@@ -87,7 +88,7 @@ export async function allocateAdvances(svc: SupabaseClient, opts: { clientIds?: 
   const orders = orderRows
     .map(o => ({
       id: num(o.id), client_id: num(o.client_id), launched: String(o.launched_at).slice(0, 10),
-      total: finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }),
+      total: billableTotal(finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }), o.notes),
       cancelled: notesStatus(o.notes) === 'cancelled',
     }))
     .filter(o => !o.cancelled && o.total > 0 && o.launched >= (fromBy.get(o.client_id) ?? '9999'))

@@ -1,4 +1,5 @@
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 import { parseNotes, isShipped, orderRef } from '@/lib/b2b/todayPriorities'
 import { stageDayKey } from '@/lib/production/dayLists'
 import { mskDayKey } from '@/lib/time'
@@ -92,6 +93,8 @@ export function computeReceivables(
     const n = parseNotes(o.notes)
     if (n.is_template === true) continue
     inScope++
+    // Переделка за наш счёт клиенту не выставляется — долга по ней нет.
+    if (ownCostRemakeOf(n)) continue
     const total = Math.round(finalTotalOf(o) * 100) / 100
     const p = Math.round((paid.get(o.id) ?? 0) * 100) / 100
     if (p > 0) withPayment++

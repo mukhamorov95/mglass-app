@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { paidByOrder, type InvoiceRow, type PaymentRow } from '@/lib/b2b/orderPayments'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { billableTotal } from '@/lib/b2b/ownCostRemake'
 import { readIn, num, type Row } from './paged'
 
 // Сколько оплачено по заказам — из payments, та же раскладка, что /api/b2b-orders/payments
@@ -46,10 +47,11 @@ export async function loadOrderPaid(
   const missing = [...new Set([...invoices.values()].flatMap(i => i.order_ids ?? []))].filter(id => !totals.has(id))
   const invoiceIds = [...invoices.keys()]
   const [neighbours, viaInvoice] = await Promise.all([
-    readIn(missing, part => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat').in('id', part).order('id')),
+    readIn(missing, part => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat, notes').in('id', part).order('id')),
     readIn(invoiceIds, part => svc.from('payments').select(PCOLS).in('invoice_id', part).is('voided_at', null).order('id')),
   ])
-  for (const o of neighbours) totals.set(num(o.id), finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }))
+  // Заказ за счёт M GLASS в счёте соседей деньги не забирает: его доля — ноль.
+  for (const o of neighbours) totals.set(num(o.id), billableTotal(finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }), o.notes))
 
   const pays: PayRow[] = [
     ...direct.map(toPay),

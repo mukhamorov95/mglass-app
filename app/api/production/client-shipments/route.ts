@@ -4,6 +4,7 @@ import { getSessionUser, getUserProfile } from '@/lib/getRole'
 import { serviceAsMe } from '@/lib/serviceAs'
 import { createServiceClient } from '@/lib/supabase-service'
 import { CASCADE_FROM } from '@/lib/production/managerCascade'
+import { ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 import { closeOpenTasksOnOrderMark, reopenTasksOnOrderUnmark, syncShippedLineTasks } from '@/lib/production/closeOnOrderMark'
 import { readIn, readPaged } from '@/lib/production/paged'
 import { applyStageUpdates } from '@/lib/production/syncStages'
@@ -136,7 +137,7 @@ export async function GET() {
         // В черновике вес и сумма считаются по заказу сейчас, у отправленной — снимок.
         const live = h.status !== 'shipped' && line
         return {
-          order_id: r.order_id, order_no: o ? orderNo(o) : String(r.order_id), client_no: o?.client_order_number?.trim() || null, key: r.line_key,
+          order_id: r.order_id, order_no: o ? orderNo(o) : String(r.order_id), client_no: o?.client_order_number?.trim() || null, own_cost: !!ownCostRemakeOf(o?.notes), key: r.line_key,
           label: r.label ?? line?.label ?? 'Строка удалена из заказа', size: r.label ? '' : line?.size ?? '',  // в снимке размер уже в названии
           qty: r.qty, lineQty: line?.qty ?? r.qty,
           weight: live ? shareOf(line.weight, line.qty, from, r.qty) : Number(r.weight_kg ?? 0),

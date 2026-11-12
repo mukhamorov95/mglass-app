@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
 import { paidByOrder, type PaymentRow, type InvoiceRow } from '@/lib/b2b/orderPayments'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { billableTotal } from '@/lib/b2b/ownCostRemake'
 import { latestPayment, paidByOf, type PaidBy, type PaidByPayment } from '@/lib/b2b/paidBy'
 
 export const dynamic = 'force-dynamic'
@@ -64,13 +65,13 @@ export async function GET(req: NextRequest) {
   try {
     // Суммы заказов нужны и для раскладки счетов по долям, и для остатка.
     const orders = ids && ids.length
-      ? await readIn(ids, part => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat').in('id', part).order('id'))
-      : await readPaged(() => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat')
+      ? await readIn(ids, part => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat, notes').in('id', part).order('id'))
+      : await readPaged(() => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat, notes')
         .is('archived_at', null).gte('created_at', '2026-01-01').order('id'))
 
     const orderTotals = new Map<number, number>()
     for (const o of orders) {
-      orderTotals.set(n(o.id), finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }))
+      orderTotals.set(n(o.id), billableTotal(finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }), o.notes))
     }
     const orderIds = [...orderTotals.keys()]
     if (orderIds.length === 0) return NextResponse.json({ paid: {}, by: {} })
@@ -135,8 +136,8 @@ export async function GET(req: NextRequest) {
     const weights = new Map(orderTotals)
     const neighbours = [...new Set(invRows.flatMap(i => i.order_ids ?? []))].filter(id => !weights.has(id))
     const neighbourRows = await readIn(neighbours, part => svc.from('b2b_orders')
-      .select('id, total_after_discount, total_sale_inc_vat').in('id', part).order('id'))
-    for (const o of neighbourRows) weights.set(n(o.id), finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }))
+      .select('id, total_after_discount, total_sale_inc_vat, notes').in('id', part).order('id'))
+    for (const o of neighbourRows) weights.set(n(o.id), billableTotal(finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }), o.notes))
 
     const paidMap = paidByOrder(allPayments, invRows, weights)
     const paid: Record<number, number> = {}

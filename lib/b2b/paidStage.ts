@@ -3,6 +3,7 @@ import { loadOrderPaid } from '@/lib/money/orderPaid'
 import { readIn, readPaged, num } from '@/lib/money/paged'
 import { isTransferMark, ADVANCE_SOURCE } from '@/lib/payments/marks'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 
 // Банк подтвердил оплату — этап «Оплачен» в заказе ставится сам, датой денег: дата перевода
 // из выписки или списания с аванса. 14.10 владелец: у ShowerGlass «Оплачен · банк» стоял, а
@@ -83,6 +84,7 @@ export async function syncPaidStages(svc: SupabaseClient, opts: { paidSince?: st
   for (const o of orders) {
     const id = num(o.id)
     const n = parse(o.notes)
+    if (ownCostRemakeOf(n)) continue  // за счёт M GLASS: клиент не платит, этап «Оплачен» не ставим
     const money = last.get(id) ?? null
     const ch = paidStageChange(n, { total: totals.get(id) ?? 0, paid: paid.get(id) ?? 0, date: money?.date ?? null, source: money?.source ?? null })
     if (!ch) continue

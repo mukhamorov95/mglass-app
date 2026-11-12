@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { isOwnerRole } from '@/lib/getRole'
@@ -120,6 +121,15 @@ export async function POST(req: Request) {
 
   const svc = createServiceClient()
   const writer = a.fin ? a.sb : svc
+
+  // Заказ за счёт M GLASS клиенту не выставляется — в счёт его не включаем.
+  const { data: own, error: ownErr } = await svc.from('b2b_orders').select('id, custom_number, notes').in('id', order_ids)
+  if (ownErr) return NextResponse.json({ error: `Заказы не прочитались: ${ownErr.message}` }, { status: 500 })
+  const ownCost = (own ?? []).filter(o => ownCostRemakeOf(o.notes))
+  if (ownCost.length) {
+    const refs = ownCost.map(o => String(o.custom_number ?? '').trim() || `#${o.id}`).join(', ')
+    return NextResponse.json({ error: `Заказ ${refs} за счёт M GLASS: клиенту его не выставляем. Уберите его из счёта или снимите отметку в карточке заказа.` }, { status: 409 })
+  }
 
   // Действующие счета с этими заказами — со статусом оплаты по платежам.
   let related: Awaited<ReturnType<typeof loadInvoicesWithOrders>>

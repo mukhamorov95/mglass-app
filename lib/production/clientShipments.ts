@@ -167,11 +167,12 @@ export function orderInShipmentText(v: Pick<ReturnType<typeof orderInShipment>, 
 export type ShipmentLineView = { order_id: number; key: string; qty: number; lineQty: number; weight: number; amount: number }
 
 // Итог отгрузки: заказов, штук, вес, сумма — одна функция и для карточки, и для листа.
-export function shipmentTotals(lines: Pick<ShipmentLineView, 'order_id' | 'qty' | 'weight' | 'amount'>[]) {
+// Строка за счёт M GLASS (переделка по нашей вине) уезжает и весит, но к оплате не идёт: в сумму не входит.
+export function shipmentTotals(lines: (Pick<ShipmentLineView, 'order_id' | 'qty' | 'weight' | 'amount'> & { own_cost?: boolean })[]) {
   return {
     orders: new Set(lines.map(l => l.order_id)).size,
     pieces: lines.reduce((s, l) => s + l.qty, 0),
     weight: round2(lines.reduce((s, l) => s + l.weight, 0)),
-    amount: round2(lines.reduce((s, l) => s + l.amount, 0)),
+    amount: round2(lines.reduce((s, l) => s + (l.own_cost ? 0 : l.amount), 0)),
   }
 }

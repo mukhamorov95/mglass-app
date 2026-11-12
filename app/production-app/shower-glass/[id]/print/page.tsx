@@ -54,10 +54,10 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
                 <tr key={`${l.order_id}-${l.key}`} className="border-b border-[#e4e4e0] align-top">
                   <td className="py-1.5 pr-2 font-medium whitespace-nowrap">{l.order_no}</td>
                   <td className="py-1.5 pr-2 whitespace-nowrap">{l.client_no ?? <span className="text-[#9a9a95]">—</span>}</td>
-                  <td className="py-1.5 pr-2">{l.label}{l.size ? `, ${l.size} мм` : ''}</td>
+                  <td className="py-1.5 pr-2">{l.label}{l.size ? `, ${l.size} мм` : ''}{l.own_cost && <span className="text-[#6b6b66]"> (переделка за счёт M GLASS)</span>}</td>
                   <td className="py-1.5 pr-2 text-right whitespace-nowrap">{l.qty} из {l.lineQty}</td>
                   <td className="py-1.5 pr-2 text-right whitespace-nowrap">{fmtKg(l.weight)}</td>
-                  {money && <td className="py-1.5 text-right whitespace-nowrap">{fmtRub(l.amount)}</td>}
+                  {money && <td className="py-1.5 text-right whitespace-nowrap">{l.own_cost ? <span className="text-[#9a9a95]">({fmtRub(l.amount)})</span> : fmtRub(l.amount)}</td>}
                 </tr>
               ))}
             </tbody>
