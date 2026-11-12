@@ -114,6 +114,25 @@ async function detail(svc: Svc, id: number) {
     .eq('order_id', id).order('sequence_order').order('id')
   if (tErr) throw new Error(tErr.message)
   const ledger = await loadLedger(svc, [id])
+  const lines = shipLines(o)
+  const indexOf = new Map(lines.map(l => [l.key, l.index]))
+  const { data: heads, error: hErr } = await svc.from('delivery_shipments').select('id, shipped_by_name, created_by')
+    .in('id', [...new Set(ledger.items.map(r => r.shipment_id))])
+  if (hErr) throw new Error(hErr.message)
+  const creators = [...new Set((heads ?? []).filter(h => !h.shipped_by_name && h.created_by).map(h => h.created_by as string))]
+  const { data: users } = creators.length ? await svc.from('users').select('id, name').in('id', creators) : { data: [] }
+  const nameOf = new Map((users ?? []).map(u => [u.id as string, (u.name as string | null) ?? null]))
+  // До 12.11 кто нажал «Отгрузить», не писалось: у старых отгрузок называем того, кто её завёл.
+  const byOf = new Map((heads ?? []).map(h => [h.id as number, h.shipped_by_name
+    ? { by: h.shipped_by_name as string, created: false }
+    : { by: nameOf.get(h.created_by as string) ?? null, created: true }]))
+  const lineShipments = ledger.items.flatMap(r => {
+    const index = indexOf.get(r.line_key)
+    if (index === undefined) return []
+    const who = byOf.get(r.shipment_id)
+    return [{ item_index: index, day: ledger.shipDay.get(r.shipment_id) ?? null, pieces: r.qty, by: who?.by ?? null, by_created: who?.created ?? false }]
+  }).sort((a, b) => (a.day ?? '').localeCompare(b.day ?? ''))
+  const earlierLines = (notes.shipped_earlier as { lines?: EarlierLines } | null | undefined)?.lines ?? {}
   const byDay = new Map<string, number>()
   for (const r of ledger.items) {
     const d = ledger.shipDay.get(r.shipment_id) ?? ''
@@ -125,5 +144,7 @@ async function detail(svc: Svc, id: number) {
     launched_at: o.launched_at, tasks: tasks ?? [],
     shipments: [...byDay.entries()].map(([day, pieces]) => ({ day: day || null, pieces })).sort((a, b) => (a.day ?? '').localeCompare(b.day ?? '')),
     earlier_pieces: earlier, ship_mark: shipMarkOf(notes as Parameters<typeof shipMarkOf>[0]),
+    line_shipments: lineShipments,
+    line_totals: lines.map(l => ({ item_index: l.index, qty: l.qty, earlier: earlierLines[l.key] ?? 0 })),
   })
 }

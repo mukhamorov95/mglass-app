@@ -24,7 +24,9 @@ import { loadJson, toast as errorToast, sendOrToast, responseError, NETWORK_ERRO
 
 type Item = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; hasTempering?: boolean; hasFacet?: boolean; hasHoles?: boolean; shape?: 'rect' | 'curved'; hasTriplex?: boolean }
 type Task = BoardTask & { id: number; station: string; rework_count: number | null; problem_reason_code: string | null; problem_comment: string | null; problem_at: string | null; problem_by_name: string | null }
-type Detail = { id: number; items: Item[]; drawing_url: string | null; launched_at: string | null; tasks: Task[]; shipments: { day: string | null; pieces: number }[]; earlier_pieces: number; ship_mark: { by: string; at: string | null } | null }
+type Detail = { id: number; items: Item[]; drawing_url: string | null; launched_at: string | null; tasks: Task[]; shipments: { day: string | null; pieces: number }[]; earlier_pieces: number; ship_mark: { by: string; at: string | null } | null
+  line_shipments?: { item_index: number; day: string | null; pieces: number; by: string | null; by_created: boolean }[]
+  line_totals?: { item_index: number; qty: number; earlier: number }[] }
 type Me = { role: string | null; production_stations: string[] | null; production_lead: boolean }
 type Period = { from: string; to: string }
 
@@ -37,6 +39,7 @@ const STATE_CLS: Record<OrderShipState, string> = {
   partial: 'bg-amber-50 text-amber-700 border-amber-200',
   full: 'bg-emerald-50 text-emerald-700 border-emerald-200',
 }
+const chipCls = (done: number, total: number) => (done >= total ? 'bg-emerald-50 text-emerald-700' : done > 0 ? 'bg-amber-50 text-amber-700' : 'bg-[#f0f0ec] text-[#6b6b66]')
 const stageLabel = (k: string) => STAGE_LABELS[k as DetailStageKey] ?? k
 const fmtDay = (day: string | null | undefined) => (day ? `${day.slice(8, 10)}.${day.slice(5, 7)}.${day.slice(0, 4)}` : 'без даты')
 const fmtStamp = (iso: string) => new Date(iso).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -320,7 +323,8 @@ function OrderCard({ o, point, isOpen, onToggle, children }: { o: BoardOrder; po
         <p className="text-[12px] text-[#6b6b66]">{o.positions} поз. · {o.pieces} шт. · {o.weight.toLocaleString('ru-RU')} кг{o.amount !== undefined ? ` · ${Math.round(o.amount).toLocaleString('ru-RU')} ₽` : ''}</p>
         {o.stages.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {o.stages.map(s => <span key={s.key} className={`text-[11px] px-1.5 py-0.5 rounded ${s.done === s.total ? 'bg-emerald-50 text-emerald-700' : s.done > 0 ? 'bg-amber-50 text-amber-700' : 'bg-[#f0f0ec] text-[#6b6b66]'}`}>{stageLabel(s.key)} {s.done}/{s.total}</span>)}
+            {o.stages.map(s => <span key={s.key} className={`text-[11px] px-1.5 py-0.5 rounded ${chipCls(s.done, s.total)}`}>{stageLabel(s.key)} {s.done}/{s.total}</span>)}
+            <span className={`text-[11px] px-1.5 py-0.5 rounded ${chipCls(o.shipped_pieces, o.pieces)}`}>Отгрузка {o.shipped_pieces}/{o.pieces} шт.</span>
           </div>
         )}
         <p className="text-[12px] text-[#6b6b66]">
@@ -379,6 +383,7 @@ function OrderDetail({ o, detail, error, scope, canMark, isLead, onRetry, onMark
               {tasks.length === 0 && <p className="text-[12px] text-[#9a9a95]">Этапов нет.</p>}
               <div className="divide-y divide-[#f4f4f0]">
                 {tasks.map(t => <StageRow key={t.id} t={t} live={live} canMark={canMark} onMark={onMark} />)}
+                {o.shipped_pieces > 0 && <ShipRow index={i} detail={detail} />}
               </div>
             </div>
           )
@@ -404,6 +409,32 @@ function OrderDetail({ o, detail, error, scope, canMark, isLead, onRetry, onMark
         </div>
       )}
     </>
+  )
+}
+
+// Отгрузка позиции — той же строкой, что этапы цеха: сколько уехало, когда и кто отгрузил.
+function ShipRow({ index, detail }: { index: number; detail: Detail }) {
+  const total = detail.line_totals?.find(l => l.item_index === index)
+  const rows = (detail.line_shipments ?? []).filter(s => s.item_index === index)
+  const earlier = total?.earlier ?? 0
+  const shipped = rows.reduce((n, s) => n + s.pieces, 0) + earlier
+  const qty = total?.qty ?? 0
+  const full = qty > 0 && shipped >= qty
+  return (
+    <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5 py-1 text-[12px]">
+      <span className={`w-24 shrink-0 font-medium ${full ? 'text-emerald-700' : shipped > 0 ? 'text-amber-700' : 'text-[#6b6b66]'}`}>{full ? '✓ ' : ''}Отгрузка</span>
+      <span className="min-w-0 text-[#4b4b47] space-y-0.5">
+        {shipped === 0 && <span className="text-[#9a9a95]">не отгружено</span>}
+        {rows.map((s, k) => (
+          <span key={k} className="block">
+            {fmtDay(s.day)} · {s.pieces} из {qty} шт. · {s.by ?? <span className="text-[#9a9a95]">кто, не записано</span>}
+            {s.by && s.by_created && <span className="text-[#9a9a95]"> · завёл отгрузку</span>}
+          </span>
+        ))}
+        {earlier > 0 && <span className="block">уехало раньше, без даты: {earlier} шт.</span>}
+        {shipped > 0 && !full && <span className="block text-amber-700">осталось {qty - shipped} шт.</span>}
+      </span>
+    </div>
   )
 }
 

@@ -44,7 +44,7 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
           <table className="w-full text-[12px] border-collapse">
             <thead>
               <tr className="border-b-2 border-[#111110] text-left">
-                <th className="py-1.5 pr-2">Заказ</th><th className="py-1.5 pr-2">Изделие</th>
+                <th className="py-1.5 pr-2">Заказ</th><th className="py-1.5 pr-2 whitespace-nowrap">№ Шовер Гласс</th><th className="py-1.5 pr-2">Изделие</th>
                 <th className="py-1.5 pr-2 text-right whitespace-nowrap">Шт.</th><th className="py-1.5 pr-2 text-right">Вес</th>
                 {money && <th className="py-1.5 text-right">Сумма</th>}
               </tr>
@@ -53,6 +53,7 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
               {s.lines.map(l => (
                 <tr key={`${l.order_id}-${l.key}`} className="border-b border-[#e4e4e0] align-top">
                   <td className="py-1.5 pr-2 font-medium whitespace-nowrap">{l.order_no}</td>
+                  <td className="py-1.5 pr-2 whitespace-nowrap">{l.client_no ?? <span className="text-[#9a9a95]">—</span>}</td>
                   <td className="py-1.5 pr-2">{l.label}{l.size ? `, ${l.size} мм` : ''}</td>
                   <td className="py-1.5 pr-2 text-right whitespace-nowrap">{l.qty} из {l.lineQty}</td>
                   <td className="py-1.5 pr-2 text-right whitespace-nowrap">{fmtKg(l.weight)}</td>
@@ -62,7 +63,7 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
             </tbody>
             <tfoot>
               <tr className="font-semibold">
-                <td className="py-2 pr-2" colSpan={2}>Итого: заказов {t.orders}</td>
+                <td className="py-2 pr-2" colSpan={3}>Итого: заказов {t.orders}</td>
                 <td className="py-2 pr-2 text-right whitespace-nowrap">{t.pieces}</td>
                 <td className="py-2 pr-2 text-right whitespace-nowrap">{fmtKg(t.weight)}</td>
                 {money && <td className="py-2 text-right whitespace-nowrap">{fmtRub(t.amount)}</td>}
@@ -80,7 +81,7 @@ export default function ShipmentPrintPage({ params }: { params: Promise<{ id: st
             const parts = text ? [text.here, text.earlier, text.after].filter(Boolean).map(x => String(x).charAt(0).toLowerCase() + String(x).slice(1)) : []
             return (
               <p key={id} className="pdf-keep">
-                <span className="font-medium">{here[0].order_no}</span>
+                <span className="font-medium">{here[0].order_no}</span>{here[0].client_no ? ` (№ Шовер Гласс ${here[0].client_no})` : ''}
                 {parts.length ? `: ${parts.join(', ')}` : ''}
               </p>
             )
