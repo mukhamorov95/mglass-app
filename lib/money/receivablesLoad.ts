@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { billableTotal } from '@/lib/b2b/ownCostRemake'
 import { mskDayKey } from '@/lib/time'
 import { readPaged, readIn, num } from './paged'
 import { loadOrderPaid } from './orderPaid'
@@ -19,7 +20,7 @@ export async function loadReceivables(svc: SupabaseClient, opts: { today?: strin
     .is('archived_at', null).not('launched_at', 'is', null).gte('launched_at', from).order('id'))
   const orders = rows as unknown as RecOrder[]
 
-  const totals = new Map(orders.map(o => [num(o.id), finalTotalOf(o)]))
+  const totals = new Map(orders.map(o => [num(o.id), billableTotal(finalTotalOf(o), o.notes)]))
   const paid = await loadOrderPaid(svc, totals)
 
   // Номер действующего счёта по заказу — чтобы видеть «запущен, а счёта нет».

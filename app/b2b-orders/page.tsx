@@ -16,6 +16,7 @@ import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 import { remainderStatus } from '@/lib/b2b/orderPayments'
 import { maxFormattedNumber, nextOrderNumber } from '@/lib/b2b/orderNumber'
 import { payStatusFromPayments, type OrderPayStatus } from '@/lib/b2b/orderPayStatus'
+import { ownCostRemakeOf, ownCostRemakeLabel } from '@/lib/b2b/ownCostRemake'
 import type { PaidBy } from '@/lib/b2b/paidBy'
 import { writeFailure } from '@/lib/rlsWrite'
 import { matchScore } from '@/lib/search/translitMatch'
@@ -369,6 +370,7 @@ const PAY_BADGE: Record<OrderPayStatus, { label: string; cls: string } | null> =
   partial: { label: 'Частично',   cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
   unpaid:  null,
   unknown: null,
+  own_cost: { label: 'За счёт M GLASS', cls: 'bg-[#eef2fb] text-[#3a55a0] border border-[#d5def3]' },
 }
 
 // Поиск по номеру и клиенту. Заказы без custom_number идентифицируются по id (в ленте
@@ -642,7 +644,7 @@ export default function B2BOrdersPage() {
   const [paidWho, setPaidWho] = useState<Record<number, PaidBy>>({})
   const [paidErr, setPaidErr] = useState<string | null>(null)
   const getOrderPayStatus = (o: Order): OrderPayStatus =>
-    payStatusFromPayments(getFinalPrice(o), paidByOrderId ? (paidByOrderId[o.id] ?? 0) : undefined)
+    ownCostRemakeOf(o.parsedNotes) ? 'own_cost' : payStatusFromPayments(getFinalPrice(o), paidByOrderId ? (paidByOrderId[o.id] ?? 0) : undefined)
   // Подтверждение отгрузки при неоплаченном остатке (не блок, второй клик).
   const [shipConfirmId, setShipConfirmId] = useState<number | null>(null)
   // Этап 9: УПД у заказов — номер выданного и «Выдать УПД» у отгруженного. Пусто, пока не загрузилось.
@@ -2468,6 +2470,7 @@ export default function B2BOrdersPage() {
                 )}
                 {scope.partial.count > 0 && <> · <span className="text-amber-700">частично {scope.partial.count} · {rub(scope.partial.sum)} ₽</span></>}
                 {' · '}<span className={scope.unpaid.count ? 'text-red-600' : ''}>без платежей {scope.unpaid.count} · {rub(scope.unpaid.sum)} ₽</span>
+                {scope.ownCost.count > 0 && <> · <span className="text-[#3a55a0]" title="Переделки по нашей вине: заказ и его сумма есть, клиенту не выставляются и в долг не входят">за счёт M GLASS {scope.ownCost.count} · {rub(scope.ownCost.sum)} ₽</span></>}
               </span>
             )}
           </p>
@@ -2569,7 +2572,7 @@ export default function B2BOrdersPage() {
                           {(dc?.next_action || dc?.reason) && (
                             <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
                           )}
-                          {(() => { const pb = PAY_BADGE[payStatus]; const who = paidWho[order.id]; return pb ? (
+                          {(() => { const pb = PAY_BADGE[payStatus]; const oc = ownCostRemakeOf(order.parsedNotes); const who = oc ? { label: '', title: ownCostRemakeLabel(oc) } : paidWho[order.id]; return pb ? (
                             <span title={who?.title} className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}{who?.label ? ` · ${who.label}` : ''}</span>
                           ) : null })()}
                           {requiresDeadlineControl(order) && (
@@ -2742,7 +2745,7 @@ export default function B2BOrdersPage() {
                             {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
                               <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
                             )}
-                            {(() => { const pb = PAY_BADGE[payStatus]; const who = paidWho[order.id]; return pb ? (
+                            {(() => { const pb = PAY_BADGE[payStatus]; const oc = ownCostRemakeOf(order.parsedNotes); const who = oc ? { label: '', title: ownCostRemakeLabel(oc) } : paidWho[order.id]; return pb ? (
                               <span title={who?.title} className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}{who?.label ? ` · ${who.label}` : ''}</span>
                             ) : null })()}
                           </div>
@@ -2927,7 +2930,7 @@ export default function B2BOrdersPage() {
                                     {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
                                       <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66]">📝 Контроль</span>
                                     )}
-                                    {(() => { const pb = PAY_BADGE[payStatus]; const who = paidWho[order.id]; return pb ? (
+                                    {(() => { const pb = PAY_BADGE[payStatus]; const oc = ownCostRemakeOf(order.parsedNotes); const who = oc ? { label: '', title: ownCostRemakeLabel(oc) } : paidWho[order.id]; return pb ? (
                                       <span title={who?.title} className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}{who?.label ? ` · ${who.label}` : ''}</span>
                                     ) : null })()}
                                     {lastDoneIdx >= 0 && !isShipped && (

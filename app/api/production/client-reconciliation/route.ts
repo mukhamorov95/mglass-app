@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { billableTotal, ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 import { requirePageAccess } from '@/lib/apiAuth'
 import { getSessionUser, getUserProfile } from '@/lib/getRole'
 import { serviceAsMe } from '@/lib/serviceAs'
@@ -82,7 +83,9 @@ async function loadDoc(svc: Svc, from: string, to: string) {
   }
   const [bankFrom, bankTo] = await Promise.all([edge(true), edge(false)])
 
-  const totals = new Map(raw.map(o => [o.id, orderAmount(o as never)]))
+  // Заказ за счёт M GLASS клиенту не выставляется: в акте он с нулём, отгрузки по нему — тоже.
+  const totals = new Map(raw.map(o => [o.id, billableTotal(orderAmount(o as never), o.notes)]))
+  const ownCost = new Set(raw.filter(o => ownCostRemakeOf(o.notes)).map(o => o.id))
   const paymentsByOrder = new Map<number, { day: string; amount: number }[]>()
   for (const p of payments) {
     for (const [orderId, amount] of paidByOrder([p], invoices, totals)) {
@@ -93,10 +96,10 @@ async function loadDoc(svc: Svc, from: string, to: string) {
   const orders: ReconOrder[] = raw.map(o => {
     const notes = notesOf(o.notes)
     const lines = shipLines(o)
-    const events = sent.filter(i => i.order_id === o.id).map(i => ({ day: shipDay.get(i.shipment_id) ?? null, amount: Number(i.amount ?? 0), pieces: i.qty }))
+    const events = sent.filter(i => i.order_id === o.id).map(i => ({ day: shipDay.get(i.shipment_id) ?? null, amount: ownCost.has(o.id) ? 0 : Number(i.amount ?? 0), pieces: i.qty }))
     const earlier = Object.entries(notes.shipped_earlier?.lines ?? {}).flatMap(([key, qty]) => {
       const line = lines.find(l => l.key === key)
-      return line && qty > 0 ? [{ day: null, amount: shareOf(line.amount, line.qty, 0, qty), pieces: qty }] : []
+      return line && qty > 0 ? [{ day: null, amount: ownCost.has(o.id) ? 0 : shareOf(line.amount, line.qty, 0, qty), pieces: qty }] : []
     })
     const shippedOf = (key: string) => sent.filter(i => i.order_id === o.id && i.line_key === key).reduce((n, i) => n + i.qty, 0) + (notes.shipped_earlier?.lines?.[key] ?? 0)
     const marked = isShipped(notes as Parameters<typeof isShipped>[0])

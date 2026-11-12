@@ -65,7 +65,8 @@ export function clientOptions(orders: ClientRef[], keyOf: (o: ClientRef) => stri
 
 export type Bucket = { count: number; sum: number }
 // paidByMark — часть paid: «Оплачен» стоит отметкой человека, денег в загруженных выписках нет
-export type OrdersSummary = { all: Bucket; active: Bucket; shipped: Bucket; paid: Bucket; paidByMark: Bucket; partial: Bucket; unpaid: Bucket }
+// ownCost — заказы за счёт M GLASS: в итоге выборки есть, в оплаченные и неоплаченные не входят
+export type OrdersSummary = { all: Bucket; active: Bucket; shipped: Bucket; paid: Bucket; paidByMark: Bucket; partial: Bucket; unpaid: Bucket; ownCost: Bucket }
 
 // Итог выборки целиком — отгруженные тоже: «на какую сумму заказали» не зависит
 // от того, на каком этапе заказ сейчас. «Не оплачено» — всё, где оплаты нет или
@@ -74,18 +75,18 @@ export function summarizeOrders<T>(
   orders: T[],
   priceOf: (o: T) => number,
   shippedOf: (o: T) => boolean,
-  payOf: (o: T) => 'paid' | 'partial' | 'unpaid' | 'unknown',
+  payOf: (o: T) => 'paid' | 'partial' | 'unpaid' | 'unknown' | 'own_cost',
   bankConfirmedOf: (o: T) => boolean = () => true,
 ): OrdersSummary {
   const b = (): Bucket => ({ count: 0, sum: 0 })
-  const s: OrdersSummary = { all: b(), active: b(), shipped: b(), paid: b(), paidByMark: b(), partial: b(), unpaid: b() }
+  const s: OrdersSummary = { all: b(), active: b(), shipped: b(), paid: b(), paidByMark: b(), partial: b(), unpaid: b(), ownCost: b() }
   const add = (x: Bucket, v: number) => { x.count++; x.sum += v }
   for (const o of orders) {
     const v = Math.round(priceOf(o))
     add(s.all, v)
     add(shippedOf(o) ? s.shipped : s.active, v)
     const p = payOf(o)
-    add(p === 'paid' ? s.paid : p === 'partial' ? s.partial : s.unpaid, v)
+    add(p === 'paid' ? s.paid : p === 'partial' ? s.partial : p === 'own_cost' ? s.ownCost : s.unpaid, v)
     if (p === 'paid' && !bankConfirmedOf(o)) add(s.paidByMark, v)
   }
   return s

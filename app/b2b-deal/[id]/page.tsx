@@ -17,6 +17,8 @@ import { paymentReminderText } from '@/lib/b2b/clientTexts'
 import { clientRequiredToLaunch, readQuoteLead } from '@/lib/b2b/leadQuote'
 import { orderProgress, type TaskLite } from '@/lib/shopBoard/model'
 import DealActions from './DealActions'
+import OwnCostToggle from './OwnCostToggle'
+import { OWN_COST_ROLES, billableTotal, ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 import { materialWithKind } from '@/lib/materialLabel'
 
 const TONE_TEXT: Record<MarginTone, string> = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-500' }
@@ -69,6 +71,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const items = (Array.isArray(order.items) ? order.items : []) as B2BOrderItem[]
   const discount = Number(order.discount_percent) || 0
   const total = finalTotalOf(order as { total_after_discount?: number; total_sale_inc_vat?: number })
+  // За счёт M GLASS: сумма заказа есть, но клиент её не должен — остаток и напоминание считаем от нуля.
+  const ownCost = ownCostRemakeOf(notes)
+  const billable = billableTotal(total, notes)
   const launched = !!order.launched_at || notes.status === 'sent' || notes.status === 'confirmed'
   const number = (order.custom_number as string | null)?.trim() || String(dealId).padStart(5, '0')
   const timeline = buildClientTimeline(notes)
@@ -79,14 +84,14 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   // оплаченных счетов, куда заказ входит; доля сводного счёта — от итогов всех его заказов
   // (loadOrderPaid дочитывает соседей). Считаем на сервере — деньги наружу без себестоимости.
   const [paidRes, { data: invs, error: invsErr }, { rates }, { data: taskRows, error: tasksErr }] = await Promise.all([
-    loadOrderPaid(sb, new Map([[dealId, total]])).then(m => ({ paid: m.get(dealId) ?? 0, err: null }), (e: unknown) => ({ paid: 0, err: { message: e instanceof Error ? e.message : String(e) } })),
+    loadOrderPaid(sb, new Map([[dealId, billable]])).then(m => ({ paid: m.get(dealId) ?? 0, err: null }), (e: unknown) => ({ paid: 0, err: { message: e instanceof Error ? e.message : String(e) } })),
     sb.from('invoices').select('id, invoice_no, status, order_ids, amount').overlaps('order_ids', [dealId]),
     loadB2BRates(sb),
     sb.from('production_tasks').select('stage_key, status, completed_at, completed_by_name').eq('order_id', dealId),
   ])
   // Без оплат «Оплачено»/«Остаток» соврали бы («не заведена») — такие строки не показываем.
   const moneyErr = paidRes.err ?? invsErr
-  const rem = remainderStatus(total, paidRes.paid)
+  const rem = remainderStatus(billable, paidRes.paid)
   const paid = rem.paid
   // Напомнить об оплате — пока не оплачено полностью и есть что оплачивать: запущенный заказ
   // или выставленный счёт. Номер счёта — только если счёт на один этот заказ: у общего счёта
@@ -94,7 +99,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const liveInvs = ((invs ?? []) as { invoice_no: string | null; status: string | null; order_ids: unknown[] | null }[])
     .filter(i => i.status !== 'cancelled')
   const ownInv = liveInvs.length === 1 && (liveInvs[0].order_ids ?? []).length === 1 ? liveInvs[0] : null
-  const payReminder = !moneyErr && total > 0 && (launched || liveInvs.length > 0) && (!rem.hasPayment || rem.outstanding)
+  const payReminder = !moneyErr && billable > 0 && (launched || liveInvs.length > 0) && (!rem.hasPayment || rem.outstanding)
     ? paymentReminderText({ invoiceNo: ownInv?.invoice_no ?? null, orderRefs: [number], total, paid: rem.paid })
     : null
   // Телефон клиента — ссылкой tel: (этап 3). Без карточки клиента — контакт из просчёта, если в нём номер.
@@ -139,6 +144,10 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
       </div>
+
+      {launched && <OwnCostToggle dealId={dealId} number={number} mark={ownCost}
+        suggestedOf={notes.repeated_from != null ? String(notes.repeated_from).padStart(5, '0') : null}
+        canEdit={(OWN_COST_ROLES as readonly string[]).includes(role ?? '')} />}
 
       {(approval?.needed || claim?.status === 'open') && (
         <div className="flex flex-wrap gap-2">
@@ -213,7 +222,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 <div className="flex justify-between">
                   <dt className="text-[#9a9a95]">{rem.hasPayment ? 'Остаток' : 'Оплата'}</dt>
                   <dd className={`font-mono font-semibold ${!rem.hasPayment ? 'text-[#9a9a95]' : rem.outstanding ? 'text-red-600' : 'text-emerald-600'}`}>
-                    {rem.hasPayment ? (rem.outstanding ? fmt(rem.remainder) : 'закрыт') : 'не заведена'}
+                    {ownCost ? 'за счёт M GLASS' : rem.hasPayment ? (rem.outstanding ? fmt(rem.remainder) : 'закрыт') : 'не заведена'}
                   </dd>
                 </div>
               </>

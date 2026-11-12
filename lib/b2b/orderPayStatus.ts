@@ -1,6 +1,7 @@
 import { remainderStatus } from '@/lib/b2b/orderPayments'
 
-export type OrderPayStatus = 'paid' | 'partial' | 'unpaid' | 'unknown'
+// own_cost — заказ за счёт M GLASS (переделка по нашей вине): клиенту не выставляется, не долг и не оплата.
+export type OrderPayStatus = 'paid' | 'partial' | 'unpaid' | 'unknown' | 'own_cost'
 
 // Оплата заказа в списке — из payments (этап 1 docs/SYSTEM_ORDER_ROUTE.md), а не из флажков
 // notes: флажок invoice_paid ставит только ручная кнопка, платёж по счёту его не трогает.

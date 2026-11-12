@@ -11,7 +11,7 @@ export type PoolOrder = {
   marked_day: string | null; marked_outside: boolean; hidden: OrderHidden | null; archived_day: string | null; rest_off: boolean; lines: OrderLine[]
 }
 export type ShipmentLine = {
-  order_id: number; order_no: string; client_no: string | null; key: string; label: string; size: string
+  order_id: number; order_no: string; client_no: string | null; own_cost?: boolean; key: string; label: string; size: string
   qty: number; lineQty: number; weight: number; amount: number
 }
 export type Shipment = {

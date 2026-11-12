@@ -6,6 +6,7 @@ import { b2bPaymentKey } from '@/lib/payments/paymentKeys'
 import { upsertSaleFromB2B, voidSale } from '@/lib/salesLedger'
 import { notifyOrderManager } from '@/lib/b2b/notifyManager'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 import { loadOrderPaid, settlementAmount } from '@/lib/money/orderPaid'
 
 // Д2: ЕДИНСТВЕННЫЙ писатель оплаты B2B-заказа. Все три экрана (просчёты,
@@ -69,6 +70,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     total_cost_net: number | null; total_cost_vat: number | null; items: unknown; created_by_name: string | null; notes: unknown
   }
 
+  if (ownCostRemakeOf(order.notes) && body.status !== 'unpaid') {
+    return NextResponse.json({ error: 'Заказ за счёт M GLASS: клиент за него не платит. Если отметка ошибочная, сначала снимите её в заказе.' }, { status: 409 })
+  }
   const total = finalTotalOf(order)
   const prepayment = body.status === 'partial' ? Math.max(0, Number(body.amount ?? 0)) : 0
   const notes = parseNotes(order.notes)
