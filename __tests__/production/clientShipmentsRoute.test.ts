@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   canMoney: true,
   closed: [] as number[],
   reopened: [] as number[],
+  lineSync: [] as { id: number; a: number; b: number; by: string | null | undefined }[],
   role: 'admin',
   packCalls: [] as Record<string, unknown>[],
   packUpdated: 1,
@@ -93,6 +94,7 @@ vi.mock('@/lib/supabase-service', () => ({ createServiceClient: () => ({ from: q
 vi.mock('@/lib/production/closeOnOrderMark', () => ({
   closeOpenTasksOnOrderMark: async (_s: unknown, id: number) => { h.closed.push(id); return { closed: 1 } },
   reopenTasksOnOrderUnmark: async (_s: unknown, id: number) => { h.reopened.push(id); return { reopened: 1 } },
+  syncShippedLineTasks: async (_s: unknown, id: number, shippedOf: (k: string) => number, actor: { name?: string | null }) => { h.lineSync.push({ id, a: shippedOf('a'), b: shippedOf('b'), by: actor.name }); return { closed: 0, reopened: 0 } },
 }))
 
 import { GET, POST } from '@/app/api/production/client-shipments/route'
@@ -120,7 +122,7 @@ const create = async (lines: [number, string, number][], date = today) => {
 
 beforeEach(() => {
   h.db = { b2b_orders: [order(1), order(2, { shipped: '2026-10-31T13:51:31.115Z' }), order(3, {}, 99)], delivery_shipments: [], delivery_shipment_items: [], production_tasks: [] }
-  h.canMoney = true; h.closed = []; h.reopened = []; h.role = 'admin'; h.packCalls = []; h.packUpdated = 1
+  h.canMoney = true; h.closed = []; h.reopened = []; h.lineSync = []; h.role = 'admin'; h.packCalls = []; h.packUpdated = 1
 })
 
 describe('отгрузка Шовер Гласс: маршрут', () => {
@@ -140,6 +142,9 @@ describe('отгрузка Шовер Гласс: маршрут', () => {
     expect(h.closed).toEqual([])
     const row = h.db.delivery_shipment_items.find(r => r.shipment_id === s1)
     expect(row).toMatchObject({ weight_kg: 10, amount: 233.33, label: 'Стекло прозрачное М1, 8 мм' })
+    // Этапы цеха по позициям получают уехавшее с учётом этой отгрузки и автора отправки.
+    expect(h.lineSync.map(x => [x.id, x.a, x.b])).toEqual([[1, 1, 0]])
+    expect(h.lineSync[0].by).toBeTruthy()
 
     const s2 = await create([[1, 'a', 2], [1, 'b', 1]])
     const full = await call({ action: 'dispatch', shipment_id: s2 })
@@ -158,8 +163,10 @@ describe('отгрузка Шовер Гласс: маршрут', () => {
     const s2 = await create([[1, 'a', 2], [1, 'b', 1]])
     await call({ action: 'dispatch', shipment_id: s2 })
 
+    h.lineSync = []
     const u = await call({ action: 'undo', shipment_id: s1 })
     expect(u.body.reverted_orders).toEqual([1])
+    expect(h.lineSync.map(x => [x.id, x.a, x.b])).toEqual([[1, 2, 1]])
     expect(notesOf(1).stages.shipped).toBeNull()
     expect(notesOf(1).client_shipment).toBeNull()
     expect(h.reopened).toEqual([1])

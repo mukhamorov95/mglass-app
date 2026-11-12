@@ -91,6 +91,9 @@ export function markLine(t: BoardTask, stageLabel: (key: string) => string): { b
   if (!t.auto_closed) return { by: t.completed_by_name, note: null }
   const from = t.auto_closed_from ?? ''
   const note = from === 'manager:shipped' ? 'закрыт отметкой «Отгружен»'
+    : from === 'shipping:line' ? 'закрыт отгрузкой изделия'
+    : from === 'shipping:shipped' ? 'закрыт отгрузкой заказа'
+    : from === 'shipping:packaged' ? 'закрыт отметкой «Упакован» в отгрузке'
     : from.startsWith('manager:') ? 'закрыт отметкой на заказе'
     : from ? `закрыт вместе с этапом «${stageLabel(from)}»` : 'закрыт автоматически'
   return { by: t.auto_closed_by_name ?? t.completed_by_name, note }
