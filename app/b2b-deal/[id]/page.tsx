@@ -213,7 +213,14 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
       <div className="grid gap-3 sm:grid-cols-2">
         <Section title="Деньги">
           <dl className="text-[12px] space-y-1">
-            <div className="flex justify-between"><dt className="text-[#9a9a95]">К оплате</dt><dd className="font-mono font-semibold">{fmt(total)}</dd></div>
+            {ownCost ? (
+              <>
+                <div className="flex justify-between"><dt className="text-[#9a9a95]">Сумма заказа</dt><dd className="font-mono font-semibold">{fmt(total)}</dd></div>
+                <div className="flex justify-between"><dt className="text-[#9a9a95]">К оплате клиентом</dt><dd className="font-mono font-semibold">{fmt(0)}</dd></div>
+              </>
+            ) : (
+              <div className="flex justify-between"><dt className="text-[#9a9a95]">К оплате</dt><dd className="font-mono font-semibold">{fmt(total)}</dd></div>
+            )}
             {moneyErr ? (
               <p role="alert" className="text-[#c23a2b]">Оплаты не загрузились: {moneyErr.message}. «Оплачено» и «Остаток» не показаны — обновите страницу.</p>
             ) : (
