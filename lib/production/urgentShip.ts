@@ -2,13 +2,44 @@
 // и отдаёт цеху ведомость: что по каждому изделию ещё не сделано. Место в очереди — notes.ship_urgent.rank.
 import { stageLabel } from '@/lib/productionStages'
 
-export type ShipUrgent = { rank: number; at?: string; by?: string }
+// lines: какие изделия и сколько штук срочные; нет поля — весь заказ, всё, что ещё не уехало (17.11.2026).
+export type UrgentLines = Record<string, number>
+export type ShipUrgent = { rank: number; at?: string; by?: string; lines?: UrgentLines | null }
 
 export function shipUrgentOf(notes: unknown): ShipUrgent | null {
   let n: unknown = notes
   if (typeof n === 'string') { try { n = JSON.parse(n) } catch { return null } }
   const v = (n as { ship_urgent?: unknown } | null)?.ship_urgent as ShipUrgent | null | undefined
-  return v && Number.isFinite(Number(v.rank)) ? { ...v, rank: Number(v.rank) } : null
+  if (!v || !Number.isFinite(Number(v.rank))) return null
+  return { ...v, rank: Number(v.rank), lines: cleanLines(v.lines) }
+}
+
+export function cleanLines(v: unknown): UrgentLines | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  const out: UrgentLines = {}
+  for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
+    const q = Math.floor(Number(n))
+    if (k && q > 0) out[k] = q
+  }
+  return Object.keys(out).length ? out : null
+}
+
+type ShipLineView = { key: string; qty: number; shipped: number; free: number }
+
+// Что отгружаем по срочному заказу: весь заказ — всё не уехавшее; отдельные изделия — они, не больше остатка.
+export function urgentLinesOf<L extends ShipLineView>(lines: L[], chosen: UrgentLines | null | undefined): { line: L; qty: number }[] {
+  return lines.flatMap(line => {
+    const left = line.qty - line.shipped
+    const want = chosen ? Math.min(chosen[line.key] ?? 0, left) : left
+    return want > 0 ? [{ line, qty: want }] : []
+  })
+}
+
+// Выбор на экране → что хранить: отмечены все свободные изделия целиком — значит весь заказ (null).
+export function chosenToStore<L extends ShipLineView>(lines: L[], picked: Map<string, number>): UrgentLines | null {
+  const free = lines.filter(l => l.free > 0)
+  if (free.length > 0 && free.every(l => (picked.get(l.key) ?? 0) >= l.free)) return null
+  return cleanLines(Object.fromEntries(picked))
 }
 
 type Ranked = { id: number; urgent_rank: number | null; overdue_days: number; deadline_day: string | null; launch_day: string }
