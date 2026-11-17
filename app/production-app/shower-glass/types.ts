@@ -7,7 +7,7 @@ export type OrderLine = {
   left?: string[] | null  // только у срочных: что по изделию ещё не сделано
 }
 export type PoolOrder = {
-  id: number; no: string; client_no: string | null; urgent_rank: number | null; launch_day: string; deadline_day: string | null; overdue_days: number
+  id: number; no: string; client_no: string | null; urgent_rank: number | null; urgent_lines: Record<string, number> | null; launch_day: string; deadline_day: string | null; overdue_days: number
   paid: boolean; state: OrderShipState; stage: OrderStage; packed_lines: number
   marked_day: string | null; marked_outside: boolean; hidden: OrderHidden | null; archived_day: string | null; rest_off: boolean; lines: OrderLine[]
 }

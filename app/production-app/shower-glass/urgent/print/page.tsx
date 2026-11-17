@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import SheetActions from '@/components/SheetActions'
 import { loadJson } from '@/lib/toast'
 import { daysWord } from '@/lib/b2b/inWorkOrders'
-import { urgentQueue } from '@/lib/production/urgentShip'
+import { urgentLinesOf, urgentQueue } from '@/lib/production/urgentShip'
 import { fmtDay, fmtKg, type ShipmentsData } from '../../types'
 
 export default function UrgentPrintPage() {
@@ -26,9 +26,9 @@ export default function UrgentPrintPage() {
   if (!data) return <p className="p-6 text-[13px] text-[#9a9a95]">Загружаю…</p>
 
   const queue = urgentQueue(data.orders.filter(o => !o.hidden && o.urgent_rank !== null && o.stage !== 'shipped'))
-  const rows = queue.map(o => ({ o, lines: o.lines.filter(l => l.shipped < l.qty) }))
-  const pieces = rows.reduce((n, r) => n + r.lines.reduce((m, l) => m + l.qty - l.shipped, 0), 0)
-  const weight = rows.reduce((n, r) => n + r.lines.reduce((m, l) => m + l.weight * (l.qty - l.shipped) / l.qty, 0), 0)
+  const rows = queue.map(o => ({ o, lines: urgentLinesOf(o.lines, o.urgent_lines) })).filter(r => r.lines.length > 0)
+  const pieces = rows.reduce((n, r) => n + r.lines.reduce((m, x) => m + x.qty, 0), 0)
+  const weight = rows.reduce((n, r) => n + r.lines.reduce((m, x) => m + x.line.weight * x.qty / x.line.qty, 0), 0)
 
   return (
     <div className="min-h-screen bg-white p-4 sm:p-6 text-[#111110] print:p-0">
@@ -63,11 +63,11 @@ export default function UrgentPrintPage() {
                         <span className="text-[#4b4b47]"> · упаковано позиций {o.packed_lines} из {o.lines.length}</span>
                       </td>
                     </tr>
-                    {lines.map(l => (
+                    {lines.map(({ line: l, qty }) => (
                       <tr key={l.key} className="border-b border-[#e4e4e0] align-top">
                         <td className="py-1.5 pr-2 pl-1.5">{l.label}</td>
                         <td className="py-1.5 pr-2 whitespace-nowrap">{l.size || '—'}</td>
-                        <td className="py-1.5 pr-2 text-right whitespace-nowrap">{l.shipped > 0 ? `${l.qty - l.shipped} из ${l.qty}` : l.qty}</td>
+                        <td className="py-1.5 pr-2 text-right whitespace-nowrap">{qty < l.qty ? `${qty} из ${l.qty}` : l.qty}</td>
                         <td className="py-1.5 pr-2">
                           {l.left == null ? (l.packed ? 'Упаковано' : <span className="text-[#6b6b66]">цех не отмечал</span>)
                             : l.left.length ? <span className="font-semibold">{l.left.join(' → ')}</span> : 'Всё сделано, к отгрузке'}

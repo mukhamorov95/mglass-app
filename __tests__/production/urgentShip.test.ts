@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { byDeadline, leftStages, moved, rankChanges, shipUrgentOf, urgentQueue, withAdded } from '@/lib/production/urgentShip'
+import { byDeadline, chosenToStore, urgentLinesOf, leftStages, moved, rankChanges, shipUrgentOf, urgentQueue, withAdded } from '@/lib/production/urgentShip'
 
 describe('urgentShip', () => {
   it('читает место из notes строкой и объектом', () => {
@@ -39,5 +39,18 @@ describe('urgentShip', () => {
     expect(leftStages(t, 0)).toEqual(['Закалка', 'Упаковка'])
     expect(leftStages(t, 1)).toEqual([])
     expect(leftStages(t, 2)).toBeNull()
+  })
+
+  it('весь заказ — всё, что не уехало; отдельные изделия — только они', () => {
+    const lines = [
+      { key: 'a', qty: 3, shipped: 1, free: 2 },
+      { key: 'b', qty: 1, shipped: 1, free: 0 },
+      { key: 'c', qty: 2, shipped: 0, free: 2 },
+    ]
+    expect(urgentLinesOf(lines, null).map(x => [x.line.key, x.qty])).toEqual([['a', 2], ['c', 2]])
+    expect(urgentLinesOf(lines, { c: 1, b: 1 }).map(x => [x.line.key, x.qty])).toEqual([['c', 1]])
+    expect(chosenToStore(lines, new Map([['a', 2], ['c', 2]]))).toBeNull()
+    expect(chosenToStore(lines, new Map([['a', 1], ['c', 2]]))).toEqual({ a: 1, c: 2 })
+    expect(shipUrgentOf({ ship_urgent: { rank: 1, lines: { a: '2', x: 0 } } })?.lines).toEqual({ a: 2 })
   })
 })

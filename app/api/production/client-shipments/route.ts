@@ -16,7 +16,7 @@ import {
   ORDER_HIDDEN_LABEL, SHOWER_GLASS, addEarlier, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, takenByLine,
   type EarlierLines, type LineRequest, type ShipOrder, type ShipRow,
 } from '@/lib/production/clientShipments'
-import { leftStages, rankChanges, shipUrgentOf, type StageTask } from '@/lib/production/urgentShip'
+import { cleanLines, leftStages, rankChanges, shipUrgentOf, type StageTask, type UrgentLines } from '@/lib/production/urgentShip'
 
 // Отгрузка Шовер Гласс: заказы и изделия к отгрузке, отгрузки к дате, история.
 // Таблица строк закрыта политиками, поэтому чтение и запись только здесь, после проверки роли.
@@ -130,7 +130,7 @@ export async function GET() {
       const asToday = o as unknown as TodayOrder
       const deadlineDay = !hidden && isLaunched(asToday, notes) ? dayOf(orderDeadline(asToday, notes)) : null
       return [{
-        id: o.id, no: orderNo(o), client_no: o.client_order_number?.trim() || null, urgent_rank: urgent?.rank ?? null, launch_day: dayOf(o.launched_at ?? notes.launched_at) ?? o.created_at.slice(0, 10), deadline_day: deadlineDay,
+        id: o.id, no: orderNo(o), client_no: o.client_order_number?.trim() || null, urgent_rank: urgent?.rank ?? null, urgent_lines: urgent?.lines ?? null, launch_day: dayOf(o.launched_at ?? notes.launched_at) ?? o.created_at.slice(0, 10), deadline_day: deadlineDay,
         overdue_days: overdueDays(deadlineDay, today, stage), paid: !!stages.invoice_paid, state, stage, packed_lines: packedLineCount(lines),
         marked_day: typeof stages.shipped === 'string' ? dayOf(stages.shipped) : null, marked_outside: markedOutside,
         hidden, archived_day: dayOf(o.archived_at), rest_off: !!notes.ship_rest_off, lines,
@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
   if (!user) return fail('Не авторизован', 401)
   const body = await req.json().catch(() => ({})) as {
     action?: string; shipment_id?: number; ship_date?: string; lines?: LineRequest[]; order_id?: number; line_key?: string; show?: boolean
-    order_ids?: number[]
+    order_ids?: number[]; chosen?: Record<string, UrgentLines | null>
   }
   const svc = await serviceAsMe()
   const shipmentId = Number(body.shipment_id)
@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
 
   if (body.action === 'urgent_set' || body.action === 'urgent_remove') {
     if (!PACK_ROLES.includes(guard)) return fail('Список срочных ведёт цех или владелец.', 403)
-    return setUrgent(svc, body.action === 'urgent_set' ? (body.order_ids ?? []).map(Number) : [], body.action === 'urgent_remove' ? Number(body.order_id) : null, await whoOf(svc, user))
+    return setUrgent(svc, body.action === 'urgent_set' ? (body.order_ids ?? []).map(Number) : [], body.action === 'urgent_remove' ? Number(body.order_id) : null, await whoOf(svc, user), body.chosen ?? {})
   }
 
   if (body.action === 'earlier' || body.action === 'rest') {
@@ -604,8 +604,9 @@ async function undo(svc: Svc, shipmentId: number, userId: string) {
   return NextResponse.json({ ok: true, reverted_orders: reverted, warnings })
 }
 
-// Очередь «Срочно отгрузить»: urgent_set присылает весь видимый порядок, пишем только сдвинувшиеся места.
-async function setUrgent(svc: Svc, queue: number[], removeId: number | null, who: string) {
+// Очередь «Срочно отгрузить»: urgent_set присылает весь видимый порядок, пишем только сдвинувшиеся места
+// и заказы, у которых в chosen пришёл новый выбор изделий (null — весь заказ).
+async function setUrgent(svc: Svc, queue: number[], removeId: number | null, who: string, chosen: Record<string, UrgentLines | null>) {
   const ids = removeId !== null ? [removeId] : [...new Set(queue)]
   if (ids.length === 0 || ids.some(id => !Number.isFinite(id))) return fail('Не выбрано ни одного заказа.')
   const orders = await loadOrders(svc, ids)
@@ -618,10 +619,14 @@ async function setUrgent(svc: Svc, queue: number[], removeId: number | null, who
   const now = new Date().toISOString()
   const writes = removeId !== null
     ? [{ id: removeId, patch: { ship_urgent: null } }]
-    : rankChanges(new Map(orders.map(o => [o.id, shipUrgentOf(o.notes)?.rank ?? null])), ids).map(({ id, rank }) => {
-        const cur = shipUrgentOf(byId.get(id)?.notes)
-        return { id, patch: { ship_urgent: { rank, at: cur?.at ?? now, by: cur?.by ?? who } } }
-      })
+    : (() => {
+        const moved = new Set(rankChanges(new Map(orders.map(o => [o.id, shipUrgentOf(o.notes)?.rank ?? null])), ids).map(x => x.id))
+        return ids.map((id, i) => ({ id, rank: i + 1 })).filter(x => moved.has(x.id) || String(x.id) in chosen).map(({ id, rank }) => {
+          const cur = shipUrgentOf(byId.get(id)?.notes)
+          const lines = String(id) in chosen ? cleanLines(chosen[String(id)]) : cur?.lines ?? null
+          return { id, patch: { ship_urgent: { rank, at: cur?.at ?? now, by: cur?.by ?? who, ...(lines ? { lines } : {}) } } }
+        })
+      })()
   const failed: string[] = []
   for (const w of writes) {
     const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: w.id, p_patch: w.patch })

@@ -14,7 +14,7 @@ import { confirmDialog } from '@/lib/dialog'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { daysWord, oldestFirst } from '@/lib/b2b/inWorkOrders'
 import { ORDER_HIDDEN_LABEL, ORDER_STATE_LABEL, numberMatches, orderInShipment, orderInShipmentText, shareOf, shipmentTotals, stripZeros, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
-import { byDeadline, moved, urgentQueue, withAdded } from '@/lib/production/urgentShip'
+import { byDeadline, chosenToStore, moved, urgentQueue, withAdded, type UrgentLines } from '@/lib/production/urgentShip'
 import { fmtDay, fmtKg, fmtRub, type OrderLine, type PoolOrder, type Shipment, type ShipmentsData } from './types'
 
 const API = '/api/production/client-shipments'
@@ -236,18 +236,22 @@ export default function ShowerGlassShipmentsPage() {
     warn('Записалось не всё', res.warnings)
   })
 
-  const saveQueue = (ids: number[], done: string) => run(async () => {
-    const res = await post('Очередь срочных не сохранилась', { action: 'urgent_set', order_ids: ids })
+  const saveQueue = (ids: number[], done: string, chosen?: Record<number, UrgentLines | null>) => run(async () => {
+    const res = await post('Очередь срочных не сохранилась', { action: 'urgent_set', order_ids: ids, chosen })
     if (!res) return
     toast.success(done)
     warn('Записалось не всё', res.warnings)
   })
 
+  // Отмечен весь заказ — срочно всё, что не уехало; отдельные изделия — только они. Повторное «В срочные» меняет выбор.
   const addUrgent = () => {
-    const ids = byDeadline([...new Map(picked.map(p => [p.order.id, p.order])).values()].filter(o => !urgentPos.has(o.id))).map(o => o.id)
-    if (ids.length === 0) { toast.success('Эти заказы уже в срочных'); return }
+    const pickedOrders = [...new Map(picked.map(p => [p.order.id, p.order])).values()]
+    const chosen: Record<number, UrgentLines | null> = {}
+    for (const o of pickedOrders) chosen[o.id] = chosenToStore(o.lines, new Map(picked.filter(p => p.order.id === o.id).map(p => [p.line.key, p.qty])))
+    const fresh = byDeadline(pickedOrders.filter(o => !urgentPos.has(o.id))).map(o => o.id)
+    const again = pickedOrders.length - fresh.length
     setSelected(new Map())
-    void saveQueue(withAdded(urgentAll.map(o => o.id), ids), `В срочные добавлено: ${ids.length} зак.`).then(() => setTab('urgent'))
+    void saveQueue(withAdded(urgentAll.map(o => o.id), fresh), [fresh.length ? `В срочные добавлено: ${fresh.length} зак.` : '', again ? `Выбор изделий обновлён: ${again} зак.` : ''].filter(Boolean).join('. '), chosen).then(() => setTab('urgent'))
   }
 
   const moveUrgent = (o: PoolOrder, dir: -1 | 1) => saveQueue(moved(urgentAll.map(x => x.id), o.id, dir), `Заказ ${o.no}: место ${(urgentPos.get(o.id) ?? 0) + dir}`)
@@ -382,9 +386,10 @@ export default function ShowerGlassShipmentsPage() {
               <section className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <a href="/production-app/shower-glass/urgent/print" className={`h-10 px-4 inline-flex items-center rounded-lg text-[13px] font-medium ${urgentAll.length ? 'bg-[#111110] text-white' : 'pointer-events-none bg-[#e4e4e0] text-[#9a9a95]'}`}>Ведомость для цеха · PDF</a>
+                  <a href="/production-app/shower-glass/urgent/client" className={`h-10 px-4 inline-flex items-center rounded-lg border text-[13px] font-medium ${urgentAll.length ? 'border-[#111110] bg-white text-[#111110]' : 'pointer-events-none border-[#e4e4e0] text-[#9a9a95]'}`}>Для {data.title} · PDF</a>
                   {data.canPack && <button onClick={() => setTab('overdue')} className="h-10 px-3 rounded-lg border border-[#e4e4e0] bg-white text-[13px] text-[#111110]">+ Добавить из просроченных</button>}
                 </div>
-                <p className="text-[12px] text-[#6b6b66]">Сверху самое срочное. Порядок меняется стрелками. Добавить: отметьте заказы галочкой в любой вкладке и нажмите внизу «В срочные». Заказ, который уехал целиком, уходит отсюда сам. В карточке заказа видно, какие этапы по каждому изделию ещё не закрыты.</p>
+                <p className="text-[12px] text-[#6b6b66]">Сверху самое срочное. Порядок меняется стрелками. Добавить: отметьте галочкой заказ целиком или отдельные изделия в любой вкладке и нажмите внизу «В срочные». Весь заказ — срочно всё, что ещё не уехало; отдельные изделия — только они. Чтобы поменять выбор, отметьте изделия заново и снова нажмите «В срочные». Заказ, который уехал целиком, уходит отсюда сам. В карточке заказа видно, какие этапы по каждому изделию ещё не закрыты.</p>
                 {urgentVisible.length === 0 && <p className="text-[13px] text-[#9a9a95]">{q ? 'Этого заказа в срочных нет.' : 'Срочных заказов нет.'}</p>}
                 <div className="space-y-1.5">
                   {urgentVisible.map(o => {
@@ -527,7 +532,7 @@ function OrderRow({ order, urgentNo, selected, canMoney, canPack, busy, expanded
             <span className="text-[12px] text-[#9a9a95]">запуск {fmtDay(order.launch_day)}{order.deadline_day ? ` · срок ${fmtDay(order.deadline_day)}` : ''}</span>
             <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[isShipped ? 'full' : order.state]}`}>{stateLabel}</span>
             {order.overdue_days > 0 && <span className="text-[11px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700">{overdueLabel(order.overdue_days)}</span>}
-            {urgentNo && <span className="text-[11px] px-1.5 py-0.5 rounded border border-red-300 bg-red-600 text-white">Срочно · {urgentNo}</span>}
+            {urgentNo && <span className="text-[11px] px-1.5 py-0.5 rounded border border-red-300 bg-red-600 text-white">Срочно · {urgentNo}{order.urgent_lines ? ` · изделий ${Object.keys(order.urgent_lines).length} из ${order.lines.length}` : ''}</span>}
             {order.paid && <span className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700">Оплачен</span>}
             {draftedPieces > 0 && <span className="text-[11px] px-1.5 py-0.5 rounded border border-sky-200 bg-sky-50 text-sky-700">В отгрузке {draftedPieces} шт.</span>}
           </div>
@@ -560,7 +565,9 @@ function OrderRow({ order, urgentNo, selected, canMoney, canPack, busy, expanded
                 <input type="checkbox" className="mt-1 h-4 w-4" aria-label={`Выбрать ${l.label}`} disabled={l.free === 0 || !!order.hidden} checked={qty > 0}
                   onChange={e => onLine(l, e.target.checked ? l.free : 0)} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] text-[#111110]">{l.label}{l.size ? `, ${l.size} мм` : ''}</p>
+                  <p className="text-[13px] text-[#111110]">{l.label}{l.size ? `, ${l.size} мм` : ''}
+                    {urgentNo && order.urgent_lines?.[l.key] && l.shipped < l.qty && <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white">срочно {Math.min(order.urgent_lines[l.key], l.qty - l.shipped)} шт.</span>}
+                  </p>
                   <p className="text-[12px] text-[#6b6b66]">
                     {pieces(l.qty)} · {fmtKg(l.weight)}{canMoney ? ` · ${fmtRub(l.amount ?? 0)}` : ''}
                     {l.drafted > 0 ? ` · в отгрузке ${l.drafted}` : ''}
