@@ -3,6 +3,7 @@
 // Отгрузка Шовер Гласс (владелец 03.11.2026): собираем отгрузку из заказов и изделий и видим,
 // что уехало, заказ уехал полностью или нет, какой вес и на какую сумму.
 // Вкладки (05.11.2026): в работе, упакованы, отгружены, просроченные, сверху самые старые; отдельно отгрузки.
+// «Срочно отгрузить» (17.11.2026): владелец ставит заказы в очередь по срочности и печатает цеху ведомость.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -13,6 +14,7 @@ import { confirmDialog } from '@/lib/dialog'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
 import { daysWord, oldestFirst } from '@/lib/b2b/inWorkOrders'
 import { ORDER_HIDDEN_LABEL, ORDER_STATE_LABEL, numberMatches, orderInShipment, orderInShipmentText, shareOf, shipmentTotals, stripZeros, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
+import { byDeadline, moved, urgentQueue, withAdded } from '@/lib/production/urgentShip'
 import { fmtDay, fmtKg, fmtRub, type OrderLine, type PoolOrder, type Shipment, type ShipmentsData } from './types'
 
 const API = '/api/production/client-shipments'
@@ -23,15 +25,17 @@ const STATE_CLS: Record<OrderShipState, string> = {
 }
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
 
-type Tab = OrderStage | 'overdue' | 'shipments' | 'history' | 'recon'
-type OrderTab = Exclude<Tab, 'shipments' | 'history' | 'recon'>
+type Tab = OrderStage | 'overdue' | 'urgent' | 'shipments' | 'history' | 'recon'
+type OrderTab = Exclude<Tab, 'urgent' | 'shipments' | 'history' | 'recon'>
 const ORDER_TABS: { key: OrderTab; label: string; hint: string; empty: string }[] = [
   { key: 'in_work', label: 'В работе', hint: 'Не упакованы целиком и ещё не уехали.', empty: 'Заказов в работе нет.' },
   { key: 'packed', label: 'Упакованы', hint: 'Цех упаковал все позиции, заказ ещё не уехал.', empty: 'Заказов, упакованных целиком, нет. Заказ попадает сюда, когда цех закрыл упаковку по всем позициям.' },
   { key: 'shipped', label: 'Отгружены', hint: 'Уехали полностью или отмечены отгруженными (с 01.07). Отмеченный без этого экрана заказ можно занести в отгрузку: отметьте его изделия.', empty: 'Отгруженных заказов нет.' },
   { key: 'overdue', label: 'Просроченные', hint: 'Срок прошёл, а заказ уехал не полностью. Эти же заказы есть во вкладках «В работе» и «Упакованы».', empty: 'Просроченных заказов нет.' },
 ]
-const TAB_KEYS: Tab[] = [...ORDER_TABS.map(t => t.key), 'shipments', 'history', 'recon']
+const TAB_KEYS: Tab[] = [...ORDER_TABS.map(t => t.key), 'urgent', 'shipments', 'history', 'recon']
+// В очереди срочных только то, что ещё не уехало целиком; уехавший выпадает сам.
+const inUrgent = (o: PoolOrder) => !o.hidden && o.urgent_rank !== null && o.stage !== 'shipped'
 const inTab = (o: PoolOrder, tab: OrderTab) => !o.hidden && (tab === 'overdue' ? o.overdue_days > 0 : o.stage === tab)
 const matches = (o: PoolOrder, q: string) => numberMatches(q, o.no, o.id)
 const overdueLabel = (days: number) => `Просрочен на ${days} ${daysWord(days)}`
@@ -51,7 +55,7 @@ function summaryText(t: ReturnType<typeof shipmentTotals>, canMoney: boolean) {
 async function post(failTitle: string, body: Record<string, unknown>) {
   const r = await sendOrToast(failTitle, API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   if (!r) return null
-  return await r.json().catch(() => ({})) as { id?: number; shipped_orders?: number[]; reverted_orders?: number[]; deleted?: boolean; warnings?: string[] }
+  return await r.json().catch(() => ({})) as { changed?: number; id?: number; shipped_orders?: number[]; reverted_orders?: number[]; deleted?: boolean; warnings?: string[] }
 }
 
 function warn(title: string, warnings?: string[]) {
@@ -105,10 +109,13 @@ export default function ShowerGlassShipmentsPage() {
   const visible = useMemo(() => {
     const list = tab === 'history' ? orders
       : tab === 'shipments' ? orders.filter(o => !o.hidden && (sentTarget || o.stage !== 'shipped') && o.lines.some(l => l.free > 0))
-      : tab === 'recon' ? []
+      : tab === 'recon' || tab === 'urgent' ? []
       : orders.filter(o => inTab(o, tab))
     return oldestFirst(list.filter(o => matches(o, q)), o => o.launch_day)
   }, [orders, tab, q, sentTarget])
+  const urgentAll = useMemo(() => urgentQueue(orders.filter(inUrgent)), [orders])
+  const urgentPos = useMemo(() => new Map(urgentAll.map((o, i) => [o.id, i + 1])), [urgentAll])
+  const urgentVisible = useMemo(() => urgentAll.filter(o => matches(o, q)), [urgentAll, q])
   const elsewhere = useMemo(() => (q ? ORDER_TABS.filter(t => t.key !== tab && orders.some(o => inTab(o, t.key) && matches(o, q))) : []), [orders, tab, q])
   const inHistory = useMemo(() => !!q && orders.some(o => matches(o, q)), [orders, q])
 
@@ -229,6 +236,27 @@ export default function ShowerGlassShipmentsPage() {
     warn('Записалось не всё', res.warnings)
   })
 
+  const saveQueue = (ids: number[], done: string) => run(async () => {
+    const res = await post('Очередь срочных не сохранилась', { action: 'urgent_set', order_ids: ids })
+    if (!res) return
+    toast.success(done)
+    warn('Записалось не всё', res.warnings)
+  })
+
+  const addUrgent = () => {
+    const ids = byDeadline([...new Map(picked.map(p => [p.order.id, p.order])).values()].filter(o => !urgentPos.has(o.id))).map(o => o.id)
+    if (ids.length === 0) { toast.success('Эти заказы уже в срочных'); return }
+    setSelected(new Map())
+    void saveQueue(withAdded(urgentAll.map(o => o.id), ids), `В срочные добавлено: ${ids.length} зак.`).then(() => setTab('urgent'))
+  }
+
+  const moveUrgent = (o: PoolOrder, dir: -1 | 1) => saveQueue(moved(urgentAll.map(x => x.id), o.id, dir), `Заказ ${o.no}: место ${(urgentPos.get(o.id) ?? 0) + dir}`)
+
+  const removeUrgent = (o: PoolOrder) => run(async () => {
+    const res = await post('Заказ не убран из срочных', { action: 'urgent_remove', order_id: o.id })
+    if (res) toast.success(`Заказ ${o.no} убран из срочных`, { detail: 'Сам заказ и его отметки не тронуты.' })
+  })
+
   const removeSentLine = (s: Shipment, orderId: number, key: string, label: string) => run(async () => {
     const ok = await confirmDialog({
       title: `Убрать изделие из отправленной отгрузки от ${fmtDay(s.ship_date)}?`,
@@ -275,7 +303,7 @@ export default function ShowerGlassShipmentsPage() {
   const orderRows = (list: PoolOrder[]) => (
     <div className="space-y-1.5">
       {list.map(o => (
-        <OrderRow key={o.id} order={o} selected={selected} canMoney={canMoney} canPack={!!data?.canPack} busy={busy} expanded={open.has(o.id)}
+        <OrderRow key={o.id} order={o} urgentNo={urgentPos.get(o.id)} selected={selected} canMoney={canMoney} canPack={!!data?.canPack} busy={busy} expanded={open.has(o.id)}
           onPacked={(l, on) => setPacked(o, l, on)}
           onExpand={() => setOpen(prev => { const n = new Set(prev); if (n.has(o.id)) n.delete(o.id); else n.add(o.id); return n })}
           onToggle={on => toggleOrder(o, on)} onLine={(l, n) => setLine(o, l, n)} />
@@ -312,6 +340,7 @@ export default function ShowerGlassShipmentsPage() {
                     className={tabCls(t.key, t.key === 'overdue' && n > 0)}>{t.label} · {n}</button>
                 )
               })}
+              <button onClick={() => { setTab('urgent'); setComposing(false) }} aria-pressed={tab === 'urgent'} className={tabCls('urgent', urgentAll.length > 0)}>Срочно отгрузить · {urgentAll.length}</button>
               <button onClick={() => setTab('shipments')} aria-pressed={tab === 'shipments'} className={tabCls('shipments')}>Отгрузки · {data.shipments.length}</button>
               <button onClick={() => { setTab('history'); setComposing(false) }} aria-pressed={tab === 'history'} className={tabCls('history')}>История заказов · {orders.length}</button>
               {canMoney && <button onClick={() => { setTab('recon'); setComposing(false) }} aria-pressed={tab === 'recon'} className={tabCls('recon')}>Акт сверки</button>}
@@ -346,6 +375,35 @@ export default function ShowerGlassShipmentsPage() {
                   </div>
                 )}
                 {orderRows(visible)}
+              </section>
+            )}
+
+            {tab === 'urgent' && (
+              <section className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <a href="/production-app/shower-glass/urgent/print" className={`h-10 px-4 inline-flex items-center rounded-lg text-[13px] font-medium ${urgentAll.length ? 'bg-[#111110] text-white' : 'pointer-events-none bg-[#e4e4e0] text-[#9a9a95]'}`}>Ведомость для цеха · PDF</a>
+                  {data.canPack && <button onClick={() => setTab('overdue')} className="h-10 px-3 rounded-lg border border-[#e4e4e0] bg-white text-[13px] text-[#111110]">+ Добавить из просроченных</button>}
+                </div>
+                <p className="text-[12px] text-[#6b6b66]">Сверху самое срочное. Порядок меняется стрелками. Добавить: отметьте заказы галочкой в любой вкладке и нажмите внизу «В срочные». Заказ, который уехал целиком, уходит отсюда сам. В карточке заказа видно, какие этапы по каждому изделию ещё не закрыты.</p>
+                {urgentVisible.length === 0 && <p className="text-[13px] text-[#9a9a95]">{q ? 'Этого заказа в срочных нет.' : 'Срочных заказов нет.'}</p>}
+                <div className="space-y-1.5">
+                  {urgentVisible.map(o => {
+                    const pos = urgentPos.get(o.id) ?? 0
+                    return (
+                      <div key={o.id} className="flex items-start gap-1.5">
+                        <div className="w-9 shrink-0 flex flex-col items-center gap-0.5 pt-1.5">
+                          <span className="text-[15px] font-semibold text-[#111110] tabular-nums">{pos}</span>
+                          {data.canPack && <>
+                            <button disabled={busy || pos === 1} onClick={() => moveUrgent(o, -1)} aria-label={`Заказ ${o.no} выше`} className="h-7 w-8 rounded border border-[#e4e4e0] bg-white text-[12px] disabled:opacity-30">▲</button>
+                            <button disabled={busy || pos === urgentAll.length} onClick={() => moveUrgent(o, 1)} aria-label={`Заказ ${o.no} ниже`} className="h-7 w-8 rounded border border-[#e4e4e0] bg-white text-[12px] disabled:opacity-30">▼</button>
+                          </>}
+                        </div>
+                        <div className="flex-1 min-w-0">{orderRows([o])}</div>
+                        {data.canPack && <button disabled={busy} onClick={() => removeUrgent(o)} aria-label={`Убрать заказ ${o.no} из срочных`} title="Убрать из срочных" className="h-8 px-2 mt-1.5 text-[#9a9a95] hover:text-red-500 disabled:opacity-30">✕</button>}
+                      </div>
+                    )
+                  })}
+                </div>
               </section>
             )}
 
@@ -418,6 +476,7 @@ export default function ShowerGlassShipmentsPage() {
               <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="h-10 rounded-lg border border-[#e4e4e0] bg-white px-2 text-[13px]" />
             )}
             <button onClick={() => setSelected(new Map())} className="h-10 px-3 rounded-lg border border-[#e4e4e0] text-[13px] text-[#4b4b47]">Сбросить</button>
+            {data?.canPack && <button onClick={addUrgent} disabled={busy} className="h-10 px-3 rounded-lg border border-red-200 bg-red-50 text-[13px] font-medium text-red-700 disabled:opacity-50">В срочные</button>}
             <button onClick={collect} disabled={busy || (target === 'new' && !newDate)}
               className="h-10 px-4 rounded-lg bg-[#111110] text-white text-[13px] font-medium disabled:opacity-50">
               {target === 'new' ? 'Собрать отгрузку' : 'Добавить'}
@@ -435,8 +494,8 @@ function monthsOf(list: PoolOrder[]) {
   return [...m.entries()]
 }
 
-function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked, onExpand, onToggle, onLine }: {
-  order: PoolOrder; selected: Map<string, number>; canMoney: boolean; canPack: boolean; busy: boolean; expanded: boolean
+function OrderRow({ order, urgentNo, selected, canMoney, canPack, busy, expanded, onPacked, onExpand, onToggle, onLine }: {
+  order: PoolOrder; urgentNo?: number; selected: Map<string, number>; canMoney: boolean; canPack: boolean; busy: boolean; expanded: boolean
   onPacked: (l: OrderLine, on: boolean) => void
   onExpand: () => void; onToggle: (on: boolean) => void; onLine: (l: OrderLine, qty: number) => void
 }) {
@@ -468,6 +527,7 @@ function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked
             <span className="text-[12px] text-[#9a9a95]">запуск {fmtDay(order.launch_day)}{order.deadline_day ? ` · срок ${fmtDay(order.deadline_day)}` : ''}</span>
             <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[isShipped ? 'full' : order.state]}`}>{stateLabel}</span>
             {order.overdue_days > 0 && <span className="text-[11px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700">{overdueLabel(order.overdue_days)}</span>}
+            {urgentNo && <span className="text-[11px] px-1.5 py-0.5 rounded border border-red-300 bg-red-600 text-white">Срочно · {urgentNo}</span>}
             {order.paid && <span className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700">Оплачен</span>}
             {draftedPieces > 0 && <span className="text-[11px] px-1.5 py-0.5 rounded border border-sky-200 bg-sky-50 text-sky-700">В отгрузке {draftedPieces} шт.</span>}
           </div>
@@ -513,6 +573,7 @@ function OrderRow({ order, selected, canMoney, canPack, busy, expanded, onPacked
                       </>
                     )}
                   </p>}
+                  {l.left && l.shipped < l.qty && <p className="text-[12px] mt-0.5">{l.left.length ? <span className="text-red-700">Не сделано: {l.left.join(' → ')}</span> : <span className="text-emerald-700">Все этапы цеха закрыты</span>}</p>}
                 </div>
                 {canPack && !isShipped && !order.hidden && l.shipped < l.qty && (
                   l.packed

@@ -83,7 +83,7 @@ export const KP_PRICE_MODES = ['consolidated', 'detailed'] as const
 // содержимое просчёта (source, user_notes, production_days, price_override, КП).
 export const COPY_DROP_KEYS: readonly string[] = [
   'status_history', 'status_comment', 'launched_at', 'work_started_at', 'deadline_date', 'deadline_control',
-  'stages', 'detail_stages', 'detail_stage_audit', 'bulk_actions',
+  'stages', 'detail_stages', 'ship_urgent', 'detail_stage_audit', 'bulk_actions',
   'payment_status', 'paid_at', 'prepayment_amount', 'payments',
   'drawing_url', 'drawing_approval',
   'material_status', 'material_checked_by', 'material_checked_at', 'material_needed_items',

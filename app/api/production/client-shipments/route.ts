@@ -16,6 +16,7 @@ import {
   ORDER_HIDDEN_LABEL, SHOWER_GLASS, addEarlier, orderHidden, orderShipState, orderStage, overdueDays, packedLineCount, requestProblem, shareOf, shipLines, takenByLine,
   type EarlierLines, type LineRequest, type ShipOrder, type ShipRow,
 } from '@/lib/production/clientShipments'
+import { leftStages, rankChanges, shipUrgentOf, type StageTask } from '@/lib/production/urgentShip'
 
 // Отгрузка Шовер Гласс: заказы и изделия к отгрузке, отгрузки к дате, история.
 // Таблица строк закрыта политиками, поэтому чтение и запись только здесь, после проверки роли.
@@ -97,6 +98,11 @@ export async function GET() {
       svc.from('production_tasks').select('order_id, item_index').eq('stage_key', 'packaging').eq('status', 'done').in('order_id', part).range(from, to) as never)
     for (const t of tasks) packedKeys.add(`${t.order_id}:${t.item_index}`)
 
+    // Для срочных — что по каждому изделию ещё не сделано.
+    const urgentIds = orders.filter(o => shipUrgentOf(o.notes)).map(o => o.id)
+    const urgentTasks = await readIn<StageTask & { order_id: number }, number>(urgentIds, (part, from, to) =>
+      svc.from('production_tasks').select('order_id, item_index, stage_key, status, sequence_order').in('order_id', part).range(from, to) as never)
+
     const money = (n: number | null | undefined) => (canMoney ? Number(n ?? 0) : undefined)
 
     const today = mskDayKey()
@@ -105,9 +111,12 @@ export async function GET() {
       const stages = notes.stages ?? {}
       const inShipment = rows.some(r => r.order_id === o.id)
       const hidden = inShipment ? null : orderHidden(o.archived_at, notes)
+      const urgent = shipUrgentOf(notes)
+      const myTasks = urgent ? urgentTasks.filter(t => t.order_id === o.id) : []
       const lines = shipLines(o).map(l => {
         const t = taken.get(`${o.id}:${l.key}`) ?? { shipped: 0, drafted: 0 }
         return {
+          ...(urgent ? { left: leftStages(myTasks, l.index) } : {}),
           key: l.key, label: l.label, size: l.size, qty: l.qty, weight: l.weight, amount: money(l.amount),
           shipped: t.shipped, drafted: t.drafted, earlier: t.earlier ?? 0, free: Math.max(0, l.qty - t.shipped - t.drafted),
           packed: !!stages.packaged || packedKeys.has(`${o.id}:${l.index}`),
@@ -121,7 +130,7 @@ export async function GET() {
       const asToday = o as unknown as TodayOrder
       const deadlineDay = !hidden && isLaunched(asToday, notes) ? dayOf(orderDeadline(asToday, notes)) : null
       return [{
-        id: o.id, no: orderNo(o), launch_day: dayOf(o.launched_at ?? notes.launched_at) ?? o.created_at.slice(0, 10), deadline_day: deadlineDay,
+        id: o.id, no: orderNo(o), client_no: o.client_order_number?.trim() || null, urgent_rank: urgent?.rank ?? null, launch_day: dayOf(o.launched_at ?? notes.launched_at) ?? o.created_at.slice(0, 10), deadline_day: deadlineDay,
         overdue_days: overdueDays(deadlineDay, today, stage), paid: !!stages.invoice_paid, state, stage, packed_lines: packedLineCount(lines),
         marked_day: typeof stages.shipped === 'string' ? dayOf(stages.shipped) : null, marked_outside: markedOutside,
         hidden, archived_day: dayOf(o.archived_at), rest_off: !!notes.ship_rest_off, lines,
@@ -203,6 +212,7 @@ export async function POST(req: NextRequest) {
   if (!user) return fail('Не авторизован', 401)
   const body = await req.json().catch(() => ({})) as {
     action?: string; shipment_id?: number; ship_date?: string; lines?: LineRequest[]; order_id?: number; line_key?: string; show?: boolean
+    order_ids?: number[]
   }
   const svc = await serviceAsMe()
   const shipmentId = Number(body.shipment_id)
@@ -213,6 +223,11 @@ export async function POST(req: NextRequest) {
   if (body.action === 'pack' || body.action === 'unpack') {
     if (!PACK_ROLES.includes(guard)) return fail('Отмечать упаковку может цех или владелец.', 403)
     return packLine(svc, body.action, Number(body.order_id), String(body.line_key ?? ''), { id: user.id, email: user.email })
+  }
+
+  if (body.action === 'urgent_set' || body.action === 'urgent_remove') {
+    if (!PACK_ROLES.includes(guard)) return fail('Список срочных ведёт цех или владелец.', 403)
+    return setUrgent(svc, body.action === 'urgent_set' ? (body.order_ids ?? []).map(Number) : [], body.action === 'urgent_remove' ? Number(body.order_id) : null, await whoOf(svc, user))
   }
 
   if (body.action === 'earlier' || body.action === 'rest') {
@@ -587,4 +602,31 @@ async function undo(svc: Svc, shipmentId: number, userId: string) {
   const reverted = await revertOrders(svc, orders, taken, userId, warnings)
   await syncLines(svc, orders.map(o => o.id), (id, key) => taken.get(`${id}:${key}`)?.shipped ?? 0, { id: userId }, warnings)
   return NextResponse.json({ ok: true, reverted_orders: reverted, warnings })
+}
+
+// Очередь «Срочно отгрузить»: urgent_set присылает весь видимый порядок, пишем только сдвинувшиеся места.
+async function setUrgent(svc: Svc, queue: number[], removeId: number | null, who: string) {
+  const ids = removeId !== null ? [removeId] : [...new Set(queue)]
+  if (ids.length === 0 || ids.some(id => !Number.isFinite(id))) return fail('Не выбрано ни одного заказа.')
+  const orders = await loadOrders(svc, ids)
+  const byId = new Map(orders.map(o => [o.id, o]))
+  for (const id of ids) {
+    const o = byId.get(id)
+    if (!o) return fail(`Заказ ${id} не найден.`, 404)
+    if (Number(o.client_id) !== SHOWER_GLASS.clientId) return fail(`Заказ ${orderNo(o)} другого клиента.`, 409)
+  }
+  const now = new Date().toISOString()
+  const writes = removeId !== null
+    ? [{ id: removeId, patch: { ship_urgent: null } }]
+    : rankChanges(new Map(orders.map(o => [o.id, shipUrgentOf(o.notes)?.rank ?? null])), ids).map(({ id, rank }) => {
+        const cur = shipUrgentOf(byId.get(id)?.notes)
+        return { id, patch: { ship_urgent: { rank, at: cur?.at ?? now, by: cur?.by ?? who } } }
+      })
+  const failed: string[] = []
+  for (const w of writes) {
+    const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: w.id, p_patch: w.patch })
+    if (error) failed.push(`${orderNo(byId.get(w.id)!)}: ${error.message}`)
+  }
+  if (failed.length === writes.length && writes.length > 0) return fail(`Не записалось: ${failed.join('; ')}`, 500)
+  return NextResponse.json({ ok: true, changed: writes.length - failed.length, warnings: failed })
 }

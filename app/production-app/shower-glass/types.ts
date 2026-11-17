@@ -4,9 +4,10 @@ import type { OrderHidden, OrderShipState, OrderStage } from '@/lib/production/c
 export type OrderLine = {
   key: string; label: string; size: string; qty: number; weight: number; amount?: number
   shipped: number; drafted: number; earlier: number; free: number; packed: boolean
+  left?: string[] | null  // только у срочных: что по изделию ещё не сделано
 }
 export type PoolOrder = {
-  id: number; no: string; launch_day: string; deadline_day: string | null; overdue_days: number
+  id: number; no: string; client_no: string | null; urgent_rank: number | null; launch_day: string; deadline_day: string | null; overdue_days: number
   paid: boolean; state: OrderShipState; stage: OrderStage; packed_lines: number
   marked_day: string | null; marked_outside: boolean; hidden: OrderHidden | null; archived_day: string | null; rest_off: boolean; lines: OrderLine[]
 }
