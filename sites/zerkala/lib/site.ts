@@ -127,6 +127,9 @@ export const SITE = {
   // Голое имя только переадресует на www (настройка доменов в Vercel).
   productionDomain: "www.mglass-zerkala.ru",
   metrikaId: process.env.NEXT_PUBLIC_YM_ID || "",
+  // Виджет Envybox (обратный звонок + чат), как на mglass.pro. Пусто — виджета нет: код
+  // виджета для этого домена и маршрут его сделок в amo выбирает владелец.
+  envyboxCode: process.env.NEXT_PUBLIC_ENVYBOX_CODE || "",
   yandexVerification: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION || "",
   // Дата последней правки текстов — идёт в lastmod карты сайта. Меняется руками
   // вместе с текстами: «сегодня» на каждой сборке Яндекс быстро перестаёт читать.

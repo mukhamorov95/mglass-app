@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Manrope } from "next/font/google";
 import { Footer, Header, MobileActionBar } from "@/components/layout";
 import { Tracking } from "@/components/Tracking";
@@ -35,6 +36,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <MobileActionBar />
         <JsonLd data={[organizationSchema(), websiteSchema()]} />
         <Tracking metrikaId={SITE.metrikaId} />
+        {SITE.envyboxCode && (
+          <>
+            <link rel="stylesheet" href="https://cdn.envybox.io/widget/cbk.css" />
+            <Script src={`https://cdn.envybox.io/widget/cbk.js?wcb_code=${SITE.envyboxCode}`} strategy="lazyOnload" />
+          </>
+        )}
       </body>
     </html>
   );
