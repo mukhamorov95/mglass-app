@@ -19,12 +19,16 @@ export function Tracking({ metrikaId }: { metrikaId: string }) {
 
   // Цели Метрики. Форма amoCRM живёт в iframe с forms.amocrm.ru, и об успешной
   // отправке сообщает только сообщением amoformsSuccessSubmit — других сигналов
-  // у страницы нет. Телефон стоит в десятке мест, поэтому клик ловим делегированием.
+  // у страницы нет. Телефон и ссылки на mglass.pro стоят в десятке мест, поэтому клик ловим делегированием.
   useEffect(() => {
     if (!metrikaId) return;
     const goal = (name: string) => (window as unknown as { ym?: Ym }).ym?.(Number(metrikaId), "reachGoal", name);
     const onClick = (e: MouseEvent) => {
-      if ((e.target as Element | null)?.closest?.('a[href^="tel:"]')) goal("phone_click");
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a) return;
+      if (a.href.startsWith("tel:")) return goal("phone_click");
+      if (a.hostname.endsWith("mglass.pro")) return goal("out_mglass_pro");
+      if (a.hostname.endsWith("vetro-furniture.ru")) return goal("out_vetro");
     };
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== "https://forms.amocrm.ru" || typeof e.data !== "string") return;

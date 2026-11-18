@@ -6,6 +6,7 @@ import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { getLanding } from "@/content/landings";
 import { OBJECTS, getObject, type ObjPhoto } from "@/content/objects";
 import { breadcrumbSchema, faqSchema, pageMetadata } from "@/lib/seo";
+import { outbound } from "@/lib/outbound";
 import { SITE, abs } from "@/lib/site";
 
 export const dynamicParams = false;
@@ -90,7 +91,7 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
               </ButtonLink>
             </div>
             {o.also && (
-              <a href={o.also.href} className="group mt-6 flex items-center gap-4 rounded-2xl border border-line bg-card p-3 pr-5 hover:border-ink">
+              <a href={outbound(o.also.href, o.slug, "hero")} target="_blank" rel="noopener" className="group mt-6 flex items-center gap-4 rounded-2xl border border-line bg-card p-3 pr-5 hover:border-ink">
                 <span className="relative h-20 w-16 shrink-0 overflow-hidden rounded-xl">
                   <Image src={o.also.photo.img} alt={o.also.photo.alt} fill sizes="64px" className="object-cover" />
                 </span>
@@ -170,14 +171,14 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
                 ))}
               </div>
             )}
-            {s.note && (
-              <p className="mt-5 font-semibold">
-                {s.note.text}{" "}
-                <a href={s.note.href} className="underline hover:text-brass">
-                  {s.note.label}
+            {[s.note, ...(s.links ?? [])].filter((x) => x !== undefined).map((n) => (
+              <p key={n.href} className="mt-5 font-semibold">
+                {n.text}{" "}
+                <a href={outbound(n.href, o.slug, "section")} target="_blank" rel="noopener" className="underline hover:text-brass">
+                  {n.label}
                 </a>
               </p>
-            )}
+            ))}
           </Container>
         </section>
       ))}
