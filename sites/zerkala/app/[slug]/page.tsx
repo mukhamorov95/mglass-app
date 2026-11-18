@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { BLOCKS, Faq, Gallery, Highlights, LandingCard, LeadSection, SectionsView, TrustBar } from "@/components/blocks";
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { LANDINGS, getLanding } from "@/content/landings";
+import { OBJECTS } from "@/content/objects";
 import { PHOTOS } from "@/content/photos";
 import { questionsForLanding } from "@/content/questions";
 import { CLUSTERS } from "@/content/types";
@@ -95,6 +96,27 @@ export default async function LandingPage({ params }: { params: Promise<{ slug: 
       })}
 
       <Gallery keys={l.gallery} />
+      {OBJECTS.some((o) => o.related.includes(l.slug)) && (
+        <section className="py-10 sm:py-14">
+          <Container>
+            <h2 className="mb-6 text-2xl font-semibold tracking-tight sm:text-3xl">Объекты с размерами и ценами</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {OBJECTS.filter((o) => o.related.includes(l.slug)).map((o) => (
+                <Link key={o.slug} href={`/raboty/${o.slug}`} className="group overflow-hidden rounded-2xl border border-line bg-card">
+                  <div className="relative aspect-[4/3]">
+                    <Image src={o.photos[0].img} alt={o.photos[0].alt} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" placeholder="blur" />
+                  </div>
+                  <div className="p-5">
+                    <h3 className="font-semibold group-hover:text-brass">{o.h1}</h3>
+                    <p className="mt-1.5 text-sm text-muted">{o.answer}</p>
+                    <span className="mt-3 block text-sm font-semibold">Смотреть объект →</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Container>
+        </section>
+      )}
       <Faq items={l.faq} />
 
       {questions.length > 0 && (

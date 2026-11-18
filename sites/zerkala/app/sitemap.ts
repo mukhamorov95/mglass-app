@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { LANDINGS } from "@/content/landings";
+import { OBJECTS } from "@/content/objects";
 import { QUESTIONS } from "@/content/questions";
 import { SITE, abs } from "@/lib/site";
 
@@ -14,6 +15,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...QUESTIONS.map((q) => ({ url: abs(`/vopros/${q.slug}`), lastModified, changeFrequency: "monthly" as const, priority: 0.6 })),
     { url: abs("/otzyvy"), lastModified, changeFrequency: "weekly", priority: 0.7 },
     { url: abs("/raboty"), lastModified, changeFrequency: "monthly", priority: 0.6 },
+    ...OBJECTS.map((o) => ({ url: abs(`/raboty/${o.slug}`), lastModified: new Date(o.published), changeFrequency: "yearly" as const, priority: 0.6 })),
     { url: abs("/kontakty"), lastModified, changeFrequency: "yearly", priority: 0.5 },
   ];
 }
