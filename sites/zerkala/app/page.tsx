@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { WorksStrip } from "@/components/WorksStrip";
 import { Faq, Gallery, LandingCard, LeadSection, LightModes, Materials, PriceFactors, Steps, TrustBar, YandexReviews } from "@/components/blocks";
 import { ButtonLink, Container, JsonLd, SectionTitle } from "@/components/ui";
 import { getLanding, landingsByCluster } from "@/content/landings";
@@ -57,6 +58,7 @@ export default function HomePage() {
                 {SITE.phone.display}
               </ButtonLink>
             </div>
+            <WorksStrip />
           </div>
           <div className="relative aspect-[4/5] overflow-hidden rounded-3xl">
             <Image src={hero.img} alt={hero.alt} fill priority sizes="(max-width: 1024px) 100vw, 45vw" className="object-cover" placeholder="blur" />
