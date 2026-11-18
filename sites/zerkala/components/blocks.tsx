@@ -49,7 +49,7 @@ export function LightModes() {
   );
 }
 
-function Table({ head, rows }: { head: string[]; rows: string[][] }) {
+export function Table({ head, rows }: { head: string[]; rows: string[][] }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-card">
       <table className="w-full min-w-[480px] text-left text-sm">

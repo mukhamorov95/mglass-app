@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { LeadSection } from "@/components/blocks";
 import { Breadcrumbs, Container, JsonLd } from "@/components/ui";
+import { OBJECTS } from "@/content/objects";
 import { PHOTOS, WORK_SECTIONS, type Photo } from "@/content/photos";
 import { breadcrumbSchema, pageMetadata } from "@/lib/seo";
 
@@ -34,6 +35,22 @@ export default function WorksPage() {
           Зеркала, которые мы сделали по размерам клиентов и установили на объектах: подсветка за зеркалом и на лицо,
           металлические рамы, фигурные формы, зеркальные стены и панно. Фото — с объектов после монтажа.
         </p>
+        <section className="pt-10">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Объекты с размерами и ценами</h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {OBJECTS.map((o) => (
+              <Link key={o.slug} href={`/raboty/${o.slug}`} className="group overflow-hidden rounded-2xl border border-line bg-card">
+                <div className="relative aspect-[4/3]">
+                  <Image src={o.hero.img} alt={o.hero.alt} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" placeholder="blur" />
+                </div>
+                <div className="p-5">
+                  <h3 className="font-semibold group-hover:text-brass">{o.h1}</h3>
+                  <span className="mt-3 block text-sm font-semibold">Подробнее →</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
         <nav aria-label="Разделы" className="mt-6 flex flex-wrap gap-2">
           {WORK_SECTIONS.map((s) => (
             <a key={s.id} href={`#${s.id}`} className="rounded-full border border-line px-4 py-2 text-sm hover:border-ink">
