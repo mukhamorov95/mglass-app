@@ -88,6 +88,16 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
                 {SITE.phone.display}
               </ButtonLink>
             </div>
+            {o.also && (
+              <a href={o.also.href} className="group mt-6 flex items-center gap-4 rounded-2xl border border-line bg-card p-3 pr-5 hover:border-ink">
+                <span className="relative h-20 w-16 shrink-0 overflow-hidden rounded-xl">
+                  <Image src={o.also.photo.img} alt={o.also.photo.alt} fill sizes="64px" className="object-cover" />
+                </span>
+                <span className="min-w-0 text-sm leading-snug">
+                  {o.also.text} <span className="font-semibold underline group-hover:text-brass">{o.also.label} →</span>
+                </span>
+              </a>
+            )}
           </div>
         </Container>
       </section>
