@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { landingsByCluster } from "@/content/landings";
+import { outbound } from "@/lib/outbound";
 import { SITE } from "@/lib/site";
 import { MenuCloser } from "./MenuCloser";
 import { Container } from "./ui";
+
+// Душевые делаем на соседнем сайте; ссылка с метками, клик считает цель Метрики out_mglass_pro.
+const SHOWERS = "https://mglass.pro/";
 
 function Logo() {
   return (
@@ -25,7 +29,7 @@ export function Header() {
       <MenuCloser />
       <Container className="flex h-16 items-center justify-between gap-4">
         <Logo />
-        <nav aria-label="Основное меню" className="hidden items-center gap-6 text-sm font-medium md:flex">
+        <nav aria-label="Основное меню" className="hidden items-center gap-6 text-sm font-medium md:flex lg:gap-5 lg:whitespace-nowrap xl:gap-6">
           <details className="group relative">
             <summary className="flex cursor-pointer list-none items-center gap-1 hover:text-brass">
               Каталог
@@ -56,9 +60,12 @@ export function Header() {
           <Link href="/otzyvy" className="hover:text-brass">Отзывы</Link>
           <Link href="/raboty" className="hover:text-brass">Работы</Link>
           <Link href="/kontakty" className="hover:text-brass">Контакты</Link>
+          <a href={outbound(SHOWERS, "shapka", "desktop")} target="_blank" rel="noopener" className="hidden font-semibold text-brass hover:text-ink lg:inline">
+            Душевые ↗
+          </a>
         </nav>
         <div className="flex items-center gap-3">
-          <a href={SITE.phone.href} className="hidden text-sm font-semibold lg:block">
+          <a href={SITE.phone.href} className="hidden whitespace-nowrap text-sm font-semibold xl:block">
             {SITE.phone.display}
           </a>
           <a href="#zayavka" className="hidden min-h-10 items-center rounded-full bg-ink px-5 text-sm font-semibold text-white hover:bg-black sm:inline-flex">
@@ -71,6 +78,10 @@ export function Header() {
               </svg>
             </summary>
             <div className="absolute inset-x-0 top-16 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-line bg-paper px-4 pb-8 pt-4 shadow-lg">
+              <a href={outbound(SHOWERS, "shapka", "mobile")} target="_blank" rel="noopener" className="mb-1 flex items-center justify-between rounded-2xl border border-line bg-card px-4 py-3 text-sm">
+                <span>Душевые и шторки на ванну</span>
+                <span className="whitespace-nowrap pl-3 font-semibold text-brass">mglass.pro ↗</span>
+              </a>
               {clusters.map((c) => (
                 <div key={c.key} className="border-b border-line py-3">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{c.title}</div>
