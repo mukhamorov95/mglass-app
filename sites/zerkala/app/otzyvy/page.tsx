@@ -1,4 +1,4 @@
-import { LeadSection, TrustBar, YandexReviews } from "@/components/blocks";
+import { LeadSection, Proof, YandexReviews } from "@/components/blocks";
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { breadcrumbSchema, pageMetadata } from "@/lib/seo";
 import { SITE } from "@/lib/site";
@@ -40,7 +40,7 @@ export default function ReviewsPage() {
 
       <section className="pb-6">
         <Container>
-          <TrustBar />
+          <Proof />
         </Container>
       </section>
 

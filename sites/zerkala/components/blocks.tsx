@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { FRAMES, LIGHT_MODES, LIGHT_TECH, MATERIALS, PRICE_FACTORS, STEPS, TRUST } from "@/content/knowledge";
+import { FRAMES, LIGHT_MODES, LIGHT_TECH, MATERIALS, PRICE_FACTORS, PROOF, STEPS } from "@/content/knowledge";
 import { PHOTOS, type PhotoKey } from "@/content/photos";
 import type { BlockKey, Landing, Section } from "@/content/types";
 import { SITE } from "@/lib/site";
@@ -12,9 +12,7 @@ export function LightModes() {
   return (
     <section className="py-12 sm:py-16">
       <Container>
-        <SectionTitle sub="Тип света выбираем первым: он меняет состав зеркала, а не одну строку в расчёте">
-          Три вида подсветки
-        </SectionTitle>
+        <SectionTitle sub="Выбираем первым — от него зависит сборка зеркала">Три вида подсветки</SectionTitle>
         <div className="grid gap-5 md:grid-cols-3">
           {LIGHT_MODES.map((m) => (
             <article key={m.key} className="overflow-hidden rounded-2xl border border-line bg-card">
@@ -24,14 +22,6 @@ export function LightModes() {
               <div className="p-5">
                 <h3 className="text-lg font-semibold">{m.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{m.text}</p>
-                <ul className="mt-3 space-y-1 text-sm">
-                  {m.parts.map((p) => (
-                    <li key={p} className="flex gap-2">
-                      <span aria-hidden="true" className="text-brass">—</span>
-                      {p}
-                    </li>
-                  ))}
-                </ul>
               </div>
             </article>
           ))}
@@ -88,9 +78,7 @@ export function Materials() {
   return (
     <section className="py-12 sm:py-16">
       <Container>
-        <SectionTitle sub="Все виды режем по вашим размерам, обрабатываем кромку, ставим в раму и подсвечиваем">
-          Какие зеркала делаем
-        </SectionTitle>
+        <SectionTitle>Какие зеркала делаем</SectionTitle>
         <Table head={["Зеркало", "Толщина", "Особенность"]} rows={MATERIALS.map((m) => [m.name, m.thickness, m.text])} />
       </Container>
     </section>
@@ -138,9 +126,7 @@ export function PriceFactors() {
   return (
     <section className="py-12 sm:py-16">
       <Container>
-        <SectionTitle sub="Пришлите размеры и исполнение — посчитаем стоимость по вашему зеркалу, а не по каталогу">
-          Из чего складывается цена
-        </SectionTitle>
+        <SectionTitle sub="Пришлите размеры — посчитаем ваше зеркало">Из чего складывается цена</SectionTitle>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PRICE_FACTORS.map((p) => (
             <div key={p.title} className="rounded-2xl border border-line bg-card p-5">
@@ -244,16 +230,17 @@ export function SectionsView({ sections }: { sections: Section[] }) {
   );
 }
 
-export function TrustBar() {
+export function Proof({ className = "" }: { className?: string }) {
   return (
-    <ul className="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-      {TRUST.map((t) => (
-        <li key={t.title} className="bg-brass-soft/60 p-4">
-          <div className="font-semibold">{t.title}</div>
-          <div className="mt-1 text-sm text-muted">{t.text}</div>
-        </li>
+    <dl className={`grid max-w-xl grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 sm:gap-x-4 ${className}`}>
+      {PROOF.map(([v, label]) => (
+        <div key={label} className="border-l-2 border-brass/60 pl-3">
+          <dt className="sr-only">{label}</dt>
+          <dd className="text-base font-bold leading-tight tabular-nums">{v}</dd>
+          <dd className="mt-0.5 text-xs leading-snug text-muted">{label}</dd>
+        </div>
       ))}
-    </ul>
+    </dl>
   );
 }
 
@@ -294,7 +281,7 @@ export function LeadSection({ title = "Рассчитаем зеркало по 
           <div>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h2>
             <p className="mt-3 text-white/70">
-              Оставьте телефон и, если знаете, размеры. Перезвоним, уточним исполнение и пришлём стоимость.
+              Оставьте телефон и размеры, если знаете. Перезвоним и пришлём цену.
             </p>
             <p className="mt-6 text-sm text-white/70">Или позвоните:</p>
             <a href={SITE.phone.href} className="text-2xl font-semibold">

@@ -33,8 +33,7 @@ export default function WorksPage() {
         <Breadcrumbs items={crumbs} />
         <h1 className="mt-6 text-3xl font-bold tracking-tight sm:text-5xl">Наши работы</h1>
         <p className="mt-4 max-w-2xl text-lg text-muted">
-          Зеркала, которые мы сделали по размерам клиентов и установили на объектах: подсветка за зеркалом и на лицо,
-          металлические рамы, фигурные формы, зеркальные стены и панно. Фото — с объектов после монтажа.
+          Зеркала по размерам клиентов — фото с объектов после монтажа.
         </p>
         <section className="pt-10">
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Объекты с размерами и ценами</h2>

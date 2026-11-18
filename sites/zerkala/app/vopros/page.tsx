@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LeadSection, TrustBar } from "@/components/blocks";
+import { LeadSection, Proof } from "@/components/blocks";
 import { Breadcrumbs, Container, JsonLd } from "@/components/ui";
 import { PHOTOS } from "@/content/photos";
 import { QUESTIONS } from "@/content/questions";
@@ -53,7 +53,7 @@ export default function QuestionsHub() {
 
       <section className="pb-6">
         <Container>
-          <TrustBar />
+          <Proof />
         </Container>
       </section>
 

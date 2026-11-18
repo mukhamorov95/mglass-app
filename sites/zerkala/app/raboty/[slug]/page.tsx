@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { Faq, LandingCard, LeadSection, Table, TrustBar } from "@/components/blocks";
+import { Faq, LandingCard, LeadSection, Table, Proof } from "@/components/blocks";
 import ObjectGallery from "@/components/ObjectGallery";
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { getLanding } from "@/content/landings";
@@ -106,7 +106,7 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
 
       <section className="pb-4">
         <Container>
-          <TrustBar />
+          <Proof />
         </Container>
       </section>
 

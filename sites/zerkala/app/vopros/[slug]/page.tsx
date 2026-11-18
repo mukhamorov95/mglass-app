@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Faq, LandingCard, LeadSection, SectionsView, TrustBar } from "@/components/blocks";
+import { Faq, LandingCard, LeadSection, SectionsView, Proof } from "@/components/blocks";
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { getLanding } from "@/content/landings";
 import { PHOTOS } from "@/content/photos";
@@ -65,7 +65,7 @@ export default async function QuestionPage({ params }: { params: Promise<{ slug:
 
       <section className="pb-4">
         <Container>
-          <TrustBar />
+          <Proof />
         </Container>
       </section>
 
