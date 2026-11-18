@@ -1,124 +1,121 @@
 import Link from 'next/link'
-import StatsBar from './StatsBar'
+import { amoGetAll } from '@/lib/amocrm'
+import { aggregate, CHANNELS, periodStart, type AmoLeadLite } from '@/lib/marketing/channels'
+import { SITES } from '@/lib/marketing/sites'
+import { MarketingTabs, requireMarketing } from './MarketingTabs'
 
-const SECTIONS = [
-  {
-    title: 'Контент и видео',
-    color: 'border-blue-200',
-    items: [
-      { href: '/marketing/content', emoji: '📅', label: 'Контент-план',   desc: 'Темы, платформы, хуки, CTA, статус публикации' },
-      { href: '/marketing/videos',  emoji: '🎬', label: 'Video Factory',  desc: 'Сценарии Reels/Shorts: хук, структура, кадры, диктор' },
-    ],
-  },
-  {
-    title: 'Партнёры и акции',
-    color: 'border-emerald-200',
-    items: [
-      { href: '/marketing/partners', emoji: '🤝', label: 'Партнёры',      desc: 'Дизайнеры, прорабы, бригады — учёт рефералов и выплат' },
-      { href: '/marketing/promos',   emoji: '🎁', label: 'Promo Center',  desc: 'Акции, бонусы, сезонные предложения без ущерба марже' },
-    ],
-  },
-  {
-    title: 'Операции',
-    color: 'border-amber-200',
-    items: [
-      { href: '/marketing/tasks', emoji: '✅', label: 'Задачи',           desc: 'B2C / B2B / партнёры / контент — приоритеты и сроки' },
-      { href: '/marketing/ai',   emoji: '🤖', label: 'AI-маркетолог',    desc: 'Сценарии, посты, идеи, WhatsApp-статусы, гипотезы' },
-    ],
-  },
-]
+export const dynamic = 'force-dynamic'
 
-const STRATEGY = [
-  { icon: '🎯', title: 'Год 1', desc: 'Стабилизировать лидогенерацию, запустить партнёрку, контент-машину, B2B упаковку' },
-  { icon: '🚀', title: 'Год 2', desc: 'Масштабировать B2B, усилить дилеров, бренд готовой продукции, регулярные кампании' },
-  { icon: '🏆', title: 'Год 3', desc: 'Федеральное масштабирование, дилерская сеть, бренд готовых серий (Aura и др.)' },
-]
+const PERIODS = [7, 30, 90] as const
 
-const CHANNELS = [
-  { icon: '👤', label: 'Дизайнеры', desc: 'Главный умножитель лидов — 1 дизайнер = 10+ клиентов/год' },
-  { icon: '🔨', label: 'Прорабы', desc: 'Постоянный поток объектов, рекомендуют по проектам' },
-  { icon: '📱', label: 'Reels/Shorts', desc: 'Органический охват: производство, до/после, советы' },
-  { icon: '📢', label: 'Яндекс Директ', desc: 'Платный трафик на горячий спрос' },
-  { icon: '🛒', label: 'Авито', desc: 'B2C и B2B лиды на готовые решения' },
-  { icon: '💬', label: 'Telegram', desc: 'Канал для дизайнеров, прорабов, B2B-партнёров' },
-]
+export default async function MarketingStatsPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
+  await requireMarketing()
+  const { d } = await searchParams
+  const days = PERIODS.find((p) => String(p) === d) ?? 30
+  const from = periodStart(days)
 
-export default function MarketingCenterPage() {
+  let leads: AmoLeadLite[] = []
+  let error: string | null = null
+  try {
+    leads = await amoGetAll<AmoLeadLite>('/leads', { 'filter[created_at][from]': String(from) }, 'leads')
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e)
+  }
+  const rows = aggregate(leads)
+  const byKey = Object.fromEntries(rows.map((r) => [r.key, r]))
+  const label = Object.fromEntries(CHANNELS.map((c) => [c.key, c]))
+  const shown = rows.filter((r) => r.total > 0 || label[r.key].site)
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6">
+      <MarketingTabs active="/marketing" sub="Заявки из amoCRM по каналам: откуда пришли и чем закончились" />
 
-      {/* Header */}
-      <div className="mb-8">
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-1">Маркетинг</p>
-        <h1 className="text-[28px] font-bold text-[#111110] tracking-tight">Marketing Center</h1>
-        <p className="text-[15px] text-[#6b6b66] mt-1">
-          Контент-машина MGlass — лиды, партнёры, бренд и рост до 1 млрд ₽
-        </p>
-      </div>
-
-      <StatsBar />
-
-      {/* Quick links */}
-      <div className="space-y-6 mb-10">
-        {SECTIONS.map(section => (
-          <div key={section.title}>
-            <div className="flex items-center gap-3 mb-3">
-              <h2 className="text-[13px] font-bold text-[#111110]">{section.title}</h2>
-              <div className="flex-1 h-px bg-[#e4e4e0]" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {section.items.map(item => (
-                <Link key={item.href} href={item.href}
-                  className={`flex items-start gap-3 bg-white border-2 ${section.color} rounded-xl p-4 hover:shadow-md transition-all group`}>
-                  <span className="text-xl mt-0.5 flex-shrink-0">{item.emoji}</span>
-                  <div>
-                    <p className="text-[14px] font-semibold text-[#111110] group-hover:text-blue-600 transition-colors">{item.label}</p>
-                    <p className="text-[12px] text-[#6b6b66] mt-0.5 leading-snug">{item.desc}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
+      <div className="mb-5 flex items-center gap-2 text-sm">
+        <span className="text-[#9a9a95]">Создано за</span>
+        {PERIODS.map((p) => (
+          <Link key={p} href={`/marketing?d=${p}`} className={`rounded-full border px-3 py-1 ${p === days ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white'}`}>
+            {p} дней
+          </Link>
         ))}
       </div>
 
-      {/* Strategy timeline */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-[13px] font-bold text-[#111110]">Стратегия роста → 1 млрд ₽</h2>
-          <div className="flex-1 h-px bg-[#e4e4e0]" />
+      {error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Не удалось загрузить сделки из amoCRM: {error}. Обновите страницу.
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {STRATEGY.map(s => (
-            <div key={s.title} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">{s.icon}</span>
-                <span className="text-[14px] font-semibold text-[#111110]">{s.title}</span>
-              </div>
-              <p className="text-[12px] text-[#6b6b66] leading-relaxed">{s.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      ) : (
+        <>
+          <section className="grid gap-3 sm:grid-cols-3">
+            {SITES.map((s) => {
+              const r = s.channels.map((k) => byKey[k])
+              const total = r.reduce((n, x) => n + x.total, 0)
+              const won = r.reduce((n, x) => n + x.won, 0)
+              return (
+                <div key={s.domain} className="rounded-xl border border-[#e4e4e0] bg-white p-4">
+                  <div className="text-sm text-[#9a9a95]">{s.domain}</div>
+                  <div className="mt-1 text-3xl font-semibold tabular-nums text-[#111110]">{total}</div>
+                  <div className="text-xs text-[#9a9a95]">заявок · успешно {won}</div>
+                </div>
+              )
+            })}
+          </section>
 
-      {/* Channels */}
-      <div>
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-[13px] font-bold text-[#111110]">Ключевые каналы</h2>
-          <div className="flex-1 h-px bg-[#e4e4e0]" />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {CHANNELS.map(c => (
-            <div key={c.label} className="bg-[#fafaf8] border border-[#e4e4e0] rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <span>{c.icon}</span>
-                <span className="text-[13px] font-semibold text-[#111110]">{c.label}</span>
-              </div>
-              <p className="text-[12px] text-[#6b6b66]">{c.desc}</p>
+          {byKey.envyboxChat.stuckQualification > 0 && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              Чат Envybox: {byKey.envyboxChat.stuckQualification} из {byKey.envyboxChat.total} заявок стоят в воронке «Квалификация» и не
+              попали в «Продажи» — менеджеры их не видят.
             </div>
-          ))}
-        </div>
-      </div>
+          )}
+
+          <section className="mt-6 overflow-x-auto rounded-xl border border-[#e4e4e0] bg-white">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="text-left text-xs uppercase tracking-wide text-[#9a9a95]">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Канал</th>
+                  <th className="px-3 py-3 text-right font-medium">Заявок</th>
+                  <th className="px-3 py-3 text-right font-medium">В работе</th>
+                  <th className="px-3 py-3 text-right font-medium">Успешно</th>
+                  <th className="px-3 py-3 text-right font-medium">Не реализовано</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((r) => (
+                  <tr key={r.key} className="border-t border-[#e4e4e0]">
+                    <td className="px-4 py-2.5">
+                      <div className="font-medium text-[#111110]">{label[r.key].label}</div>
+                      <div className="text-xs text-[#9a9a95]">{label[r.key].hint}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{r.total}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{r.open}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{r.won}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{r.lost}</td>
+                  </tr>
+                ))}
+                <tr className="border-t border-[#e4e4e0] bg-[#f5f5f3] font-semibold">
+                  <td className="px-4 py-2.5">Всего</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{leads.length}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rows.reduce((n, r) => n + r.open, 0)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rows.reduce((n, r) => n + r.won, 0)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{rows.reduce((n, r) => n + r.lost, 0)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <p className="mt-2 text-xs text-[#9a9a95]">
+            Каналы без заявок за период скрыты, кроме сайтов. Канал — по тегу, полю «Источник сделки» и utm; если менеджер их не поставил,
+            сделка попадает в «Без признака».
+          </p>
+        </>
+      )}
+
+      <section className="mt-6 rounded-xl border border-dashed border-[#e4e4e0] p-4 text-sm">
+        <div className="font-medium text-[#111110]">Не подключено</div>
+        <ul className="mt-2 space-y-1 text-[#9a9a95]">
+          <li>Визиты и переходы по сайтам — нужен токен Метрики (OAuth, выдаёт владелец аккаунта Метрики)</li>
+          <li>Страницы в поиске — нужен доступ к API Вебмастера и Search Console</li>
+          <li>Публикации на площадках — появятся с реестром публикаций (этап Э1)</li>
+        </ul>
+      </section>
     </div>
   )
 }

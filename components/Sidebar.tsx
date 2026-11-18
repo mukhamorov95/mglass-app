@@ -91,7 +91,7 @@ const BUYER_PRODUCTION: NavItem[] = [
 // ─── SEO role ─────────────────────────────────────────────────────────────────
 
 const SEO_ANALYTICS: NavItem[] = [
-  { href: '/marketing/seo', label: 'SEO · Заявки сайта', icon: '🌐' },
+  { href: '/marketing', label: 'Маркетинг · заявки по каналам', icon: '🌐' },
   { href: '/b2b-analytics', label: 'B2B Аналитика', icon: '📊' },
   { href: '/b2b-growth',    label: 'Развитие B2B',  icon: '🚀' },
   { href: '/ai-stats',      label: 'Статистика AI', icon: '📈' },
@@ -132,7 +132,6 @@ const CFO_ITEMS: NavItem[] = [
 
 const CEO_ANALYTICS: NavItem[] = [
   { href: '/ceo/sales',     label: 'Продажи по периодам', icon: '💰' },
-  { href: '/marketing/seo', label: 'SEO · Заявки сайта', icon: '🌐' },
   { href: '/b2b-analytics', label: 'B2B Аналитика', icon: '📊' },
   { href: '/vladislav',     label: 'Vladislav AI',  icon: '💬' },
   { href: '/marketing',     label: 'Маркетинг',     icon: '📣' },
@@ -376,19 +375,14 @@ const PROMO_CENTER: NavItem[] = [
   { href: '/marketing/promo',       label: 'Пульт продвижения', icon: '💲' },
   { href: '/marketing/promo/pipeline', label: 'Конвейер роликов', icon: '🏭' },
   { href: '/marketing/promo/guide', label: 'Регламент',         icon: '📖' },
+  { href: '/marketing/video-factory', label: 'AI Video Factory', icon: '🎬' },
+  { href: '/marketing/media-library', label: 'Медиабиблиотека', icon: '🖼️' },
 ]
 
 const MARKETING_CENTER: NavItem[] = [
-  { href: '/marketing/seo',           label: 'SEO · Заявки сайта', icon: '🔍' },
-  { href: '/marketing',               label: 'Marketing Center',   icon: '📣' },
-  { href: '/marketing/content',       label: 'Контент-план',       icon: '📅' },
-  { href: '/marketing/video-factory', label: 'AI Video Factory',   icon: '🎬' },
-  { href: '/marketing/media-library', label: 'Медиабиблиотека',    icon: '🖼️' },
-  { href: '/marketing/daily',         label: 'Дневной план AI',    icon: '☀️' },
-  { href: '/marketing/partners',      label: 'Партнёры',           icon: '🤝' },
-  { href: '/marketing/promos',        label: 'Акции',              icon: '🏷️' },
-  { href: '/marketing/tasks',         label: 'Задачи',             icon: '✅' },
-  { href: '/marketing/ai',            label: 'AI-маркетолог',      icon: '🤖' },
+  { href: '/marketing',        label: 'Статистика', icon: '📈' },
+  { href: '/marketing/agents', label: 'Агенты',     icon: '🤖' },
+  { href: '/marketing/sites',  label: 'Сайты',      icon: '🌐' },
 ]
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -441,7 +435,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner-tasks', '/admin/avito-funnel', '/admin/sales-control', '/admin/org', '/admin/users', '/admin/access-check', '/admin/activity-log', '/production-app'])) open.push('owner')
     // /marketing/promo принадлежит «Продвижению», а не «Маркетингу» —
     // иначе по общему префиксу раскроется чужая группа.
-    if (inSection(pathname, ['/marketing/promo'])) open.push('promo')
+    if (inSection(pathname, ['/marketing/promo', '/marketing/video-factory', '/marketing/media-library'])) open.push('promo')
     else if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
@@ -481,7 +475,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/b2b-analytics', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
     // /marketing/promo принадлежит «Продвижению», а не «Маркетингу» —
     // иначе по общему префиксу раскроется чужая группа.
-    if (inSection(pathname, ['/marketing/promo'])) open.push('promo')
+    if (inSection(pathname, ['/marketing/promo', '/marketing/video-factory', '/marketing/media-library'])) open.push('promo')
     else if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
   } else if (role === 'ceo') {

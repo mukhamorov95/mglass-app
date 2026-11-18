@@ -21,7 +21,7 @@ function extractJSON(text: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireAnyPageAccess(['/marketing/daily', '/marketing/video-factory'])
+  const guard = await requireAnyPageAccess(['/marketing/video-factory'])
   if (guard instanceof NextResponse) return guard
 
   const supabase = await createClient()
