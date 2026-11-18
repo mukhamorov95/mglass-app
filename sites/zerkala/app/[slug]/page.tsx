@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BLOCKS, Faq, Gallery, Highlights, LandingCard, LeadSection, SectionsView, TrustBar } from "@/components/blocks";
+import { BLOCKS, Faq, Gallery, Highlights, LandingCard, LeadSection, Proof, SectionsView } from "@/components/blocks";
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { LANDINGS, getLanding } from "@/content/landings";
 import { ObjectCard, objectGridClass } from "@/components/ObjectCard";
@@ -59,11 +59,14 @@ export default async function LandingPage({ params }: { params: Promise<{ slug: 
             <div className="text-xs font-semibold uppercase tracking-wider text-brass">{CLUSTERS[l.cluster].title}</div>
             <h1 className="mt-2 text-3xl font-bold leading-tight tracking-tight sm:text-5xl">{l.h1}</h1>
             <p className="mt-4 text-lg text-muted">{l.lead}</p>
+            <Proof className="mt-6" />
             <div className="mt-7 flex flex-wrap gap-3">
               <ButtonLink href="#zayavka">Рассчитать стоимость</ButtonLink>
-              <ButtonLink href={SITE.phone.href} variant="light">
-                {SITE.phone.display}
-              </ButtonLink>
+              <div className="hidden sm:block">
+                <ButtonLink href={SITE.phone.href} variant="light">
+                  {SITE.phone.display}
+                </ButtonLink>
+              </div>
             </div>
           </div>
           <div className="relative aspect-[4/5] overflow-hidden rounded-3xl sm:aspect-[4/3] lg:aspect-[4/5]">
@@ -73,8 +76,7 @@ export default async function LandingPage({ params }: { params: Promise<{ slug: 
       </section>
 
       <section className="pb-6">
-        <Container className="grid gap-3">
-          <TrustBar />
+        <Container>
           <Highlights items={l.highlights} />
         </Container>
       </section>
@@ -132,7 +134,7 @@ export default async function LandingPage({ params }: { params: Promise<{ slug: 
           <Container>
             <h2 className="mb-6 text-2xl font-semibold tracking-tight sm:mb-8 sm:text-3xl">Смотрите также</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {related.slice(0, 6).map((r) => (
+              {related.slice(0, 3).map((r) => (
                 <LandingCard key={r.slug} l={r} />
               ))}
             </div>

@@ -52,8 +52,7 @@ export default function ContactsPage() {
           </div>
         </div>
         <p className="mt-8 max-w-2xl text-muted">
-          Чтобы посчитать зеркало быстрее, пришлите ширину и высоту, фото стены и то, какую подсветку хотите. Не знаете, что выбрать,
-          — начните с разделов{" "}
+          Для быстрого расчёта пришлите ширину, высоту, фото стены и тип подсветки. Не знаете, что выбрать, — смотрите{" "}
           <Link href="/zerkala-s-podsvetkoj" className="underline hover:text-ink">зеркала с подсветкой</Link> и{" "}
           <Link href="/zerkala-v-vannuyu" className="underline hover:text-ink">зеркала в ванную</Link>.
         </p>

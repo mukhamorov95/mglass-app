@@ -8,7 +8,7 @@ function Ring({ img, alt }: { img: StaticImageData; alt: string }) {
     <span className="block rounded-full bg-gradient-to-tr from-brass via-brass-soft to-ink p-[3px] transition group-hover:rotate-6">
       <span className="block rounded-full bg-paper p-[2px]">
         <span className="relative block h-[68px] w-[68px] overflow-hidden rounded-full sm:h-[76px] sm:w-[76px]">
-          <Image src={img} alt={alt} fill sizes="80px" className="object-cover transition duration-500 group-hover:scale-110" />
+          <Image src={img} alt={alt} fill sizes="80px" loading="eager" className="object-cover transition duration-500 group-hover:scale-110" />
         </span>
       </span>
     </span>
