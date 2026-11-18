@@ -108,7 +108,6 @@ export const SITE = {
     orgId: "160929264216",
     mapsUrl: FACTS.address.value.mapsUrl,
     widgetUrl: "https://yandex.ru/maps-reviews-widget/160929264216?comments",
-    badgeUrl: "https://yandex.ru/maps-reviews-widget/160929264216",
   },
   // Приём заявок — публичный маршрут mglass-app (site_leads + Telegram владельцу).
   // Локально по умолчанию выключен: иначе проверка формы будит владельца.
