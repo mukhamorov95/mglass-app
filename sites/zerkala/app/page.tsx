@@ -1,9 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { WorksStrip } from "@/components/WorksStrip";
-import { Faq, Gallery, LandingCard, LeadSection, LightModes, Materials, PriceFactors, Steps, TrustBar, YandexReviews } from "@/components/blocks";
+import { Faq, Gallery, LandingCard, LeadSection, LightModes, Materials, PriceFactors, Steps, YandexReviews } from "@/components/blocks";
 import { ButtonLink, Container, JsonLd, SectionTitle } from "@/components/ui";
 import { getLanding, landingsByCluster } from "@/content/landings";
+import { OBJECTS } from "@/content/objects";
 import { PHOTOS } from "@/content/photos";
 import { breadcrumbSchema, faqSchema, pageMetadata, serviceSchema } from "@/lib/seo";
 import { SITE } from "@/lib/site";
@@ -28,10 +29,25 @@ const HUB_FAQ = [
   { q: "Работаете с дизайнерами и юрлицами?", a: "Да. Режем серии полотен по спецификации, делаем зеркальные стены для залов и серии зеркал для салонов, работаем по договору и счёту." },
 ];
 
+// Цифры первого экрана — только из файла фактов сайта (lib/site.ts, confirmed).
+const PROOF: [string, string][] = [
+  [SITE.leadTime.regular.replace(/ рабочих дней$/, "").replace("от ", "от\u00a0"), "рабочих дней изготовление"],
+  [`${SITE.warrantyMonths} мес.`, "гарантия по договору"],
+  [SITE.projects, `проектов с ${SITE.foundedYear} года`],
+  ["Замер", "и монтаж на объекте"],
+];
+
+// Пример цены — из последнего объекта с ценой из его КП, а не оценка.
+function priceExample() {
+  const o = [...OBJECTS].sort((x, y) => y.published.localeCompare(x.published)).find((x) => x.example);
+  return o?.example ? { o, ...o.example } : null;
+}
+
 export default function HomePage() {
   const clusters = landingsByCluster();
   const featured = FEATURED.map(getLanding).filter((x): x is NonNullable<typeof x> => Boolean(x));
   const hero = PHOTOS.rectAura;
+  const example = priceExample();
 
   return (
     <>
@@ -43,32 +59,60 @@ export default function HomePage() {
         ]}
       />
 
-      <section className="pb-12 pt-8 sm:pb-16 sm:pt-12">
-        <Container className="grid items-center gap-10 lg:grid-cols-[1.15fr_1fr]">
-          <div>
+      <section className="pb-12 pt-6 sm:pb-16 sm:pt-10">
+        <Container className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
+          <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-wider text-brass">{SITE.serviceArea}</div>
-            <h1 className="mt-3 text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Зеркала на заказ в Москве</h1>
-            <p className="mt-5 max-w-xl text-lg text-muted">
-              По вашим размерам — с подсветкой за зеркалом или светом на лицо, в раме, любой формы. Режем, обрабатываем, собираем
-              подсветку и вешаем.
+            <h1 className="mt-3 text-4xl font-bold leading-[1.04] tracking-tight [text-wrap:balance] sm:text-6xl">
+              Зеркала на&nbsp;заказ <span className="whitespace-nowrap">в&nbsp;Москве</span>
+            </h1>
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-ink/75 sm:mt-5 sm:text-lg">
+              Режем зеркало по размерам вашей стены, собираем подсветку и вешаем. Свет за зеркалом или на лицо, в раме, любой
+              формы.
             </p>
+            <dl className="mt-6 grid max-w-xl grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 sm:gap-x-4">
+              {PROOF.map(([v, label]) => (
+                <div key={label} className="border-l-2 border-brass/60 pl-3">
+                  <dt className="sr-only">{label}</dt>
+                  <dd className="text-base font-bold leading-tight tabular-nums">{v}</dd>
+                  <dd className="mt-0.5 text-xs leading-snug text-muted">{label}</dd>
+                </div>
+              ))}
+            </dl>
             <div className="mt-8 flex flex-wrap gap-3">
               <ButtonLink href="#zayavka">Рассчитать стоимость</ButtonLink>
-              <ButtonLink href={SITE.phone.href} variant="light">
-                {SITE.phone.display}
-              </ButtonLink>
+              {/* На телефоне номер уже в нижней панели «Позвонить» */}
+              <div className="hidden sm:block">
+                <ButtonLink href={SITE.phone.href} variant="light">
+                  {SITE.phone.display}
+                </ButtonLink>
+              </div>
             </div>
+            <p className="mt-3 text-sm text-muted">Пришлите размеры — посчитаем цену вашего зеркала.</p>
             <WorksStrip />
           </div>
-          <div className="relative aspect-[4/5] overflow-hidden rounded-3xl">
+          <div className="relative aspect-[4/5] overflow-hidden rounded-3xl lg:aspect-auto lg:h-[min(640px,calc(100svh-9rem))]">
             <Image src={hero.img} alt={hero.alt} fill priority sizes="(max-width: 1024px) 100vw, 45vw" className="object-cover" placeholder="blur" />
+            <span className="absolute left-4 top-4 rounded-full bg-paper/90 px-3 py-1 text-xs font-semibold backdrop-blur">
+              Наша работа<span className="hidden sm:inline"> · {hero.caption.toLowerCase()}</span>
+            </span>
+            {example && (
+              <Link
+                href={`/raboty/${example.o.slug}`}
+                className="group absolute inset-x-4 bottom-4 flex items-center gap-3 rounded-2xl bg-paper/95 p-3 pr-4 shadow-lg backdrop-blur sm:inset-x-auto sm:left-4 sm:max-w-sm"
+              >
+                <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl">
+                  <Image src={example.photo.img} alt={example.photo.alt} fill sizes="56px" className="object-cover" />
+                </span>
+                <span className="min-w-0 text-sm leading-snug">
+                  <span className="block text-muted">{example.o.card.label} · {example.label}</span>
+                  <span className="block font-bold tabular-nums">
+                    {example.price} <span className="font-semibold text-brass group-hover:underline">смотреть объект →</span>
+                  </span>
+                </span>
+              </Link>
+            )}
           </div>
-        </Container>
-      </section>
-
-      <section className="pb-4">
-        <Container>
-          <TrustBar />
         </Container>
       </section>
 

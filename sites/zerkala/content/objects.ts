@@ -48,6 +48,8 @@ export type SiteObject = {
   place: string;
   // Короткая карточка: на «Работах», посадочных и первом экране главной.
   card: { label: string; line: string };
+  // Пример цены для первого экрана главной: одна позиция из КП объекта и её фото.
+  example?: { price: string; label: string; photo: ObjPhoto };
   // Лист чертежей без штампа: адрес, телефон и имя заказчика вырезаны.
   drawing?: { img: StaticImageData; alt: string; text: string };
   // Что ещё сделали на объекте и где это смотреть — на первом экране, под кнопками.
@@ -226,6 +228,7 @@ export const OBJECTS: SiteObject[] = [
     photos: [SB.bath, SB.su, SB.dark, SB.on, SB.off, SB.shower],
     place: "ЖК «Суббота», Донстрой",
     card: { label: "ЖК «Суббота»", line: "4 зеркала с подсветкой и душевая с золотой фурнитурой" },
+    example: { price: "24 500 ₽", label: "зеркало с подсветкой 700 × 950 мм", photo: SB.su },
     also: {
       photo: SB.shower,
       text: "В этом же заказе мы сделали душевую с фурнитурой цвета золото браш. Душевые ограждения — на нашем сайте",
