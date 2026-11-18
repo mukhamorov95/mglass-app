@@ -106,6 +106,19 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
         </Container>
       </section>
 
+      {o.drawing && (
+        <section className="py-8 sm:py-10">
+          <Container className="max-w-3xl">
+            <h2 className="mb-4 text-2xl font-semibold tracking-tight">Чертежи объекта</h2>
+            <p className="leading-relaxed text-ink/85">{o.drawing.text}</p>
+            <a href={o.drawing.img.src} target="_blank" rel="noopener" className="mt-5 block overflow-hidden rounded-2xl border border-line bg-white">
+              <Image src={o.drawing.img} alt={o.drawing.alt} sizes="(max-width: 768px) 100vw, 768px" className="h-auto w-full" />
+            </a>
+            <p className="mt-2 text-sm text-muted">Нажмите на чертёж, чтобы открыть его в полном размере.</p>
+          </Container>
+        </section>
+      )}
+
       {o.sections.map((s) => (
         <section key={s.h2} className="py-8 sm:py-10">
           <Container className="max-w-3xl">
