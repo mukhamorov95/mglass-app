@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { Faq, LandingCard, LeadSection, Table } from "@/components/blocks";
+import { Faq, LandingCard, LeadSection, Table, TrustBar } from "@/components/blocks";
 import ObjectGallery from "@/components/ObjectGallery";
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { getLanding } from "@/content/landings";
@@ -67,6 +67,7 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
           <div className="min-w-0 lg:col-start-2 lg:row-start-1 lg:pt-2">
             <div className="text-xs font-semibold uppercase tracking-wider text-brass">Наша работа · {o.place}</div>
             <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight sm:text-4xl">{o.h1}</h1>
+            {o.result && <p className="mt-3 text-lg text-ink/80">{o.result}</p>}
           </div>
           <div className="min-w-0 lg:col-start-1 lg:row-span-2 lg:row-start-1">
             <ObjectGallery photos={o.photos} />
@@ -83,7 +84,7 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
             </dl>
             <p className="mt-6 leading-relaxed text-ink/85">{o.answer}</p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <ButtonLink href="#zayavka">Рассчитать своё зеркало</ButtonLink>
+              <ButtonLink href="#zayavka">Узнать цену своего зеркала</ButtonLink>
               <ButtonLink href={SITE.phone.href} variant="light">
                 {SITE.phone.display}
               </ButtonLink>
@@ -102,9 +103,16 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
         </Container>
       </section>
 
+      <section className="pb-4">
+        <Container>
+          <TrustBar />
+        </Container>
+      </section>
+
       <section className="py-6">
         <Container className="max-w-3xl">
           <h2 className="mb-4 text-2xl font-semibold tracking-tight">Карточка объекта</h2>
+          {o.summary && <p className="mb-5 leading-relaxed text-ink/85">{o.summary}</p>}
           <dl className="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2">
             {o.facts.map(([k, v]) => (
               <div key={k} className="bg-paper p-4">
