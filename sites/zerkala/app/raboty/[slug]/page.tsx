@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Faq, LandingCard, LeadSection, Table } from "@/components/blocks";
+import ObjectGallery from "@/components/ObjectGallery";
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from "@/components/ui";
 import { getLanding } from "@/content/landings";
 import { OBJECTS, getObject, type ObjPhoto } from "@/content/objects";
@@ -17,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const o = getObject(slug);
   if (!o) return {};
-  return pageMetadata({ path: `/raboty/${o.slug}`, title: o.title, description: o.description, image: o.hero.img });
+  return pageMetadata({ path: `/raboty/${o.slug}`, title: o.title, description: o.description, image: o.photos[0].img });
 }
 
 function Figure({ p, sizes }: { p: ObjPhoto; sizes: string }) {
@@ -49,7 +50,7 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
     datePublished: o.published,
     inLanguage: "ru-RU",
     mainEntityOfPage: abs(path),
-    image: [o.hero, ...o.sections.flatMap((s) => s.photos ?? [])].map((p) => abs(p.img.src)),
+    image: o.photos.map((p) => abs(p.img.src)),
     author: { "@id": `${SITE.url}/#organization` },
     publisher: { "@id": `${SITE.url}/#organization` },
   };
@@ -61,20 +62,26 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
         <Breadcrumbs items={crumbs} />
       </Container>
 
-      <section className="pb-8 pt-6 sm:pb-10">
-        <Container className="grid items-start gap-8 lg:grid-cols-[1.15fr_1fr]">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold uppercase tracking-wider text-brass">Наша работа</div>
-            <h1 className="mt-2 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">{o.h1}</h1>
-            <p className="mt-5 rounded-2xl border border-line bg-card p-5 text-lg leading-relaxed">{o.answer}</p>
-            <dl className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2">
-              {o.facts.map(([k, v]) => (
-                <div key={k} className="bg-paper p-4">
-                  <dt className="text-xs font-semibold uppercase tracking-wider text-muted">{k}</dt>
-                  <dd className="mt-1 font-semibold">{v}</dd>
+      <section className="pb-8 pt-4 sm:pb-12">
+        <Container className="grid items-start gap-x-12 gap-y-5 lg:grid-cols-[1.05fr_1fr] lg:grid-rows-[auto_1fr]">
+          <div className="min-w-0 lg:col-start-2 lg:row-start-1 lg:pt-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-brass">Наша работа · {o.place}</div>
+            <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight sm:text-4xl">{o.h1}</h1>
+          </div>
+          <div className="min-w-0 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+            <ObjectGallery photos={o.photos} />
+          </div>
+          <div className="min-w-0 lg:col-start-2 lg:row-start-2">
+            <dl className="grid grid-cols-2 gap-3">
+              {o.highlights.map(([v, label]) => (
+                <div key={label} className="rounded-2xl border border-line bg-card p-4">
+                  <dt className="sr-only">{label}</dt>
+                  <dd className="text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">{v}</dd>
+                  <dd className="mt-1 text-sm text-muted">{label}</dd>
                 </div>
               ))}
             </dl>
+            <p className="mt-6 leading-relaxed text-ink/85">{o.answer}</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <ButtonLink href="#zayavka">Рассчитать своё зеркало</ButtonLink>
               <ButtonLink href={SITE.phone.href} variant="light">
@@ -82,7 +89,20 @@ export default async function ObjectPage({ params }: { params: Promise<{ slug: s
               </ButtonLink>
             </div>
           </div>
-          <Figure p={o.hero} sizes="(max-width: 1024px) 100vw, 42vw" />
+        </Container>
+      </section>
+
+      <section className="py-6">
+        <Container className="max-w-3xl">
+          <h2 className="mb-4 text-2xl font-semibold tracking-tight">Карточка объекта</h2>
+          <dl className="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2">
+            {o.facts.map(([k, v]) => (
+              <div key={k} className="bg-paper p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wider text-muted">{k}</dt>
+                <dd className="mt-1 font-semibold">{v}</dd>
+              </div>
+            ))}
+          </dl>
         </Container>
       </section>
 

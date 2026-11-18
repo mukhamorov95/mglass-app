@@ -41,7 +41,7 @@ export default function WorksPage() {
             {OBJECTS.map((o) => (
               <Link key={o.slug} href={`/raboty/${o.slug}`} className="group overflow-hidden rounded-2xl border border-line bg-card">
                 <div className="relative aspect-[4/3]">
-                  <Image src={o.hero.img} alt={o.hero.alt} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" placeholder="blur" />
+                  <Image src={o.photos[0].img} alt={o.photos[0].alt} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" placeholder="blur" />
                 </div>
                 <div className="p-5">
                   <h3 className="font-semibold group-hover:text-brass">{o.h1}</h3>
