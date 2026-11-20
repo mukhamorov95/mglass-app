@@ -49,21 +49,31 @@ export function AmoForm({ id, hash, src, phone }: { id: string; hash: string; sr
     s.src = src;
     s.onerror = () => setFailed(true);
     box.appendChild(s);
+    // Скрипт может загрузиться, но формы не нарисовать (медленная сеть, VPN, блокировщик) —
+    // onerror тогда молчит, а посетитель видит пустую карточку. Проверяем, что окно формы появилось.
+    const watchdog = window.setTimeout(() => {
+      const frame = box.querySelector("iframe");
+      if (!frame || frame.offsetHeight < 100) setFailed(true);
+    }, 6000);
     return () => {
+      window.clearTimeout(watchdog);
       box.innerHTML = "";
     };
   }, [id, hash, src]);
 
   return (
     <div>
-      <div ref={ref} className="amo-form min-h-[320px]" />
+      <div ref={ref} className={failed ? "amo-form" : "amo-form min-h-[320px]"} />
       {failed && (
-        <p role="alert" className="text-sm">
-          Форма не загрузилась. Позвоните нам:{" "}
-          <a href={phone.href} className="font-semibold underline">
+        <div role="alert" className="flex min-h-[240px] flex-col items-start justify-center gap-4 py-6">
+          <p className="text-base">Форма заявки не загрузилась. Позвоните — посчитаем по телефону:</p>
+          <a href={phone.href} className="rounded-full bg-[#111] px-6 py-3 text-lg font-semibold text-white">
             {phone.display}
           </a>
-        </p>
+          <button type="button" onClick={() => window.location.reload()} className="text-sm underline">
+            Попробовать загрузить форму ещё раз
+          </button>
+        </div>
       )}
     </div>
   );
