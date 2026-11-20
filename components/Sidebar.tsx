@@ -381,6 +381,7 @@ const PROMO_CENTER: NavItem[] = [
 
 const MARKETING_CENTER: NavItem[] = [
   { href: '/marketing',        label: 'Статистика', icon: '📈' },
+  { href: '/marketing/objects', label: 'Объекты',   icon: '🏠' },
   { href: '/marketing/agents', label: 'Агенты',     icon: '🤖' },
   { href: '/marketing/sites',  label: 'Сайты',      icon: '🌐' },
 ]
