@@ -54,6 +54,7 @@ const MGLASS: NavEntry[] = [
   { href: '/admin/suppliers',    label: 'Поставщики',        icon: '🏭' },
   { groupLabel: 'Маркетинг' },
   { href: '/marketing',          label: 'Статистика',        icon: '📈' },
+  { href: '/marketing/objects',  label: 'Объекты',           icon: '🏠' },
   { href: '/marketing/agents',   label: 'Агенты',            icon: '🤖' },
   { href: '/marketing/sites',    label: 'Сайты',             icon: '🌐' },
   { groupLabel: 'Аналитика' },
