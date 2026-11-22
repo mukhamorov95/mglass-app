@@ -4,7 +4,7 @@ import type { AmoLeadLite } from '@/lib/marketing/channels'
 import { getMetrikaToken } from '@/lib/marketing/metrikaToken'
 import { SITES } from '@/lib/marketing/sites'
 import { getRole, isOwnerRole } from '@/lib/getRole'
-import { aggregateWeeks, buildWeeks, delta, fetchMetrika, leadDatesFor, SOURCES, todayMoscow, type MetrikaRow, type WeekRow } from '@/lib/marketing/traffic'
+import { aggregateWeeks, buildWeeks, coverage, delta, firstDate, fetchMetrika, leadDatesFor, SOURCES, todayMoscow, type MetrikaRow, type WeekRow } from '@/lib/marketing/traffic'
 import { MarketingTabs, requireMarketing } from '../MarketingTabs'
 import { weekLabel, WeeklyChart } from './WeeklyChart'
 
@@ -43,6 +43,13 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
     : []
   const metrikaErrors = metrika.flatMap((m) => (m.error ? [m.error] : []))
   const sampled = metrika.some((m) => m.sampled)
+  const starts = metrika.map((m) => (m.error ? null : firstDate(m.rows)))
+  const cov = (w: { from: string; to: string }) => coverage({ ...w, partial: false }, starts)
+  const short = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`
+  const startNote = sites
+    .map((s, i) => (starts[i] && starts[i]! > weeks[0].from ? `${s.domain} — с ${short(starts[i]!)}` : null))
+    .filter(Boolean)
+    .join('; ')
 
   let leadsError: string | null = null
   let leads: AmoLeadLite[] = []
@@ -134,7 +141,7 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
       {hasVisits && (
         <section className="mt-6 rounded-xl border border-[#e4e4e0] bg-white p-4">
           <h2 className="mb-2 font-semibold text-[#111110]">Визиты по неделям</h2>
-          <WeeklyChart weeks={rows} />
+          <WeeklyChart weeks={rows.filter((r) => cov(r) !== 'none')} />
         </section>
       )}
 
@@ -158,11 +165,11 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
                   {weekLabel(r)}
                   {r.partial && <span className="ml-1 text-xs text-[#9a9a95]">идёт</span>}
                 </td>
-                <td className="px-2 py-2 text-right font-semibold tabular-nums">{hasVisits ? r.visits : '—'}</td>
+                <td className="px-2 py-2 text-right font-semibold tabular-nums">{!hasVisits || cov(r) === 'none' ? '—' : `${r.visits}${cov(r) === 'partial' ? '*' : ''}`}</td>
                 {SOURCES.map((s) => (
-                  <td key={s.key} className="px-2 py-2 text-right tabular-nums">{hasVisits ? r[s.key] : '—'}</td>
+                  <td key={s.key} className="px-2 py-2 text-right tabular-nums">{!hasVisits || cov(r) === 'none' ? '—' : r[s.key]}</td>
                 ))}
-                <td className="px-2 py-2 text-right tabular-nums">{hasVisits ? r.pageviews : '—'}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{!hasVisits || cov(r) === 'none' ? '—' : r.pageviews}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{leadsError ? '—' : r.leads}</td>
               </tr>
             ))}
@@ -170,6 +177,7 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
         </table>
       </section>
       <p className="mt-2 text-xs text-[#9a9a95]">
+        {startNote && <>Счётчики Метрики стоят не весь период: {startNote}. Раньше — «—», неделя со звёздочкой посчитана не по всем сайтам. </>}
         Визиты — Метрика, без роботов, источник по последнему значимому переходу (как в отчёте «Источники, сводка»); наши собственные проверки сайта
         попадают в «Прямые заходы». Заявки — сделки amo этого сайта по дате создания, тот же признак канала, что на вкладке «Статистика».
       </p>

@@ -81,6 +81,15 @@ export function aggregateWeeks(weeks: Week[], rows: MetrikaRow[], leadDates: str
   return out
 }
 
+// Покрытие недели счётчиками: до первого дня с данными счётчика визитов «нет», а не ноль.
+export type Coverage = 'none' | 'partial' | 'full'
+export function coverage(w: Week, firstDates: (string | null)[]): Coverage {
+  if (firstDates.every((d) => !d || d > w.to)) return 'none'
+  return firstDates.every((d) => d && d <= w.from) ? 'full' : 'partial'
+}
+
+export const firstDate = (rows: MetrikaRow[]) => rows.reduce<string | null>((m, r) => (r.visits > 0 && (!m || r.date < m) ? r.date : m), null)
+
 // Изменение к прошлой неделе в процентах; от нуля процента нет.
 export function delta(cur: number, prev: number): number | null {
   if (!prev) return null

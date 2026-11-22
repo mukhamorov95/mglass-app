@@ -45,3 +45,14 @@ describe('посещаемость по неделям чт–ср', () => {
     expect(delta(5, 0)).toBeNull()
   })
 })
+
+describe('покрытие недели счётчиками', () => {
+  it('до первого дня счётчика — нет данных, неделя запуска — частично', async () => {
+    const { coverage } = await import('@/lib/marketing/traffic')
+    const w = (from: string, to: string) => ({ from, to, partial: false })
+    expect(coverage(w('2026-09-24', '2026-09-30'), ['2026-10-05'])).toBe('none')
+    expect(coverage(w('2026-10-01', '2026-10-07'), ['2026-10-05'])).toBe('partial')
+    expect(coverage(w('2026-10-08', '2026-10-14'), ['2026-10-05', '2026-09-17'])).toBe('full')
+    expect(coverage(w('2026-09-24', '2026-09-30'), ['2026-10-05', '2026-09-17'])).toBe('partial')
+  })
+})
