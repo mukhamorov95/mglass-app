@@ -70,6 +70,7 @@ export const SENSITIVE_TABLES = new Set([
   'cashflow_account_balances', 'cashflow_transfers', // остатки денег на счетах и переводы между ними
   'payment_request_payments', 'fp_directives', // оплаты заявок и недельные решения о расходах
   'fp_distributions', // утверждённое распределение денег недели по фондам
+  'finplan_model_versions', // утверждённые версии финмодели: оклады, постоянные, маржа
 ])
 
 // Новые таблицы без денег и людей — перечислены явно, с причиной. Тест
