@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { balancesFromStatement } from '@/lib/accountRecon'
 import { requireRole } from '@/lib/apiAuth'
 import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
@@ -73,6 +74,17 @@ export async function POST(req: NextRequest) {
     .upsert(rows, { onConflict: 'unit,external_key', ignoreDuplicates: true, count: 'exact' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Остатки банка — опора сверки счетов (ФП Ф3). Сбой записи не отменяет загрузку
+  // строк, но называется в ответе.
+  const balRows = parsed.balances.flatMap(balancesFromStatement)
+    .map(b => ({ unit, account: b.account, as_of: b.as_of, balance: b.balance, source: 'bank', import_batch: batch, entered_by: me.name }))
+  let balancesError: string | null = null
+  if (balRows.length) {
+    const { error: be } = await svc.from('cashflow_account_balances')
+      .upsert(balRows, { onConflict: 'unit,account,as_of,source' })
+    if (be) balancesError = be.message
+  }
+
   // Сверка с итогами банка: сумма разобранных строк должна совпасть с
   // ВсегоПоступило/ВсегоСписано из выписки. Расхождение = парсер что-то пропустил.
   const inSum = round2(parsed.rows.filter(r => r.direction === 'in').reduce((s, r) => s + r.amount, 0))
@@ -89,7 +101,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true, format: parsed.format, parsed: rows.length,
     added: count ?? 0, duplicates: rows.length - (count ?? 0),
-    empty: rows.length === 0, reconcile,
+    empty: rows.length === 0, reconcile, balancesSaved: balancesError ? 0 : balRows.length, balancesError,
   })
 }
 
