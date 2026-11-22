@@ -422,7 +422,7 @@ export function CommitteeTab({ unit, funds, isFin, myName, myRole }: Shared) {
                   в фонде {RUB(ff.available)} · в резерве {RUB(ff.reserved)} · одобрено на неделе {RUB(approvedHere)} ·{' '}
                   <span className={left != null && left < 0 ? 'text-red-600 font-semibold' : 'text-emerald-700 font-semibold'}>свободно {RUB(left ?? 0)}</span>
                 </p>
-              ) : <p className="text-[12px] text-[#9a9a95]">у фонда нет % в модели — свободные деньги не считаются</p>}
+              ) : <p className="text-[12px] text-[#9a9a95]">фонд не участвует в распределении</p>}
             </div>
             {list.map(r => {
               const lim = limits.get(r.id)
@@ -466,7 +466,7 @@ export function CommitteeTab({ unit, funds, isFin, myName, myRole }: Shared) {
         )
       })}
       <p className="text-[11px] text-[#9a9a95] text-center">
-        Свободно = остаток фонда по финнеделям месяца (заливка денег клиентов − расходы) − резервы утверждённых недель − одобренное на этой неделе.
+        Свободно = остаток фонда (распределено по методике за завершённые недели месяца − расходы) − резервы утверждённых недель − одобренное на этой неделе.
         Окончательное утверждение сервер проверяет заново и не пропускает одобренное сверх свободного.
       </p>
     </div>
