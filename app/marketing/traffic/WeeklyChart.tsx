@@ -28,7 +28,7 @@ export function WeeklyChart({ weeks }: { weeks: WeekRow[] }) {
   const max = niceMax(Math.max(1, ...weeks.map((w) => w.visits)))
   const x = (i: number) => PAD.l + (n === 1 ? 0 : (i * (W - PAD.l - PAD.r)) / (n - 1))
   const y = (v: number) => PAD.t + (H - PAD.t - PAD.b) * (1 - v / max)
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(max * f))
+  const ticks = [0, 0.2, 0.4, 0.6, 0.8, 1].map((f) => Math.round(max * f))
   const lastFull = weeks.findLastIndex((w) => !w.partial)
 
   return (
