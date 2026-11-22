@@ -1,16 +1,18 @@
 'use client'
 
-// Б3: финнеделя чт–ср. Месячный план (из точки безубыточности) делится на
-// недели; недобор завершённой недели добавляется к оставшимся, перевыполнение
-// вычитается. Поступления выбранной недели наполняют фонды waterfall сверху
-// вниз по процентам финмодели. Расчёты — в lib/finweek.ts (чистые, с тестами).
+// Финнеделя чт–ср (ТЗ ФП 22.11, Ф1). Месяц считает операции по их дате:
+// периоды = недели по средам, обрезанные месяцем, + «До конца месяца». План
+// месяца делится по рабочим дням; недобор завершённого периода — на оставшиеся.
+// План и заливка фондов — только деньги клиентов; заём, вклад учредителя и
+// возвраты показаны отдельно. Расчёты — lib/finweek.ts (чистые, с тестами).
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { finWeeksOfMonth, buildWeekPlans, waterfall, inWeek } from '@/lib/finweek'
+import { monthPeriods, buildPeriodPlans, monthStatus, incomeSplit, waterfall } from '@/lib/finweek'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number }
-type Entry = { entry_date: string; kind: string; fund_id: number; amount: number }
+type Entry = { entry_date: string; kind: string; fund_id: number; subfund_id: number | null; amount: number }
+type Sub = { id: number; fund_id: number; name: string; non_income: boolean }
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const DD = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`
@@ -36,6 +38,7 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
   const [editPlan, setEditPlan] = useState(false)
   const [tbTargets, setTbTargets] = useState<{ unit: string; label: string; tb0: number | null; tb1: number | null; tbTarget: number | null }[]>([])
   const [entries, setEntries] = useState<Entry[]>([])
+  const [subs, setSubs] = useState<Sub[]>([])
   const [selIdx, setSelIdx] = useState<number | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2800) }
@@ -47,38 +50,53 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
     setMonth(now.slice(0, 7))
   }, [])
 
-  const weeks = useMemo(() => (month ? finWeeksOfMonth(month) : []), [month])
+  const periods = useMemo(() => (month ? monthPeriods(month) : []), [month])
+  const incomeFundIds = useMemo(() => funds.filter(f => f.unit === unit && f.flow === 'in').map(f => f.id), [funds, unit])
 
   const load = useCallback(async () => {
-    if (!weeks.length) return
-    const [p, e] = await Promise.all([
+    if (!periods.length) return
+    const from = periods[0].week.start
+    const to = periods[periods.length - 1].week.end
+    const [p, e, s] = await Promise.all([
       sb.from('cashflow_month_plans').select('plan_amount').eq('unit', unit).eq('month', month).maybeSingle(),
-      sb.from('cashflow_entries').select('entry_date,kind,fund_id,amount')
-        .eq('unit', unit).gte('entry_date', weeks[0].start).lte('entry_date', weeks[weeks.length - 1].end),
+      sb.from('cashflow_entries').select('entry_date,kind,fund_id,subfund_id,amount')
+        .eq('unit', unit).gte('entry_date', from).lte('entry_date', to).range(0, 9999),
+      incomeFundIds.length
+        ? sb.from('cashflow_subfunds').select('id,fund_id,name,non_income').in('fund_id', incomeFundIds).eq('active', true).order('sort')
+        : Promise.resolve({ data: [] }),
     ])
     setPlan(p.data ? Number((p.data as { plan_amount: number }).plan_amount) : null)
     setEntries((e.data ?? []) as Entry[])
-  }, [sb, unit, month, weeks])
+    setSubs((s.data ?? []) as Sub[])
+  }, [sb, unit, month, periods, incomeFundIds])
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
-  const factByWeek = useMemo(() =>
-    weeks.map(w => entries.reduce((s, e) => s + (e.kind === 'in' && inWeek(e.entry_date, w) ? Number(e.amount) : 0), 0)),
-  [weeks, entries])
-  const weekPlans = useMemo(() =>
-    today ? buildWeekPlans(plan ?? 0, weeks, factByWeek, today) : [],
-  [plan, weeks, factByWeek, today])
+  const nonIncome = useMemo(() => new Set(subs.filter(s => s.non_income).map(s => s.id)), [subs])
+  const byPeriod = useMemo(() => periods.map(p => incomeSplit(entries, p.start, p.end, nonIncome)), [periods, entries, nonIncome])
+  const rows = useMemo(() =>
+    today ? buildPeriodPlans(plan ?? 0, periods, byPeriod.map(x => x.client), today) : [],
+  [plan, periods, byPeriod, today])
+  const status = useMemo(() => monthStatus(rows, plan ?? 0), [rows, plan])
 
   const defaultIdx = useMemo(() => {
-    const cur = weeks.findIndex(w => inWeek(today, w))
+    const cur = rows.findIndex(r => r.current)
     if (cur >= 0) return cur
-    const done = weeks.filter(w => w.end < today).length
+    const done = rows.filter(r => r.completed).length
     return done > 0 ? done - 1 : 0
-  }, [weeks, today])
+  }, [rows])
   const sel = selIdx ?? defaultIdx
-  const selWeek = weekPlans[sel]
-  const wf = useMemo(() => selWeek ? waterfall(selWeek.fact, unitFunds) : null, [selWeek, unitFunds])
+  const selRow = rows[sel]
+  const selWeekIncome = useMemo(() => selRow ? incomeSplit(entries, selRow.period.week.start, selRow.period.week.end, nonIncome) : null, [selRow, entries, nonIncome])
+  const wf = useMemo(() => selWeekIncome ? waterfall(selWeekIncome.client, unitFunds) : null, [selWeekIncome, unitFunds])
+
+  async function toggleNonIncome(sub: Sub) {
+    const { data, error } = await sb.from('cashflow_subfunds').update({ non_income: !sub.non_income }).eq('id', sub.id).select('id')
+    if (error || !data?.length) { flash('Не сохранилось' + (error ? ': ' + error.message : ' — нет прав')); return }
+    flash(!sub.non_income ? `«${sub.name}» — не от клиентов ✓` : `«${sub.name}» — деньги клиентов ✓`)
+    await load()
+  }
 
   async function savePlan() {
     const amount = Number(planDraft.replace(/\s/g, '').replace(',', '.'))
@@ -93,7 +111,8 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
     await load()
   }
 
-  const monthFact = factByWeek.reduce((s, v) => s + v, 0)
+  const monthFact = byPeriod.reduce((s, v) => s + v.client, 0)
+  const monthOther = byPeriod.reduce((s, v) => s + v.nonIncome, 0)
 
   return (
     <div className="space-y-3">
@@ -105,7 +124,7 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
           <span className="text-[14px] font-semibold text-[#111110] capitalize min-w-[120px] text-center">{month && monthLabel(month)}</span>
           <button onClick={() => { setMonth(shiftMonth(month, 1)); setSelIdx(null) }} className="px-2.5 py-1 rounded-md border border-[#e4e4e0] text-[13px]">→</button>
         </div>
-        <span className="text-[12px] text-[#9a9a95]">{weeks.length} фин. недель (чт–ср)</span>
+        <span className="text-[12px] text-[#9a9a95]">{rows.filter(r => !r.period.tail).length} сред в месяце</span>
       </div>
 
       <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
@@ -144,8 +163,9 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
             )}
           </div>
           <div className="text-right">
-            <p className="text-[11px] uppercase tracking-widest text-[#9a9a95]">Факт месяца</p>
+            <p className="text-[11px] uppercase tracking-widest text-[#9a9a95]">Пришло от клиентов</p>
             <p className="text-[22px] font-bold text-emerald-700">{RUB(monthFact)}</p>
+            {monthOther > 0 && <p className="text-[11px] text-[#6b6b66]">ещё {RUB(monthOther)} не от клиентов — в план не входит</p>}
           </div>
           {isFin && !editPlan && (
             <button onClick={() => {
@@ -160,27 +180,48 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
         </div>
         <p className="text-[11px] text-[#9a9a95] mt-2">
           Источник плана — точка безубыточности перед началом месяца{showBreakevenLink && <> (<a href="/cfo/breakeven" className="text-blue-600">открыть ТБ ↗</a>)</>}.
-          Недобор недели добавляется к плану оставшихся недель, перевыполнение — вычитается.
+          План делится по рабочим дням периодов; недобор завершённого периода — на оставшиеся, исходный план виден рядом.
+          Месяц считает деньги по дате поступления, неделя совещания — все семь дней чт–ср.
         </p>
       </div>
 
+      {plan != null && status.asOf && (
+        <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
+          <p className="text-[14px] font-semibold text-[#111110] mb-2">На конец среды {DD(status.asOf)}</p>
+          {[
+            ['По плану должно было поступить с начала месяца', RUB(status.cumBase), 'text-[#111110]'],
+            ['Пришло от клиентов', RUB(status.cumFact), 'text-[#111110]'],
+            [status.lag >= 0 ? 'Отставание' : 'Опережение', RUB(Math.abs(status.lag)), status.lag > 0 ? 'text-red-600' : 'text-emerald-700'],
+            ['Осталось получить до конца месяца', RUB(status.remaining), 'text-[#111110]'],
+          ].map(([k, v, c]) => (
+            <div key={k} className="flex justify-between gap-3 text-[13px] py-1 border-b border-[#f0f0ee] last:border-b-0">
+              <span className="text-[#4b4b47]">{k}</span><span className={`font-mono font-semibold ${c}`}>{v}</span>
+            </div>
+          ))}
+          {status.nextTargets.length > 0 && (
+            <p className="text-[12px] text-[#6b6b66] mt-2">Новая цель оставшихся периодов: {status.nextTargets.map(t => RUB(t)).join(' · ')}</p>
+          )}
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
         <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 sm:gap-x-4 px-4 py-2 text-[11px] uppercase tracking-widest text-[#9a9a95] border-b border-[#f0f0ee]">
-          <span>Неделя</span><span className="text-right">План</span><span className="text-right">Факт</span><span className="text-right">Откл.</span>
+          <span>Период</span><span className="text-right">План</span><span className="text-right">Факт</span><span className="text-right">Откл.</span>
         </div>
-        {weekPlans.map((w, i) => {
-          const dev = w.completed || w.current ? w.deviation : null
+        {rows.map((w, i) => {
+          const dev = plan != null && (w.completed || w.current) ? w.deviation : null
           return (
-            <button key={w.week.start} onClick={() => setSelIdx(i)}
+            <button key={w.period.start} onClick={() => setSelIdx(i)}
               className={`w-full grid grid-cols-[1fr_auto_auto_auto] gap-x-2 sm:gap-x-4 px-4 py-2.5 text-[13px] border-b border-[#f0f0ee] last:border-b-0 text-left ${i === sel ? 'bg-[#f5f5f3]' : ''}`}>
               <span className="text-[#111110] whitespace-nowrap">
-                чт {DD(w.week.start)} — ср {DD(w.week.end)}
+                {w.period.tail ? <>До конца месяца · {DD(w.period.start)}{w.period.end !== w.period.start && <>—{DD(w.period.end)}</>}</>
+                  : <>{DD(w.period.start)} — ср {DD(w.period.end)}</>}
                 {w.current && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold align-middle">текущая</span>}
                 {w.completed && <span className="ml-2 text-[10px] text-[#9a9a95] align-middle">завершена</span>}
               </span>
               <span className="font-mono text-right text-[#111110]">
-                {RUB(w.plan)}
-                {Math.round(w.plan) !== Math.round(w.base) && <span className="block text-[10px] text-[#9a9a95]">база {RUB(w.base)}</span>}
+                {plan == null ? '—' : RUB(w.plan)}
+                {plan != null && Math.round(w.plan) !== Math.round(w.base) && <span className="block text-[10px] text-[#9a9a95]">исходно {RUB(w.base)}</span>}
               </span>
               <span className="font-mono text-right text-[#111110]">{w.fact > 0 || w.completed || w.current ? RUB(w.fact) : '—'}</span>
               <span className={`font-mono text-right ${dev == null ? 'text-[#9a9a95]' : dev < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
@@ -191,14 +232,15 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
         })}
       </div>
 
-      {selWeek && wf && (
+      {selRow && wf && selWeekIncome && (
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
           <div className="flex items-baseline justify-between mb-3">
-            <p className="text-[14px] font-semibold text-[#111110]">Наполнение фондов · чт {DD(selWeek.week.start)} — ср {DD(selWeek.week.end)}</p>
-            <p className="text-[12px] text-[#9a9a95]">поступило {RUB(selWeek.fact)}</p>
+            <p className="text-[14px] font-semibold text-[#111110]">Наполнение фондов · неделя чт {DD(selRow.period.week.start)} — ср {DD(selRow.period.week.end)}</p>
+            <p className="text-[12px] text-[#9a9a95]">от клиентов {RUB(selWeekIncome.client)}</p>
           </div>
-          {selWeek.fact <= 0 && <p className="text-[13px] text-[#9a9a95]">Поступлений за неделю пока нет — фонды не наполнялись.</p>}
-          {selWeek.fact > 0 && (['variable', 'fixed', 'fund'] as const).map(cls => {
+          {selWeekIncome.nonIncome > 0 && <p className="text-[12px] text-[#6b6b66] mb-2">Ещё {RUB(selWeekIncome.nonIncome)} не от клиентов (заём, свои, возвраты) — в заливку не идут.</p>}
+          {selWeekIncome.client <= 0 && <p className="text-[13px] text-[#9a9a95]">Денег от клиентов за неделю пока нет — фонды не наполнялись.</p>}
+          {selWeekIncome.client > 0 && (['variable', 'fixed', 'fund'] as const).map(cls => {
             const rows = wf.fills.filter(f => f.fund_class === cls)
             if (!rows.length) return null
             return (
@@ -222,13 +264,28 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
               </div>
             )
           })}
-          {selWeek.fact > 0 && (
+          {selWeekIncome.client > 0 && (
             <div className="flex justify-between pt-2 mt-2 border-t border-[#f0f0ee] text-[13px]">
               <span className="font-semibold text-blue-700">Перелив (остаток после всех процентов)</span>
               <span className="font-mono font-semibold text-blue-700">{RUB(wf.overflow)}</span>
             </div>
           )}
           <p className="text-[11px] text-[#9a9a95] mt-3">Waterfall сверху вниз: переменные → постоянные → фонды. При нехватке поступлений нижние фонды не наполняются.</p>
+        </div>
+      )}
+
+      {subs.length > 0 && (
+        <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
+          <p className="text-[14px] font-semibold text-[#111110]">Что считать деньгами клиентов</p>
+          <p className="text-[11px] text-[#9a9a95] mb-2">Отмеченное — не от клиентов: растит остаток на счетах, но не входит в план и в заливку фондов.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {subs.map(s => (
+              <button key={s.id} disabled={!isFin} onClick={() => toggleNonIncome(s)}
+                className={`text-[12px] px-2 py-1 rounded-md border ${s.non_income ? 'border-amber-400 bg-amber-50 text-amber-900' : 'border-[#e4e4e0] text-[#4b4b47]'} ${isFin ? 'hover:border-[#111110]' : 'cursor-default'}`}>
+                {s.non_income ? 'не от клиентов · ' : ''}{s.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

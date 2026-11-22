@@ -8,7 +8,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { finWeeksOfMonth, fundAvailability, inWeek, type FinWeek, type CashEntryLike } from '@/lib/finweek'
+import { monthPeriods, fundAvailability, isClientIncome, inWeek, type FinWeek, type CashEntryLike } from '@/lib/finweek'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number }
 type Subfund = { id: number; fund_id: number; name: string }
@@ -201,26 +201,30 @@ export function RequestsTab({ unit, funds, subfunds, isFin, myName }: Shared) {
 export function CommitteeTab({ unit, funds, isFin, myName }: Shared) {
   const sb = createClient()
   const { reqs, reload } = useRequests(unit)
-  // Точный остаток фондов (Б3): waterfall по финнеделям чт–ср текущего месяца.
+  // Остаток фондов: waterfall по периодам текущего месяца (недели по средам,
+  // обрезанные месяцем) только на деньгах клиентов — заём и возвраты не в заливке.
   const [weeks, setWeeks] = useState<FinWeek[]>([])
   const [entries, setEntries] = useState<CashEntryLike[]>([])
+  const [nonIncome, setNonIncome] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const ym = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' }).slice(0, 7)
-    const w = finWeeksOfMonth(ym)
+    const w = monthPeriods(ym).map(p => ({ start: p.start, end: p.end }))
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeeks(w)
     if (!w.length) return
-    sb.from('cashflow_entries').select('entry_date, kind, fund_id, amount').eq('unit', unit)
-      .gte('entry_date', w[0].start).lte('entry_date', w[w.length - 1].end)
+    sb.from('cashflow_entries').select('entry_date, kind, fund_id, subfund_id, amount').eq('unit', unit)
+      .gte('entry_date', w[0].start).lte('entry_date', w[w.length - 1].end).range(0, 9999)
       .then(({ data }) => setEntries((data ?? []) as CashEntryLike[]))
+    sb.from('cashflow_subfunds').select('id').eq('non_income', true)
+      .then(({ data }) => setNonIncome(new Set((data ?? []).map((x: { id: number }) => x.id))))
   }, [sb, unit])
 
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
-  const avail = useMemo(() => fundAvailability(weeks, entries, unitFunds), [weeks, entries, unitFunds])
+  const avail = useMemo(() => fundAvailability(weeks, entries, unitFunds, nonIncome), [weeks, entries, unitFunds, nonIncome])
   const monthIncome = useMemo(() =>
-    entries.reduce((s, e) => s + (e.kind === 'in' && weeks.some(w => inWeek(e.entry_date, w)) ? Number(e.amount) : 0), 0),
-  [entries, weeks])
+    entries.reduce((s, e) => s + (isClientIncome(e, nonIncome) && weeks.some(w => inWeek(e.entry_date, w)) ? Number(e.amount) : 0), 0),
+  [entries, weeks, nonIncome])
 
   async function setStatus(r: Req, status: string) {
     await sb.from('payment_requests').update({ status, status_changed_at: new Date().toISOString(), status_changed_by: myName, updated_at: new Date().toISOString() }).eq('id', r.id)
@@ -239,7 +243,7 @@ export function CommitteeTab({ unit, funds, isFin, myName }: Shared) {
           <p className="text-[11px] uppercase tracking-widest text-[#9a9a95]">Комитет · заявок к решению</p>
           <p className="text-[22px] font-bold">{pending.length} на {RUB(totalAsk)}</p>
         </div>
-        <p className="text-[12px] text-[#c9c9c4]">поступления месяца: {RUB(monthIncome)}</p>
+        <p className="text-[12px] text-[#c9c9c4]">от клиентов за месяц: {RUB(monthIncome)}</p>
       </div>
 
       {byFund.size === 0 && (
