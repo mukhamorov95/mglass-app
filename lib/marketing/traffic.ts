@@ -91,9 +91,11 @@ export function leadDatesFor(leads: AmoLeadLite[], channels: ChannelKey[]): stri
   return leads.filter((l) => channels.includes(channelOf(l))).map((l) => moscowDate(l.created_at * 1000))
 }
 
-type MetrikaResponse = { data?: { dimensions: { id?: string | null; name?: string | null }[]; metrics: number[] }[]; message?: string; errors?: { message: string }[] }
+type MetrikaResponse = { data?: { dimensions: { id?: string | null; name?: string | null }[]; metrics: number[] }[]; sampled?: boolean; message?: string; errors?: { message: string }[] }
 
-export async function fetchMetrika(counterId: number, date1: string, date2: string, token: string): Promise<MetrikaRow[]> {
+export type MetrikaResult = { rows: MetrikaRow[]; sampled: boolean }
+
+async function metrikaRange(counterId: number, date1: string, date2: string, token: string): Promise<MetrikaResult> {
   const q = new URLSearchParams({
     ids: String(counterId),
     metrics: 'ym:s:visits,ym:s:pageviews',
@@ -101,7 +103,6 @@ export async function fetchMetrika(counterId: number, date1: string, date2: stri
     date1,
     date2,
     filters: "ym:s:isRobot=='No'",
-    accuracy: 'full',
     limit: '10000',
   })
   const res = await fetch(`https://api-metrika.yandex.net/stat/v1/data?${q}`, {
@@ -109,12 +110,39 @@ export async function fetchMetrika(counterId: number, date1: string, date2: stri
     next: { revalidate: 1800 },
   })
   const body = (await res.json().catch(() => ({}))) as MetrikaResponse
-  if (!res.ok) throw new Error(`Метрика ответила ${res.status}: ${body.message ?? body.errors?.[0]?.message ?? 'без пояснения'}`)
-  return (body.data ?? []).map((r) => ({
-    date: String(r.dimensions[0]?.name ?? r.dimensions[0]?.id ?? ''),
-    source: String(r.dimensions[1]?.id ?? ''),
-    engine: String(r.dimensions[2]?.id ?? r.dimensions[2]?.name ?? ''),
-    visits: r.metrics[0] ?? 0,
-    pageviews: r.metrics[1] ?? 0,
-  }))
+  if (!res.ok) throw new MetrikaError(res.status, body.message ?? body.errors?.[0]?.message ?? 'без пояснения')
+  return {
+    sampled: !!body.sampled,
+    rows: (body.data ?? []).map((r) => ({
+      date: String(r.dimensions[0]?.name ?? r.dimensions[0]?.id ?? ''),
+      source: String(r.dimensions[1]?.id ?? ''),
+      engine: String(r.dimensions[2]?.id ?? r.dimensions[2]?.name ?? ''),
+      visits: r.metrics[0] ?? 0,
+      pageviews: r.metrics[1] ?? 0,
+    })),
+  }
+}
+
+class MetrikaError extends Error {
+  constructor(public status: number, detail: string) {
+    super(`Метрика ответила ${status}: ${detail}`)
+  }
+}
+
+// Весь период одним запросом; если Метрика считает его слишком тяжёлым — по неделям.
+export async function fetchMetrika(counterId: number, weeks: Week[], token: string): Promise<MetrikaResult> {
+  const from = weeks[0].from
+  const to = weeks.at(-1)!.to
+  try {
+    return await metrikaRange(counterId, from, to, token)
+  } catch (e) {
+    if (!(e instanceof MetrikaError) || e.status !== 400) throw e
+  }
+  const out: MetrikaResult = { rows: [], sampled: false }
+  for (const w of weeks) {
+    const r = await metrikaRange(counterId, w.from, w.to, token)
+    out.rows.push(...r.rows)
+    out.sampled ||= r.sampled
+  }
+  return out
 }

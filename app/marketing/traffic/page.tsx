@@ -39,9 +39,10 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
   const isOwner = isOwnerRole(await getRole())
 
   const metrika = token
-    ? await Promise.all(sites.map((s) => fetchMetrika(s.metrikaId, from, today, token).then((rows) => ({ rows, error: null as string | null }), (e: unknown) => ({ rows: [] as MetrikaRow[], error: `${s.domain}: ${e instanceof Error ? e.message : String(e)}` }))))
+    ? await Promise.all(sites.map((s) => fetchMetrika(s.metrikaId, weeks, token).then((r) => ({ ...r, error: null as string | null }), (e: unknown) => ({ rows: [] as MetrikaRow[], sampled: false, error: `${s.domain}: ${e instanceof Error ? e.message : String(e)}` }))))
     : []
   const metrikaErrors = metrika.flatMap((m) => (m.error ? [m.error] : []))
+  const sampled = metrika.some((m) => m.sampled)
 
   let leadsError: string | null = null
   let leads: AmoLeadLite[] = []
@@ -103,6 +104,9 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           Визиты не загрузились — {metrikaErrors.join('; ')}. {metrikaErrors.length < sites.length ? 'Сумма ниже — без этого сайта.' : ''}
         </div>
+      )}
+      {sampled && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Метрика отдала часть периода по выборке — визиты приблизительные.</div>
       )}
       {leadsError && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Заявки из amoCRM не загрузились ({leadsError}) — колонка «Заявок» пустая, а не ноль.</div>
