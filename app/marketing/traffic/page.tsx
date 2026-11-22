@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { amoGetAll } from '@/lib/amocrm'
 import type { AmoLeadLite } from '@/lib/marketing/channels'
+import { getMetrikaToken } from '@/lib/marketing/metrikaToken'
 import { SITES } from '@/lib/marketing/sites'
+import { getRole, isOwnerRole } from '@/lib/getRole'
 import { aggregateWeeks, buildWeeks, delta, fetchMetrika, leadDatesFor, SOURCES, todayMoscow, type MetrikaRow, type WeekRow } from '@/lib/marketing/traffic'
 import { MarketingTabs, requireMarketing } from '../MarketingTabs'
 import { weekLabel, WeeklyChart } from './WeeklyChart'
@@ -33,7 +35,8 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
   const today = todayMoscow()
   const weeks = buildWeeks(today, span)
   const from = weeks[0].from
-  const token = process.env.YANDEX_METRIKA_TOKEN
+  const { token, error: tokenError } = await getMetrikaToken()
+  const isOwner = isOwnerRole(await getRole())
 
   const metrika = token
     ? await Promise.all(sites.map((s) => fetchMetrika(s.metrikaId, from, today, token).then((rows) => ({ rows, error: null as string | null }), (e: unknown) => ({ rows: [] as MetrikaRow[], error: `${s.domain}: ${e instanceof Error ? e.message : String(e)}` }))))
@@ -87,13 +90,13 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
 
       {!token && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <div className="font-medium">Визиты не подключены: в приложении нет токена Метрики.</div>
-          <ol className="mt-2 list-decimal space-y-1 pl-5">
-            <li>oauth.yandex.ru → «Создать приложение» под аккаунтом, где лежат счётчики; доступ «Яндекс.Метрика: получение статистики», Redirect URI — https://oauth.yandex.ru/verification_code.</li>
-            <li>Открыть https://oauth.yandex.ru/authorize?response_type=token&amp;client_id=&lt;ClientID приложения&gt; → «Разрешить» → скопировать токен.</li>
-            <li>Vercel → проект → Settings → Environment Variables → YANDEX_METRIKA_TOKEN = токен (Production) → Redeploy.</li>
-          </ol>
-          <div className="mt-2">Пока токена нет, ниже считаются только заявки из amo.</div>
+          <div className="font-medium">Визиты не подключены: приложение ещё не получило доступ к Метрике{tokenError ? ` (${tokenError})` : ''}.</div>
+          {isOwner ? (
+            <Link href="/marketing/traffic/connect" className="mt-2 inline-block rounded-lg bg-[#111110] px-3 py-2 text-white">Подключить Метрику</Link>
+          ) : (
+            <div className="mt-1">Подключает владелец кнопкой на этой вкладке.</div>
+          )}
+          <div className="mt-2">Пока доступа нет, ниже считаются только заявки из amo.</div>
         </div>
       )}
       {metrikaErrors.length > 0 && (
