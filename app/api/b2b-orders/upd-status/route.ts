@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePageAccess } from '@/lib/apiAuth'
-import { getSessionUser, isOwnerRole } from '@/lib/getRole'
+import { getSessionUser } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
 import { mskDayKey } from '@/lib/time'
 import { loadUpdSeries, missingSchema } from '@/lib/b2b/updRegistry'
 import type { UpdIssuedShort, UpdStatus } from '@/lib/b2b/updStatus'
+import { orderAuthorScope } from '@/lib/b2b/orderScope'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,13 +26,12 @@ export async function GET(req: NextRequest) {
   if (!ids.length) return NextResponse.json(empty)
 
   try {
-    const { data: prof } = await svc.from('users').select('see_all_orders').eq('id', user.id).maybeSingle()
-    const seesAll = isOwnerRole(role) || role === 'buyer' || prof?.see_all_orders === true
+    const author = await orderAuthorScope(svc, role, user.id)
     // Пачками по 500: PostgREST отдаёт не больше 1000 строк, а заказов у владельца больше.
     const parts = chunk(ids, 500)
     const orderRes = await Promise.all(parts.map(part => {
       let q = svc.from('b2b_orders').select('id, client_id').in('id', part)
-      if (!seesAll) q = q.eq('created_by', user.id)
+      if (author) q = q.eq('created_by', author)
       return q
     }))
     const oErr = orderRes.find(r => r.error)?.error
