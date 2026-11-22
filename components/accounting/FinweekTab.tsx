@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { AccountsRecon } from '@/components/accounting/AccountsRecon'
 import { monthPeriods, buildPeriodPlans, monthStatus, incomeSplit, waterfall, defaultSplit, manualFits, toKop, type StoredPeriod } from '@/lib/finweek'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number }
@@ -249,6 +250,8 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
           Месяц считает деньги по дате поступления, неделя совещания — все семь дней чт–ср.
         </p>
       </div>
+
+      {today && <AccountsRecon unit={unit} isFin={isFin} myName={myName} today={today} />}
 
       {plan != null && isFin && (
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
