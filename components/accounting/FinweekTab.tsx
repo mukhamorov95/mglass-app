@@ -9,7 +9,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { AccountsRecon } from '@/components/accounting/AccountsRecon'
-import { monthPeriods, buildPeriodPlans, monthStatus, incomeSplit, waterfall, defaultSplit, manualFits, toKop, type StoredPeriod } from '@/lib/finweek'
+import { DistributionBlock } from '@/components/accounting/DistributionBlock'
+import { monthPeriods, buildPeriodPlans, monthStatus, incomeSplit, defaultSplit, manualFits, toKop, type StoredPeriod } from '@/lib/finweek'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number }
 type Entry = { entry_date: string; kind: string; fund_id: number; subfund_id: number | null; amount: number }
@@ -29,7 +30,6 @@ const shiftMonth = (ym: string, d: number) => {
   const t = y * 12 + (m - 1) + d
   return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`
 }
-const CLASS_LABEL: Record<string, string> = { variable: 'Переменные', fixed: 'Постоянные', fund: 'Фонды' }
 
 export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
   unit: 'ip' | 'ooo'; funds: Fund[]; isFin: boolean; myName: string; showBreakevenLink: boolean
@@ -106,7 +106,6 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
   const sel = selIdx ?? defaultIdx
   const selRow = rows[sel]
   const selWeekIncome = useMemo(() => selRow ? incomeSplit(entries, selRow.period.week.start, selRow.period.week.end, nonIncome) : null, [selRow, entries, nonIncome])
-  const wf = useMemo(() => selWeekIncome ? waterfall(selWeekIncome.client, unitFunds) : null, [selWeekIncome, unitFunds])
 
   async function toggleNonIncome(sub: Sub) {
     const { data, error } = await sb.from('cashflow_subfunds').update({ non_income: !sub.non_income }).eq('id', sub.id).select('id')
@@ -336,46 +335,12 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
         })}
       </div>
 
-      {selRow && wf && selWeekIncome && (
-        <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-          <div className="flex items-baseline justify-between mb-3">
-            <p className="text-[14px] font-semibold text-[#111110]">Наполнение фондов · неделя чт {DD(selRow.period.week.start)} — ср {DD(selRow.period.week.end)}</p>
-            <p className="text-[12px] text-[#9a9a95]">от клиентов {RUB(selWeekIncome.client)}</p>
-          </div>
-          {selWeekIncome.nonIncome > 0 && <p className="text-[12px] text-[#6b6b66] mb-2">Ещё {RUB(selWeekIncome.nonIncome)} не от клиентов (заём, свои, возвраты) — в заливку не идут.</p>}
-          {selWeekIncome.client <= 0 && <p className="text-[13px] text-[#9a9a95]">Денег от клиентов за неделю пока нет — фонды не наполнялись.</p>}
-          {selWeekIncome.client > 0 && (['variable', 'fixed', 'fund'] as const).map(cls => {
-            const rows = wf.fills.filter(f => f.fund_class === cls)
-            if (!rows.length) return null
-            return (
-              <div key={cls} className="mb-3 last:mb-0">
-                <p className="text-[11px] uppercase tracking-widest text-[#9a9a95] mb-1">{CLASS_LABEL[cls]}</p>
-                {rows.map(f => {
-                  const pct = f.target > 0 ? f.allocated / f.target : 0
-                  const bar = pct >= 0.999 ? 'bg-emerald-500' : pct > 0 ? 'bg-amber-400' : 'bg-red-400'
-                  return (
-                    <div key={f.id} className="mb-1.5">
-                      <div className="flex justify-between text-[12px]">
-                        <span className="text-[#4b4b47]">{f.name} <span className="text-[#9a9a95]">{f.percent}%</span></span>
-                        <span className="font-mono text-[#4b4b47]">{RUB(f.allocated)}{pct < 0.999 && <span className="text-[#9a9a95]"> / {RUB(f.target)}</span>}</span>
-                      </div>
-                      <div className="h-[6px] rounded bg-[#f0f0ec] overflow-hidden">
-                        <div className={`h-full rounded ${bar}`} style={{ width: `${Math.min(100, Math.round(pct * 100))}%` }} />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })}
-          {selWeekIncome.client > 0 && (
-            <div className="flex justify-between pt-2 mt-2 border-t border-[#f0f0ee] text-[13px]">
-              <span className="font-semibold text-blue-700">Перелив (остаток после всех процентов)</span>
-              <span className="font-mono font-semibold text-blue-700">{RUB(wf.overflow)}</span>
-            </div>
-          )}
-          <p className="text-[11px] text-[#9a9a95] mt-3">Waterfall сверху вниз: переменные → постоянные → фонды. При нехватке поступлений нижние фонды не наполняются.</p>
-        </div>
+      {selRow && selWeekIncome && selWeekIncome.nonIncome > 0 && (
+        <p className="text-[12px] text-[#6b6b66] px-1">За неделю до ср {DD(selRow.period.week.end)} ещё {RUB(selWeekIncome.nonIncome)} не от клиентов (заём, свои, возвраты) — в распределение не идут.</p>
+      )}
+      {selRow && today && (
+        <DistributionBlock unit={unit} month={month} weekEnd={selRow.period.week.end} today={today} funds={unitFunds}
+          entries={entries} nonIncome={nonIncome} monthPlan={plan} canApprove={canApprove} myName={myName} />
       )}
 
       {subs.length > 0 && (
