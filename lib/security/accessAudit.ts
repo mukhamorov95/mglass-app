@@ -65,13 +65,17 @@ export const SENSITIVE_TABLES = new Set([
   'inbound_events',   // сырые вебхуки Wazzup/АТС: тексты клиентов, телефоны, имена
   'client_advances',  // авансы клиентов: суммы, кто и когда заплатил вперёд
   'cashflow_subfund_plans', // план подфонда ДДС в месяц — оклады людей по именам
+  'cashflow_period_snapshots', // план и факт поступлений компании по средам
+  'integration_tokens', // токены внешних сервисов (Метрика) — доступ к чужим кабинетам
 ])
 
 // Новые таблицы без денег и людей — перечислены явно, с причиной. Тест
 // __tests__/access/newTablesClassified.test.ts требует, чтобы каждая таблица из
 // миграций с 23.09 стояла в одном из списков: «решили, что не чувствительная»
 // отличается от «забыли» только записью здесь.
-export const NOT_SENSITIVE_TABLES = new Set<string>([])
+export const NOT_SENSITIVE_TABLES = new Set<string>([
+  'content_objects', 'content_publications', 'content_metrics', // реестр публикаций маркетинга: ЖК, ссылки, UTM, просмотры — без людей и денег
+])
 
 // Таблицы витрины: их публичность — замысел, а не упущение.
 const PUBLIC_BY_DESIGN = new Set([

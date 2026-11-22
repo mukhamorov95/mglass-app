@@ -177,10 +177,25 @@ export type PeriodPlan = {
   current: boolean
 }
 
-export function buildPeriodPlans(monthPlan: number, periods: MonthPeriod[], factByPeriod: number[], today: string): PeriodPlan[] {
+// Разбивка по рабочим дням — предложение; утверждённая вручную (manual, рубли
+// по периодам) заменяет её, если сходится с месяцем до копейки и совпадает по датам.
+export function defaultSplit(monthPlan: number, periods: MonthPeriod[]): number[] {
+  return splitKopecks(toKop(monthPlan), periods.map(p => workdays(p.start, p.end))).map(toRub)
+}
+
+export type StoredPeriod = { start: string; end: string; amount: number }
+
+export function manualFits(monthPlan: number, periods: MonthPeriod[], manual: StoredPeriod[] | null | undefined): boolean {
+  if (!manual || manual.length !== periods.length) return false
+  if (manual.some((m, i) => m.start !== periods[i].start || m.end !== periods[i].end || !(Number(m.amount) >= 0))) return false
+  return manual.reduce((s, m) => s + toKop(Number(m.amount)), 0) === toKop(monthPlan)
+}
+
+export function buildPeriodPlans(monthPlan: number, periods: MonthPeriod[], factByPeriod: number[], today: string, manual?: StoredPeriod[] | null): PeriodPlan[] {
   const total = toKop(monthPlan)
-  const weights = periods.map(p => workdays(p.start, p.end))
-  const base = splitKopecks(total, weights)
+  const base = manualFits(monthPlan, periods, manual)
+    ? manual!.map(m => toKop(Number(m.amount)))
+    : splitKopecks(total, periods.map(p => workdays(p.start, p.end)))
   const plan = [...base]
   const fact = periods.map((_, i) => toKop(factByPeriod[i] ?? 0))
   let cumFact = 0
