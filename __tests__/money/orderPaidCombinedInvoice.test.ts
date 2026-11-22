@@ -9,15 +9,20 @@ import { loadOrderPaid } from '@/lib/money/orderPaid'
 
 const h = vi.hoisted(() => ({ db: null as unknown as FakeDb }))
 
-vi.mock('@/lib/apiAuth', () => ({ requireRole: async () => 'manager' }))
+vi.mock('@/lib/apiAuth', () => ({ requireAnyPageAccess: async () => 'manager' }))
+vi.mock('@/lib/getRole', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/getRole')>()),
+  getSessionUser: async () => ({ id: 'yana' }),
+}))
 vi.mock('@/lib/supabase-service', () => ({ createServiceClient: () => fakeClient(h.db) }))
 
 import { GET } from '@/app/api/b2b-orders/payments/route'
 
-const order = (id: number, total: number) => ({ id, total_after_discount: total, total_sale_inc_vat: total, archived_at: null, created_at: '2026-09-01' })
+const order = (id: number, total: number) => ({ id, total_after_discount: total, total_sale_inc_vat: total, archived_at: null, created_at: '2026-09-01', created_by: 'yana' })
 
 beforeEach(() => {
   h.db = makeDb({
+    users: [{ id: 'yana', see_all_orders: false }],
     b2b_orders: [order(5167, 4802), order(5171, 12503), order(5400, 9789)],
     invoices: [{ id: 60, order_ids: ['5167', '5171', '5400'], amount: 27094 }],
     payments: [{ id: 1, amount: 27094, invoice_id: 60, b2b_order_id: null, voided_at: null, source: 'bank_statement_import', entered_by_name: null, paid_at: '2026-09-24' }],

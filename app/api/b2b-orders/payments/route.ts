@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/lib/apiAuth'
+import { requireAnyPageAccess } from '@/lib/apiAuth'
+import { getSessionUser } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
 import { paidByOrder, type PaymentRow, type InvoiceRow } from '@/lib/b2b/orderPayments'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { billableTotal } from '@/lib/b2b/ownCostRemake'
 import { latestPayment, paidByOf, type PaidBy, type PaidByPayment } from '@/lib/b2b/paidBy'
+import { orderAuthorScope } from '@/lib/b2b/orderScope'
 
 export const dynamic = 'force-dynamic'
 
 // A23: сколько оплачено по заказам — из payments (единственный источник денег,
 // не notes). Отдаём ТОЛЬКО суммы оплаты и кто её отметил; себестоимость/маржа наружу не идут.
 // Принимает ?ids=1,2,3 (заказы на экране); без ids — свежий срез.
-const ALLOWED = ['admin', 'ceo', 'manager', 'commercial', 'buyer', 'cfo'] as const
+// Пускаем тех, кто открывает экраны-вызыватели, и только к их заказам: RLS payments не отдаёт
+// менеджеру B2B-платежи вовсе, и до 22.11 этот маршрут был его дверью к оплате чужих заказов.
+const SCREENS = ['/b2b-orders', '/b2b-crm/report']
 
 // PostgREST отдаёт не больше 1000 строк за запрос, а заказов на экране у владельца больше
 // (07.10 — 1213): без пачек молча терялись самые новые. Пачка по 500 id, и каждая ещё
@@ -52,8 +56,10 @@ const toPayment = (p: Row): PaymentRow => ({
 })
 
 export async function GET(req: NextRequest) {
-  const guard = await requireRole([...ALLOWED])
-  if (guard instanceof NextResponse) return guard
+  const role = await requireAnyPageAccess(SCREENS)
+  if (role instanceof NextResponse) return role
+  const user = await getSessionUser()
+  if (!user) return NextResponse.json({ error: 'Нужно войти' }, { status: 401 })
 
   const svc = createServiceClient()
 
@@ -63,11 +69,16 @@ export async function GET(req: NextRequest) {
     : null
 
   try {
+    const author = await orderAuthorScope(svc, role, user.id)
+    const visibleOrders = () => {
+      const q = svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat, notes')
+      return author ? q.eq('created_by', author) : q
+    }
+
     // Суммы заказов нужны и для раскладки счетов по долям, и для остатка.
     const orders = ids && ids.length
-      ? await readIn(ids, part => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat, notes').in('id', part).order('id'))
-      : await readPaged(() => svc.from('b2b_orders').select('id, total_after_discount, total_sale_inc_vat, notes')
-        .is('archived_at', null).gte('created_at', '2026-01-01').order('id'))
+      ? await readIn(ids, part => visibleOrders().in('id', part).order('id'))
+      : await readPaged(() => visibleOrders().is('archived_at', null).gte('created_at', '2026-01-01').order('id'))
 
     const orderTotals = new Map<number, number>()
     for (const o of orders) {
