@@ -18,6 +18,10 @@
       "schedule": "30 3 * * *"
     },
     {
+      "path": "/api/cron/finplan-snapshot",
+      "schedule": "5 21 * * *"
+    },
+    {
       "path": "/api/cron/sales-sheet-sync",
       "schedule": "0 5 * * *"
     },
