@@ -4,6 +4,7 @@ import { getRole } from '@/lib/getRole'
 
 const TABS = [
   { href: '/marketing', label: 'Статистика' },
+  { href: '/marketing/traffic', label: 'Посещаемость' },
   { href: '/marketing/objects', label: 'Объекты' },
   { href: '/marketing/agents', label: 'Агенты' },
   { href: '/marketing/sites', label: 'Сайты' },

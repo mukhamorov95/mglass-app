@@ -10,6 +10,9 @@ export type SiteEntry = {
   engine: string
   deploy: string
   metrika: string
+  // Наш счётчик Метрики — по нему вкладка «Посещаемость» берёт визиты
+  metrikaId: number
+  slug: string
   goals: string
   search: string
   leads: string
@@ -25,6 +28,8 @@ export const SITES: SiteEntry[] = [
     engine: 'Свой (Next.js, статичный) — sites/zerkala в репозитории',
     deploy: 'Архив через панель reg.ru, вручную',
     metrika: '112922124',
+    metrikaId: 112922124,
+    slug: 'zerkala',
     goals: 'lead_form, phone_click, out_mglass_pro, out_vetro',
     search: 'Вебмастер, Search Console',
     leads: 'Форма amo → «Продажи», тег «сайт-зеркала»',
@@ -38,6 +43,8 @@ export const SITES: SiteEntry[] = [
     engine: 'Tilda',
     deploy: 'Публикация в Tilda',
     metrika: '113436523 (наш) + 94295749 (подрядчика, через его GTM)',
+    metrikaId: 113436523,
+    slug: 'pro',
     goals: 'Формы Tilda; цели старого счётчика — у подрядчика',
     search: 'Вебмастер, Search Console',
     leads: 'Формы Tilda, WhatsApp/Telegram, Envybox: звонок и чат',
@@ -51,6 +58,8 @@ export const SITES: SiteEntry[] = [
     engine: 'Tilda',
     deploy: 'Публикация в Tilda',
     metrika: '113440184 (наш) + 89188465 (старый)',
+    metrikaId: 113440184,
+    slug: 'peregorodki',
     goals: 'Формы Tilda',
     search: 'Вебмастер, Search Console',
     leads: 'Формы Tilda, Envybox',

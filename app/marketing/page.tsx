@@ -111,7 +111,7 @@ export default async function MarketingStatsPage({ searchParams }: { searchParam
       <section className="mt-6 rounded-xl border border-dashed border-[#e4e4e0] p-4 text-sm">
         <div className="font-medium text-[#111110]">Не подключено</div>
         <ul className="mt-2 space-y-1 text-[#9a9a95]">
-          <li>Визиты и переходы по сайтам — нужен токен Метрики (OAuth, выдаёт владелец аккаунта Метрики)</li>
+          <li>Визиты и переходы по сайтам — вкладка «Посещаемость» (нужен токен Метрики)</li>
           <li>Страницы в поиске — нужен доступ к API Вебмастера и Search Console</li>
           <li>Публикации на площадках — появятся с реестром публикаций (этап Э1)</li>
         </ul>
