@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { ModelVersions } from '@/components/cfo/ModelVersions'
 import {
   analyzeBreakeven, combineUnits, withoutDebt, kindOf, allocationCheck, companyLevelCosts, applyFactEdits, factEditsFrom, partsSum,
-  BREAKEVEN_LABELS, BREAKEVEN_HINTS, DISTRIBUTION_NOTE, FIXED_KIND_LABELS,
+  BREAKEVEN_LABELS, BREAKEVEN_HINTS, DISTRIBUTION_NOTE, FIXED_KIND_LABELS, whyNoBreakeven,
   type BreakevenModel, type FixedRow, type FixedKind, type SharedCost, type FactEdits, type Part,
 } from '@/lib/breakeven'
 
@@ -756,6 +757,11 @@ export default function BreakevenPage() {
             <div key={title} className="bg-white rounded-xl border border-[#e4e4e0] p-4">
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">{title}</p>
               <p className="text-[22px] font-bold font-mono text-[#111110] mt-1">{val != null ? fmt(val) : '—'}<span className="text-[12px] text-[#9a9a95] font-sans"> /мес</span></p>
+              {val == null && (
+                <p className="text-[12px] text-red-600 mt-1">
+                  {whyNoBreakeven(calc, title === BREAKEVEN_LABELS.tb0 ? 0 : title === BREAKEVEN_LABELS.tb1 ? calc.fundsShare : calc.fundsShare + (m.ownerPct || 0) / 100)}
+                </p>
+              )}
               {val != null && calc.revenue > 0 && (
                 <div className="mt-2">
                   <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
@@ -779,6 +785,8 @@ export default function BreakevenPage() {
             </div>
           ))}
           <p className="text-[11px] text-[#9a9a95] px-1 leading-relaxed">{DISTRIBUTION_NOTE}</p>
+
+          <ModelVersions canApprove={!summary} meName={meName} />
 
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">Фонд перелива</p>

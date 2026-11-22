@@ -176,6 +176,14 @@ export function analyzeBreakeven(m: BreakevenModel): BreakevenAnalysis {
   }
 }
 
+// Почему точки нет (ТЗ ФП §2): вместо «—» — причина словами.
+export function whyNoBreakeven(a: Pick<BreakevenAnalysis, 'revenue' | 'marginPct'>, share = 0): string | null {
+  if (a.revenue <= 0) return 'Нет плана выручки — долю маржи не из чего посчитать'
+  if (a.marginPct <= 0) return `Переменные расходы забирают всю выручку (маржа ${Math.round(a.marginPct * 1000) / 10} %) — постоянные не покрыть ни при какой выручке`
+  if (share >= 1) return `Фонды и доход собственника забирают ${Math.round(share * 1000) / 10} % маржи — на постоянные ничего не остаётся`
+  return null
+}
+
 export function computeBreakeven(m: BreakevenModel): BreakevenTargets {
   const a = analyzeBreakeven(m)
   return {
