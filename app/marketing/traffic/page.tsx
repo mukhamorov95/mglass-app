@@ -141,7 +141,7 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
       {hasVisits && (
         <section className="mt-6 rounded-xl border border-[#e4e4e0] bg-white p-4">
           <h2 className="mb-2 font-semibold text-[#111110]">Визиты по неделям</h2>
-          <WeeklyChart weeks={rows.filter((r) => cov(r) !== 'none')} />
+          <WeeklyChart weeks={rows.filter((r) => cov(r) === 'full')} />
         </section>
       )}
 
@@ -177,7 +177,7 @@ export default async function MarketingTrafficPage({ searchParams }: { searchPar
         </table>
       </section>
       <p className="mt-2 text-xs text-[#9a9a95]">
-        {startNote && <>Счётчики Метрики стоят не весь период: {startNote}. Раньше — «—», неделя со звёздочкой посчитана не по всем сайтам. </>}
+        {startNote && <>Счётчики Метрики стоят не весь период: {startNote}. Раньше — «—», неделя со звёздочкой посчитана не по всем сайтам и на график не попадает. </>}
         Визиты — Метрика, без роботов, источник по последнему значимому переходу (как в отчёте «Источники, сводка»); наши собственные проверки сайта
         попадают в «Прямые заходы». Заявки — сделки amo этого сайта по дате создания, тот же признак канала, что на вкладке «Статистика».
       </p>
