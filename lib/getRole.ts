@@ -283,6 +283,8 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/settings',
     '/admin/dashboard',
     '/admin/analytics-mglass',
+    // Объекты M-Glass с маржой (владелец 22.11: маржу объекта видит фин. директор).
+    '/sales/objects',
   ],
 
   // Бухгалтерия (Алёна, Екатерина): только свой раздел — ни маржи, ни CFO-дашбордов

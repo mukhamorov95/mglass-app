@@ -78,6 +78,8 @@ describe('структура по ТЗ (Н1)', () => {
       '/production-app/control',
       // Динамика продаж по месяцам, год против прошлого (просьба владельца 22.10)
       '/sales/dynamics', '/b2b-crm/dynamics',
+      // Объекты M-Glass от продажи до сдачи, менеджер видит свои (владелец 22.11)
+      '/sales/objects',
     ]
     expect(all.map(i => i.href).sort()).toEqual(before.sort())
   })

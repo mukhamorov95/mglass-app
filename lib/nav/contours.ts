@@ -62,6 +62,7 @@ const MGLASS: NavEntry[] = [
   { href: '/sales',              label: 'Продажи M-Glass',   icon: '💰' },
   { href: '/sales/dynamics',     label: 'Динамика продаж',   icon: '📊' },
   { href: '/sales/managers',     label: 'Показатели менеджеров', icon: '🏆' },
+  { href: '/sales/objects',      label: 'Объекты M-Glass',   icon: '🏗️' },
   { href: '/sales/margin',       label: 'Маржа',             icon: '📐' },
   { href: '/commercial/activity', label: 'Рабочий день менеджеров', icon: '⏱️' },
   { href: '/my-earnings',        label: 'Мои деньги',        icon: '💰' },
