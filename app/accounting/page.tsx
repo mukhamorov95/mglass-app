@@ -666,7 +666,7 @@ export default function AccountingPage() {
         {tab === 'audit' && !isBuyer && <AuditTab today={fDate} onGo={setTab} />}
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
-        {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
+        {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} myRole={myRole} />}
         {tab === 'notes' && !isBuyer && <NotesTab unit={unit} />}
       </div>
     </div>
