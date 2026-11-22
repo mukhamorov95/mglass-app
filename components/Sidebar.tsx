@@ -116,6 +116,7 @@ const CFO_ITEMS: NavItem[] = [
   { href: '/cfo/invoices', label: 'Реестр счетов',     icon: '📄' },
   { href: '/cfo/cashflow', label: 'ДДС · календарь',   icon: '📅' },
   { href: '/cfo/sales-ledger', label: 'Продажи и маржа', icon: '🧮' },
+  { href: '/sales/objects',    label: 'Объекты M-Glass', icon: '🏗️' },
   { href: '/cfo/margins',  label: 'Маржинальность',    icon: '📈' },
   { href: '/cfo/unit',     label: 'Unit-экономика',    icon: '🔍' },
   { href: '/cfo/order-economics', label: 'Экономика заказов', icon: '🧾' },

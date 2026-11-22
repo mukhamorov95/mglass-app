@@ -62,6 +62,8 @@ export const MANAGER_MGLASS: NavEntry[] = [
   ] },
 
   { groupLabel: 'Исполнение' },
+  // Объект = продажа от продажи до сдачи (docs/B2C_OBJECT_ROUTE.md, Р1). Менеджер видит свои.
+  { href: '/sales/objects',     label: 'Объекты',           icon: '🏗️' },
   { sectionLabel: 'Замеры', icon: '📐', items: [
     { href: '/measure-requests',  label: 'Заявки на замер',   icon: '📐' },
     { href: '/measure-calendar',  label: 'Календарь замеров', icon: '🗓️' },
