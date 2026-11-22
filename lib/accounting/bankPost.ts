@@ -280,12 +280,28 @@ export async function postBankRow(
   }
 
   if (input.requestId) {
-    // Заявка закрывается фактом платежа из банка — руками её больше не отмечают
-    const { error } = await svc.from('payment_requests').update({
-      status: 'paid', entry_id: entryId, status_changed_at: new Date().toISOString(),
-      status_changed_by: me.name, updated_at: new Date().toISOString(),
-    }).eq('id', input.requestId)
-    if (error) warnings.push(`Заявка не закрыта: ${error.message}`)
+    // Платёж из банка — одна из оплат заявки (ФП Ф4а); «оплачена» — когда оплачено
+    // всё одобренное, иначе остаток резерва ждёт следующей оплаты.
+    const { error: pe } = await svc.from('payment_request_payments').insert({
+      request_id: input.requestId, entry_id: entryId, amount, paid_on: row.op_date,
+      account: entry.account, paid_by_name: me.name,
+    })
+    if (pe) warnings.push(`Оплата заявки не записана: ${pe.message}`)
+    else {
+      const [{ data: rq }, { data: pays }] = await Promise.all([
+        svc.from('payment_requests').select('amount,approved_amount').eq('id', input.requestId).maybeSingle(),
+        svc.from('payment_request_payments').select('amount').eq('request_id', input.requestId),
+      ])
+      const approved = Math.round(num(rq?.approved_amount ?? rq?.amount) * 100)
+      const paid = (pays ?? []).reduce((s, p) => s + Math.round(num(p.amount) * 100), 0)
+      if (paid > approved) warnings.push(`Оплачено по заявке больше одобренного на ${fmtRub((paid - approved) / 100)}`)
+      const { error } = await svc.from('payment_requests').update({
+        ...(paid >= approved ? { status: 'paid' } : {}),
+        entry_id: entryId, status_changed_at: new Date().toISOString(),
+        status_changed_by: me.name, updated_at: new Date().toISOString(),
+      }).eq('id', input.requestId)
+      if (error) warnings.push(`Заявка не обновлена: ${error.message}`)
+    }
   }
 
   const { data: marked, error: markErr } = await svc.from('bank_statement_rows')

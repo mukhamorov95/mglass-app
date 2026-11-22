@@ -68,6 +68,7 @@ export const SENSITIVE_TABLES = new Set([
   'cashflow_period_snapshots', // план и факт поступлений компании по средам
   'integration_tokens', // токены внешних сервисов (Метрика) — доступ к чужим кабинетам
   'cashflow_account_balances', 'cashflow_transfers', // остатки денег на счетах и переводы между ними
+  'payment_request_payments', 'fp_directives', // оплаты заявок и недельные решения о расходах
 ])
 
 // Новые таблицы без денег и людей — перечислены явно, с причиной. Тест
