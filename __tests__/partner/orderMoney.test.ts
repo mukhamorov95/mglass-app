@@ -84,3 +84,35 @@ describe('сумма позиции в карточке = как у менедж
     expect(effectiveItemTotal({ saleIncVat: 10000, manualTotal: 8500 } as unknown as B2BOrderItem, 10)).toBe(8500)
   })
 })
+
+describe('оплата в кабинете Шовер Гласс', () => {
+  it('переделка за наш счёт — не «ожидает оплаты» и не к онлайн-оплате', async () => {
+    const { paymentView, amountDue } = await import('@/lib/partner/orderMoney')
+    const v = paymentView({ total: 12000, paidFromPayments: 0, notes: { own_cost_remake: { of: '05722' } }, due: true })
+    expect(v).toEqual({ status: 'own_cost' })
+    expect(amountDue(v)).toBe(0)
+  })
+  it('заказ до границы закрыт оплаченным, после — по платежам', async () => {
+    const { paymentView } = await import('@/lib/partner/orderMoney')
+    const { isSettledOrder } = await import('@/lib/b2b/settledBefore')
+    const old = isSettledOrder(2, '2026-06-30T20:59:00Z', {})
+    const edge = isSettledOrder(2, '2026-06-30T21:00:00Z', {})
+    expect(old).toBe(true)
+    expect(edge).toBe(false) // 01.07 по Москве — уже не закрыт
+    expect(isSettledOrder(10, '2026-01-01T00:00:00Z', {})).toBe(false)
+    expect(isSettledOrder(2, null, { launched_at: '2026-05-01T10:00:00Z' })).toBe(true)
+    expect(paymentView({ total: 5000, paidFromPayments: 0, notes: {}, due: true, settled: old })).toEqual({ status: 'paid' })
+    expect(paymentView({ total: 5000, paidFromPayments: 0, notes: {}, due: true, settled: edge })).toEqual({ status: 'awaiting', total: 5000 })
+  })
+})
+
+describe('подпись оплаты', () => {
+  it('остаток к оплате считается только у ожидающих и частичных', async () => {
+    const { unpaidOf, paymentLabel } = await import('@/lib/partner/paymentLabel')
+    expect(unpaidOf({ status: 'awaiting', total: 5000 })).toBe(5000)
+    expect(unpaidOf({ status: 'partial', paid: 2000, total: 5000, remainder: 3000 })).toBe(3000)
+    expect(unpaidOf({ status: 'own_cost' })).toBe(0)
+    expect(unpaidOf({ status: 'paid' })).toBe(0)
+    expect(paymentLabel({ status: 'own_cost' })).toMatch(/не выставляется/)
+  })
+})

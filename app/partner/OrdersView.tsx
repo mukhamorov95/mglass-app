@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
+import type { PaymentView } from '@/lib/partner/orderMoney'
+import { paymentLabel, paymentPill, unpaidOf } from '@/lib/partner/paymentLabel'
 import { QUOTE_LABEL, canEditQuote, canSubmitQuote, type QuoteState } from '@/lib/partner/quoteState'
 
 // Списки кабинета (дизайн .pcab). Три пункта меню:
@@ -22,6 +24,7 @@ type Order = {
   point?: PointStage | null
   quoteState?: QuoteState | null
   stateNote?: string | null
+  payment?: PaymentView | null
 }
 type Resp = { linked: boolean; client: { name: string } | null; orders: Order[] }
 type View = 'quotes' | 'inwork' | 'shipped'
@@ -55,6 +58,7 @@ export default function OrdersView({ view }: { view: View }) {
   const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
+  const [onlyUnpaid, setOnlyUnpaid] = useState(false)
 
   const [loadErr, setLoadErr] = useState<string | null>(null)
 
@@ -104,7 +108,10 @@ export default function OrdersView({ view }: { view: View }) {
   const meta = VIEW_META[view]
   const orders = data?.orders ?? []
   const lanes = VIEW_LANES[view]
-  const visible = orders.filter(o => lanes.includes(o.lane))
+  const inView = orders.filter(o => lanes.includes(o.lane))
+  const unpaid = inView.filter(o => unpaidOf(o.payment) > 0)
+  const unpaidSum = unpaid.reduce((s, o) => s + unpaidOf(o.payment), 0)
+  const visible = view !== 'quotes' && onlyUnpaid ? unpaid : inView
   // Для просчётов: недавние (≤2 недель по последней активности) и архив.
   const recent = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) <= ARCHIVE_DAYS) : visible
   const archived = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) > ARCHIVE_DAYS) : []
@@ -185,6 +192,14 @@ export default function OrdersView({ view }: { view: View }) {
             {recent.map(card)}
           </div>
         )}
+        {!loading && data?.linked && view !== 'quotes' && inView.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+            <button className={onlyUnpaid ? 'ghost' : 'primary'} onClick={() => setOnlyUnpaid(false)}>Все · {inView.length}</button>
+            <button className={onlyUnpaid ? 'primary' : 'ghost'} onClick={() => setOnlyUnpaid(true)} disabled={unpaid.length === 0}>
+              Не оплачены · {unpaid.length}{unpaidSum > 0 ? ` · ${fmtMoney(unpaidSum)}` : ''}
+            </button>
+          </div>
+        )}
         {!loading && data?.linked && view !== 'quotes' && lanesOf(recent)}
 
         {!loading && data?.linked && view === 'quotes' && archived.length > 0 && (
@@ -240,6 +255,9 @@ function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit:
             : o.lane === 'shipped' ? <span className="pill p-ship">Отгружен</span>
             : <span className="pc tnum">{o.progressPct}% · {o.stage}</span>}
         </div>
+      )}
+      {!o.point && o.payment && (o.lane === 'in_work' || o.lane === 'shipped') && (
+        <div style={{ marginTop: 6 }}><span className={`pill ${paymentPill(o.payment)}`}>{paymentLabel(o.payment)}</span></div>
       )}
 
       {o.recalcNote && <div className="recalc">✎ Пересчитано менеджером: {o.recalcNote}</div>}

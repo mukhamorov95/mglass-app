@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
+import type { PaymentView } from '@/lib/partner/orderMoney'
+import { paymentLabel, paymentPill } from '@/lib/partner/paymentLabel'
 import Link from 'next/link'
 import DrawingFiles from './DrawingFiles'
 import type { PointStage } from '@/lib/partner/pointPay'
@@ -13,7 +15,7 @@ type TL = { label: string; state: 'done' | 'now' | 'wait'; date: string | null }
 type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
   lane: string; ready: boolean; progressPct: number; deadline: string | null; estimateDays?: number
-  payment?: { status: 'paid' } | { status: 'partial'; paid: number; total: number; remainder: number } | { status: 'awaiting'; total: number } | null
+  payment?: PaymentView | null
   onlinePayEnabled?: boolean
   canInvoice?: boolean
   point?: PointStage | null
@@ -150,10 +152,8 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {o.payment && (
-            <span className={`pill ${o.payment.status === 'paid' ? 'p-ready' : 'p-sub'}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>
-              {o.payment.status === 'paid' ? 'Оплачен'
-                : o.payment.status === 'partial' ? `Оплачено ${fmt(o.payment.paid)} из ${fmt(o.payment.total)}, осталось ${fmt(o.payment.remainder)}`
-                : 'Ожидает оплаты'}
+            <span className={`pill ${paymentPill(o.payment)}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>
+              {paymentLabel(o.payment)}
             </span>
           )}
           <span className={`pill ${pillCls}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>{statusText}</span>
