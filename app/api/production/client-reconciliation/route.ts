@@ -13,6 +13,7 @@ import { SHOWER_GLASS, orderShipState, shareOf, shipLines, type EarlierLines, ty
 import { buildReconciliation, paymentCountsAsMoney, type ReconMoney, type ReconOrder } from '@/lib/production/clientReconciliation'
 import { readIn, readPaged } from '@/lib/production/paged'
 import { mskDayKey } from '@/lib/time'
+import { settledBeforeOf } from '@/lib/b2b/settledBefore'
 
 // Акт сверки: чтение и запись только здесь и только тем, кому положено видеть деньги. Себестоимости в ответе нет.
 // Клиент пока один, расчёт от него не зависит: другого клиента добавит одна строка.
@@ -20,7 +21,7 @@ import { mskDayKey } from '@/lib/time'
 const PAGE = '/production-app/shower-glass'
 // settledBefore: заказы старше акта бухгалтера (он начат с этой даты) закрыты. Оплат тех месяцев в приложении нет,
 // и 10 таких заказов показывали клиента должником на 276 333 ₽, хотя по акту на эту дату остатка нет.
-const CLIENT = { id: SHOWER_GLASS.clientId, name: SHOWER_GLASS.title, settledBefore: '2026-07-01' }
+const CLIENT = { id: SHOWER_GLASS.clientId, name: SHOWER_GLASS.title, settledBefore: settledBeforeOf(SHOWER_GLASS.clientId)! }
 const BANK_UNIT = 'ooo'  // производство работает через ООО
 
 type Svc = ReturnType<typeof createServiceClient>

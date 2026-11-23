@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { isSettledOrder } from '@/lib/b2b/settledBefore'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { paymentsEnabled } from '@/lib/payments/provider'
 import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
@@ -100,12 +101,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   let paidFromPayments = 0
   try { paidFromPayments = (await loadPaidByOrders(svc, [oid])).get(oid) ?? 0 }
   catch (e) { return NextResponse.json({ error: `Оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
-  const fullyPaid = paymentView({ total, paidFromPayments, notes: pn, due: true })?.status === 'paid'
+  const settled = isSettledOrder(client.id, o.launched_at, pn)
+  const fullyPaid = paymentView({ total, paidFromPayments, notes: pn, due: true, settled })?.status === 'paid'
   const point = pointStage({ isPoint, launched, submitted: lane === 'submitted', invoiced, paid: fullyPaid })
 
   // Оплата: «Оплачен» / «Оплачено X из Y, осталось Z» / «Ожидает оплаты» — последнее,
   // когда заказ в работе или точке выставлен счёт; у просчёта — ничего.
-  const payment = paymentView({ total, paidFromPayments, notes: pn, due: launched || point === 'await_payment' })
+  const payment = paymentView({ total, paidFromPayments, notes: pn, due: launched || point === 'await_payment', settled })
 
   const canInvoice = invoiceState({ launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced }) === 'open'
   // УПД — только выданный документ (этап 7), и любому партнёру заказа: флаг — для счёта.
@@ -130,7 +132,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     deadline,
     estimateDays: DEFAULT_WORKING_DAYS,
     payment,
-    onlinePayEnabled: !!payment && payment.status !== 'paid' && paymentsEnabled(),
+    onlinePayEnabled: !!payment && payment.status !== 'paid' && payment.status !== 'own_cost' && paymentsEnabled(),
     canInvoice,
     point,
     updIssued: !!upd,

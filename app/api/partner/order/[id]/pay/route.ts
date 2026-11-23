@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { isSettledOrder } from '@/lib/b2b/settledBefore'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { createPaymentLink, paymentsEnabled } from '@/lib/payments/provider'
 import { appUrl } from '@/lib/appUrl'
@@ -34,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
   const { data: order } = await svc.from('b2b_orders')
-    .select('id,client_id,custom_number,total_after_discount,total_sale_inc_vat,notes').eq('id', oid).maybeSingle()
+    .select('id,client_id,custom_number,launched_at,total_after_discount,total_sale_inc_vat,notes').eq('id', oid).maybeSingle()
   if (!order || order.client_id !== client.id) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
   const pn = parseNotes(order.notes)
@@ -46,7 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let paidFromPayments = 0
   try { paidFromPayments = (await loadPaidByOrders(svc, [oid])).get(oid) ?? 0 }
   catch (e) { return NextResponse.json({ error: `Оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
-  const amount = amountDue(paymentView({ total, paidFromPayments, notes: pn, due: true }))
+  const amount = amountDue(paymentView({ total, paidFromPayments, notes: pn, due: true, settled: isSettledOrder(client.id, order.launched_at, pn) }))
   if (amount <= 0) return NextResponse.json({ error: 'Заказ уже оплачен' }, { status: 409 })
   const number = (order.custom_number as string | null)?.trim() || `#${oid}`
   const base = appUrl()

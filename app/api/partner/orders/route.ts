@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { isSettledOrder } from '@/lib/b2b/settledBefore'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { partnerProgress, partnerDeadline, isLaunched, noteStatus } from '@/lib/partner/orderProgress'
 import { quoteState } from '@/lib/partner/quoteState'
@@ -53,17 +54,16 @@ export async function GET() {
   catch (e) { updError = e instanceof Error ? e.message : String(e) }
 
   // Точке счёт нужен до запуска — читаем реестр счетов только для неё.
+  // Оплата нужна по запущенным заказам любому партнёру, а точке — ещё и по незапущенным (она платит до запуска).
   const isPoint = client.is_point === true
   let invoiced = new Set<number>()
   let paidMap = new Map<number, number>()
-  if (isPoint) {
-    try {
-      invoiced = await loadInvoicedOrders(svc, data.map(o => o.id as number))
-      const notLaunched = data.filter(o => !isLaunched({ launched_at: o.launched_at as string | null }, parseNotes(o.notes as string | null))).map(o => o.id as number)
-      paidMap = await loadPaidByOrders(svc, notLaunched)
-    } catch (e) {
-      return NextResponse.json({ error: `Счета и оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
-    }
+  try {
+    if (isPoint) invoiced = await loadInvoicedOrders(svc, data.map(o => o.id as number))
+    const need = isPoint ? data : data.filter(o => isLaunched({ launched_at: o.launched_at as string | null }, parseNotes(o.notes as string | null)))
+    paidMap = await loadPaidByOrders(svc, need.map(o => o.id as number))
+  } catch (e) {
+    return NextResponse.json({ error: `Счета и оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
 
   const orders = data.map((o: Record<string, unknown>) => {
@@ -87,6 +87,9 @@ export async function GET() {
     }).filter(Boolean))]
     const summary = matLabels.slice(0, 2).join(' · ') + (matLabels.length > 2 ? ` +${matLabels.length - 2}` : '')
 
+    const total = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
+    const payment = paymentView({ total, paidFromPayments: paidMap.get(o.id as number) ?? 0, notes: pn, due: p.launched, settled: isSettledOrder(client.id, o.launched_at, pn) })
+
     return {
       id: o.id as number,
       number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
@@ -108,9 +111,10 @@ export async function GET() {
       invoice: invoiceState({ launched: p.launched, canSelfInvoice: !!client.can_self_invoice, isPoint, invoiced: invoiced.has(o.id as number) }),
       point: pointStage({
         isPoint, launched: p.launched, submitted: lane === 'submitted', invoiced: invoiced.has(o.id as number),
-        paid: isPoint && paymentView({ total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0), paidFromPayments: paidMap.get(o.id as number) ?? 0, notes: pn, due: true })?.status === 'paid',
+        paid: isPoint && paymentView({ total, paidFromPayments: paidMap.get(o.id as number) ?? 0, notes: pn, due: true })?.status === 'paid',
       }),
       upd: upds.get(o.id as number) ?? null,
+      payment,
     }
   })
 

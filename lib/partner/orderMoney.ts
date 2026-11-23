@@ -3,6 +3,7 @@ import { chunk, readPaged, type Paged } from '@/lib/partner/readPaged'
 import { isStageDone, stagesOf } from '@/lib/b2b/stageDone'
 import { paidByOrder, remainderStatus, type InvoiceRow, type PaymentRow } from '@/lib/b2b/orderPayments'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 
 // Отметка «Оплачен»: notes.payment_status пишет только /api/b2b-orders/[id]/payment;
 // этап invoice_paid — старая отметка с экрана заказов.
@@ -79,6 +80,7 @@ export async function loadPaidByOrders(svc: SupabaseClient, orderIds: readonly n
 
 export type PaymentView =
   | { status: 'paid' }
+  | { status: 'own_cost' }
   | { status: 'partial'; paid: number; total: number; remainder: number }
   | { status: 'awaiting'; total: number }
 
@@ -89,9 +91,12 @@ export function paymentView(o: {
   paidFromPayments: number
   notes: Record<string, unknown>
   due: boolean   // заказ в работе или точке выставлен счёт
+  settled?: boolean  // закрыт по слову владельца (lib/b2b/settledBefore)
 }): PaymentView | null {
   const total = Math.round(o.total)
-  if (markedPaid(o.notes)) return { status: 'paid' }
+  // Переделка за наш счёт клиенту не выставляется — ни «ожидает», ни «оплачен».
+  if (ownCostRemakeOf(o.notes)) return { status: 'own_cost' }
+  if (markedPaid(o.notes) || o.settled) return { status: 'paid' }
   const marked = o.notes.payment_status === 'partial' ? Math.round(Number(o.notes.prepayment_amount) || 0) : 0
   const paid = o.paidFromPayments > 0 ? Math.round(o.paidFromPayments) : marked
   const st = remainderStatus(total, paid)
@@ -102,6 +107,6 @@ export function paymentView(o: {
 
 // К оплате онлайн — остаток, а не вся сумма заказа.
 export function amountDue(view: PaymentView | null): number {
-  if (!view || view.status === 'paid') return 0
+  if (!view || view.status === 'paid' || view.status === 'own_cost') return 0
   return view.status === 'partial' ? view.remainder : view.total
 }
