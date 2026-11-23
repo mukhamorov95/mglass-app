@@ -4,14 +4,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { TEAM_ROLE_RU, type TeamPerm, type TeamRole } from '@/lib/partner/teamRoles'
 
 // Левое меню кабинета партнёра (дизайн из прототипа, класс .pcab .side).
 // Имя клиента и счётчики (просчёты/заказы) берём из /api/partner/orders.
 // На узком экране сайдбар сжимается в колонку иконок (см. PartnerTheme).
 
-const CALC_CHILDREN = [
-  { href: '/partner/new', label: 'Новый просчёт', emo: '➕' },
-  { href: '/partner/quotes', label: 'Мои просчёты', badge: 'quotes' as const, emo: '📄' },
+const CALC_CHILDREN: { href: string; label: string; emo: string; badge?: 'quotes' | 'inwork' | 'shipped'; perm?: TeamPerm }[] = [
+  { href: '/partner/new', label: 'Новый просчёт', emo: '➕', perm: 'calc' },
+  { href: '/partner/quotes', label: 'Мои просчёты', badge: 'quotes' as const, emo: '📄', perm: 'calc' },
   { href: '/partner/orders', label: 'Заказы в работе', badge: 'inwork' as const, emo: '🔧' },
   { href: '/partner/shipped', label: 'Отгруженные', badge: 'shipped' as const, emo: '📦' },
 ]
@@ -31,10 +32,16 @@ export default function PartnerNav() {
   const [client, setClient] = useState<string | null>(null)
   const [counts, setCounts] = useState<{ quotes: number; inwork: number; shipped: number }>({ quotes: 0, inwork: 0, shipped: 0 })
   const [unread, setUnread] = useState(0)
+  // Меню по роли (права режет сервер; здесь — чтобы не вести в закрытое). Пока не знаем — всё видно.
+  const [role, setRole] = useState<TeamRole | null>(null)
+  const [perms, setPerms] = useState<Partial<Record<TeamPerm, boolean>> | null>(null)
+  const may = (p?: TeamPerm) => !p || !perms || perms[p] === true
 
   useEffect(() => {
-    fetch('/api/partner/orders').then(r => r.json()).then((d: { client?: { name: string } | null; orders?: OrderLite[] }) => {
+    fetch('/api/partner/orders').then(r => r.json()).then((d: { client?: { name: string } | null; orders?: OrderLite[]; role?: TeamRole; perms?: Record<TeamPerm, boolean> }) => {
       if (d.client?.name) setClient(d.client.name)
+      if (d.role) setRole(d.role)
+      if (d.perms) setPerms(d.perms)
       const os = d.orders ?? []
       setCounts({
         quotes: os.filter(o => o.lane === 'quote').length,
@@ -69,10 +76,10 @@ export default function PartnerNav() {
           <span className="tx">Табло</span>
         </Link>
 
-        <Link href="/partner/counter" className={item(path.startsWith('/partner/counter'))}>
+        {may('calc') && <Link href="/partner/counter" className={item(path.startsWith('/partner/counter'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M3 8.5 4.5 3.5h11L17 8.5" /><path d="M3 8.5h14v1a2.3 2.3 0 0 1-4.6 0 2.3 2.3 0 0 1-4.7 0A2.3 2.3 0 0 1 3 9.5Z" /><path d="M4.5 11.5v5h11v-5" /><path d="M8.5 16.5v-3h3v3" /></svg></span>
           <span className="tx">Прилавок</span>
-        </Link>
+        </Link>}
 
         <Link href="/partner/notifications" className={item(path.startsWith('/partner/notifications'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M6 8a4 4 0 0 1 8 0c0 4 1.5 5 1.5 5h-11S6 12 6 8Z" /><path d="M8.5 16a1.5 1.5 0 0 0 3 0" /></svg></span>
@@ -86,7 +93,7 @@ export default function PartnerNav() {
             <span className="tx">Калькулятор</span><span className="chev">▾</span>
           </button>
           <div className="sub">
-            {CALC_CHILDREN.map(c => {
+            {CALC_CHILDREN.filter(c => may(c.perm)).map(c => {
               const n = badgeFor(c.badge)
               return (
                 <Link key={c.href} href={c.href} className={item(path.startsWith(c.href))}>
@@ -99,25 +106,30 @@ export default function PartnerNav() {
           </div>
         </div>
 
-        <Link href="/partner/documents" className={item(path.startsWith('/partner/documents'))}>
+        {may('finance') && <Link href="/partner/documents" className={item(path.startsWith('/partner/documents'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M6 2.5h5l3 3V17a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 6 17Z" /><path d="M11 2.5V6h3" /></svg></span>
           <span className="tx">Документы</span>
-        </Link>
+        </Link>}
 
-        <Link href="/partner/catalog" className={item(path.startsWith('/partner/catalog'))}>
+        {may('calc') && <Link href="/partner/catalog" className={item(path.startsWith('/partner/catalog'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M5 6h10l-1 11H6z" /><path d="M7.5 6a2.5 2.5 0 0 1 5 0" /></svg></span>
           <span className="tx">Каталог</span>
-        </Link>
+        </Link>}
+
+        {may('team') && perms && <Link href="/partner/team" className={item(path.startsWith('/partner/team'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><circle cx="7.5" cy="7" r="2.6" /><circle cx="13.5" cy="7.8" r="2.1" /><path d="M2.8 16a4.7 4.7 0 0 1 9.4 0" /><path d="M12.5 12.3a4 4 0 0 1 5 3.7" /></svg></span>
+          <span className="tx">Команда</span>
+        </Link>}
 
         <div className="lbl">Помощь</div>
         <Link href="/partner/profile" className={item(path.startsWith('/partner/profile'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="7" r="3.2" /><path d="M4.5 16.5a5.5 5.5 0 0 1 11 0" /></svg></span>
           <span className="tx">Профиль</span>
         </Link>
-        <Link href="/partner/claims" className={item(path.startsWith('/partner/claims'))}>
+        {may('claims') && <Link href="/partner/claims" className={item(path.startsWith('/partner/claims'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M10 2.5 2.5 16.5h15z" /><line x1="10" y1="8" x2="10" y2="12" /><line x1="10" y1="14.2" x2="10" y2="14.25" /></svg></span>
           <span className="tx">Гарантия</span>
-        </Link>
+        </Link>}
         <Link href="/partner/guide" className={item(path.startsWith('/partner/guide'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.4" /><path d="M7.9 7.6a2.2 2.2 0 1 1 3 2c-.8.5-1 1-1 1.9" /><line x1="10" y1="14.3" x2="10" y2="14.35" /></svg></span>
           <span className="tx">Как пользоваться</span>
@@ -128,7 +140,7 @@ export default function PartnerNav() {
         <div className="av">{initials(client ?? 'M Glass')}</div>
         <div className="min-w-0">
           <div className="nm">{client ?? 'Кабинет'}</div>
-          <div className="rl">Партнёр M-Glass</div>
+          <div className="rl">{role ? `${TEAM_ROLE_RU[role]} · ` : ''}Партнёр M-Glass</div>
         </div>
         <button className="out" title="Выйти"
           onClick={async () => { await createClient().auth.signOut(); window.location.href = '/login' }}>⎋</button>

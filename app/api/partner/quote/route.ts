@@ -8,7 +8,7 @@ import { loadB2BRates } from '@/lib/b2b/rates'
 import { effectiveItemTotal, type FacetPrice, type B2BOrderItem } from '@/lib/b2bCalculator'
 import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial, B2BService } from '@/lib/types'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { previewWriteGuard } from '@/lib/partnerPreview'
 import { canEditQuote, quoteLockReason, quoteState } from '@/lib/partner/quoteState'
 import { materialWithKind } from '@/lib/materialLabel'
@@ -44,8 +44,10 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number; name: string; discount_percent: number | null }>(svc, user.id, 'id,name,discount_percent')
-  if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const pm = await resolvePartnerMember<{ id: number; name: string; discount_percent: number | null }>(svc, user.id, 'id,name,discount_percent')
+  if (!pm) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const client = pm.client
+  { const denied = denyUnless(pm.role, 'calc'); if (denied) return denied }
 
   const body = await req.json().catch(() => ({}))
   const specs = Array.isArray(body?.items) ? (body.items as ItemSpec[]) : []
@@ -171,6 +173,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, quoteId: editId, items: safeItems, total: partnerTotal, discountPercent: discount })
   }
 
+  // Автор — человек из команды партнёра, а не только компания (Т4): «ShowerGlass · Анна».
+  const { data: me } = await svc.from('users').select('name').eq('id', user.id).maybeSingle()
+  const person = ((me as { name?: string | null } | null)?.name ?? '').trim()
+  const authorName = person && person !== client.name ? `${client.name} · ${person}` : client.name
   const notes = JSON.stringify({
     status: 'quote', source: 'partner', created_by_partner: true,
     partner_comment: comment || undefined,
@@ -192,7 +198,7 @@ export async function POST(req: NextRequest) {
     notes,
     source: 'partner',
     created_by: user.id,
-    created_by_name: client.name,
+    created_by_name: authorName,
     updated_at: new Date().toISOString(),
   }).select('id').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

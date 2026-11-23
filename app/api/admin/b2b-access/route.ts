@@ -35,7 +35,13 @@ async function linkUserToClient(a: Admin, userId: string, clientId: number):
     return { ok: false, error: 'Этот пользователь уже привязан к другой компании', status: 400 }
   }
 
+  // Учётку сотрудника M-Glass в партнёры не переводим: выдача доступа по email уже
+  // существующего человека молча отнимала бы у него рабочую роль.
+  const { data: u } = await a.from('users').select('role').eq('id', userId).maybeSingle()
+  const curRole = (u as { role?: string | null } | null)?.role ?? null
+  if (curRole && curRole !== 'partner') return { ok: false, error: 'Это учётка сотрудника M-Glass — укажите другой email', status: 400 }
   await a.from('users').update({ role: 'partner', name: client.name }).eq('id', userId)
+  await a.from('profiles').upsert({ user_id: userId, organization_id: 2, role: 'partner' }, { onConflict: 'user_id' })
 
   const asMember = !!client.user_id && client.user_id !== userId
   if (asMember) {
@@ -159,7 +165,7 @@ export async function POST(req: Request) {
 
   // Учётка: создаём новую или находим существующую по email.
   let userId: string
-  const { data: created, error } = await a.auth.admin.createUser({ email, password: randomPw(), email_confirm: true })
+  const { data: created, error } = await a.auth.admin.createUser({ email, password: randomPw(), email_confirm: true, app_metadata: { mglass_kind: 'partner' } })
   if (error) {
     const { data: list } = await a.auth.admin.listUsers({ perPage: 1000, page: 1 })
     const found = list?.users.find(u => u.email?.toLowerCase() === email)

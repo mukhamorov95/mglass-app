@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { resolvePartnerMember } from '@/lib/partnerClient'
+import { can } from '@/lib/partner/teamRoles'
 import { partnerProgress } from '@/lib/partner/orderProgress'
 import { readPaged } from '@/lib/partner/readPaged'
 
@@ -21,8 +22,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
-  if (!client) return NextResponse.json({ linked: false })
+  const pm = await resolvePartnerMember<{ id: number }>(svc, user.id)
+  if (!pm) return NextResponse.json({ linked: false })
+  const client = pm.client
 
   let data: Record<string, unknown>[]
   try {
@@ -77,14 +79,15 @@ export async function GET() {
     .map(([name, amount]) => ({ name, amount: Math.round(amount) }))
     .sort((a, b) => b.amount - a.amount).slice(0, 5)
 
+  const money = can(pm.role, 'prices')
   return NextResponse.json({
-    linked: true, year,
+    linked: true, year, money,
     ordersCount,
-    sumYear: Math.round(sumYear),
-    avgCheck: ordersCount ? Math.round(sumYear / ordersCount) : 0,
+    sumYear: money ? Math.round(sumYear) : null,
+    avgCheck: money ? (ordersCount ? Math.round(sumYear / ordersCount) : 0) : null,
     inWork, readyToShip,
-    savingsYear: Math.round(savingsYear),
-    byMonth: byMonth.map(v => Math.round(v)),
-    topMaterials,
+    savingsYear: money ? Math.round(savingsYear) : null,
+    byMonth: money ? byMonth.map(v => Math.round(v)) : null,
+    topMaterials: money ? topMaterials : topMaterials.map(m => ({ name: m.name, amount: null })),
   })
 }

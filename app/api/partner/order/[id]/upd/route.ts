@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { loadUpdIssued } from '@/lib/b2b/updRegistry'
 
 // УПД в кабинете — любому партнёру своего заказа, без флага самообслуживания: документ
@@ -19,8 +19,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
-  if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const pm = await resolvePartnerMember<{ id: number }>(svc, user.id)
+  if (!pm) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const client = pm.client
+  { const denied = denyUnless(pm.role, 'finance'); if (denied) return denied }
 
   const { data: order, error: oErr } = await svc.from('b2b_orders')
     .select('id,client_id,custom_number').eq('id', oid).maybeSingle()

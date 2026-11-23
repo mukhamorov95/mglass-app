@@ -10,7 +10,7 @@ import { QUOTE_LABEL, type QuoteState } from '@/lib/partner/quoteState'
 import { responseError, NETWORK_ERROR } from '@/lib/toast'
 
 // Карточка заказа кабинета (дизайн из прототипа, .pcab).
-type Item = { material: string; thickness: number; width: number; height: number; quantity: number; tempering: boolean; facet: boolean; triplex: boolean; price: number }
+type Item = { material: string; thickness: number; width: number; height: number; quantity: number; tempering: boolean; facet: boolean; triplex: boolean; price: number | null }
 type TL = { label: string; state: 'done' | 'now' | 'wait'; date: string | null }
 type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
@@ -18,6 +18,7 @@ type Order = {
   payment?: PaymentView | null
   onlinePayEnabled?: boolean
   canInvoice?: boolean
+  perms?: Partial<Record<'prices' | 'calc' | 'payStatus' | 'finance' | 'delivery' | 'claims' | 'team', boolean>>
   point?: PointStage | null
   updIssued?: boolean
   upd?: { number: number; year: number; docDate: string } | null
@@ -27,7 +28,7 @@ type Order = {
   quoteState?: QuoteState | null
   stateNote?: string | null
   delivery?: { method: 'pickup' | 'delivery'; address: string | null; comment: string | null; status: string | null } | null
-  total: number; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
+  total: number | null; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -181,7 +182,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
           <div className="card-h"><h3>Позиции</h3><span className="mut">{o.items.length}</span></div>
           <div className="tbl-wrap"><table>
             <thead>
-              <tr><th>Деталь</th><th>Размер, мм</th><th className="r">Кол-во</th><th className="r">Сумма</th></tr>
+              <tr><th>Деталь</th><th>Размер, мм</th><th className="r">Кол-во</th>{o.total != null && <th className="r">Сумма</th>}</tr>
             </thead>
             <tbody>
               {o.items.map((it, i) => (
@@ -189,10 +190,10 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
                   <td>{it.material} {it.thickness}мм{it.tempering ? ', закалка' : ''}{it.facet ? ', фацет' : ''}{it.triplex ? ', триплекс' : ''}</td>
                   <td className="tnum">{it.width} × {it.height}</td>
                   <td className="r tnum">{it.quantity}</td>
-                  <td className="r tnum">{fmt(it.price)}</td>
+                  {o.total != null && <td className="r tnum">{fmt(it.price ?? 0)}</td>}
                 </tr>
               ))}
-              <tr className="tot-row"><td colSpan={3}>Итого по вашей цене (с НДС)</td><td className="r tnum">{fmt(o.total)}</td></tr>
+              {o.total != null && <tr className="tot-row"><td colSpan={3}>Итого по вашей цене (с НДС)</td><td className="r tnum">{fmt(o.total)}</td></tr>}
             </tbody>
           </table></div>
         </div>
@@ -217,7 +218,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
               {o.drawingUrl && !o.drawingApproval && o.drawingPrev && (
                 <div className="info" style={{ marginTop: 10 }}><span>↻</span><span>Чертёж обновлён{o.drawingPrev.updatedAt ? ` ${fmtDate(o.drawingPrev.updatedAt)}` : ''} — после того как вы {o.drawingPrev.status === 'rework' ? 'отправили его на доработку' : 'его согласовали'}. Посмотрите новый и ответьте ещё раз.</span></div>
               )}
-              {o.drawingUrl && !o.drawingApproval && !reworkOpen && (
+              {o.drawingUrl && !o.drawingApproval && !reworkOpen && o.perms?.calc !== false && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button className="primary" style={{ flex: 1 }} disabled={deciding} onClick={() => decide('approve')}>✓ Согласовать</button>
                   <button className="ghost" style={{ flex: 1 }} disabled={deciding} onClick={() => setReworkOpen(true)}>✎ На доработку</button>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { previewWriteGuard } from '@/lib/partnerPreview'
 
 // A7: партнёр сам ведёт свои юрлица (реквизиты для счёта/договора). Строго свои.
@@ -14,8 +14,11 @@ const FIELDS = ['full_name', 'inn', 'kpp', 'ogrn', 'legal_address', 'bank_accoun
 function svcClient() {
   return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
+// Реквизиты — право «финансы» (руководитель, бухгалтер): прочим ни читать, ни писать.
 async function ownClient(svc: ReturnType<typeof svcClient>, userId: string) {
-  return resolvePartnerClient<{ id: number; organization_id: number | null }>(svc, userId, 'id,organization_id')
+  const pm = await resolvePartnerMember<{ id: number; organization_id: number | null }>(svc, userId, 'id,organization_id')
+  if (!pm) return { client: null, denied: null }
+  return { client: pm.client, denied: denyUnless(pm.role, 'finance') }
 }
 function pick(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
@@ -31,8 +34,9 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
   const svc = svcClient()
-  const client = await ownClient(svc, user.id)
+  const { client, denied } = await ownClient(svc, user.id)
   if (!client) return NextResponse.json({ linked: false, entities: [] })
+  if (denied) return denied
   const { data } = await svc.from('b2b_client_legal_entities').select(COLS)
     .eq('client_id', client.id).eq('active', true)
     .order('is_default', { ascending: false }).order('id', { ascending: true })
@@ -46,8 +50,9 @@ export async function POST(req: NextRequest) {
   const svc = svcClient()
   const blocked = await previewWriteGuard(svc, user.id)
   if (blocked) return blocked
-  const client = await ownClient(svc, user.id)
+  const { client, denied } = await ownClient(svc, user.id)
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  if (denied) return denied
 
   const body = await req.json().catch(() => ({})) as Record<string, unknown>
   const fields = pick(body)

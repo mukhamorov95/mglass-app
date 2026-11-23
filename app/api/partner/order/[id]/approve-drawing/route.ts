@@ -3,7 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
 import { pushNotification } from '@/lib/partnerNotify'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { appUrl } from '@/lib/appUrl'
 import { previewWriteGuard } from '@/lib/partnerPreview'
 import { decisionOf, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
@@ -25,8 +25,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const blocked = await previewWriteGuard(svc, user.id)
   if (blocked) return blocked
-  const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
-  if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const pm = await resolvePartnerMember<{ id: number; name: string }>(svc, user.id, 'id,name')
+  if (!pm) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const client = pm.client
+  { const denied = denyUnless(pm.role, 'calc'); if (denied) return denied }
 
   const body = await req.json().catch(() => ({}))
   const decision = body?.decision === 'rework' ? 'rework' : body?.decision === 'approve' ? 'approve' : null

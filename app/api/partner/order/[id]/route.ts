@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { isSettledOrder } from '@/lib/b2b/settledBefore'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { resolvePartnerMember } from '@/lib/partnerClient'
+import { permsOf } from '@/lib/partner/teamRoles'
 import { paymentsEnabled } from '@/lib/payments/provider'
 import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import { partnerProgress, partnerDeadline, noteStatus } from '@/lib/partner/orderProgress'
@@ -35,9 +36,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number; name: string; full_name: string | null; inn: string | null; kpp: string | null; ogrn: string | null; legal_address: string | null; bank_account: string | null; bank_name: string | null; bik: string | null; corr_account: string | null; can_self_invoice: boolean | null; is_point: boolean | null }>(
-    svc, user.id, 'id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account, can_self_invoice, is_point')
-  if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const pm = await resolvePartnerMember<{ id: number; name: string; full_name: string | null; inn: string | null; kpp: string | null; ogrn: string | null; legal_address: string | null; bank_account: string | null; bank_name: string | null; bik: string | null; corr_account: string | null; can_self_invoice: boolean | null; is_point: boolean | null }>(svc, user.id, 'id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account, can_self_invoice, is_point')
+  if (!pm) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const client = pm.client
 
   const { data: o } = await svc.from('b2b_orders')
     .select('id, client_id, custom_number, client_order_number, created_at, launched_at, discount_percent, total_after_discount, total_sale_inc_vat, items, notes')
@@ -113,7 +114,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // УПД — только выданный документ (этап 7), и любому партнёру заказа: флаг — для счёта.
   const upd = await loadUpdIssued(svc, oid).catch(e => { console.error('[partner/order] УПД не прочитан:', oid, e instanceof Error ? e.message : e); return null })
 
-  return NextResponse.json({
+  const full = {
     id: o.id,
     number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
     clientOrderNumber: (o.client_order_number as string | null) ?? null,
@@ -148,5 +149,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     recalcNote: history.length > 0 && !stateNote && (qs === null || qs === 'draft') ? lastComment : null,
     quoteState: qs,
     stateNote,
+  }
+  // Права роли режут ответ: кладовщику — без цен и денег, менеджеру — без реквизитов и документов.
+  const perms = permsOf(pm.role)
+  return NextResponse.json({
+    ...full,
+    role: pm.role, perms,
+    buyer: perms.finance ? full.buyer : null,
+    total: perms.prices ? full.total : null,
+    items: perms.prices ? full.items : full.items.map(it => ({ ...it, price: null })),
+    payment: perms.payStatus ? full.payment : null,
+    onlinePayEnabled: perms.finance && full.onlinePayEnabled,
+    canInvoice: perms.finance && full.canInvoice,
+    updIssued: perms.finance && full.updIssued,
+    upd: perms.finance ? full.upd : null,
+    point: perms.payStatus ? full.point : null,
   })
 }

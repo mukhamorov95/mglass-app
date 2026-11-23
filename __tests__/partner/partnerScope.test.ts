@@ -8,7 +8,7 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined })
 
 const db = vi.hoisted(() => ({
   clients: [] as { id: number; user_id: string | null }[],
-  members: [] as { client_id: number; user_id: string }[],
+  members: [] as { client_id: number; user_id: string; role: string; disabled_at: string | null }[],
 }))
 
 vi.mock('@/lib/supabase-service', () => ({
@@ -30,7 +30,7 @@ import { getPartnerClientId, partnerOwnsOrder } from '@/lib/partnerScope'
 
 beforeEach(() => {
   db.clients = [{ id: 10, user_id: 'owner-of-10' }, { id: 20, user_id: 'owner-of-20' }]
-  db.members = [{ client_id: 10, user_id: 'member-of-10' }]
+  db.members = [{ client_id: 10, user_id: 'member-of-10', role: 'manager', disabled_at: null }]
 })
 
 describe('getPartnerClientId — как во всём кабинете', () => {

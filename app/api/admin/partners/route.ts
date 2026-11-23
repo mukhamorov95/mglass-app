@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   const password = wantPass || genPassword()
 
-  const { data: created, error: cErr } = await db.auth.admin.createUser({ email, password, email_confirm: true })
+  const { data: created, error: cErr } = await db.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { mglass_kind: 'partner' } })
   if (cErr || !created?.user) return NextResponse.json({ error: cErr?.message || 'Не удалось создать аккаунт' }, { status: 400 })
   const uid = created.user.id
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { previewWriteGuard } from '@/lib/partnerPreview'
 import { parseNotes } from '@/lib/orderFlags'
 import { checkDrawingFile, isDrawingKind, storagePath } from '@/lib/partner/drawingFiles'
@@ -20,13 +20,14 @@ async function loadOwnOrder(ctx: Ctx) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false as const, error: NextResponse.json({ error: 'Не авторизован' }, { status: 401 }) }
   const svc = createServiceClient()
-  const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
-  if (!client) return { ok: false as const, error: NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 }) }
+  const pm = await resolvePartnerMember<{ id: number }>(svc, user.id)
+  if (!pm) return { ok: false as const, error: NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 }) }
+  const client = pm.client
   const { data: order } = await svc.from('b2b_orders').select('id,client_id,launched_at,notes').eq('id', oid).maybeSingle()
   const o = order as { client_id: number | null; launched_at: string | null; notes: string | null } | null
   if (!o || o.client_id !== client.id) return { ok: false as const, error: NextResponse.json({ error: 'Просчёт не найден' }, { status: 404 }) }
   const launched = !!(o.launched_at || parseNotes(o.notes ?? null).launched_at)
-  return { ok: true as const, oid, user, svc, clientId: client.id, launched }
+  return { ok: true as const, oid, user, svc, clientId: client.id, launched, role: pm.role }
 }
 
 const view = (r: Row, launched: boolean) => ({
@@ -53,6 +54,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<NextResponse> {
   if (!r.ok) return r.error
   const blocked = await previewWriteGuard(r.svc, r.user.id, { allowOnTest: true })
   if (blocked) return blocked
+  { const denied = denyUnless(r.role, 'calc'); if (denied) return denied }
   if (r.launched) return NextResponse.json({ error: 'Заказ уже в работе — файл передайте менеджеру' }, { status: 400 })
 
   const form = await req.formData().catch(() => null)
@@ -87,6 +89,7 @@ export async function DELETE(req: Request, ctx: Ctx): Promise<NextResponse> {
   if (!r.ok) return r.error
   const blocked = await previewWriteGuard(r.svc, r.user.id, { allowOnTest: true })
   if (blocked) return blocked
+  { const denied = denyUnless(r.role, 'calc'); if (denied) return denied }
   if (r.launched) return NextResponse.json({ error: 'Заказ уже в работе — файлы не удаляются' }, { status: 400 })
 
   const fileId = new URL(req.url).searchParams.get('file') ?? ''
