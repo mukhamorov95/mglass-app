@@ -140,11 +140,22 @@ describe('accessMatrix — закупщик с manager_workspace (Вера) по
 
 describe('accessMatrix — корень и публичные пути открыты всем ролям', () => {
   for (const role of ALL_ROLES) {
-    it(`${role}: /, /login, /access-denied, /api/* открыты`, () => {
+    it(`${role}: /, /login, /access-denied открыты; /api/* — всем, кроме партнёра`, () => {
       expect(canAccessRoute(role, '/')).toBe(true)
       expect(canAccessRoute(role, '/login')).toBe(true)
       expect(canAccessRoute(role, '/access-denied')).toBe(true)
-      expect(canAccessRoute(role, '/api/anything')).toBe(true)
+      expect(canAccessRoute(role, '/api/anything')).toBe(role !== 'partner')
     })
   }
+})
+
+describe('accessMatrix — партнёру открыты только API кабинета', () => {
+  it('кабинет, чертёж своего заказа, вход и устройства', () => {
+    for (const p of ['/api/partner/orders', '/api/partner/order/5/upd', '/api/b2b/drawing/5', '/api/auth/set-password', '/api/security/register-device'])
+      expect(canAccessRoute('partner', p)).toBe(true)
+  })
+  it('внутренние маршруты штата закрыты, даже похожие по префиксу', () => {
+    for (const p of ['/api/b2b-orders', '/api/deals', '/api/invoices/1', '/api/production/client-reconciliation', '/api/search', '/api/security/register-device-x', '/api/partnerx'])
+      expect(canAccessRoute('partner', p)).toBe(false)
+  })
 })

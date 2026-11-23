@@ -372,6 +372,22 @@ const SCOPED_BUYER_B2B_PATHS: ReadonlyArray<string> = [
   '/p/o',
 ]
 
+// Внешний партнёр ходит в API только кабинета. Остальные /api/* защищаются каждый сам,
+// и часть из них проверяет лишь факт входа — для штата это нормально, для чужой
+// компании нет. Новый маршрут кабинета живёт под /api/partner/ или вписывается сюда.
+export const PARTNER_API_PREFIXES = [
+  '/api/partner/',
+  '/api/b2b/drawing/',
+  '/api/auth/',
+  '/api/security/register-device',
+  '/api/security/my-devices',
+] as const
+
+function apiAllowed(r: Role, pathname: string): boolean {
+  if (r !== 'partner') return true
+  return PARTNER_API_PREFIXES.some(p => p.endsWith('/') ? pathname.startsWith(p) : (pathname === p || pathname.startsWith(p + '/')))
+}
+
 // Centralised route gate. Use this everywhere instead of ad-hoc role checks.
 // `opts.b2bScope` is optional — old 2-arg callers keep working unchanged.
 export function canAccessRoute(
@@ -383,12 +399,8 @@ export function canAccessRoute(
   if (!r) return false
   if (isOwnerRole(r)) return true
 
-  if (
-    pathname === '/' ||
-    pathname.startsWith('/api/') ||
-    pathname === '/login' ||
-    pathname === '/access-denied'
-  ) return true
+  if (pathname.startsWith('/api/')) return apiAllowed(r, pathname)
+  if (pathname === '/' || pathname === '/login' || pathname === '/access-denied') return true
 
   const allowed = ROLE_ALLOWED[r] ?? []
   const matchAllow = (p: string) =>
@@ -423,7 +435,12 @@ export function explainAccess(
   const r = normalizeRole(role)
   if (!r) return { allowed: false, reason: 'нет роли' }
   if (isOwnerRole(r)) return { allowed: true, reason: 'владелец (admin/ceo) — доступ ко всему' }
-  if (pathname === '/' || pathname.startsWith('/api/') || pathname === '/login' || pathname === '/access-denied') {
+  if (pathname.startsWith('/api/')) {
+    return apiAllowed(r, pathname)
+      ? { allowed: true, reason: r === 'partner' ? 'API кабинета партнёра' : 'API — проверка в самом маршруте' }
+      : { allowed: false, reason: 'партнёру открыты только API кабинета' }
+  }
+  if (pathname === '/' || pathname === '/login' || pathname === '/access-denied') {
     return { allowed: true, reason: 'общедоступный путь' }
   }
   const allowed = ROLE_ALLOWED[r] ?? []

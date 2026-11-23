@@ -4,6 +4,7 @@ import { canAccessRoute, isOwnerRole, normalizeRole, type Role, type B2BScope } 
 import { classifyDevice } from './lib/deviceClass'
 import { isDeviceAllowed } from './lib/deviceLimits'
 import { normalizeManagerHome } from './lib/managerHome'
+import { readSignedScoped, roleCookieSecret, signScoped } from './lib/roleCookie'
 import { OWNER_2FA_COOKIE, isOwner2faEnabled, owner2faSecret, verifyOwner2faCookie } from './lib/owner2faCookie'
 
 const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
@@ -14,18 +15,8 @@ function normalizeB2BScope(v: unknown): B2BScope {
   return null
 }
 
-// Кэш роли/скоупа в куках привязан к id пользователя: `${userId}|${value}`.
-// Это (1) не даёт чужой сессии на том же браузере унаследовать чужие права и
-// (2) делает старые куки (без разделителя) недействительными на деплое —
-// значит после смены прав в БД кука-миска заставит middleware перечитать базу,
-// а не тянуть протухшее значение. Возвращаем value только если префикс = userId.
-function readScoped(cookieValue: string | undefined, userId: string): string | undefined {
-  if (cookieValue === undefined) return undefined
-  const sep = cookieValue.indexOf('|')
-  if (sep < 0) return undefined                       // старый формат → cache-miss
-  if (cookieValue.slice(0, sep) !== userId) return undefined
-  return cookieValue.slice(sep + 1)
-}
+// Кэш роли/скоупа в куках привязан к id пользователя и подписан (lib/roleCookie):
+// чужая, старая или поддельная кука — промах кэша, middleware перечитывает базу.
 const ROLE_COOKIES = ['user-role', 'user-b2b-scope', 'user-mgr-ws'] as const
 
 export async function middleware(request: NextRequest) {
@@ -133,12 +124,12 @@ export async function middleware(request: NextRequest) {
       try {
         // Владелец от лимита освобождён: он работает с ноутбука, с телефона и
         // из офиса в один день, и вытеснение сессии мешает, а не защищает.
-        // Роль берём из куки, а если её ещё нет (первый заход с устройства) —
+        // Роль берём из подписанной куки, а если её нет или она не сошлась —
         // спрашиваем базу: иначе владелец упирался бы в лимит ровно там, где
         // освобождение и нужно. Пропускаем только саму проверку устройства —
         // тик активности и проверка маршрута ниже выполняются как обычно.
-        let ownerRole = isOwnerRole(normalizeRole(readScoped(request.cookies.get('user-role')?.value, user.id)))
-        if (!ownerRole && !request.cookies.get('user-role')) {
+        let ownerRole = isOwnerRole(normalizeRole(await readSignedScoped('user-role', request.cookies.get('user-role')?.value, user.id, roleCookieSecret())))
+        if (!ownerRole) {
           const { data: u } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
           ownerRole = isOwnerRole(normalizeRole((u as { role?: string } | null)?.role))
         }
@@ -177,12 +168,13 @@ export async function middleware(request: NextRequest) {
 
   // Role-based route protection
   if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo && !isPublicEmbed) {
-    const cached      = readScoped(request.cookies.get('user-role')?.value, user.id)
-    const cachedScope = readScoped(request.cookies.get('user-b2b-scope')?.value, user.id)
-    const cachedMgr   = readScoped(request.cookies.get('user-mgr-ws')?.value, user.id)
+    const secret      = roleCookieSecret()
+    const cached      = await readSignedScoped('user-role', request.cookies.get('user-role')?.value, user.id, secret)
+    const cachedScope = await readSignedScoped('user-b2b-scope', request.cookies.get('user-b2b-scope')?.value, user.id, secret)
+    const cachedMgr   = await readSignedScoped('user-mgr-ws', request.cookies.get('user-mgr-ws')?.value, user.id, secret)
     let role: Role | null = normalizeRole(cached)
     // Empty-string payload means "checked, no scope" — distinct from "not checked
-    // yet" (undefined). readScoped returns undefined for another user's / old cookie.
+    // yet" (undefined). readSignedScoped returns undefined for another user's / old cookie.
     let b2bScope: B2BScope | undefined =
       cachedScope === undefined ? undefined : normalizeB2BScope(cachedScope)
     // '1'/'0' — проверено; undefined — ещё не читали (новая кука после деплоя).
@@ -201,15 +193,15 @@ export async function middleware(request: NextRequest) {
       b2bScope = normalizeB2BScope(perms?.b2b_client_scope)
       mgrWs = perms?.manager_workspace === true
       if (role) {
-        supabaseResponse.cookies.set('user-role', `${user.id}|${role}`, {
+        supabaseResponse.cookies.set('user-role', await signScoped('user-role', user.id, role, secret), {
           maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
         })
       }
       // Cache scope even when null so we don't hit the DB on every request.
-      supabaseResponse.cookies.set('user-b2b-scope', `${user.id}|${b2bScope ?? ''}`, {
+      supabaseResponse.cookies.set('user-b2b-scope', await signScoped('user-b2b-scope', user.id, b2bScope ?? '', secret), {
         maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
       })
-      supabaseResponse.cookies.set('user-mgr-ws', `${user.id}|${mgrWs ? '1' : '0'}`, {
+      supabaseResponse.cookies.set('user-mgr-ws', await signScoped('user-mgr-ws', user.id, mgrWs ? '1' : '0', secret), {
         maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
       })
     }
@@ -259,6 +251,11 @@ export async function middleware(request: NextRequest) {
     }
 
     if (role && !canAccessRoute(role, pathname, { b2bScope: b2bScope ?? null, managerWorkspace: mgrWs ?? false })) {
+      if (pathname.startsWith('/api/')) {
+        const res = NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
+        supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c))
+        return res
+      }
       const url = request.nextUrl.clone()
       url.pathname = '/access-denied'
       return redirect(url)
