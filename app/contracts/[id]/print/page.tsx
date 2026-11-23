@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { renderDocCanvas } from '@/lib/pdfCapture'
 import QRCode from 'qrcode'
 import { paymentQrString } from '@/lib/paymentQr'
-import { ContractDocument, InvoiceDocument, type ContractContent } from './documents'
+import { ActDocument, ContractDocument, InvoiceDocument, type ContractContent } from './documents'
 
 const CSS = `
 .dc-scope{--ink:#18181B;--red:#E1442E;--line:#c9c9c4;background:#54545a;min-height:100vh;font-family:-apple-system,"Helvetica Neue","Segoe UI",Arial,sans-serif;color:#1a1a1a}
@@ -63,9 +63,13 @@ export default function ContractPrintPage() {
   const [notFound, setNotFound] = useState(false)
   // Счёт открывается ссылкой из карточки сделки: ?doc=invoice. Отдельного
   // документа «счёт» в рознице нет — это вторая вкладка договора.
-  const [tab, setTab] = useState<'contract' | 'invoice'>(
-    () => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('doc') === 'invoice')
-      ? 'invoice' : 'contract')
+  // ?doc=act — акт сдачи-приёмки (номер = номер договора, дата — сегодня, можно поменять).
+  const [tab, setTab] = useState<'contract' | 'invoice' | 'act'>(() => {
+    const d = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('doc') : null
+    return d === 'invoice' || d === 'act' ? d : 'contract'
+  })
+  const [actDate, setActDate] = useState(() => new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }))
+  const actRef = useRef<HTMLDivElement>(null)
   const [qr, setQr] = useState('')
   const [busy, setBusy] = useState(false)
   const [withSeal, setWithSeal] = useState(true)
@@ -105,17 +109,17 @@ export default function ContractPrintPage() {
     QRCode.toDataURL(s, { margin: 0, width: 240 }).then(setQr).catch(() => {})
   }, [c])
 
-  async function downloadInvoice() {
-    if (!invoiceRef.current) return
+  async function downloadInvoice(ref = invoiceRef, name = `Счёт-${c?.number ?? ''}.pdf`) {
+    if (!ref.current) return
     setBusy(true)
     try {
       const jspdf = await import('jspdf')
-      const canvas = await renderDocCanvas(invoiceRef.current)
+      const canvas = await renderDocCanvas(ref.current)
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
       let w = 210, h = 210 * canvas.height / canvas.width
       if (h > 297) { h = 297; w = 297 * canvas.width / canvas.height }
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', (210 - w) / 2, 0, w, h)
-      pdf.save(`Счёт-${c?.number ?? ''}.pdf`)
+      pdf.save(name)
     } finally { setBusy(false) }
   }
 
@@ -191,13 +195,22 @@ export default function ContractPrintPage() {
       <div className="dc-toolbar">
         <button className={`tab${tab === 'contract' ? ' on' : ''}`} onClick={() => setTab('contract')}>Договор</button>
         <button className={`tab${tab === 'invoice' ? ' on' : ''}`} onClick={() => setTab('invoice')}>Счёт</button>
+        <button className={`tab${tab === 'act' ? ' on' : ''}`} onClick={() => setTab('act')}>Акт</button>
+        {tab === 'act' && (
+          <label className="dc-seal" title="Дата акта — день сдачи работ">
+            Дата акта
+            <input type="text" value={actDate} onChange={e => setActDate(e.target.value)} style={{ width: 92, height: 'auto', border: '1px solid #d8d8d3', borderRadius: 6, padding: '2px 6px', font: 'inherit' }} />
+          </label>
+        )}
         <label className="dc-seal" title="Подпись и печать на документе">
           <input type="checkbox" checked={withSeal} onChange={e => setWithSeal(e.target.checked)} />
           Подпись и печать
         </label>
         {tab === 'contract'
           ? <button onClick={downloadContract} disabled={busy}>{busy ? 'Готовлю…' : '💾 Скачать договор'}</button>
-          : <button onClick={downloadInvoice} disabled={busy}>{busy ? 'Готовлю…' : '💾 Скачать счёт'}</button>}
+          : tab === 'invoice'
+            ? <button onClick={() => downloadInvoice()} disabled={busy}>{busy ? 'Готовлю…' : '💾 Скачать счёт'}</button>
+            : <button onClick={() => downloadInvoice(actRef, `Акт-${c?.number ?? ''}.pdf`)} disabled={busy}>{busy ? 'Готовлю…' : '💾 Скачать акт'}</button>}
       </div>
       <div className="doc-wrap">
         <div style={{ display: tab === 'contract' ? 'block' : 'none' }}>
@@ -205,6 +218,9 @@ export default function ContractPrintPage() {
         </div>
         <div style={{ display: tab === 'invoice' ? 'block' : 'none' }}>
           <div ref={invoiceRef}><InvoiceDocument c={c} qr={qr} withSeal={withSeal} /></div>
+        </div>
+        <div style={{ display: tab === 'act' ? 'block' : 'none' }}>
+          <div ref={actRef}><ActDocument c={c} actDate={actDate} withSeal={withSeal} /></div>
         </div>
       </div>
     </div>

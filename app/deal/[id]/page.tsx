@@ -859,6 +859,7 @@ export default function DealPage() {
                     <span className="flex items-center gap-3">
                       <Link href={`/contracts/${d.id}/print`} className="text-[12px] text-blue-600 hover:underline">Договор</Link>
                       <Link href={`/contracts/${d.id}/print?doc=invoice`} className="text-[12px] text-blue-600 hover:underline">Счёт</Link>
+                      <Link href={`/contracts/${d.id}/print?doc=act`} className="text-[12px] text-blue-600 hover:underline">Акт</Link>
                       <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
                     </span>
                   </div>
