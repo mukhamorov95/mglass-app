@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { canEditQuote, quoteLockReason, quoteState } from '@/lib/partner/quoteState'
 
 // Загрузка просчёта партнёра для РЕДАКТИРОВАНИЯ. Отдаём спецификации позиций
@@ -21,8 +21,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
-  if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const pm = await resolvePartnerMember<{ id: number }>(svc, user.id)
+  if (!pm) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const client = pm.client
+  { const denied = denyUnless(pm.role, 'calc'); if (denied) return denied }
 
   const { data: order } = await svc.from('b2b_orders')
     .select('id,client_id,launched_at,notes,items').eq('id', oid).maybeSingle()

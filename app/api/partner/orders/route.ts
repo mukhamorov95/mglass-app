@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { isSettledOrder } from '@/lib/b2b/settledBefore'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { resolvePartnerMember } from '@/lib/partnerClient'
+import { permsOf } from '@/lib/partner/teamRoles'
 import { partnerProgress, partnerDeadline, isLaunched, noteStatus } from '@/lib/partner/orderProgress'
 import { quoteState } from '@/lib/partner/quoteState'
 import { readPaged } from '@/lib/partner/readPaged'
@@ -29,8 +30,9 @@ export async function GET() {
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
   // Привязанный клиент (первичный владелец ИЛИ участник команды). Нет → «не привязан».
-  const client = await resolvePartnerClient<{ id: number; name: string; can_self_invoice: boolean | null; is_point: boolean | null }>(svc, user.id, 'id,name,can_self_invoice,is_point')
-  if (!client) return NextResponse.json({ linked: false, client: null, orders: [] })
+  const pm = await resolvePartnerMember<{ id: number; name: string; can_self_invoice: boolean | null; is_point: boolean | null }>(svc, user.id, 'id,name,can_self_invoice,is_point')
+  if (!pm) return NextResponse.json({ linked: false, client: null, orders: [] })
+  const client = pm.client
 
   // Все состояния: просчёт → отправлен в работу → в работе → отгружен.
   // Партнёр видит и просчёты, которые мы сделали для него.
@@ -118,5 +120,14 @@ export async function GET() {
     }
   })
 
-  return NextResponse.json({ linked: true, client: { name: client.name }, orders, updError })
+  // Права роли режут ответ: без «цен» — ни сумм, ни оплаты; без «финансов» — ни счёта, ни УПД.
+  const perms = permsOf(pm.role)
+  const shaped = orders.map(o => ({
+    ...o,
+    amount: perms.prices ? o.amount : null,
+    payment: perms.payStatus ? o.payment : null,
+    invoice: perms.finance ? o.invoice : null,
+    upd: perms.finance ? o.upd : null,
+  }))
+  return NextResponse.json({ linked: true, client: { name: client.name }, role: pm.role, perms, orders: shaped, updError })
 }

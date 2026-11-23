@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { resolvePartnerMember } from '@/lib/partnerClient'
+import { can } from '@/lib/partner/teamRoles'
 import { chunk, readPaged } from '@/lib/partner/readPaged'
 import { buildEvents, waitingActions, WAITING_RECENT_DAYS, type ActivityOrder, type DocEvent, type PaymentEvent } from '@/lib/partner/activity'
 import { decisionOf, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
@@ -29,8 +30,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const client = await resolvePartnerClient<{ id: number; is_point: boolean | null }>(svc, user.id, 'id,is_point')
-  if (!client) return NextResponse.json({ linked: false, events: [], waiting: [] })
+  const pm = await resolvePartnerMember<{ id: number; is_point: boolean | null }>(svc, user.id, 'id,is_point')
+  if (!pm) return NextResponse.json({ linked: false, events: [], waiting: [] })
+  const client = pm.client
 
   try {
     const rows = await readPaged<Row>(() => svc.from('b2b_orders')
@@ -123,7 +125,12 @@ export async function GET() {
       },
     })
 
-    return NextResponse.json({ linked: true, events: buildEvents(orders, payments, docs), waiting })
+    // Роль без денег не видит оплат и документов; действия — только свои по роли.
+    const events = buildEvents(orders, payments, docs).filter(e =>
+      (e.tone !== 'money' || can(pm.role, 'payStatus')) && (e.tone !== 'doc' || can(pm.role, 'finance')))
+    const mine = waiting.filter(w =>
+      w.kind === 'drawing' ? can(pm.role, 'calc') : w.kind === 'payment' ? can(pm.role, 'finance') : can(pm.role, 'delivery'))
+    return NextResponse.json({ linked: true, events, waiting: mine })
   } catch (e) {
     return NextResponse.json({ error: `События не загрузились: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import TeamPanel from './TeamPanel'
 import Link from 'next/link'
 import { confirmDialog } from '@/lib/dialog'
 import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
@@ -23,6 +24,7 @@ export default function B2BAccessPage() {
   const [copied, setCopied] = useState(false)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [pointBusy, setPointBusy] = useState<number | null>(null)
+  const [teamFor, setTeamFor] = useState<number | null>(null)
 
   async function load() {
     try {
@@ -154,6 +156,10 @@ export default function B2BAccessPage() {
                     </button>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {r.linked && (
+                      <button onClick={() => setTeamFor(t => (t === r.id ? null : r.id))}
+                        className={`text-[12px] px-3 py-1.5 rounded-lg border ${teamFor === r.id ? 'border-[#111110] text-[#111110]' : 'border-[#e4e4e0] text-[#111110] hover:border-[#111110]'}`}>Команда</button>
+                    )}
                     <button onClick={() => preview(r.id)} disabled={busy} title="Открыть кабинет глазами этого клиента — только просмотр"
                       className="text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#111110] hover:border-[#111110]">👁 Смотреть как партнёр</button>
                     {r.linked ? (
@@ -175,6 +181,7 @@ export default function B2BAccessPage() {
                   </div>
                 </div>
                 {grantId === r.id && err && <p className="text-[11px] text-red-500 mt-1.5">{err}</p>}
+                {teamFor === r.id && <TeamPanel clientId={r.id} />}
               </div>
             ))}
             {filtered.length === 0 && <div className="px-4 py-8 text-center text-[13px] text-[#9a9a95]">Ничего не найдено</div>}

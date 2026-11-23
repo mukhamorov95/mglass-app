@@ -4,7 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import type { B2BMaterial } from '@/lib/types'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 
 // Справочники для партнёрского калькулятора. Отдаём ТОЛЬКО безопасные поля:
 // материалы (id/имя/категория/толщина/цена продажи), опции фацета (мм + цена),
@@ -18,8 +18,10 @@ export async function GET() {
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-  const client = await resolvePartnerClient<{ id: number; name: string; discount_percent: number | null }>(svc, user.id, 'id,name,discount_percent')
-  if (!client) return NextResponse.json({ linked: false, materials: [], facetOptions: [], surcharges: [] })
+  const pm = await resolvePartnerMember<{ id: number; name: string; discount_percent: number | null }>(svc, user.id, 'id,name,discount_percent')
+  if (!pm) return NextResponse.json({ linked: false, materials: [], facetOptions: [], surcharges: [] })
+  const client = pm.client
+  { const denied = denyUnless(pm.role, 'calc'); if (denied) return denied }
 
   const [{ data: mats }, { data: matrix }, { data: facets }, { data: surchargeData }] = await Promise.all([
     svc.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),

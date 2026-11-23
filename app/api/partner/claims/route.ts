@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { notifyAdmins } from '@/lib/telegram'
 import { pushNotification } from '@/lib/partnerNotify'
 import { appUrl } from '@/lib/appUrl'
@@ -26,8 +26,10 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
   const svc = svcClient()
-  const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
-  if (!client) return NextResponse.json({ linked: false, claims: [] })
+  const pm = await resolvePartnerMember<{ id: number }>(svc, user.id)
+  if (!pm) return NextResponse.json({ linked: false, claims: [] })
+  const client = pm.client
+  { const denied = denyUnless(pm.role, 'claims'); if (denied) return denied }
 
   const { data } = await svc.from('partner_claims')
     .select('id,order_id,kind,description,status,resolution,created_at,resolved_at')
@@ -51,8 +53,10 @@ export async function POST(req: NextRequest) {
   const svc = svcClient()
   const blocked = await previewWriteGuard(svc, user.id)
   if (blocked) return blocked
-  const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
-  if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const pm = await resolvePartnerMember<{ id: number; name: string }>(svc, user.id, 'id,name')
+  if (!pm) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const client = pm.client
+  { const denied = denyUnless(pm.role, 'claims'); if (denied) return denied }
 
   const body = await req.json().catch(() => ({}))
   const kind = KINDS.has(body?.kind) ? String(body.kind) : null

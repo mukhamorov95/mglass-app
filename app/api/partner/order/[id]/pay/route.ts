@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { isSettledOrder } from '@/lib/b2b/settledBefore'
-import { resolvePartnerClient } from '@/lib/partnerClient'
+import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { createPaymentLink, paymentsEnabled } from '@/lib/payments/provider'
 import { appUrl } from '@/lib/appUrl'
 import { previewWriteGuard } from '@/lib/partnerPreview'
@@ -31,8 +31,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const blocked = await previewWriteGuard(svc, user.id)
   if (blocked) return blocked
-  const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
-  if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const pm = await resolvePartnerMember<{ id: number; name: string }>(svc, user.id, 'id,name')
+  if (!pm) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
+  const client = pm.client
+  { const denied = denyUnless(pm.role, 'finance'); if (denied) return denied }
 
   const { data: order } = await svc.from('b2b_orders')
     .select('id,client_id,custom_number,launched_at,total_after_discount,total_sale_inc_vat,notes').eq('id', oid).maybeSingle()
