@@ -58,7 +58,7 @@ export const MANAGER_MGLASS: NavEntry[] = [
   { href: '/calculations',      label: 'Расчёты',          icon: '📋' },
   { sectionLabel: 'КП и документы', icon: '📄', items: [
     { href: '/kp',                label: 'КП',               icon: '📄' },
-    { href: '/contracts',         label: 'Договоры и счета', icon: '📃' },
+    { href: '/contracts',         label: 'Договоры, счета и акты', icon: '📃' },
   ] },
 
   { groupLabel: 'Исполнение' },

@@ -485,7 +485,7 @@ export default function ContractsPage() {
               {savedId && (
                 <a href={`/contracts/${savedId}/print`} target="_blank" rel="noreferrer"
                   className="px-5 py-2.5 bg-[#E1442E] text-white text-[13px] font-semibold rounded-lg hover:bg-[#c93a26] shadow-lg">
-                  📄 Договор и счёт (PDF)
+                  📄 Договор, счёт и акт (PDF)
                 </a>
               )}
               {savedId && <span className="text-[12px] text-emerald-600">Сохранено ✓</span>}
@@ -522,7 +522,9 @@ export default function ContractsPage() {
                               <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>
                               <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]" title="Изменить">✏️</button>
                               <button onClick={() => duplicateRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110] font-medium" title="Сделать копию — новый договор с этими же данными">⧉ Копия</button>
-                              <a href={`/contracts/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">PDF</a>
+                              <a href={`/contracts/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">Договор</a>
+                              <a href={`/contracts/${r.id}/print?doc=invoice`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">Счёт</a>
+                              <a href={`/contracts/${r.id}/print?doc=act`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium" title="Акт сдачи-приёмки выполненных работ по этому договору">Акт</a>
                               {canDelete && <button onClick={e => del(r.id, e)} className="text-[12px] text-red-400 hover:text-red-600" title="Удалить (только админ)">🗑</button>}
                             </div>
                           </div>

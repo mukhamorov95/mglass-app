@@ -28,7 +28,7 @@ const MGLASS: NavEntry[] = [
   { sectionLabel: 'Расчёты и документы', icon: '📄', items: [
     { href: '/calculations',     label: 'Расчёты',           icon: '📋' },
     { href: '/kp',               label: 'КП',                icon: '📄' },
-    { href: '/contracts',        label: 'Договоры и счета',  icon: '📃' },
+    { href: '/contracts',        label: 'Договоры, счета и акты',  icon: '📃' },
   ] },
   { groupLabel: 'Производство' },
   // Розничный заказ идёт в цех B2B-заказом клиента M GLASS — те же экраны с фильтром (Н2)

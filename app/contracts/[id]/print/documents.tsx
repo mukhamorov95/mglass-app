@@ -260,3 +260,63 @@ export function ContractDocument({ c, withSeal = true }: { c: ContractContent; w
     </div>
   )
 }
+
+// ── Акт сдачи-приёмки выполненных работ (по образцу акта № 0895-3, владелец 23.11) ──
+// Номер акта = номер договора (заказа), стороны, спецификация и суммы — из договора.
+export function ActDocument({ c, actDate, withSeal = true }: { c: ContractContent; actDate: string; withSeal?: boolean }) {
+  const spec = c.spec && c.spec.length ? c.spec : []
+  const cust = customerLine(c.customer_type, c.customer)
+  const vat = c.vat_rate ?? EXECUTOR.vatRate
+  const totalN = numOr(c.total)
+  const installN = numOr(c.install_sum), deliveryN = numOr(c.delivery_sum), liftN = numOr(c.lift_sum)
+  const works = ['изготовление', (deliveryN > 0 || liftN > 0) ? 'доставка' : '', installN > 0 ? 'монтаж' : ''].filter(Boolean)
+  const worksText = works.length > 1 ? `${works.slice(0, -1).join(', ')} и ${works.at(-1)}` : works[0]
+  const parts = [
+    `изготовление и поставка Изделий — ${money(c.make_sum, vat)}`,
+    installN > 0 ? `монтажные работы — ${money(c.install_sum, vat)}` : '',
+    deliveryN > 0 ? `доставка — ${money(c.delivery_sum, vat)}` : '',
+    liftN > 0 ? `подъём — ${money(c.lift_sum, vat)}` : '',
+  ].filter(Boolean)
+  return (
+    <div className="doc-page contract">
+      <div className="c-hdr">
+        <div><b>{EXECUTOR.nameShort}</b><br />ИНН {EXECUTOR.inn}<br />Тел.: {EXECUTOR.phone}</div>
+        <div className="c-hdr-r"><b>АКТ № {c.number ?? '—'}</b><br />{actDate}</div>
+      </div>
+      <h2 className="inv-title" style={{ marginTop: 4 }}>АКТ СДАЧИ-ПРИЁМКИ ВЫПОЛНЕННЫХ РАБОТ<br /><span style={{ fontSize: '11pt', fontWeight: 600 }}>по договору № {c.number ?? '—'} от {c.date ?? ''}</span></h2>
+
+      <p>Мы, нижеподписавшиеся, {EXECUTOR.name} (ОГРНИП {EXECUTOR.ogrnip}), именуемый в дальнейшем «Исполнитель», с одной стороны, и {cust}, именуемый в дальнейшем «Заказчик», с другой стороны, составили настоящий Акт о том, что Исполнителем выполнены {worksText} следующих Изделий:</p>
+
+      <table className="inv-items">
+        <thead><tr><th style={{ width: 36 }}>№</th><th>Наименование Изделия (Спецификация, Раздел № 2 Договора)</th><th style={{ width: 70 }}>Кол-во</th></tr></thead>
+        <tbody>
+          {spec.length ? spec.map((s, i) => (
+            <tr key={i}><td>2.{i + 1}</td><td>{specLine({ ...s, qty: undefined })}</td><td>{s.qty ? `${s.qty} шт.` : '1 шт.'}</td></tr>
+          )) : <tr><td>—</td><td>Согласно Спецификации Договора</td><td /></tr>}
+        </tbody>
+      </table>
+
+      <p>1. Работы выполнены надлежащим образом, в установленный срок и в соответствии с требованиями Договора и Спецификации. Заказчик претензий по объёму, качеству и срокам выполнения работ не имеет.</p>
+      <p>2. Общая стоимость выполненных работ составляет {money(totalN, vat)}, в том числе: {parts.join('; ')}.</p>
+      <p>3. Гарантийный срок на Изделия и работы — {EXECUTOR.warrantyMonths} (восемнадцать) месяцев с даты подписания настоящего Акта.</p>
+      <p>4. Настоящий Акт составлен в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон.</p>
+
+      <div className="c-req" style={{ marginTop: 24 }}>
+        <div><b>Исполнитель:</b><br />{EXECUTOR.name}<br />ИНН {EXECUTOR.inn}, ОГРНИП {EXECUTOR.ogrnip}
+          <div className="c-sign">
+            {withSeal && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="c-signature" src="/signature.png" alt="" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="c-stamp" src="/stamp.png" alt="" />
+              </>
+            )}
+            <span className="c-sign-line">__________________ / {EXECUTOR.fioShort} /</span>
+          </div>
+        </div>
+        <div><b>Заказчик:</b><br />{c.customer_type === 'company' ? (c.customer?.name ?? '') : (c.customer?.fio ?? '')}<br /><br /><br />__________________ /                          /</div>
+      </div>
+    </div>
+  )
+}
