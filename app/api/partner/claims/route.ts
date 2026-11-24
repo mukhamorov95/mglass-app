@@ -1,3 +1,4 @@
+import { partnerOrderNo } from '@/lib/partner/format'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -40,9 +41,9 @@ export async function GET() {
   let numbers: Record<number, string> = {}
   if (orderIds.length) {
     const { data: os } = await svc.from('b2b_orders').select('id,custom_number').in('id', orderIds)
-    numbers = Object.fromEntries((os ?? []).map(o => [o.id as number, (o.custom_number as string | null)?.trim() || `#${o.id}`]))
+    numbers = Object.fromEntries((os ?? []).map(o => [o.id as number, partnerOrderNo({ id: o.id as number, custom_number: o.custom_number as string | null })]))
   }
-  const claims = (data ?? []).map(c => ({ ...c, kindLabel: KIND_LABEL[c.kind] ?? c.kind, orderNumber: c.order_id ? (numbers[c.order_id as number] ?? `#${c.order_id}`) : null }))
+  const claims = (data ?? []).map(c => ({ ...c, kindLabel: KIND_LABEL[c.kind] ?? c.kind, orderNumber: c.order_id ? (numbers[c.order_id as number] ?? partnerOrderNo({ id: c.order_id as number })) : null }))
   return NextResponse.json({ linked: true, claims })
 }
 

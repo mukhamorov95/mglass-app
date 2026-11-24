@@ -1,3 +1,4 @@
+import { partnerOrderNo } from '@/lib/partner/format'
 import { reviewOf } from '@/lib/b2b/partnerReview'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
@@ -118,7 +119,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const full = {
     id: o.id,
-    number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
+    number: partnerOrderNo({ id: o.id as number, custom_number: o.custom_number as string | null }),
     clientOrderNumber: (o.client_order_number as string | null) ?? null,
     clientName: client.name,
     buyer: {

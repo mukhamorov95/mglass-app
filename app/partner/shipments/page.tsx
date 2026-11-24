@@ -5,6 +5,7 @@ import { loadJson } from '@/lib/toast'
 import { presetPeriod, type PresetId } from '@/lib/b2b/clientReport'
 import type { ReconDoc } from '@/lib/production/clientReconciliation'
 import ReconciliationDoc, { fmtMoney } from '@/app/production-app/shower-glass/ReconciliationDoc'
+import { rub } from '@/lib/partner/format'
 import { fmtDay, fmtKg } from '@/app/production-app/shower-glass/types'
 import type { PartnerShipOrder, PartnerShipment } from '@/lib/partner/shipmentsView'
 
@@ -61,7 +62,7 @@ export default function PartnerShipmentsPage() {
     <div className="wrap">
       <div className="ph" style={{ marginBottom: 14 }}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Отгрузки</h1>
-        <div className="cap">Где каждый заказ: в работе, упакован, уехал. Отгрузки по датам и акт сверки.</div>
+        <div className="cap">Где каждый заказ: в работе, упакован, уехал. Отгрузки по датам и акт сверки. Учёт по изделиям — с 1 июля 2026: более ранние заказы есть на Табло и в «Документах».</div>
       </div>
 
       {err && <div className="note"><div className="t">Не загрузилось</div><div className="s">{err}. Обновите страницу через минуту.</div></div>}
@@ -115,7 +116,7 @@ function OrderBox({ o, money, urgentTab }: { o: PartnerShipOrder; money: boolean
             {STAGE_RU[o.stage]} · упаковано позиций {o.packed_lines} из {o.lines.length} · уехало {shipped} из {pieces} шт.
           </div>
         </div>
-        {sum !== null && <div className="amt tnum">{fmtMoney(sum)}</div>}
+        {sum !== null && <div className="amt tnum">{rub(sum)}</div>}
       </div>
       <button className="ghost" style={{ marginTop: 8, fontSize: 12, padding: '4px 10px' }} onClick={() => setOpen(v => !v)}>
         {open ? 'Скрыть изделия ▴' : `Изделия · ${o.lines.length} ▾`}
@@ -153,7 +154,7 @@ function ShipmentsList({ list, money }: { list: PartnerShipment[]; money: boolea
                 <div className="num">Отгрузка {fmtDay(h.ship_date)}</div>
                 <div className="meta tnum">заказов {orders} · {pieces} шт. · {fmtKg(weight)}</div>
               </div>
-              {sum !== null && <div className="amt tnum">{fmtMoney(sum)}</div>}
+              {sum !== null && <div className="amt tnum">{rub(sum)}</div>}
             </div>
             <button className="ghost" style={{ marginTop: 8, fontSize: 12, padding: '4px 10px' }} onClick={() => setOpen(open === h.id ? null : h.id)}>
               {open === h.id ? 'Скрыть ▴' : 'Что уехало ▾'}
@@ -164,7 +165,7 @@ function ShipmentsList({ list, money }: { list: PartnerShipment[]; money: boolea
                   <div key={i} className="meta" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 4 }}>
                     <span style={{ minWidth: 70, color: 'var(--ink)' }}>{l.order_no}{l.client_no ? ` (ваш № ${l.client_no})` : ''}</span>
                     <span style={{ flex: '1 1 200px', minWidth: 0 }}>{l.label}{l.size ? ` · ${l.size}` : ''} · {l.qty} шт.</span>
-                    {money && <span className="tnum">{l.own_cost ? 'за наш счёт' : fmtMoney(l.amount ?? 0)}</span>}
+                    {money && <span className="tnum">{l.own_cost ? 'за наш счёт' : rub(l.amount ?? 0)}</span>}
                   </div>
                 ))}
               </div>

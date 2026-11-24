@@ -1,3 +1,4 @@
+import { fromShopNo } from '@/lib/partner/format'
 import type { PoolOrder, Shipment } from '@/app/production-app/shower-glass/types'
 
 // Что из экрана отгрузок цеха уходит партнёру (К7, владелец 24.11). Только чтение, свой клиент.
@@ -14,7 +15,7 @@ export type PartnerShipment = { id: number; ship_date: string | null; lines: { o
 
 export function partnerOrders(orders: PoolOrder[], money: boolean): PartnerShipOrder[] {
   return orders.filter(o => !o.hidden).map(o => ({
-    id: o.id, no: o.no, client_no: o.client_no, urgent: o.urgent_rank !== null && o.stage !== 'shipped', urgent_rank: o.urgent_rank,
+    id: o.id, no: fromShopNo(o.id, o.no), client_no: o.client_no, urgent: o.urgent_rank !== null && o.stage !== 'shipped', urgent_rank: o.urgent_rank,
     launch_day: o.launch_day, deadline_day: o.deadline_day, overdue_days: o.overdue_days,
     stage: o.stage, state: o.state, packed_lines: o.packed_lines, ship_day: o.marked_day,
     lines: o.lines.map(l => ({
@@ -29,7 +30,7 @@ export function partnerShipments(list: Shipment[], money: boolean): PartnerShipm
   return list.filter(h => h.status === 'shipped').map(h => ({
     id: h.id, ship_date: h.ship_date,
     lines: h.lines.map(l => ({
-      order_id: l.order_id, order_no: l.order_no, client_no: l.client_no, label: l.label, size: l.size, qty: l.qty, weight: l.weight,
+      order_id: l.order_id, order_no: fromShopNo(l.order_id, l.order_no), client_no: l.client_no, label: l.label, size: l.size, qty: l.qty, weight: l.weight,
       ...(money ? { amount: l.amount, own_cost: !!l.own_cost } : {}),
     })),
   }))
