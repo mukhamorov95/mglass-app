@@ -56,3 +56,10 @@ export async function drawingUploadedAt(svc: SupabaseClient, drawingUrl: string)
   if (!obj) return null
   return latest(obj.updated_at, obj.created_at, (obj.metadata as { lastModified?: string } | null)?.lastModified)
 }
+
+// Согласование чертежа спрашиваем только по заявке, поданной из кабинета, и до запуска:
+// заказ, который мы завели и запустили сами, клиенту согласовывать незачем (24.11.2026:
+// у Шовер Гласс «Чертёж ждёт согласования» висел на запущенных заказах).
+export function drawingAsksPartner(notes: Record<string, unknown>, launched: boolean): boolean {
+  return !launched && (notes.source === 'partner' || notes.created_by_partner === true)
+}

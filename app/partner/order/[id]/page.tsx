@@ -26,6 +26,8 @@ type Order = {
   upd?: { number: number; year: number; docDate: string } | null
   drawingApproval?: { status: 'approved' | 'rework'; comment: string | null; at: string | null } | null
   drawingPrev?: { status: 'approved' | 'rework'; at: string | null; updatedAt: string | null } | null
+  drawingAsk?: boolean
+  askDelivery?: boolean
   launched?: boolean
   quoteState?: QuoteState | null
   stateNote?: string | null
@@ -225,16 +227,16 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
               {o.drawingUrl && o.drawingApproval?.status === 'rework' && (
                 <div className="recalc" style={{ marginTop: 10 }}>✎ Отправлено на доработку{o.drawingApproval.comment ? `: ${o.drawingApproval.comment}` : ''}. Менеджер пришлёт обновлённый чертёж.</div>
               )}
-              {o.drawingUrl && !o.drawingApproval && o.drawingPrev && (
+              {o.drawingUrl && o.drawingAsk && !o.drawingApproval && o.drawingPrev && (
                 <div className="info" style={{ marginTop: 10 }}><span>↻</span><span>Чертёж обновлён{o.drawingPrev.updatedAt ? ` ${fmtDate(o.drawingPrev.updatedAt)}` : ''} — после того как вы {o.drawingPrev.status === 'rework' ? 'отправили его на доработку' : 'его согласовали'}. Посмотрите новый и ответьте ещё раз.</span></div>
               )}
-              {o.drawingUrl && !o.drawingApproval && !reworkOpen && o.perms?.calc !== false && (
+              {o.drawingUrl && o.drawingAsk && !o.drawingApproval && !reworkOpen && o.perms?.calc !== false && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button className="primary" style={{ flex: 1 }} disabled={deciding} onClick={() => decide('approve')}>✓ Согласовать</button>
                   <button className="ghost" style={{ flex: 1 }} disabled={deciding} onClick={() => setReworkOpen(true)}>✎ На доработку</button>
                 </div>
               )}
-              {o.drawingUrl && !o.drawingApproval && reworkOpen && (
+              {o.drawingUrl && o.drawingAsk && !o.drawingApproval && reworkOpen && (
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <textarea className="pinput" rows={3} autoFocus value={reworkText} onChange={e => setReworkText(e.target.value)}
                     placeholder="Что поправить в чертеже?" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 10, fontSize: 13, color: 'var(--ink)', fontFamily: 'inherit', outline: 'none', resize: 'vertical' }} />
@@ -265,7 +267,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
-      {o.lane !== 'quote' && (
+      {o.lane !== 'quote' && (o.askDelivery !== false || o.delivery) && (
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h"><h3>Получение</h3>
             {o.delivery?.status && <span className="pill p-work" style={{ fontSize: 11 }}>{o.delivery.status}</span>}

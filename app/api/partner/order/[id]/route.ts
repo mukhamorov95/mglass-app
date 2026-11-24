@@ -14,7 +14,8 @@ import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { materialWithKind } from '@/lib/materialLabel'
 import { invoiceState } from '@/lib/partner/documents'
 import { pointStage } from '@/lib/partner/pointPay'
-import { decisionOf, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
+import { decisionOf, drawingAsksPartner, drawingUploadedAt, isDecisionStale } from '@/lib/partner/drawingApproval'
+import { shipsByOurRoute } from '@/lib/production/clientShipments'
 import { loadUpdIssued } from '@/lib/b2b/updRegistry'
 
 // Карточка заказа для кабинета. СТРОГО по своему client_id. Отдаём только
@@ -145,8 +146,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     drawingUrl,
     drawingApproval,
     drawingPrev,
+    drawingAsk: drawingAsksPartner(pn, launched),
     launched,
     delivery,
+    askDelivery: !shipsByOurRoute(client.id),
     recalcNote: history.length > 0 && !stateNote && (qs === null || qs === 'draft') ? lastComment : null,
     quoteState: qs,
     stateNote,
