@@ -5,6 +5,7 @@ import { resolvePartnerMember } from '@/lib/partnerClient'
 import { permsOf } from '@/lib/partner/teamRoles'
 import { partnerProgress } from '@/lib/partner/orderProgress'
 import { readPaged } from '@/lib/partner/readPaged'
+import { SHOWER_GLASS } from '@/lib/production/clientShipments'
 
 // Меню кабинета: имя, роль, права, счётчики и непрочитанные — одним лёгким запросом.
 // Раньше меню звало полный /api/partner/orders (оплаты, УПД, отгрузки) ради трёх чисел.
@@ -36,7 +37,7 @@ export async function GET() {
       else if (lane === 'shipped') counts.shipped++
       else counts.inwork++
     }
-    return NextResponse.json({ linked: true, client: { name: pm.client.name }, isPoint: pm.client.is_point === true, role: pm.role, perms: permsOf(pm.role), counts, unread: unread.count ?? 0 })
+    return NextResponse.json({ linked: true, client: { name: pm.client.name }, isPoint: pm.client.is_point === true, shipTracking: pm.client.id === SHOWER_GLASS.clientId, role: pm.role, perms: permsOf(pm.role), counts, unread: unread.count ?? 0 })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
