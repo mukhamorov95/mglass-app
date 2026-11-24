@@ -19,7 +19,7 @@ import { materialLabelShort } from '@/lib/materialLabel'
 import { daysWord } from '@/lib/b2b/inWorkOrders'
 import { loadPointClientIds } from '@/lib/b2b/points'
 import { ORDER_STATE_LABEL, numberMatches, type OrderShipState } from '@/lib/production/clientShipments'
-import { BOARD_TABS, BOARD_TAB_KEYS, boardSort, inBoardTab, markLine, type BoardOrder, type BoardTab, type BoardTask, IDLE_ALARM_DAYS } from '@/lib/production/ordersBoard'
+import { BOARD_TABS, BOARD_TAB_KEYS, boardSort, inBoardTab, markLine, type BoardOrder, type BoardTab, type BoardTask } from '@/lib/production/ordersBoard'
 import { loadJson, toast as errorToast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 type Item = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; hasTempering?: boolean; hasFacet?: boolean; hasHoles?: boolean; shape?: 'rect' | 'curved'; hasTriplex?: boolean }
@@ -329,7 +329,6 @@ function OrderCard({ o, point, isOpen, onToggle, children }: { o: BoardOrder; po
         )}
         <p className="text-[12px] text-[#6b6b66]">
           {o.last_mark ? `Последняя отметка ${fmtStamp(o.last_mark.at)}${o.last_mark.by ? `, ${o.last_mark.by}` : ''}` : 'Отметок ещё нет'}
-          {o.idle_days !== null && o.idle_days >= IDLE_ALARM_DAYS && <span className="text-amber-700"> · без отметок {o.idle_days} {daysWord(o.idle_days)}</span>}
         </p>
       </button>
       {isOpen && <div className="border-t border-[#f0f0ec] px-3 py-3 space-y-3">{children}</div>}
