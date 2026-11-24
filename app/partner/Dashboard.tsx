@@ -155,11 +155,12 @@ export default function Dashboard() {
 
         <div className="split">
           <div className="card">
-            <div className="card-h"><h3>Заказы по месяцам</h3><span className="mut">{year} · шт.</span></div>
+            <div className="card-h"><h3>Заказы по месяцам</h3><span className="mut">{year} · шт., по месяцу заказа</span></div>
             <div className="chart">
               {byMonthCount.map((c, i) => (
-                <div className={`bar${c === peak && peak > 0 ? ' peak' : ''}`} key={i} title={`${MONTHS[i]}: ${c}`}>
-                  <div className="fill" style={{ height: `${Math.round((c / chartMax) * 100)}%` }} />
+                <div className="bar" key={i} title={`${MONTHS[i]}: ${c}`}>
+                  {c > 0 && <div className="cnt tnum">{c}</div>}
+                  <div className={`fill${c === 0 ? ' zero' : ''}`} style={{ height: `${Math.round((c / chartMax) * 80)}%` }} />
                   <div className="m">{MONTHS[i]}</div>
                 </div>
               ))}
