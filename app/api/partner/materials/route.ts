@@ -1,9 +1,10 @@
+import { publicServices } from '@/lib/partner/partnerServices'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
-import type { B2BMaterial } from '@/lib/types'
+import type { B2BMaterial, B2BService } from '@/lib/types'
 import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 
 // Справочники для партнёрского калькулятора. Отдаём ТОЛЬКО безопасные поля:
@@ -23,11 +24,12 @@ export async function GET() {
   const client = pm.client
   { const denied = denyUnless(pm.role, 'calc'); if (denied) return denied }
 
-  const [{ data: mats }, { data: matrix }, { data: facets }, { data: surchargeData }] = await Promise.all([
+  const [{ data: mats }, { data: matrix }, { data: facets }, { data: surchargeData }, { data: svcData }] = await Promise.all([
     svc.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
     svc.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
     svc.from('facet_prices').select('type_mm,sale_price').eq('active', true).order('type_mm'),
     svc.from('b2b_surcharge_rules').select('id,axis,min_mm,max_mm,surcharge_percent,label,shape_filter').eq('active', true).order('sort_order'),
+    svc.from('b2b_services').select('id,name,type,value,active,sort_order').eq('active', true).order('sort_order').order('id'),
   ])
 
   const priced = prepPricedMaterials((mats ?? []) as B2BMaterial[], (matrix ?? []) as Array<Record<string, unknown>>)
@@ -55,5 +57,6 @@ export async function GET() {
     linked: true,
     discountPercent: Number(client.discount_percent) || 0,
     materials, facetOptions, surcharges,
+    services: publicServices((svcData ?? []) as B2BService[]),
   })
 }
