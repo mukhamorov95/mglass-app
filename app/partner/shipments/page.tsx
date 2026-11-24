@@ -13,9 +13,9 @@ import type { PartnerShipOrder, PartnerShipment } from '@/lib/partner/shipmentsV
 // Только чтение.
 
 type Data = { available: boolean; today: string; money: boolean; finance: boolean; orders: PartnerShipOrder[]; shipments: PartnerShipment[] }
-type Tab = 'in_work' | 'packed' | 'shipped' | 'overdue' | 'urgent' | 'shipments' | 'recon'
+type Tab = 'in_work' | 'packed' | 'shipped' | 'overdue' | 'urgent' | 'shipments' | 'history' | 'recon'
 
-const TABS: { key: Exclude<Tab, 'shipments' | 'recon'>; label: string; empty: string }[] = [
+const TABS: { key: Exclude<Tab, 'shipments' | 'history' | 'recon'>; label: string; empty: string }[] = [
   { key: 'in_work', label: 'В работе', empty: 'Заказов в работе нет.' },
   { key: 'packed', label: 'Упакованы', empty: 'Упакованных заказов нет.' },
   { key: 'shipped', label: 'Отгружены', empty: 'Отгруженных заказов нет.' },
@@ -72,7 +72,8 @@ export default function PartnerShipmentsPage() {
         <>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
             {TABS.map(t => btn(t.key, `${t.label} · ${counts[t.key]}`, (t.key === 'overdue' || t.key === 'urgent') && counts[t.key] > 0))}
-            {btn('shipments', `История отгрузок · ${data.shipments.length}`)}
+            {btn('shipments', `Отгрузки · ${data.shipments.length}`)}
+            {btn('history', `История заказов · ${data.orders.length}`)}
             {data.finance && btn('recon', 'Акт сверки')}
           </div>
 
@@ -82,6 +83,9 @@ export default function PartnerShipmentsPage() {
             return <div style={{ display: 'grid', gap: 10 }}>{list.map(o => <OrderBox key={o.id} o={o} money={data.money} urgentTab={tab === 'urgent'} />)}</div>
           })()}
 
+          {tab === 'history' && (data.orders.length === 0
+            ? <div className="note"><div className="s">Заказов нет.</div></div>
+            : <div style={{ display: 'grid', gap: 10 }}>{[...data.orders].sort((a, b) => b.launch_day.localeCompare(a.launch_day) || b.id - a.id).map(o => <OrderBox key={o.id} o={o} money={data.money} urgentTab={false} />)}</div>)}
           {tab === 'shipments' && <ShipmentsList list={data.shipments} money={data.money} />}
           {tab === 'recon' && data.finance && <Recon today={data.today} />}
         </>

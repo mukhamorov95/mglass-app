@@ -15,14 +15,14 @@ export function invoiceState(o: { launched: boolean; canSelfInvoice: boolean; is
 
 export const INVOICE_HINT: Record<Exclude<InvoiceState, 'open'>, string> = {
   manager: 'счёт пришлёт менеджер',
-  after_launch: 'счёт — после запуска',
+  after_launch: 'счёт — после проверки и запуска',
   after_check: 'счёт — после проверки суммы',
 }
 
 // Отказ маршрута счёта словами — тот же, что видит партнёр на странице счёта.
 export const INVOICE_REFUSAL: Record<Exclude<InvoiceState, 'open'>, { status: number; error: string }> = {
   manager: { status: 403, error: 'Счёт выставляет менеджер' },
-  after_launch: { status: 409, error: 'Счёт доступен после запуска заказа в работу' },
+  after_launch: { status: 409, error: 'Счёт откроется, когда менеджер проверит заказ и запустит его в работу' },
   after_check: { status: 409, error: 'Счёт откроется, когда менеджер проверит сумму и выставит его' },
 }
 

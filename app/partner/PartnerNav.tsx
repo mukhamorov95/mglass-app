@@ -76,6 +76,11 @@ export default function PartnerNav() {
           <span className="tx">Табло</span>
         </Link>
 
+        {shipTracking && <Link href="/partner/shipments" className={item(path.startsWith('/partner/shipments'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><path d="M2.5 5.5h9v8h-9z" /><path d="M11.5 8.5h3.2l2.8 2.8v2.2h-6" /><circle cx="5.5" cy="14.5" r="1.6" /><circle cx="14.5" cy="14.5" r="1.6" /></svg></span>
+          <span className="tx">Отгрузки</span>
+        </Link>}
+
 
         {isPoint && may('calc') && <Link href="/partner/counter" className={item(path.startsWith('/partner/counter'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M3 8.5 4.5 3.5h11L17 8.5" /><path d="M3 8.5h14v1a2.3 2.3 0 0 1-4.6 0 2.3 2.3 0 0 1-4.7 0A2.3 2.3 0 0 1 3 9.5Z" /><path d="M4.5 11.5v5h11v-5" /><path d="M8.5 16.5v-3h3v3" /></svg></span>
@@ -106,11 +111,6 @@ export default function PartnerNav() {
             })}
           </div>
         </div>
-
-        {shipTracking && <Link href="/partner/shipments" className={item(path.startsWith('/partner/shipments'))}>
-          <span className="ic"><svg viewBox="0 0 20 20"><path d="M2.5 5.5h9v8h-9z" /><path d="M11.5 8.5h3.2l2.8 2.8v2.2h-6" /><circle cx="5.5" cy="14.5" r="1.6" /><circle cx="14.5" cy="14.5" r="1.6" /></svg></span>
-          <span className="tx">Отгрузки</span>
-        </Link>}
 
         {may('finance') && <Link href="/partner/documents" className={item(path.startsWith('/partner/documents'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M6 2.5h5l3 3V17a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 6 17Z" /><path d="M11 2.5V6h3" /></svg></span>
