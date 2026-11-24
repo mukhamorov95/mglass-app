@@ -8,7 +8,8 @@ import { TEAM_ROLE_RU, type TeamPerm, type TeamRole } from '@/lib/partner/teamRo
 
 // Левое меню кабинета партнёра (дизайн из прототипа, класс .pcab .side).
 // Имя клиента и счётчики (просчёты/заказы) берём из /api/partner/orders.
-// На узком экране сайдбар сжимается в колонку иконок (см. PartnerTheme).
+// На телефоне (≤560 px) меню — выезжающая панель, а снизу — панель из пяти пунктов с подписями
+// (24.11.2026: колонку иконок без подписей на телефоне не понять).
 
 const CALC_CHILDREN: { href: string; label: string; emo: string; badge?: 'quotes' | 'inwork' | 'shipped'; perm?: TeamPerm }[] = [
   { href: '/partner/new', label: 'Новый просчёт', emo: '➕', perm: 'calc' },
@@ -31,6 +32,7 @@ export default function PartnerNav() {
   const [client, setClient] = useState<string | null>(null)
   const [counts, setCounts] = useState<{ quotes: number; inwork: number; shipped: number }>({ quotes: 0, inwork: 0, shipped: 0 })
   const [unread, setUnread] = useState(0)
+  const [menu, setMenu] = useState(false)
   // Прилавок — только точкам на рынке: остальным партнёрам он непонятен (владелец 24.11).
   const [isPoint, setIsPoint] = useState(false)
   // Отгрузки по изделиям ведутся у клиента — отдельный раздел вместо «Отгруженных» (К7).
@@ -55,8 +57,28 @@ export default function PartnerNav() {
   const item = (active: boolean, extra = '') => `it${active ? ' on' : ''}${extra ? ' ' + extra : ''}`
   const badgeFor = (b?: 'quotes' | 'inwork' | 'shipped') => (b ? counts[b] : 0)
 
+  const ordersHref = shipTracking ? '/partner/shipments' : '/partner/orders'
+  const tab = (href: string, label: string, icon: React.ReactNode, active: boolean, badge = 0) => (
+    <Link href={href} className={`bt${active ? ' on' : ''}`} onClick={() => setMenu(false)}>
+      <span className="bi">{icon}{badge > 0 && <span className="bb">{badge > 99 ? '99+' : badge}</span>}</span>
+      <span>{label}</span>
+    </Link>
+  )
+
   return (
-    <aside className="side">
+    <>
+    {menu && <div className="side-dim" onClick={() => setMenu(false)} />}
+    <nav className="bnav" aria-label="Меню кабинета">
+      {tab('/partner', 'Табло', <svg viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6" rx="1.4" /><rect x="11" y="3" width="6" height="6" rx="1.4" /><rect x="3" y="11" width="6" height="6" rx="1.4" /><rect x="11" y="11" width="6" height="6" rx="1.4" /></svg>, path === '/partner')}
+      {tab(ordersHref, shipTracking ? 'Отгрузки' : 'Заказы', <svg viewBox="0 0 20 20"><path d="M2.5 5.5h9v8h-9z" /><path d="M11.5 8.5h3.2l2.8 2.8v2.2h-6" /><circle cx="5.5" cy="14.5" r="1.6" /><circle cx="14.5" cy="14.5" r="1.6" /></svg>, path.startsWith(ordersHref))}
+      {may('calc') && tab('/partner/new', 'Просчёт', <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.4" /><line x1="10" y1="6.5" x2="10" y2="13.5" /><line x1="6.5" y1="10" x2="13.5" y2="10" /></svg>, path.startsWith('/partner/new'))}
+      {tab('/partner/notifications', 'Уведомл.', <svg viewBox="0 0 20 20"><path d="M6 8a4 4 0 0 1 8 0c0 4 1.5 5 1.5 5h-11S6 12 6 8Z" /><path d="M8.5 16a1.5 1.5 0 0 0 3 0" /></svg>, path.startsWith('/partner/notifications'), path.startsWith('/partner/notifications') ? 0 : unread)}
+      <button type="button" className={`bt${menu ? ' on' : ''}`} onClick={() => setMenu(m => !m)} aria-expanded={menu}>
+        <span className="bi"><svg viewBox="0 0 20 20"><line x1="3.5" y1="6" x2="16.5" y2="6" /><line x1="3.5" y1="10" x2="16.5" y2="10" /><line x1="3.5" y1="14" x2="16.5" y2="14" /></svg></span>
+        <span>Ещё</span>
+      </button>
+    </nav>
+    <aside className={`side${menu ? ' show' : ''}`} onClick={e => { if ((e.target as HTMLElement).closest('a')) setMenu(false) }}>
       <div className="brand">
         <div className="logo" aria-label="M-Glass">
           <svg viewBox="0 0 64 56" xmlns="http://www.w3.org/2000/svg">
@@ -117,7 +139,7 @@ export default function PartnerNav() {
           <span className="tx">Документы</span>
         </Link>}
 
-        {may('calc') && <Link href="/partner/catalog" className={item(path.startsWith('/partner/catalog'))}>
+        {isPoint && may('calc') && <Link href="/partner/catalog" className={item(path.startsWith('/partner/catalog'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M5 6h10l-1 11H6z" /><path d="M7.5 6a2.5 2.5 0 0 1 5 0" /></svg></span>
           <span className="tx">Каталог</span>
         </Link>}
@@ -152,5 +174,6 @@ export default function PartnerNav() {
           onClick={async () => { await createClient().auth.signOut(); window.location.href = '/login' }}>⎋</button>
       </div>
     </aside>
+    </>
   )
 }

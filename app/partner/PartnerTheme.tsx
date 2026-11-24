@@ -118,7 +118,8 @@ const CSS = `
   border-radius:6px 6px 3px 3px;transition:.2s;min-height:3px}
 .pcab .bar:hover .fill{filter:brightness(1.12)}
 .pcab .bar .m{font-size:10px;color:var(--muted);font-weight:600}
-.pcab .bar.peak .fill{background:var(--blue)}
+.pcab .bar .cnt{font-size:10.5px;font-weight:700;color:var(--ink-2)}
+.pcab .bar .fill.zero{min-height:0}
 
 .pcab .split{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;margin-top:14px}
 
@@ -127,7 +128,7 @@ const CSS = `
 .pcab .srow.first{border-top:0}
 .pcab .srow .snm{font-size:13px;font-weight:500;width:150px;flex-shrink:0}
 .pcab .srow .track{flex:1;height:8px;background:var(--surface-2);border-radius:20px;overflow:hidden}
-.pcab .srow .tk{height:100%;border-radius:20px}
+.pcab .srow .tk{display:block;height:100%;border-radius:20px}
 .pcab .srow .ct{font-size:12.5px;color:var(--muted);font-weight:600;width:26px;text-align:right;flex-shrink:0}
 
 /* pills */
@@ -155,7 +156,7 @@ const CSS = `
 .pcab .ord .amt{font-size:14.5px;font-weight:700;white-space:nowrap}
 .pcab .ord .prog{display:flex;align-items:center;gap:10px;margin-top:12px}
 .pcab .ord .track{flex:1;height:6px;background:var(--surface-2);border-radius:20px;overflow:hidden}
-.pcab .ord .tk{height:100%;border-radius:20px}
+.pcab .ord .tk{display:block;height:100%;border-radius:20px}
 .pcab .ord .pc{font-size:11.5px;color:var(--muted);font-weight:600;white-space:nowrap}
 .pcab .ord .recalc{margin-top:10px;font-size:11.5px;color:var(--amber);background:var(--amber-bg);
   border:1px solid var(--amber-bd);border-radius:9px;padding:7px 10px}
@@ -276,25 +277,28 @@ const CSS = `
   .pcab .split,.pcab .frm{grid-template-columns:1fr}
   .pcab .chart{gap:4px;height:150px}
 }
+/* Нижняя панель — только на телефоне */
+.pcab .bnav,.pcab .side-dim{display:none}
 @media (max-width:560px){
-  .pcab{grid-template-columns:60px 1fr}
-  .pcab .brand{justify-content:center;padding:16px 0 12px}
-  .pcab .brand .co,.pcab .brand .sub{display:none}
-  .pcab .nav{padding:8px 8px;align-items:center}
-  .pcab .nav .lbl{display:none}
-  .pcab .nav .it{justify-content:center;padding:12px 0;width:44px;position:relative}
-  .pcab .nav .it .tx{display:none}
-  .pcab .nav .badge{position:absolute;transform:translate(14px,-12px);margin:0;padding:0 5px}
-  .pcab .grp.open .sub{display:flex}
-  .pcab .grp .chev{display:none}
-  .pcab .sub{margin:0;align-items:center}
-  .pcab .sub .it{width:44px;justify-content:center;padding:10px 0}
-  .pcab .sub .it .tx{display:none}
-  .pcab .sub .it .emo{display:inline;font-size:16px;line-height:1}
-  .pcab .sub .it .badge{position:absolute;transform:translate(14px,-12px);margin:0;padding:0 5px}
-  .pcab .who{justify-content:center;padding:12px 0}
-  .pcab .who .nm,.pcab .who .rl,.pcab .who .out{display:none}
+  .pcab{grid-template-columns:1fr}
+  .pcab .side{position:fixed;left:0;top:0;bottom:0;width:min(290px,84vw);z-index:40;height:auto;
+    transform:translateX(-102%);transition:transform .2s;box-shadow:var(--shadow);overflow-y:auto}
+  .pcab .side.show{transform:none}
+  .pcab .side-dim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:39}
+  .pcab .bnav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;position:fixed;left:0;right:0;bottom:0;z-index:30;
+    background:var(--surface);border-top:1px solid var(--border);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
+  .pcab .bnav .bt{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;font-size:10.5px;font-weight:600;
+    color:var(--muted);text-decoration:none;background:none;border:0;font-family:inherit;cursor:pointer;min-width:0}
+  .pcab .bnav .bt.on{color:var(--ink)}
+  .pcab .bnav .bi{position:relative;width:22px;height:22px;display:flex}
+  .pcab .bnav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .pcab .bnav .bb{position:absolute;top:-5px;left:14px;background:var(--blue);color:#fff;font-size:9.5px;font-weight:700;
+    border-radius:10px;padding:0 5px;line-height:15px}
+  .pcab .main{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .pcab .top{flex-wrap:wrap;padding:12px 16px}
+  .pcab .top > div{min-width:0}
   .pcab .top h1{font-size:18px}
+  .pcab .kpi .v{font-size:20px;white-space:nowrap}
 }
 `
 
