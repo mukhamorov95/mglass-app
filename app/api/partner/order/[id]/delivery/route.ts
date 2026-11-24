@@ -1,3 +1,4 @@
+import { partnerOrderNo } from '@/lib/partner/format'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   await svc.from('b2b_orders').update({ updated_at: new Date().toISOString() }).eq('id', oid)
 
-  const number = (order.custom_number as string | null)?.trim() || `#${oid}`
+  const number = partnerOrderNo({ id: oid, custom_number: order.custom_number as string | null })
   const base = appUrl()
   await notifyAdmins(
     `🚚 <b>Способ получения</b>\n${client.name}, заказ ${number}: ${method === 'delivery' ? `доставка — ${address}` : 'самовывоз'}` +

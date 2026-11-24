@@ -112,9 +112,9 @@ export default function Dashboard() {
   const distMax = Math.max(...dist.map(d => d.c), 1)
 
   const kpis = [
-    { k: 'Заказов за год', v: String(stats.ordersCount), d: 'в производстве и отгружено', flat: true },
+    { k: `Заказов за ${year}`, v: String(stats.ordersCount), d: `в производстве и отгружено, с 1 января`, flat: true },
     ...(stats.money === false ? [] : [
-      { k: 'Сумма за год', v: fmtMoney(stats.sumYear ?? 0), d: 'по вашим ценам, с НДС', flat: true },
+      { k: `Сумма за ${year}`, v: fmtMoney(stats.sumYear ?? 0), d: 'по вашим ценам, с НДС', flat: true },
       { k: 'Средний чек', v: fmtMoney(stats.avgCheck ?? 0), d: 'на заказ', flat: true },
     ]),
     {

@@ -1,3 +1,4 @@
+import { partnerOrderNo } from '@/lib/partner/format'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -51,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   catch (e) { return NextResponse.json({ error: `Оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
   const amount = amountDue(paymentView({ total, paidFromPayments, notes: pn, due: true, settled: isSettledOrder(client.id, order.launched_at, pn) }))
   if (amount <= 0) return NextResponse.json({ error: 'Заказ уже оплачен' }, { status: 409 })
-  const number = (order.custom_number as string | null)?.trim() || `#${oid}`
+  const number = partnerOrderNo({ id: oid, custom_number: order.custom_number as string | null })
   const base = appUrl()
 
   const link = await createPaymentLink({

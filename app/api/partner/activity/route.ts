@@ -1,3 +1,4 @@
+import { partnerOrderNo } from '@/lib/partner/format'
 import { shipsByOurRoute } from '@/lib/production/clientShipments'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
@@ -41,7 +42,7 @@ export async function GET() {
       .eq('client_id', client.id).is('archived_at', null).order('id'))
     const orders: (ActivityOrder & { total: number })[] = rows.map(o => ({
       id: Number(o.id),
-      number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
+      number: partnerOrderNo({ id: o.id as number, custom_number: o.custom_number as string | null }),
       created_at: o.created_at as string,
       launched_at: (o.launched_at as string | null) ?? null,
       notes: parseNotes(o.notes),

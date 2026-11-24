@@ -1,3 +1,4 @@
+import { partnerOrderNo } from '@/lib/partner/format'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { notifyPartnerOrderStatus } from '@/lib/notify'
 import { appUrl } from '@/lib/appUrl'
@@ -80,7 +81,7 @@ export async function reconcileOrder(
   partnerEmail: string | null,
 ): Promise<void> {
   const orderId = order.id as number
-  const number = (order.custom_number as string | null)?.trim() || `#${orderId}`
+  const number = partnerOrderNo({ id: orderId, custom_number: order.custom_number as string | null })
   const base = appUrl()
   const link = `${base}/partner/order/${orderId}`
 

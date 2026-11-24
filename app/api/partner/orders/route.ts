@@ -1,3 +1,4 @@
+import { partnerOrderNo } from '@/lib/partner/format'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -118,7 +119,7 @@ export async function GET() {
 
     return {
       id: o.id as number,
-      number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
+      number: partnerOrderNo({ id: o.id as number, custom_number: o.custom_number as string | null }),
       clientOrderNumber: (o.client_order_number as string | null) ?? null,
       created_at: o.created_at as string,
       updatedAt: (o.updated_at as string | null) ?? (o.created_at as string),
