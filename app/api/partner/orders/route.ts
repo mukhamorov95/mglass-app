@@ -130,6 +130,7 @@ export async function GET() {
       ready: p.ready,
       shipPartial: partial,
       // Автор — только у просчётов, сделанных в кабинете: у наших там имя нашего сотрудника.
+      byPartner: o.source === 'partner',
       author: o.source === 'partner' ? authorOf(o.created_by_name as string | null, client.name) : null,
       deadline: partnerDeadline({ launched_at: o.launched_at as string | null, created_at: o.created_at as string }, pn).toISOString(),
       recalcNote: history.length > 0 && !stateNote && (qs === null || qs === 'draft') ? lastComment : null,

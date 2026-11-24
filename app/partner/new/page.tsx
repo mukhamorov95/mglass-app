@@ -15,6 +15,8 @@ import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 type Material = { id: number; name: string; category: string; thickness: number; salePrice: number }
 type FacetOpt = { typeMm: number; salePrice: number }
+type SvcOpt = { id: number; name: string; type: 'percent' | 'per_m2' | 'fixed'; value: number }
+const svcPrice = (s: SvcOpt) => s.type === 'percent' ? `+${s.value} %` : s.type === 'per_m2' ? `${Math.round(s.value).toLocaleString('ru-RU')} ₽/м²` : `${Math.round(s.value).toLocaleString('ru-RU')} ₽`
 type PricedItem = { material: string; thickness: number; width: number; height: number; quantity: number; price: number; lineTotal?: number }
 
 type Spec = {
@@ -22,6 +24,7 @@ type Spec = {
   hasTempering: boolean; hasFacet: boolean; facetTypeMm: number | null; hasHoles: boolean
   shape: 'rect' | 'curved'; hasTriplex: boolean; triplexLayers: number
   triplexMat2Id: number | null; triplexMat3Id: number | null; applyMinPrice: boolean
+  serviceIds?: number[]
 }
 
 
@@ -54,6 +57,8 @@ export default function PartnerNewQuotePage() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [facetOpts, setFacetOpts] = useState<FacetOpt[]>([])
   const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([])
+  const [svcOpts, setSvcOpts] = useState<SvcOpt[]>([])
+  const [svcSel, setSvcSel] = useState<number[]>([])
   const [discount, setDiscount] = useState(0)
   const [linked, setLinked] = useState(true)
   const [loading, setLoading] = useState(true)
@@ -97,6 +102,7 @@ export default function PartnerNewQuotePage() {
       setMaterials(mats)
       setFacetOpts(d.facetOptions ?? [])
       setSurchargeRules((d.surcharges ?? []) as SurchargeRule[])
+      setSvcOpts((d.services ?? []) as SvcOpt[])
       setDiscount(Number(d.discountPercent) || 0)
       if (d.facetOptions?.[0]) setFacetMm(Number(d.facetOptions[0].typeMm))
       // Пресет из каталога: /partner/new?preset=стекло|зеркало — предвыбор категории.
@@ -145,7 +151,7 @@ export default function PartnerNewQuotePage() {
       hasTempering: superCat !== 'зеркало' && tempering, hasFacet: facet, facetTypeMm: facet ? facetMm : null,
       hasHoles: holes, shape: (curved ? 'curved' : 'rect') as 'rect' | 'curved',
       hasTriplex: triplex, triplexLayers, triplexMat2Id: triplexMat2, triplexMat3Id: triplexMat3,
-      applyMinPrice: minPrice,
+      applyMinPrice: minPrice, serviceIds: svcSel,
     } : null
     const t = setTimeout(async () => {
       if (!spec) { setLivePrice(null); return }
@@ -157,7 +163,7 @@ export default function PartnerNewQuotePage() {
       } catch { /* сеть — просто не показываем цену */ } finally { setLiveBusy(false) }
     }, 300)
     return () => clearTimeout(t)
-  }, [matId, width, height, qty, tempering, facet, facetMm, holes, curved, minPrice, triplex, triplexLayers, triplexMat2, triplexMat3, superCat])
+  }, [matId, width, height, qty, tempering, facet, facetMm, holes, curved, minPrice, triplex, triplexLayers, triplexMat2, triplexMat3, superCat, svcSel])
 
   const catDef = useMemo(() => SUPER_CATS.find(s => s.value === superCat) ?? SUPER_CATS[0], [superCat])
   const catMats = useMemo(() => materials.filter(m => (catDef.cats as readonly string[]).includes(m.category)), [materials, catDef])
@@ -204,11 +210,11 @@ export default function PartnerNewQuotePage() {
       hasTempering: !isMirror && tempering, hasFacet: facet, facetTypeMm: facet ? facetMm : null,
       hasHoles: holes, shape: curved ? 'curved' : 'rect',
       hasTriplex: triplex, triplexLayers, triplexMat2Id: triplexMat2, triplexMat3Id: triplexMat3,
-      applyMinPrice: minPrice,
+      applyMinPrice: minPrice, serviceIds: svcSel,
     }
     const next = [...list, spec]
     setList(next)
-    setWidth(''); setHeight(''); setQty('1'); setHoles(false); setCurved(false); setFacet(false); setTriplex(false)
+    setWidth(''); setHeight(''); setQty('1'); setHoles(false); setCurved(false); setFacet(false); setTriplex(false); setSvcSel([])
     setSavedId(null); setSubmitted(false)
     void recompute(next, false)
   }
@@ -237,6 +243,7 @@ export default function PartnerNewQuotePage() {
     setHoles(s.hasHoles); setCurved(s.shape === 'curved'); setMinPrice(s.applyMinPrice)
     setTriplex(s.hasTriplex); setTriplexLayers(s.triplexLayers === 3 ? 3 : 2)
     setTriplexMat2(s.triplexMat2Id); setTriplexMat3(s.triplexMat3Id)
+    setSvcSel(s.serviceIds ?? [])
     const next = list.filter((_, idx) => idx !== i)
     setList(next); setSavedId(null); setSubmitted(false)
     void recompute(next, false)
@@ -373,6 +380,22 @@ export default function PartnerNewQuotePage() {
                 </div>
               )}
 
+              {svcOpts.length > 0 && (
+                <div className="fld full">
+                  <span className="lab">Доп. работы <span style={{ fontWeight: 400, textTransform: 'none', color: 'var(--ink-3)' }}>— как в нашем расчёте</span></span>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {svcOpts.map(o => (
+                      <label key={o.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={svcSel.includes(o.id)}
+                          onChange={e => setSvcSel(v => e.target.checked ? [...v, o.id] : v.filter(x => x !== o.id))} />
+                        <span style={{ flex: 1 }}>{o.name}</span>
+                        <span className="tnum" style={{ color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>{svcPrice(o)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {triplex && (
                 <div className="fld full" style={{ gap: 8 }}>
                   <select value={triplexLayers} onChange={e => setTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
@@ -418,7 +441,7 @@ export default function PartnerNewQuotePage() {
                   const name = p?.material ?? materials.find(m => m.id === s.materialId)?.name ?? '—'
                   return (
                     <tr key={i}>
-                      <td>{name}{s.hasTempering ? ', закалка' : ''}{s.hasFacet ? ', фацет' : ''}{s.hasTriplex ? ', триплекс' : ''}</td>
+                      <td>{name}{s.hasTempering ? ', закалка' : ''}{s.hasFacet ? ', фацет' : ''}{s.hasTriplex ? ', триплекс' : ''}{(s.serviceIds ?? []).map(id => svcOpts.find(o => o.id === id)?.name).filter(Boolean).map(n => `, ${String(n).toLowerCase()}`).join('')}</td>
                       <td className="tnum">{s.width} × {s.height}</td>
                       <td className="r tnum">{s.quantity}</td>
                       <td className="r tnum">{p ? fmt(p.lineTotal ?? p.price) : (busy ? '…' : '')}</td>

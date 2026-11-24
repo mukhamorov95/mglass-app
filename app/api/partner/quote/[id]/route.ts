@@ -1,3 +1,4 @@
+import { serviceIdsOf } from '@/lib/partner/partnerServices'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -55,6 +56,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       triplexMat2Id: triplexGlasses[0] ? Number(triplexGlasses[0].materialId) || null : null,
       triplexMat3Id: triplexGlasses[1] ? Number(triplexGlasses[1].materialId) || null : null,
       applyMinPrice: it.applyMinPrice !== false,
+      serviceIds: serviceIdsOf(it),
     }
   })
 

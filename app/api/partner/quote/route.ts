@@ -1,3 +1,4 @@
+import { pickServices } from '@/lib/partner/partnerServices'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -35,6 +36,7 @@ type ItemSpec = {
   triplexMat2Id?: number | null
   triplexMat3Id?: number | null
   applyMinPrice?: boolean
+  serviceIds?: number[]          // доп. работы из справочника (lib/partner/partnerServices)
   comment?: string
 }
 
@@ -91,6 +93,7 @@ export async function POST(req: NextRequest) {
   const triplexSvc = ((services ?? []) as B2BService[]).find(s => s.type === 'per_m2' && /триплекс/i.test(s.name))
   const triplexPrice = triplexSvc ? { salePerM2: Number(triplexSvc.value) || 0, costPerM2: Number(triplexSvc.cost_price) || 0 } : null
 
+  const allServices = (services ?? []) as B2BService[]
   const items: B2BOrderItem[] = []
   for (const s of specs) {
     const mat = byId.get(Number(s.materialId))
@@ -118,7 +121,7 @@ export async function POST(req: NextRequest) {
         triplexExtraGlasses,
         applyMinPrice: s.applyMinPrice !== false,
         comment: typeof s.comment === 'string' ? s.comment.slice(0, 120) : undefined,
-        // resolvedServices: [] — доп-услуги в кабинете пилота не выбираются; надбавки за габариты применяются автоматически
+        resolvedServices: pickServices(allServices, s.serviceIds),
       },
       { facetPrices, surchargeRules, rates: loadedRates.rates },
     )

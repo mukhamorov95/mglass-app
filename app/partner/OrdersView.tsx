@@ -23,6 +23,7 @@ type Order = {
   summary: string; positions: number
   shipPartial?: { shipped: number; total: number } | null
   author?: string | null
+  byPartner?: boolean
   point?: PointStage | null
   quoteState?: QuoteState | null
   stateNote?: string | null
@@ -237,7 +238,7 @@ function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit:
           <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.point ? '' : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
           {o.point && <div className="meta" style={{ marginTop: 2, color: o.point === 'await_payment' ? 'var(--amber)' : 'var(--ink-2)', fontWeight: o.point === 'await_payment' ? 600 : 400 }}>{POINT_LINE[o.point]}</div>}
           {o.summary && <div className="meta" style={{ marginTop: 2, color: 'var(--ink-2)' }}>{o.summary}{o.positions ? ` · ${o.positions} поз.` : ''}</div>}
-          {o.author && <div className="meta" style={{ marginTop: 2 }}>Просчитал: {o.author}</div>}
+          <div className="meta" style={{ marginTop: 2 }}>{o.byPartner ? `Посчитали вы${o.author ? ` · ${o.author}` : ''}` : 'Посчитали мы — M-Glass'}</div>
         </div>
         <div className="amt tnum">{fmtMoney(o.amount)}</div>
       </div>

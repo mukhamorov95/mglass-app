@@ -198,6 +198,7 @@ type Order = {
   // Column-level authorship — backed by 20260630_b2b_orders_authorship.sql.
   // Optional/nullable so the UI keeps working against pre-migration rows.
   created_by_name?:     string | null
+  source?:              string | null   // 'partner' — посчитал клиент в своём кабинете
   launched_at?:         string | null
   launched_by_name?:    string | null
   launched_by_user_id?: string | null
@@ -2556,7 +2557,7 @@ export default function B2BOrdersPage() {
                       onClick={() => setExpanded(isOpen ? null : order.id)}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}
+                          {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}{order.source === 'partner' && <span title="Посчитал клиент в кабинете — перепроверьте позиции перед запуском" className="text-[10px] font-semibold px-1.5 py-px rounded-full bg-[#eef4ff] text-[#2b5fd9] flex-shrink-0">Из кабинета</span>}
                           <span className="text-[13px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-px rounded flex-shrink-0">
                             {order.custom_number?.trim() || `00${order.id}`}
                           </span>
@@ -2735,7 +2736,7 @@ export default function B2BOrdersPage() {
                                 кл.{order.client_order_number}
                               </span>
                             )}
-                            {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}
+                            {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}{order.source === 'partner' && <span title="Посчитал клиент в кабинете — перепроверьте позиции перед запуском" className="text-[10px] font-semibold px-1.5 py-px rounded-full bg-[#eef4ff] text-[#2b5fd9] flex-shrink-0">Из кабинета</span>}
                             <span className="text-[13px] font-semibold text-[#111110] truncate">{order.client_name}</span>
                             {ds.status !== 'normal' && ds.status !== 'unknown' && (
                               <span className={`text-[10px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${DEADLINE_BADGE[ds.status]}`}>
@@ -2920,7 +2921,7 @@ export default function B2BOrdersPage() {
                                         кл.{order.client_order_number}
                                       </span>
                                     )}
-                                    {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}
+                                    {order.client_id != null && pointClients.has(order.client_id) && <PointBadge />}{order.source === 'partner' && <span title="Посчитал клиент в кабинете — перепроверьте позиции перед запуском" className="text-[10px] font-semibold px-1.5 py-px rounded-full bg-[#eef4ff] text-[#2b5fd9] flex-shrink-0">Из кабинета</span>}
                                     <p className="text-[14px] font-bold text-[#111110]">{order.client_name}</p>
                                     {ds.status !== 'normal' && ds.status !== 'unknown' && (
                                       <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
