@@ -6,7 +6,7 @@ import Link from 'next/link'
 // Уведомления кабинета (дизайн .pcab): статусы заказов, приглашение, подтверждения.
 // Данные — /api/partner/notifications (строго свои). Открытие ленты помечает прочитанным.
 
-type Item = { id: number; kind: string; title: string; body: string | null; link: string | null; read_at: string | null; created_at: string }
+type Item = { id: number; kind: string; title: string; body: string | null; link: string | null; read_at: string | null; created_at: string; by?: string | null }
 
 const ICON: Record<string, string> = {
   access: '👋', submitted: '📨', in_work: '🏭', ready: '✅', shipped: '🚚', recalc: '✎',
@@ -56,7 +56,7 @@ export default function PartnerNotificationsPage() {
                       {!n.read_at && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />}
                     </div>
                     {n.body && <div className="fm" style={{ marginTop: 2 }}>{n.body}</div>}
-                    <div className="fm" style={{ marginTop: 3, opacity: .8 }}>{fmt(n.created_at)}</div>
+                    <div className="fm" style={{ marginTop: 3, opacity: .8 }}>{fmt(n.created_at)}{n.by ? ` · отметил: ${n.by}` : ''}</div>
                   </div>
                 </>
               )
