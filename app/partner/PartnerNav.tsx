@@ -17,7 +17,6 @@ const CALC_CHILDREN: { href: string; label: string; emo: string; badge?: 'quotes
   { href: '/partner/shipped', label: 'Отгруженные', badge: 'shipped' as const, emo: '📦' },
 ]
 
-type OrderLite = { lane: 'quote' | 'submitted' | 'in_work' | 'shipped' }
 
 function initials(name: string): string {
   const parts = name.replace(/[«»"']/g, '').trim().split(/\s+/).filter(Boolean)
@@ -32,24 +31,22 @@ export default function PartnerNav() {
   const [client, setClient] = useState<string | null>(null)
   const [counts, setCounts] = useState<{ quotes: number; inwork: number; shipped: number }>({ quotes: 0, inwork: 0, shipped: 0 })
   const [unread, setUnread] = useState(0)
+  // Прилавок — только точкам на рынке: остальным партнёрам он непонятен (владелец 24.11).
+  const [isPoint, setIsPoint] = useState(false)
   // Меню по роли (права режет сервер; здесь — чтобы не вести в закрытое). Пока не знаем — всё видно.
   const [role, setRole] = useState<TeamRole | null>(null)
   const [perms, setPerms] = useState<Partial<Record<TeamPerm, boolean>> | null>(null)
   const may = (p?: TeamPerm) => !p || !perms || perms[p] === true
 
   useEffect(() => {
-    fetch('/api/partner/orders').then(r => r.json()).then((d: { client?: { name: string } | null; orders?: OrderLite[]; role?: TeamRole; perms?: Record<TeamPerm, boolean> }) => {
+    fetch('/api/partner/nav').then(r => r.json()).then((d: { client?: { name: string } | null; counts?: { quotes: number; inwork: number; shipped: number }; unread?: number; isPoint?: boolean; role?: TeamRole; perms?: Record<TeamPerm, boolean> }) => {
       if (d.client?.name) setClient(d.client.name)
       if (d.role) setRole(d.role)
       if (d.perms) setPerms(d.perms)
-      const os = d.orders ?? []
-      setCounts({
-        quotes: os.filter(o => o.lane === 'quote').length,
-        inwork: os.filter(o => o.lane === 'submitted' || o.lane === 'in_work').length,
-        shipped: os.filter(o => o.lane === 'shipped').length,
-      })
+      if (d.counts) setCounts(d.counts)
+      setUnread(d.unread ?? 0)
+      setIsPoint(d.isPoint === true)
     }).catch(() => {})
-    fetch('/api/partner/notifications').then(r => r.json()).then((d: { unread?: number }) => setUnread(d.unread ?? 0)).catch(() => {})
   }, [])
 
   const item = (active: boolean, extra = '') => `it${active ? ' on' : ''}${extra ? ' ' + extra : ''}`
@@ -76,7 +73,8 @@ export default function PartnerNav() {
           <span className="tx">Табло</span>
         </Link>
 
-        {may('calc') && <Link href="/partner/counter" className={item(path.startsWith('/partner/counter'))}>
+
+        {isPoint && may('calc') && <Link href="/partner/counter" className={item(path.startsWith('/partner/counter'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M3 8.5 4.5 3.5h11L17 8.5" /><path d="M3 8.5h14v1a2.3 2.3 0 0 1-4.6 0 2.3 2.3 0 0 1-4.7 0A2.3 2.3 0 0 1 3 9.5Z" /><path d="M4.5 11.5v5h11v-5" /><path d="M8.5 16.5v-3h3v3" /></svg></span>
           <span className="tx">Прилавок</span>
         </Link>}

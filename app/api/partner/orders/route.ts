@@ -32,6 +32,9 @@ function authorOf(raw: string | null, clientName: string): string | null {
 }
 
 export async function GET() {
+  const t0 = Date.now()
+  const marks: string[] = []
+  const mark = (n: string) => marks.push(`${n};dur=${Date.now() - t0}`)
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
@@ -42,6 +45,7 @@ export async function GET() {
   const pm = await resolvePartnerMember<{ id: number; name: string; can_self_invoice: boolean | null; is_point: boolean | null }>(svc, user.id, 'id,name,can_self_invoice,is_point')
   if (!pm) return NextResponse.json({ linked: false, client: null, orders: [] })
   const client = pm.client
+  mark('member')
 
   // Все состояния: просчёт → отправлен в работу → в работе → отгружен.
   // Партнёр видит и просчёты, которые мы сделали для него.
@@ -58,6 +62,7 @@ export async function GET() {
     return NextResponse.json({ error: `Заказы не загрузились: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
 
+  mark('orders')
   // Реестр УПД не прочитался — список всё равно нужен; «Документы» скажут, что статус УПД неизвестен.
   let upds = new Map<number, UpdShort>()
   let updError: string | null = null
@@ -77,6 +82,7 @@ export async function GET() {
     return NextResponse.json({ error: `Счета и оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
 
+  mark('money')
   // Отгрузки по изделиям: без них заказ, уехавший частично, висит «в работе» без подсказки.
   let shippedLines = new Map<string, number>()
   try { shippedLines = await loadShippedLines(svc, data.filter(o => o.launched_at || isLaunched({ launched_at: null }, parseNotes(o.notes as string | null))).map(o => o.id as number)) }
@@ -150,5 +156,7 @@ export async function GET() {
     invoice: perms.finance ? o.invoice : null,
     upd: perms.finance ? o.upd : null,
   }))
-  return NextResponse.json({ linked: true, client: { name: client.name }, role: pm.role, perms, orders: shaped, updError })
+  mark('done')
+  // Server-Timing: замер «кабинет открывается 20 с» (24.11) — видно, какой шаг держит.
+  return NextResponse.json({ linked: true, client: { name: client.name }, role: pm.role, perms, orders: shaped, updError }, { headers: { 'Server-Timing': marks.join(', ') } })
 }
