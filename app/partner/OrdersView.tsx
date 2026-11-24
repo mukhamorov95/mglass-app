@@ -21,6 +21,8 @@ type Order = {
   amount: number; lane: Lane; progressPct: number; stage: string
   shipped: boolean; ready: boolean; deadline: string; recalcNote: string | null
   summary: string; positions: number
+  shipPartial?: { shipped: number; total: number } | null
+  author?: string | null
   point?: PointStage | null
   quoteState?: QuoteState | null
   stateNote?: string | null
@@ -235,6 +237,7 @@ function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit:
           <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.point ? '' : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
           {o.point && <div className="meta" style={{ marginTop: 2, color: o.point === 'await_payment' ? 'var(--amber)' : 'var(--ink-2)', fontWeight: o.point === 'await_payment' ? 600 : 400 }}>{POINT_LINE[o.point]}</div>}
           {o.summary && <div className="meta" style={{ marginTop: 2, color: 'var(--ink-2)' }}>{o.summary}{o.positions ? ` · ${o.positions} поз.` : ''}</div>}
+          {o.author && <div className="meta" style={{ marginTop: 2 }}>Просчитал: {o.author}</div>}
         </div>
         <div className="amt tnum">{fmtMoney(o.amount)}</div>
       </div>
@@ -255,6 +258,9 @@ function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit:
             : o.lane === 'shipped' ? <span className="pill p-ship">Отгружен</span>
             : <span className="pc tnum">{o.progressPct}% · {o.stage}</span>}
         </div>
+      )}
+      {o.lane === 'in_work' && o.shipPartial && (
+        <div className="meta tnum" style={{ marginTop: 6, color: 'var(--ink-2)' }}>Уехало {o.shipPartial.shipped} из {o.shipPartial.total} шт., остальное в работе</div>
       )}
       {!o.point && o.payment && (o.lane === 'in_work' || o.lane === 'shipped') && (
         <div style={{ marginTop: 6 }}><span className={`pill ${paymentPill(o.payment)}`}>{paymentLabel(o.payment)}</span></div>
