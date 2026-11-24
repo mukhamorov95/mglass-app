@@ -1,5 +1,6 @@
 'use client'
 
+import ManagerCard from './ManagerCard'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { loadJson } from '@/lib/toast'
@@ -136,6 +137,8 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        <ManagerCard />
 
         {activity && activity.waiting.length > 0 && (
           <div className="card" style={{ marginBottom: 14 }}>
