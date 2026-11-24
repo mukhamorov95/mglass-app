@@ -8,6 +8,7 @@ import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
 import type { PaymentView } from '@/lib/partner/orderMoney'
 import { paymentLabel, paymentPill, unpaidOf } from '@/lib/partner/paymentLabel'
 import { QUOTE_LABEL, canEditQuote, canSubmitQuote, type QuoteState } from '@/lib/partner/quoteState'
+import type { ItemView } from '@/lib/partner/itemStages'
 
 // Списки кабинета (дизайн .pcab). Три пункта меню:
 //   view='quotes'  → просчёты (черновики). Разбиты на Недавние + Архив (>2 недель).
@@ -230,6 +231,7 @@ function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit:
   // просчёт и заказ → карточка: править их нельзя, форма открылась бы пустой.
   const qs: QuoteState = o.quoteState ?? 'draft'
   const isDraft = o.lane === 'quote' && canEditQuote(qs)
+  const [detailOpen, setDetailOpen] = useState(false)
   const body = (
     <>
       <div className="r1">
@@ -267,6 +269,14 @@ function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit:
         <div style={{ marginTop: 6 }}><span className={`pill ${paymentPill(o.payment)}`}>{paymentLabel(o.payment)}</span></div>
       )}
 
+      {(o.lane === 'in_work' || o.lane === 'shipped') && (
+        <button className="ghost" style={{ marginTop: 8, fontSize: 12, padding: '4px 10px' }}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); setDetailOpen(v => !v) }}>
+          {detailOpen ? 'Скрыть детали ▴' : 'По деталям ▾'}
+        </button>
+      )}
+      {detailOpen && <ItemStagesPanel orderId={o.id} />}
+
       {o.recalcNote && <div className="recalc">✎ Пересчитано менеджером: {o.recalcNote}</div>}
 
       {isDraft && canSubmitQuote(qs) && (
@@ -279,5 +289,49 @@ function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit:
   )
   return (
     <Link href={isDraft ? `/partner/new?edit=${o.id}` : `/partner/order/${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
+  )
+}
+
+const fmtWhen = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+
+// Раскрытие заказа: по каждой детали этапы цеха — что сделано (кто, когда) и что ещё нет.
+function ItemStagesPanel({ orderId }: { orderId: number }) {
+  const [items, setItems] = useState<ItemView[] | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    loadJson<{ items: ItemView[] }>(`/api/partner/order/${orderId}/stages`).then(r => {
+      if (r.error !== null) setErr(r.error); else setItems(r.data.items)
+    })
+  }, [orderId])
+  const stop = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation() }
+  if (err) return <div className="perr" onClick={stop}>Детали не загрузились: {err}</div>
+  if (!items) return <div className="meta" style={{ marginTop: 8 }} onClick={stop}>Загружаю детали…</div>
+  return (
+    <div onClick={stop} style={{ marginTop: 10, display: 'grid', gap: 10, cursor: 'default' }}>
+      {items.map(it => (
+        <div key={it.index} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 13 }}>{it.index + 1}. {it.label}{it.size ? ` · ${it.size}` : ''} · {it.qty} шт.</b>
+            <span className="meta tnum">
+              {it.total > 0 ? `этапов ${it.done} из ${it.total}` : 'этапы по детали не отмечаются'}
+              {it.shipped > 0 ? ` · уехало ${it.shipped} из ${it.qty}` : ''}
+            </span>
+          </div>
+          {it.stages.length > 0 && (
+            <div style={{ display: 'grid', gap: 3, marginTop: 6 }}>
+              {it.stages.map(st => (
+                <div key={st.key} className="meta" style={{ display: 'flex', gap: 8, color: st.done ? 'var(--ink)' : 'var(--muted)' }}>
+                  <span style={{ width: 14, color: st.done ? 'var(--green)' : 'var(--muted)' }}>{st.done ? '✓' : '○'}</span>
+                  <span style={{ minWidth: 92 }}>{st.label}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    {st.done ? [st.at ? fmtWhen(st.at) : null, st.by, st.note].filter(Boolean).join(' · ') : 'ещё не сделано'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   )
 }

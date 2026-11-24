@@ -1,3 +1,4 @@
+import { notifyAuthor } from '@/lib/partner/notifyAuthor'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -28,12 +29,28 @@ export async function GET() {
 
   const { data } = await svc
     .from('partner_notifications')
-    .select('id,kind,title,body,link,read_at,created_at')
+    .select('id,kind,title,body,link,read_at,created_at,order_id')
     .eq('client_id', client.id)
     .order('created_at', { ascending: false })
     .limit(50)
 
-  const items = data ?? []
+  const rows = (data ?? []) as { id: number; kind: string; order_id?: number | null; read_at: string | null }[]
+  const orderIds = [...new Set(rows.map(n => n.order_id).filter((x): x is number => typeof x === 'number'))]
+  const notesById = new Map<number, Record<string, unknown>>()
+  let packs: { order_id: number; completed_at: string | null; completed_by_name: string | null; auto_closed_by_name: string | null }[] = []
+  if (orderIds.length) {
+    const [{ data: os }, { data: ps }] = await Promise.all([
+      svc.from('b2b_orders').select('id, notes').in('id', orderIds).eq('client_id', client.id),
+      svc.from('production_tasks').select('order_id, completed_at, completed_by_name, auto_closed_by_name')
+        .in('order_id', orderIds).eq('stage_key', 'packaging').eq('status', 'done'),
+    ])
+    for (const o of os ?? []) { try { notesById.set(o.id as number, o.notes ? JSON.parse(o.notes as string) : {}) } catch { notesById.set(o.id as number, {}) } }
+    packs = (ps ?? []) as typeof packs
+  }
+  const items = rows.map(n => ({
+    ...n,
+    by: n.order_id ? notifyAuthor(n.kind, notesById.get(n.order_id), packs.filter(p => p.order_id === n.order_id)) : null,
+  }))
   const unread = items.filter(n => !n.read_at).length
   return NextResponse.json({ linked: true, items, unread })
 }
