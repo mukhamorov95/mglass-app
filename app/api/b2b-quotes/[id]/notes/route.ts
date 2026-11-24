@@ -1,3 +1,4 @@
+import { checkPatch } from '@/lib/b2b/partnerReview'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
@@ -132,7 +133,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Без свежего чтения не пишем: патч из пустого объекта потерял бы историю статусов.
   if (freshErr || !freshRow) return bad(`Заказ не прочитан: ${freshErr?.message ?? 'нет строки'}`, 500)
   const fresh = parseOrderNotes((freshRow as { notes: unknown }).notes)
-  const patch = build(fresh)
+  const patch = {
+    ...build(fresh),
+    // Заявка из кабинета ждёт проверки — действие менеджера её закрывает (кто и когда).
+    ...(body.action === 'launch' ? checkPatch(fresh, { kind: 'launch' }, at, who)
+      : body.action === 'status' && typeof body.to === 'string' ? checkPatch(fresh, { kind: 'status', to: body.to }, at, who) : {}),
+  }
   const { error: patchErr } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: patch })
   if (patchErr) return bad(`Не сохранено: ${patchErr.message}`, 500)
 

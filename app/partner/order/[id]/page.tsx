@@ -12,6 +12,8 @@ import { responseError, NETWORK_ERROR } from '@/lib/toast'
 // Карточка заказа кабинета (дизайн из прототипа, .pcab).
 type Item = { material: string; thickness: number; width: number; height: number; quantity: number; tempering: boolean; facet: boolean; triplex: boolean; price: number | null }
 type TL = { label: string; state: 'done' | 'now' | 'wait'; date: string | null }
+const fmtWhenRu = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+
 type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
   lane: string; ready: boolean; progressPct: number; deadline: string | null; estimateDays?: number
@@ -27,6 +29,7 @@ type Order = {
   launched?: boolean
   quoteState?: QuoteState | null
   stateNote?: string | null
+  review?: { requestedAt: string; checkedAt: string | null; outcome: 'approved' | 'rejected' | null; manager: string | null } | null
   delivery?: { method: 'pickup' | 'delivery'; address: string | null; comment: string | null; status: string | null } | null
   total: number | null; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
 }
@@ -174,6 +177,13 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
 
       {qs && qs !== 'draft' && o.stateNote && (
         <div className="info" style={{ marginTop: 0, marginBottom: 14 }}><span>✎</span><span>{qs === 'rejected' ? 'Причина отказа' : 'Комментарий менеджера'}: {o.stateNote}</span></div>
+      )}
+      {o.review && (
+        <div className="info" style={{ marginTop: 0, marginBottom: 14 }}><span>🔎</span><span>
+          Отправлено на проверку {fmtWhenRu(o.review.requestedAt)}. {o.review.checkedAt
+            ? `${o.review.outcome === 'rejected' ? 'Проверено и отклонено' : 'Проверено и одобрено'} ${fmtWhenRu(o.review.checkedAt)}${o.review.manager ? `, менеджер ${o.review.manager}` : ''}.`
+            : `Ждёт проверки менеджера${o.review.manager ? ` (${o.review.manager})` : ''}.`}
+        </span></div>
       )}
       {o.recalcNote && <div className="ord" style={{ boxShadow: 'none' }}><div className="recalc" style={{ marginTop: 0 }}>✎ Пересчитано менеджером: {o.recalcNote}</div></div>}
 

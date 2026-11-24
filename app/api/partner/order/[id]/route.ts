@@ -1,3 +1,4 @@
+import { reviewOf } from '@/lib/b2b/partnerReview'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -149,6 +150,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     recalcNote: history.length > 0 && !stateNote && (qs === null || qs === 'draft') ? lastComment : null,
     quoteState: qs,
     stateNote,
+    // Проверка заявки нашим менеджером: когда пришла, когда проверена (без внутренних полей).
+    review: (() => { const r = reviewOf(pn); return r ? { requestedAt: r.requested_at, checkedAt: r.checked_at ?? null, outcome: r.outcome ?? null, manager: r.checked_by ?? r.manager_name ?? null } : null })(),
   }
   // Права роли режут ответ: кладовщику — без цен и денег, менеджеру — без реквизитов и документов.
   const perms = permsOf(pm.role)
