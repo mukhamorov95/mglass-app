@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const comment = typeof body?.comment === 'string' ? body.comment.trim().slice(0, 1000) : ''
   if (decision === 'rework' && !comment) return NextResponse.json({ error: 'Опишите, что доработать' }, { status: 400 })
 
-  const { data: order } = await svc.from('b2b_orders').select('id,client_id,custom_number,notes').eq('id', oid).maybeSingle()
+  const { data: order } = await svc.from('b2b_orders').select('id,client_id,custom_number,launched_at,notes').eq('id', oid).maybeSingle()
   if (!order || order.client_id !== client.id) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
   let notes: Record<string, unknown> = {}
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await pushNotification(svc, {
     clientId: client.id, orderId: oid, kind: decision === 'approve' ? 'drawing_approved' : 'drawing_rework',
     title: decision === 'approve' ? `Чертёж согласован · ${number}` : `Чертёж отправлен на доработку · ${number}`,
-    body: decision === 'approve' ? 'Спасибо! Запускаем в производство.' : (comment || undefined),
+    body: decision === 'approve' ? (order.launched_at || notes.launched_at ? 'Спасибо! Заказ уже в работе.' : 'Спасибо! Менеджер запустит заказ в работу.') : (comment || undefined),
     link: `/partner/order/${oid}`,
   }).catch(() => {})
 

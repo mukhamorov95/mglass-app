@@ -1,3 +1,4 @@
+import { shipsByOurRoute } from '@/lib/production/clientShipments'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -113,6 +114,7 @@ export async function GET() {
     const byId = new Map(orders.map(o => [o.id, o]))
     const waiting = waitingActions(orders, {
       now,
+      askDelivery: !shipsByOurRoute(client.id),
       drawingOpen: o => drawingOpen.has(o.id),
       point: o => {
         if (!isPoint) return null

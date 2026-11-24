@@ -1,3 +1,4 @@
+import { drawingAsksPartner } from '@/lib/partner/drawingApproval'
 import { stagesOf, stageDate } from '@/lib/b2b/stageDone'
 import { partnerProgress, noteStatus } from '@/lib/partner/orderProgress'
 import { decisionOf } from '@/lib/partner/drawingApproval'
@@ -23,7 +24,7 @@ const STEP_TEXT: [string, string][] = [
   ['edge_processed', 'Кромка обработана'],
   ['drilled', 'Сверление выполнено'],
   ['tempering', 'Закалка выполнена'],
-  ['packaged', 'Упакован — готов к выдаче'],
+  ['packaged', 'Упакован — готов'],
   ['shipped', 'Отгружен'],
 ]
 
@@ -78,7 +79,7 @@ export const WAITING_RECENT_DAYS = 45
 // (решение устарело — считает вызывающий по времени файла).
 export function waitingActions(
   orders: ActivityOrder[],
-  opts: { drawingOpen: (o: ActivityOrder) => boolean; point: (o: ActivityOrder) => PointStage | null; now?: number },
+  opts: { drawingOpen: (o: ActivityOrder) => boolean; point: (o: ActivityOrder) => PointStage | null; askDelivery?: boolean; now?: number },
 ): WaitingAction[] {
   const now = opts.now ?? Date.now()
   const out: WaitingAction[] = []
@@ -93,14 +94,14 @@ export function waitingActions(
     const recent = Number.isFinite(since) && (now - since) / 86_400_000 <= WAITING_RECENT_DAYS
 
     // Чертёж согласуют до производства: когда цех уже режет, спрашивать поздно.
-    if (recent && p.progressPct === 0 && !p.ready && opts.drawingOpen(o)) {
+    if (recent && drawingAsksPartner(n, p.launched) && opts.drawingOpen(o)) {
       out.push({ kind: 'drawing', orderId: o.id, number: o.number, text: 'Чертёж ждёт согласования' })
     }
     if (opts.point(o) === 'await_payment') {
       out.push({ kind: 'payment', orderId: o.id, number: o.number, text: POINT_LINE.await_payment })
     }
     const dl = n.delivery as { method?: unknown } | undefined
-    if (recent && p.lane === 'in_work' && !(dl && (dl.method === 'pickup' || dl.method === 'delivery'))) {
+    if (opts.askDelivery !== false && recent && p.lane === 'in_work' && !(dl && (dl.method === 'pickup' || dl.method === 'delivery'))) {
       out.push({ kind: 'delivery', orderId: o.id, number: o.number, text: p.ready ? 'Готов — выберите доставку или самовывоз' : 'Не выбран способ получения' })
     }
   }

@@ -23,7 +23,7 @@ describe('табло — последние события по датам, а �
       [{ orderId: 5642, at: '2026-10-07', text: 'Выдан УПД № 533' }])
     expect(ev.map(e => `${e.number}: ${e.text.replace(/\s/g, ' ')}`)).toEqual([
       '0245-1: Выдан УПД № 533',
-      '0245-1: Упакован — готов к выдаче',
+      '0245-1: Упакован — готов',
       '0245-1: Получена оплата 12 000 ₽',
       '0245-1: Кромка обработана',
       '0245-1: Резка выполнена',
@@ -51,10 +51,17 @@ describe('ждут вашего действия', () => {
   it('способ выбран — ничего не ждём', () => {
     expect(waitingActions([{ ...fresh, notes: { ...fresh.notes, delivery: { method: 'pickup' } } }], none)).toEqual([])
   })
-  it('чертёж — только до начала производства и если решения нет', () => {
-    const launchedNoMarks: ActivityOrder = { ...fresh, notes: { status: 'sent', drawing_url: 'x', delivery: { method: 'pickup' } } }
-    expect(waitingActions([launchedNoMarks], { ...none, drawingOpen: () => true }).map(w => w.kind)).toEqual(['drawing'])
-    expect(waitingActions([fresh], { ...none, drawingOpen: () => true }).map(w => w.kind)).toEqual(['delivery'])
+  it('чертёж — только по заявке из кабинета, до запуска и если решения нет', () => {
+    const own: ActivityOrder = { id: 11, number: '#11', created_at: '2026-10-06T08:00:00Z', launched_at: null,
+      notes: { status: 'quote', source: 'partner', drawing_url: 'x' } }
+    expect(waitingActions([own], { ...none, drawingOpen: () => true }).map(w => w.kind)).toEqual(['drawing'])
+    // Запущенный нами заказ (Шовер Гласс 24.11): клиенту согласовывать незачем.
+    const launchedByUs: ActivityOrder = { ...fresh, notes: { status: 'sent', drawing_url: 'x', delivery: { method: 'pickup' } } }
+    expect(waitingActions([launchedByUs], { ...none, drawingOpen: () => true })).toEqual([])
+    expect(waitingActions([{ ...own, launched_at: '2026-10-06' }], { ...none, drawingOpen: () => true }).map(w => w.kind)).toEqual(['delivery'])
+  })
+  it('клиент с нашими отгрузками — способ получения не спрашиваем', () => {
+    expect(waitingActions([fresh], { ...none, askDelivery: false })).toEqual([])
   })
   it('точка со счётом — оплата первой строкой', () => {
     const q: ActivityOrder = { id: 8, number: '#8', created_at: '2026-10-06T08:00:00Z', launched_at: null, notes: { status: 'pending_approval' } }

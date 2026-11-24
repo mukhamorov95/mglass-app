@@ -9,6 +9,10 @@ import { appUrl } from '@/lib/appUrl'
 // смотрим только свежие транзиции (RECENT_DAYS по времени этапа/запуска).
 
 const RECENT_DAYS = 45
+// Событие, замеченное позже этого срока (первое открытие кабинета, простой крона), —
+// история, а не новость: пишется прочитанным, датой события, без письма. 24.11.2026
+// первое открытие кабинета Шовер Гласс дало ~147 «новых» событий с одним временем.
+const NEWS_DAYS = 3
 const isRecent = (iso: string | null | undefined): boolean =>
   !!iso && (Date.now() - new Date(iso).getTime()) / 86_400_000 <= RECENT_DAYS
 
@@ -22,12 +26,16 @@ function parseNotes(n: unknown): Record<string, unknown> {
 
 // Вставка одного уведомления. Дубликат (тот же client/order/kind) молча игнорируется.
 // Возвращает true, если это НОВОЕ событие (значит, можно слать письмо).
+// at — время самого события (иначе now()); silent — записать прочитанным, без письма.
 export async function pushNotification(svc: SupabaseClient, n: {
   clientId: number; orderId?: number | null; kind: NotifyKind; title: string; body?: string; link?: string
+  at?: string | null; silent?: boolean
 }): Promise<boolean> {
   const row = {
     client_id: n.clientId, order_id: n.orderId ?? null, kind: n.kind,
     title: n.title, body: n.body ?? null, link: n.link ?? null,
+    ...(n.at ? { created_at: n.at } : {}),
+    ...(n.silent ? { read_at: new Date().toISOString() } : {}),
   }
   const { data, error } = await svc
     .from('partner_notifications')
@@ -60,7 +68,7 @@ function orderTransitions(o: Record<string, unknown>): { kind: 'in_work' | 'read
 
 const TITLE: Record<'in_work' | 'ready' | 'shipped', string> = {
   in_work: 'Заказ принят в работу',
-  ready: 'Заказ готов к выдаче',
+  ready: 'Заказ готов и упакован',
   shipped: 'Заказ отгружен',
 }
 
@@ -78,11 +86,13 @@ export async function reconcileOrder(
 
   for (const t of orderTransitions(order)) {
     if (!isRecent(t.ts)) continue
+    const history = (Date.now() - new Date(t.ts!).getTime()) / 86_400_000 > NEWS_DAYS
     const fresh = await pushNotification(svc, {
       clientId: client.id, orderId, kind: t.kind,
       title: `${TITLE[t.kind]} · ${number}`, link: `/partner/order/${orderId}`,
+      at: t.ts, silent: history,
     })
-    if (fresh && partnerEmail) {
+    if (fresh && !history && partnerEmail) {
       const ok = await notifyPartnerOrderStatus({ to: partnerEmail, clientName: client.name, orderNumber: number, kind: t.kind, link })
       if (ok) await svc.from('partner_notifications')
         .update({ emailed_at: new Date().toISOString() })

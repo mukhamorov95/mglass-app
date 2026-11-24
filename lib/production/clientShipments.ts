@@ -176,3 +176,6 @@ export function shipmentTotals(lines: (Pick<ShipmentLineView, 'order_id' | 'qty'
     amount: round2(lines.reduce((s, l) => s + (l.own_cost ? 0 : l.amount), 0)),
   }
 }
+
+// Клиент, которого цех отгружает по своему маршруту: способ получения у него не спрашиваем.
+export const shipsByOurRoute = (clientId: number): boolean => clientId === SHOWER_GLASS.clientId
