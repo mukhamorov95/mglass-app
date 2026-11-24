@@ -24,7 +24,7 @@ type Admin = ReturnType<typeof admin>
 // Единая привязка учётки к компании (первичный владелец ИЛИ участник команды).
 // Изоляция: один логин = ровно одна компания. Используют и «выдать доступ» (по email),
 // и «привязать приглашённого» (по userId) — онбординг партнёра из PR #272 без привязки.
-async function linkUserToClient(a: Admin, userId: string, clientId: number):
+async function linkUserToClient(a: Admin, userId: string, clientId: number, ourPartner = false):
   Promise<{ ok: true; asMember: boolean; clientName: string } | { ok: false; error: string; status: number }> {
   const { data: client } = await a.from('b2b_clients').select('id,name,user_id').eq('id', clientId).maybeSingle()
   if (!client) return { ok: false, error: 'Клиент не найден', status: 404 }
@@ -39,7 +39,9 @@ async function linkUserToClient(a: Admin, userId: string, clientId: number):
   // существующего человека молча отнимала бы у него рабочую роль.
   const { data: u } = await a.from('users').select('role').eq('id', userId).maybeSingle()
   const curRole = (u as { role?: string | null } | null)?.role ?? null
-  if (curRole && curRole !== 'partner') return { ok: false, error: 'Это учётка сотрудника M-Glass — укажите другой email', status: 400 }
+  // ourPartner: учётку создали мы как партнёрскую. Триггер handle_new_user её пометку
+  // не видит (GoTrue пишет app_metadata после вставки) и ставит 'manager' — это не сотрудник.
+  if (curRole && curRole !== 'partner' && !ourPartner) return { ok: false, error: 'Это учётка сотрудника M-Glass — укажите другой email', status: 400 }
   await a.from('users').update({ role: 'partner', name: client.name }).eq('id', userId)
   await a.from('profiles').upsert({ user_id: userId, organization_id: 2, role: 'partner' }, { onConflict: 'user_id' })
 
@@ -165,18 +167,21 @@ export async function POST(req: Request) {
 
   // Учётка: создаём новую или находим существующую по email.
   let userId: string
+  let ourPartner = false
   const { data: created, error } = await a.auth.admin.createUser({ email, password: randomPw(), email_confirm: true, app_metadata: { mglass_kind: 'partner' } })
   if (error) {
     const { data: list } = await a.auth.admin.listUsers({ perPage: 1000, page: 1 })
     const found = list?.users.find(u => u.email?.toLowerCase() === email)
     if (!found) return NextResponse.json({ error: error.message }, { status: 400 })
     userId = found.id
+    ourPartner = (found.app_metadata as { mglass_kind?: string } | undefined)?.mglass_kind === 'partner'
   } else {
     userId = created.user.id
+    ourPartner = true
   }
 
   // Привязка (первичный/участник + гард изоляции + приветствие) — единым хелпером.
-  const link = await linkUserToClient(a, userId, clientId)
+  const link = await linkUserToClient(a, userId, clientId, ourPartner)
   if (!link.ok) return NextResponse.json({ error: link.error }, { status: link.status })
 
   const token = await createSetupToken(userId)
