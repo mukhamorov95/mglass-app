@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { defaultAt, defaultPick } from '@/lib/glass/clientMaterials'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { leadTimeText, isMirrorCategory } from '@/lib/partner/leadTime'
 import { SUPER_CATS, readDraft, type SuperCat } from '@/lib/partner/counter'
@@ -33,10 +34,8 @@ const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 function firstSel(mats: Material[], sc: SuperCat): { thickness: number | null; matId: number | null } {
   const def = SUPER_CATS.find(s => s.value === sc) ?? SUPER_CATS[0]
   const cm = mats.filter(m => (def.cats as readonly string[]).includes(m.category))
-  const ths = [...new Set(cm.map(m => m.thickness))].sort((a, b) => a - b)
-  const thickness = ths[0] ?? null
-  const matId = cm.find(m => m.thickness === thickness)?.id ?? null
-  return { thickness, matId }
+  const pick = defaultPick(cm, sc, sc === 'зеркало' ? 4 : 8)
+  return { thickness: pick?.thickness ?? null, matId: pick?.id ?? null }
 }
 
 function OptBox({ color, title, on, onLabel, offLabel, onToggle }: {
@@ -327,7 +326,7 @@ export default function PartnerNewQuotePage() {
 
               <div className="fld">
                 <span className="lab">Толщина</span>
-                <select value={thickness ?? ''} onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(catMats.find(m => m.thickness === t)?.id ?? null); setPreview(null) }}>
+                <select value={thickness ?? ''} onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(defaultAt(catMats, superCat, t)?.id ?? null); setPreview(null) }}>
                   {thicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
                 </select>
               </div>

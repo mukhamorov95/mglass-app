@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { defaultAt, defaultPick } from '@/lib/glass/clientMaterials'
 import Link from 'next/link'
 import {
   SUPER_CATS, readDraft, writeDraft, retailLine, retailQuote, describeSpec,
@@ -79,13 +80,9 @@ export default function PartnerCounterPage() {
   function pickCat(sc: SuperCat, mats: Material[]) {
     const def = SUPER_CATS.find(s => s.value === sc) ?? SUPER_CATS[0]
     const cm = mats.filter(m => (def.cats as readonly string[]).includes(m.category))
-    const ths = [...new Set(cm.map(m => m.thickness))].sort((a, b) => a - b)
-    // Зеркало на рынке чаще всего 4 мм, стекло под закалку — 6 мм.
-    const want = sc === 'зеркало' ? 4 : 6
-    const t = ths.includes(want) ? want : (ths[0] ?? null)
-    // Самое ходовое на рынке — серебро и прозрачное, а не первое по алфавиту.
-    const atT = cm.filter(m => m.thickness === t)
-    const pref = atT.find(m => /серебро|прозрачн/i.test(m.name)) ?? atT[0]
+    // Зеркало на рынке чаще всего 4 мм, стекло под закалку — 6 мм; тип — М1 / Серебро.
+    const pref = defaultPick(cm, sc, sc === 'зеркало' ? 4 : 6)
+    const t = pref?.thickness ?? null
     setSuperCat(sc); setThickness(t); setMatId(pref?.id ?? null)
     if (sc === 'зеркало') setTempering(false)
   }
@@ -195,7 +192,7 @@ export default function PartnerCounterPage() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
-              <select value={thickness ?? ''} aria-label="Толщина" onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(catMats.find(m => m.thickness === t)?.id ?? null) }}>
+              <select value={thickness ?? ''} aria-label="Толщина" onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(defaultAt(catMats, superCat, t)?.id ?? null) }}>
                 {thicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
               </select>
               <select value={matId ?? ''} aria-label="Тип" onChange={e => setMatId(Number(e.target.value))}>
