@@ -129,3 +129,25 @@ describe('движение заказа', () => {
     expect(idleDays(null, null, '2026-11-05')).toBeNull()
   })
 })
+
+import { attentionOf } from '@/lib/production/ordersBoard'
+
+describe('вкладка «Внимание» (24.11.2026: отметки день в день)', () => {
+  const base = { stage: 'in_work' as const, overdue_days: 0, deadline_day: '2026-12-10', urgent: false, problem: false, idle_days: 0 }
+  it('причины словами, самая тяжёлая первой', () => {
+    expect(attentionOf({ ...base, overdue_days: 4, idle_days: 5 }, '2026-11-24')).toEqual(['просрочен на 4 дн.', 'нет отметок 5 дн.'])
+    expect(attentionOf({ ...base, deadline_day: '2026-11-24' }, '2026-11-24')).toEqual(['срок сегодня'])
+    expect(attentionOf({ ...base, deadline_day: '2026-11-25', urgent: true }, '2026-11-24')).toEqual(['срок завтра', 'срочный'])
+  })
+  it('одна ночь без отметок — ещё не тревога, две — да', () => {
+    expect(attentionOf({ ...base, idle_days: 1 }, '2026-11-24')).toEqual([])
+    expect(attentionOf({ ...base, idle_days: 2 }, '2026-11-24')).toEqual(['нет отметок 2 дн.'])
+  })
+  it('упакованный и отгруженный не дёргают', () => {
+    expect(attentionOf({ ...base, stage: 'packed', overdue_days: 3 }, '2026-11-24')).toEqual([])
+  })
+  it('вкладка берёт заказы с причинами', () => {
+    expect(inBoardTab({ stage: 'in_work', overdue_days: 0, ship_day: null, launch_day: null, attention: ['срочный'] }, 'attention', null)).toBe(true)
+    expect(inBoardTab({ stage: 'in_work', overdue_days: 0, ship_day: null, launch_day: null, attention: [] }, 'attention', null)).toBe(false)
+  })
+})
