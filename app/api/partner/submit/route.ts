@@ -9,6 +9,8 @@ import { appUrl } from '@/lib/appUrl'
 import { appendTo, parseOrderNotes } from '@/lib/b2b/orderNotes'
 import { previewWriteGuard } from '@/lib/partnerPreview'
 import { canSubmitQuote, quoteLockReason, quoteState } from '@/lib/partner/quoteState'
+import { notifyUser } from '@/lib/b2b/notifyManager'
+import { pickManager, type Review } from '@/lib/b2b/partnerReview'
 
 // Партнёр отправляет свой просчёт в заявку (на проверку менеджеру).
 // Просчёт → status='pending_approval'. Только свой просчёт, только если не запущен.
@@ -67,7 +69,21 @@ export async function POST(req: NextRequest) {
   const freshState = quoteState(typeof fresh.status === 'string' ? fresh.status : null)
   if (!canSubmitQuote(freshState)) return NextResponse.json({ error: quoteLockReason(freshState) }, { status: 409 })
   const at = new Date().toISOString()
+
+  // Ответственный менеджер — ему «проверить» в Telegram; время и кому — в notes.review.
+  const { data: cl } = await svc.from('b2b_clients').select('manager_user_id').eq('id', client.id).maybeSingle()
+  const { data: authors } = await svc.from('b2b_orders').select('created_by').eq('client_id', client.id)
+    .neq('source', 'partner').not('created_by', 'is', null).order('id', { ascending: false }).limit(50)
+  const managerId = pickManager((cl as { manager_user_id?: string | null } | null)?.manager_user_id, (authors ?? []).map(a => a.created_by as string | null))
+  const { data: mgr } = managerId ? await svc.from('users').select('name').eq('id', managerId).maybeSingle() : { data: null }
+  const base0 = appUrl()
+  const telegram = managerId ? await notifyUser(managerId,
+    `🧾 <b>Проверить заявку из кабинета</b>\n${client.name} отправил просчёт №${quoteId} в работу. Проверьте позиции и согласуйте или запустите.`,
+    base0 ? [[{ text: 'Открыть просчёты', url: `${base0}/b2b-quotes` }]] : undefined) : false
+  const review: Review = { requested_at: at, manager_id: managerId, manager_name: (mgr as { name?: string | null } | null)?.name ?? null, telegram }
+
   const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: quoteId, p_patch: {
+    review,
     status: 'pending_approval',
     status_history: appendTo(fresh, 'status_history', { from: (fresh.status as string) || 'quote', to: 'pending_approval', date: at, by: 'partner' }),
     submitted_by_partner_at: at,

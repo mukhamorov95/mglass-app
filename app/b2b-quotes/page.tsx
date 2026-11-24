@@ -1,5 +1,6 @@
 'use client'
 
+import { reviewLine, reviewOf } from '@/lib/b2b/partnerReview'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
@@ -847,6 +848,24 @@ export default function B2BQuotesPage() {
         </div>
       )}
 
+      {(() => {
+        // Заявки из кабинета, которые ждут проверки менеджера (владелец 24.11): видно без Telegram.
+        const waiting = quotes.filter(q => { const r = reviewOf(parseNotes(q.notes)); return !!r && !r.checked_at })
+        if (waiting.length === 0) return null
+        return (
+          <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+            <p className="text-[13px] font-semibold text-indigo-800">🤝 Ждут проверки из кабинета · {waiting.length}</p>
+            <ul className="mt-1 space-y-0.5">
+              {waiting.map(q => (
+                <li key={q.id} className="text-[12px] text-indigo-900">
+                  <button className="underline decoration-dotted" onClick={() => setExpanded(q.id)}>#{q.id} · {q.client_name}</button>
+                  {' — '}{reviewLine(reviewOf(parseNotes(q.notes))!)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })()}
       {visible.length === 0 ? (
         <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center">
           {filter.by || filter.src ? (<>
@@ -929,7 +948,10 @@ export default function B2BQuotesPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         {isPartnerReq && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">🤝 Заявка партнёра · проверить</span>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">🤝 Заявка партнёра · {reviewOf(parsed)?.checked_at ? 'проверено' : 'проверить'}</span>
+                        )}
+                        {isPartnerFrom && reviewOf(parsed) && (
+                          <span className="text-[10px] text-[#6b6b66]">{reviewLine(reviewOf(parsed)!)}</span>
                         )}
                         {isPartnerFrom && !isPartnerReq && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">🤝 от партнёра</span>
