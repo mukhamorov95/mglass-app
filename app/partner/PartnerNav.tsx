@@ -33,19 +33,22 @@ export default function PartnerNav() {
   const [unread, setUnread] = useState(0)
   // Прилавок — только точкам на рынке: остальным партнёрам он непонятен (владелец 24.11).
   const [isPoint, setIsPoint] = useState(false)
+  // Отгрузки по изделиям ведутся у клиента — отдельный раздел вместо «Отгруженных» (К7).
+  const [shipTracking, setShipTracking] = useState(false)
   // Меню по роли (права режет сервер; здесь — чтобы не вести в закрытое). Пока не знаем — всё видно.
   const [role, setRole] = useState<TeamRole | null>(null)
   const [perms, setPerms] = useState<Partial<Record<TeamPerm, boolean>> | null>(null)
   const may = (p?: TeamPerm) => !p || !perms || perms[p] === true
 
   useEffect(() => {
-    fetch('/api/partner/nav').then(r => r.json()).then((d: { client?: { name: string } | null; counts?: { quotes: number; inwork: number; shipped: number }; unread?: number; isPoint?: boolean; role?: TeamRole; perms?: Record<TeamPerm, boolean> }) => {
+    fetch('/api/partner/nav').then(r => r.json()).then((d: { client?: { name: string } | null; counts?: { quotes: number; inwork: number; shipped: number }; unread?: number; isPoint?: boolean; shipTracking?: boolean; role?: TeamRole; perms?: Record<TeamPerm, boolean> }) => {
       if (d.client?.name) setClient(d.client.name)
       if (d.role) setRole(d.role)
       if (d.perms) setPerms(d.perms)
       if (d.counts) setCounts(d.counts)
       setUnread(d.unread ?? 0)
       setIsPoint(d.isPoint === true)
+      setShipTracking(d.shipTracking === true)
     }).catch(() => {})
   }, [])
 
@@ -91,7 +94,7 @@ export default function PartnerNav() {
             <span className="tx">Калькулятор</span><span className="chev">▾</span>
           </button>
           <div className="sub">
-            {CALC_CHILDREN.filter(c => may(c.perm)).map(c => {
+            {CALC_CHILDREN.filter(c => may(c.perm) && !(shipTracking && c.href === '/partner/shipped')).map(c => {
               const n = badgeFor(c.badge)
               return (
                 <Link key={c.href} href={c.href} className={item(path.startsWith(c.href))}>
@@ -103,6 +106,11 @@ export default function PartnerNav() {
             })}
           </div>
         </div>
+
+        {shipTracking && <Link href="/partner/shipments" className={item(path.startsWith('/partner/shipments'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><path d="M2.5 5.5h9v8h-9z" /><path d="M11.5 8.5h3.2l2.8 2.8v2.2h-6" /><circle cx="5.5" cy="14.5" r="1.6" /><circle cx="14.5" cy="14.5" r="1.6" /></svg></span>
+          <span className="tx">Отгрузки</span>
+        </Link>}
 
         {may('finance') && <Link href="/partner/documents" className={item(path.startsWith('/partner/documents'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M6 2.5h5l3 3V17a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 6 17Z" /><path d="M11 2.5V6h3" /></svg></span>
