@@ -16,8 +16,8 @@ export default async function PartnerProfilePage() {
   if (!user) return <div className="wrap"><div className="note"><div className="s">Не авторизован</div></div></div>
 
   const svc = createServiceClient()
-  const client = await resolvePartnerClient<{ id: number; name: string; contact: string | null; phone: string | null; discount_percent: number | null }>(
-    svc, user.id, 'id, name, contact, phone, discount_percent')
+  const client = await resolvePartnerClient<{ id: number; name: string; contact: string | null; phone: string | null; discount_percent: number | null; is_point: boolean | null }>(
+    svc, user.id, 'id, name, contact, phone, discount_percent, is_point')
   if (!client) return (
     <div className="wrap"><div className="note">
       <div className="t">Аккаунт не привязан</div>
@@ -52,7 +52,7 @@ export default async function PartnerProfilePage() {
         </div>
       </div>
 
-      <CounterSettings />
+      {client.is_point === true && <CounterSettings />}
 
       <LegalEntities />
     </div>

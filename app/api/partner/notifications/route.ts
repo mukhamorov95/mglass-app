@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { reconcileClientOrders } from '@/lib/partnerNotify'
@@ -22,8 +22,9 @@ export async function GET() {
   const client = await resolvePartnerClient<{ id: number; name: string; user_id: string | null }>(svc, user.id, 'id,name,user_id')
   if (!client) return NextResponse.json({ linked: false, items: [], unread: 0 })
 
-  // Свежая сверка статусов (best-effort, не роняет ленту).
-  await reconcileClientOrders(svc, client as { id: number; name: string; user_id: string | null }).catch(() => {})
+  // Сверка статусов — после ответа: последовательно по 100 заказам она держала ленту 4–15 с.
+  // Новое событие появится при следующем открытии.
+  after(() => reconcileClientOrders(svc, client as { id: number; name: string; user_id: string | null }).catch(() => {}))
 
   const { data } = await svc
     .from('partner_notifications')
