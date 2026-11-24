@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase-browser'
 import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
 import type { PaymentView } from '@/lib/partner/orderMoney'
@@ -55,11 +54,6 @@ const VIEW_META: Record<View, { title: string; cap: string; empty: string }> = {
 export default function OrdersView({ view }: { view: View }) {
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showPwd, setShowPwd] = useState(false)
-  const [pwd, setPwd] = useState('')
-  const [pwd2, setPwd2] = useState('')
-  const [pwdSaving, setPwdSaving] = useState(false)
-  const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [onlyUnpaid, setOnlyUnpaid] = useState(false)
@@ -95,20 +89,6 @@ export default function OrdersView({ view }: { view: View }) {
     } finally { setSubmittingId(null) }
   }
 
-  async function changePassword() {
-    setPwdMsg(null)
-    if (pwd.length < 8) { setPwdMsg({ ok: false, text: 'Минимум 8 символов' }); return }
-    if (pwd !== pwd2) { setPwdMsg({ ok: false, text: 'Пароли не совпадают' }); return }
-    setPwdSaving(true)
-    try {
-      const { error } = await createClient().auth.updateUser({ password: pwd })
-      if (error) { setPwdMsg({ ok: false, text: error.message }); return }
-      setPwdMsg({ ok: true, text: 'Пароль изменён' })
-      setPwd(''); setPwd2('')
-      setTimeout(() => setShowPwd(false), 1200)
-    } finally { setPwdSaving(false) }
-  }
-
   const meta = VIEW_META[view]
   const orders = data?.orders ?? []
   const lanes = VIEW_LANES[view]
@@ -140,32 +120,9 @@ export default function OrdersView({ view }: { view: View }) {
           <div className="cap">{data?.client?.name ? `${data.client.name} · ` : ''}{meta.cap}</div>
         </div>
         <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
-          <button className="ghost" onClick={() => { setShowPwd(true); setPwdMsg(null) }}>Сменить пароль</button>
           <Link className="primary" href="/partner/new">＋ Новый просчёт</Link>
         </div>
       </div>
-
-      {showPwd && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setShowPwd(false)}>
-          <div className="card" style={{ width: '100%', maxWidth: 380, padding: 20 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Смена пароля</h3>
-              <button className="out" onClick={() => setShowPwd(false)} style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 18 }}>✕</button>
-            </div>
-            <p className="cap" style={{ marginTop: 0, marginBottom: 12 }}>Придумайте свой пароль — его будете знать только вы.</p>
-            <div className="fld" style={{ marginBottom: 8 }}>
-              <input className="pinput" type="password" value={pwd} onChange={e => { setPwd(e.target.value); setPwdMsg(null) }} placeholder="Новый пароль (мин. 8 символов)" autoFocus />
-            </div>
-            <div className="fld">
-              <input className="pinput" type="password" value={pwd2} onChange={e => { setPwd2(e.target.value); setPwdMsg(null) }} placeholder="Повторите пароль" onKeyDown={e => { if (e.key === 'Enter') changePassword() }} />
-            </div>
-            {pwdMsg && <p style={{ fontSize: 12, marginTop: 8, color: pwdMsg.ok ? 'var(--green)' : '#dc2626' }}>{pwdMsg.text}</p>}
-            <button className="primary" onClick={changePassword} disabled={pwdSaving} style={{ width: '100%', marginTop: 14, padding: 11 }}>
-              {pwdSaving ? 'Сохраняю…' : 'Сохранить пароль'}
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="wrap">
         <style dangerouslySetInnerHTML={{ __html: '.pcab .pinput{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13.5px;color:var(--ink);font-family:inherit;outline:none;width:100%}.pcab .pinput:focus{border-color:var(--ink)}' }} />
