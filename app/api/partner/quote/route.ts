@@ -1,3 +1,4 @@
+import { isClientCalculable } from '@/lib/glass/clientMaterials'
 import { pickServices } from '@/lib/partner/partnerServices'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
@@ -101,6 +102,8 @@ export async function POST(req: NextRequest) {
     const h = Number(s.height) || 0
     const q = Number(s.quantity) || 0
     if (!mat || w <= 0 || h <= 0 || q <= 0) return NextResponse.json({ error: 'Некорректная позиция' }, { status: 400 })
+    if (!isClientCalculable(mat) || (s.hasTriplex && [s.triplexMat2Id, s.triplexMat3Id].some(id => { const x = id ? byId.get(Number(id)) : null; return x ? !isClientCalculable(x) : false })))
+      return NextResponse.json({ error: `«${mat.name}»: рифлёное стекло пока считает ваш менеджер — пришлите ему размеры` }, { status: 400 })
 
     const triplexExtraGlasses = s.hasTriplex
       ? [byId.get(Number(s.triplexMat2Id)) ?? mat, ...(s.triplexLayers === 3 ? [byId.get(Number(s.triplexMat3Id)) ?? mat] : [])]

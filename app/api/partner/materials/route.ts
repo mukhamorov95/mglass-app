@@ -1,3 +1,4 @@
+import { isClientCalculable } from '@/lib/glass/clientMaterials'
 import { publicServices } from '@/lib/partner/partnerServices'
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
@@ -44,6 +45,7 @@ export async function GET() {
   const withClientPrices = applyClientPrices(priced, clientPrices)
   const materials = withClientPrices
     .filter(m => (m.sale_price ?? 0) > 0)          // без цены — клиенту не показываем
+    .filter(isClientCalculable)                    // рифлёное считает менеджер (24.11.2026)
     .map(m => ({ id: m.id, name: m.name, category: m.category, thickness: m.thickness, salePrice: m.sale_price }))
 
   const facetOptions = (facets ?? []).map((f: Record<string, unknown>) => ({

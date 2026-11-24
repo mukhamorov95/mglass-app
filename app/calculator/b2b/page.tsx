@@ -37,16 +37,11 @@ const EXCLUDED_THICKNESS = [12]
 // его задаёт владелец по популярности; раньше здесь был свой список из шести имён.
 const sortByPriority = sortByDirectory
 
-const DEFAULTS: Record<SuperCat, { thickness: number; name: string }> = {
-  стекло:  { thickness: 8, name: 'Прозрачное М1' },
-  зеркало: { thickness: 4, name: 'Зеркало осветлённое' },
-}
+// Решение владельца 24.11.2026: в любой толщине по умолчанию «Прозрачное М1», у зеркала — «Серебро».
+const DEFAULT_THICKNESS: Record<SuperCat, number> = { стекло: 8, зеркало: 4 }
 
 function pickDefault(mats: B2BMaterial[], superCat: SuperCat) {
-  const d = DEFAULTS[superCat]
-  const preferred = mats.find(m => m.thickness === d.thickness && m.name === d.name)
-  if (preferred) return preferred
-  return sortByPriority(mats)[0] ?? null
+  return defaultPick(mats, superCat, DEFAULT_THICKNESS[superCat]) ?? sortByPriority(mats)[0] ?? null
 }
 
 const SUPER_CATS = [
@@ -60,6 +55,7 @@ import {
 } from '@/lib/b2bCalculator'
 import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
 import { rankMap, sortByDirectory } from '@/lib/glass/materialOrder'
+import { defaultAt, defaultPick } from '@/lib/glass/clientMaterials'
 import { materialWithKind } from '@/lib/materialLabel'
 
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
@@ -663,7 +659,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
 
   function handleThicknessChange(t: number) {
     setFThickness(t)
-    const mat = categoryMaterials.find(m => m.thickness === t)
+    const mat = defaultAt(sortByPriority(categoryMaterials), fSuperCat, t)
     if (mat) { setFMatId(mat.id); setFWaste(mat.waste_percent) }
     else { setFMatId(null) }
   }
@@ -1280,7 +1276,8 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     setEThickness(t)
     const scDef = SUPER_CATS.find(s => s.value === eSuperCat) ?? SUPER_CATS[0]
     const mats = sortByPriority(materials.filter(m => (scDef.cats as readonly string[]).includes(m.category) && m.thickness === t))
-    if (mats.length > 0) { setEMatId(mats[0].id); setEWaste(mats[0].waste_percent) }
+    const mat = defaultAt(mats, eSuperCat, t)
+    if (mat) { setEMatId(mat.id); setEWaste(mat.waste_percent) }
     else setEMatId(null)
   }
 
