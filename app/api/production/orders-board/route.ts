@@ -7,7 +7,7 @@ import { isShipped, orderDeadline, type TodayOrder } from '@/lib/b2b/todayPriori
 import { orderAmount } from '@/lib/liveOrders'
 import { PROD_SINCE, isUrgent, parseNotes } from '@/lib/orderFlags'
 import { orderHidden, orderShipState, shipLines, type EarlierLines, type ShipOrder } from '@/lib/production/clientShipments'
-import { boardOverdue, boardStage, idleDays, lastMarkOf, shipMarkOf, stageCounts, type BoardOrder, type BoardTask } from '@/lib/production/ordersBoard'
+import { boardOverdue, boardStage, idleDays, attentionOf, lastMarkOf, shipMarkOf, stageCounts, type BoardOrder, type BoardTask } from '@/lib/production/ordersBoard'
 import { readIn, readPaged } from '@/lib/production/paged'
 import { inShopScope, shopScopeOf } from '@/lib/production/shopScope'
 import { mskDayKey } from '@/lib/time'
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
         stage, state, shipped_pieces: marked ? pieces : lines.reduce((n, l) => n + Math.min(l.qty, shippedOf(l.key)), 0),
         ship_day: shipped ? markDay ?? lastLedgerDay : null,
         stages: stageCounts(orderTasks, to), last_mark: last, idle_days: stage === 'in_work' ? idleDays(last, launchDay, to) : null,
-      }]
+      }].map(b => ({ ...b, attention: attentionOf(b, to) }))
     })
     return NextResponse.json({ today, to, orders })
   } catch (e) {

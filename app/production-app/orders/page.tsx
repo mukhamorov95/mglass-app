@@ -19,7 +19,7 @@ import { materialLabelShort } from '@/lib/materialLabel'
 import { daysWord } from '@/lib/b2b/inWorkOrders'
 import { loadPointClientIds } from '@/lib/b2b/points'
 import { ORDER_STATE_LABEL, numberMatches, type OrderShipState } from '@/lib/production/clientShipments'
-import { BOARD_TABS, BOARD_TAB_KEYS, boardSort, inBoardTab, markLine, type BoardOrder, type BoardTab, type BoardTask } from '@/lib/production/ordersBoard'
+import { BOARD_TABS, BOARD_TAB_KEYS, boardSort, inBoardTab, markLine, type BoardOrder, type BoardTab, type BoardTask, IDLE_ALARM_DAYS } from '@/lib/production/ordersBoard'
 import { loadJson, toast as errorToast, sendOrToast, responseError, NETWORK_ERROR } from '@/lib/toast'
 
 type Item = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; hasTempering?: boolean; hasFacet?: boolean; hasHoles?: boolean; shape?: 'rect' | 'curved'; hasTriplex?: boolean }
@@ -33,7 +33,6 @@ type Period = { from: string; to: string }
 const API = '/api/production/orders-board'
 const OWNER = new Set(['admin', 'ceo'])
 const OWNER_EMAIL = 'admin@mglass.ru'  // владелец опознаётся по email (см. lib/getRole)
-const IDLE_ALARM_DAYS = 3
 const STATE_CLS: Record<OrderShipState, string> = {
   none: 'bg-[#f5f5f3] text-[#4b4b47] border-[#e4e4e0]',
   partial: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -72,7 +71,7 @@ function OrdersScreen() {
   const [today, setToday] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [tab, setTabState] = useState<BoardTab>(BOARD_TAB_KEYS.includes(initialTab as BoardTab) ? initialTab as BoardTab : 'in_work')
+  const [tab, setTabState] = useState<BoardTab>(BOARD_TAB_KEYS.includes(initialTab as BoardTab) ? initialTab as BoardTab : 'attention')
   const [period, setPeriod] = useState<Period | null>(null)
   const [stageFilter, setStageFilter] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -245,7 +244,7 @@ function OrdersScreen() {
             <div className="flex flex-wrap items-center gap-1.5">
               {BOARD_TABS.map(t => {
                 const n = tabCount(t.key)
-                return <button key={t.key} onClick={() => setTab(t.key)} aria-pressed={tab === t.key} className={tabCls(t.key, t.key === 'overdue' && n > 0)}>{t.label} · {n}</button>
+                return <button key={t.key} onClick={() => setTab(t.key)} aria-pressed={tab === t.key} className={tabCls(t.key, (t.key === 'overdue' || t.key === 'attention') && n > 0)}>{t.label} · {n}</button>
               })}
               <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Номер или клиент"
                 className="ml-auto h-10 w-40 rounded-lg border border-[#e4e4e0] bg-white px-2.5 text-[13px]" />
@@ -317,6 +316,7 @@ function OrderCard({ o, point, isOpen, onToggle, children }: { o: BoardOrder; po
           <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS[o.state]}`}>{ORDER_STATE_LABEL[o.state]}{o.state === 'partial' ? ` · ${o.shipped_pieces} из ${o.pieces} шт.` : ''}{o.state === 'full' && o.ship_day ? ` ${fmtDay(o.ship_day)}` : ''}</span>
           {o.overdue_days > 0 && <span className="text-[11px] px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-200">Просрочен на {o.overdue_days} {daysWord(o.overdue_days)}</span>}
           {o.problem && <span className="text-[11px] px-1.5 py-0.5 rounded border bg-red-600 text-white border-red-600">Проблема</span>}
+          {o.attention.filter(a => !a.startsWith('просрочен') && a !== 'срочный' && a !== 'проблема на этапе').map(a => <span key={a} className="text-[11px] px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">{a[0].toUpperCase() + a.slice(1)}</span>)}
           {o.paid && <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATE_CLS.full}`}>Оплачен</span>}
           <span className="ml-auto text-[#9a9a95] text-[13px]">{isOpen ? '▲' : '▼'}</span>
         </div>

@@ -3,8 +3,9 @@
 import { overdueDays, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
 import { mskDayKey } from '@/lib/time'
 
-export type BoardTab = 'in_work' | 'packed' | 'shipped' | 'overdue' | 'history'
+export type BoardTab = 'attention' | 'in_work' | 'packed' | 'shipped' | 'overdue' | 'history'
 export const BOARD_TABS: { key: BoardTab; label: string; hint: string; empty: string }[] = [
+  { key: 'attention', label: 'Внимание', hint: 'Что требует внимания сегодня: просрочен, срок сегодня или завтра, срочный, проблема, нет отметок 2+ дня. Отметки этапов — день в день: без них заказ выглядит стоящим и у нас, и у клиента в кабинете.', empty: 'Всё под контролем: просроченных, горящих и заказов без отметок нет.' },
   { key: 'in_work', label: 'В работе', hint: 'Сверху просроченные, самые старые первыми. Цеху ещё есть что отмечать.', empty: 'Заказов в работе нет.' },
   { key: 'packed', label: 'Упакованы', hint: 'Все этапы закрыты, отметки об отгрузке нет. Старые, скорее всего, уже уехали: отметить их можно в разделе отгрузок со своей датой.', empty: 'Упакованных заказов нет.' },
   { key: 'shipped', label: 'Отгружены', hint: 'Заказы с отметкой об отгрузке. Свежие сверху.', empty: 'Отгруженных заказов нет.' },
@@ -25,6 +26,7 @@ export type BoardOrder = {
   positions: number; pieces: number; weight: number; amount?: number
   stage: OrderStage; state: OrderShipState; shipped_pieces: number; ship_day: string | null
   stages: BoardStageCount[]; last_mark: { at: string; by: string | null } | null; idle_days: number | null
+  attention: string[]
 }
 
 const dayKey = (iso: string) => mskDayKey(new Date(iso))
@@ -59,7 +61,8 @@ export function boardStage(tasks: BoardTask[], to: string, shipped: boolean): Or
 // Просрочка только у заказа в работе: у упакованных старых она утопила бы настоящие (на 05.11 их 350 против 104 в работе).
 export const boardOverdue = (deadlineDay: string | null, to: string, stage: OrderStage) => (stage === 'in_work' ? overdueDays(deadlineDay, to, stage) : 0)
 
-export function inBoardTab(o: Pick<BoardOrder, 'stage' | 'overdue_days' | 'ship_day' | 'launch_day'>, tab: BoardTab, period: { from: string; to: string } | null): boolean {
+export function inBoardTab(o: Pick<BoardOrder, 'stage' | 'overdue_days' | 'ship_day' | 'launch_day'> & { attention?: string[] }, tab: BoardTab, period: { from: string; to: string } | null): boolean {
+  if (tab === 'attention') return (o.attention?.length ?? 0) > 0
   if (tab === 'overdue') return o.overdue_days > 0
   if (tab === 'in_work' || tab === 'packed') return o.stage === tab
   if (tab === 'shipped') return o.stage === 'shipped' && (!period || (!!o.ship_day && o.ship_day >= period.from && o.ship_day <= period.to))
@@ -109,4 +112,23 @@ type ShipTrace = { by?: string | null; at?: string | null } | null | undefined
 export function shipMarkOf(notes: { shipped_mark?: ShipTrace; ship_backfill?: ShipTrace; client_shipment?: ShipTrace }): { by: string; at: string | null } | null {
   for (const t of [notes.shipped_mark, notes.client_shipment, notes.ship_backfill]) if (t?.by) return { by: t.by, at: t.at ?? null }
   return null
+}
+
+// Отметки — день в день (владелец 24.11.2026): заказ в работе без отметок 2+ дня считается стоящим.
+export const IDLE_ALARM_DAYS = 2
+
+// Почему заказ на вкладке «Внимание» — причины словами, самая тяжёлая первой.
+export function attentionOf(o: Pick<BoardOrder, 'stage' | 'overdue_days' | 'deadline_day' | 'urgent' | 'problem' | 'idle_days'>, to: string): string[] {
+  if (o.stage !== 'in_work') return []
+  const out: string[] = []
+  if (o.overdue_days > 0) out.push(`просрочен на ${o.overdue_days} дн.`)
+  else if (o.deadline_day && o.deadline_day >= to) {
+    const left = daysBetween(to, o.deadline_day)
+    if (left === 0) out.push('срок сегодня')
+    else if (left === 1) out.push('срок завтра')
+  }
+  if (o.problem) out.push('проблема на этапе')
+  if (o.urgent) out.push('срочный')
+  if (o.idle_days !== null && o.idle_days >= IDLE_ALARM_DAYS) out.push(`нет отметок ${o.idle_days} дн.`)
+  return out
 }
