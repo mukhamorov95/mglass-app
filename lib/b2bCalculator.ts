@@ -292,13 +292,16 @@ export function calcItem(
   let minLinePrice:    number | undefined
   let minPriceDelta:   number | undefined
 
+  // Минимум — только к стеклу с закалкой (владелец 25.11.2026): вырезы, отверстия, фацет,
+  // триплекс и прочие услуги идут сверху, иначе на малой детали они бесплатны для клиента.
   if (minResolved && applyMinPrice) {
     const minTotal = minResolved.minPricePerPiece * quantity
-    if (saleIncVat < minTotal) {
+    if (baseSaleIncVat < minTotal) {
+      const extras      = saleIncVat - baseSaleIncVat
       originalLinePrice = saleIncVat
-      minLinePrice      = minTotal
-      minPriceDelta     = minTotal - saleIncVat
-      saleIncVat        = minTotal
+      minPriceDelta     = minTotal - baseSaleIncVat
+      saleIncVat        = minTotal + extras
+      minLinePrice      = saleIncVat
       minPriceApplied   = true
       minPriceReason    = minResolved.reason
     }

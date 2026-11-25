@@ -47,6 +47,16 @@ describe('calcItem — ядро B2B-цены', () => {
     expect(noFloor.minPriceApplied).toBeUndefined()
   })
 
+  it('минимальная цена — к стеклу с закалкой, услуги сверху (владелец 25.11.2026)', () => {
+    const cut = { id: 29, name: 'Вырез', type: 'fixed' as const, value: 401, cost_price: 0, description: '', active: true, sort_order: 0 }
+    const bare = calcItem(MAT, 100, 100, 1, 20, false, [], false, null, [], false, 2, null, [], true)
+    const withCut = calcItem(MAT, 100, 100, 1, 20, false, [cut], false, null, [], false, 2, null, [], true)
+    expect(withCut.minPriceApplied).toBe(true)
+    expect(withCut.saleIncVat).toBe(bare.saleIncVat + 401)
+    expect(withCut.minLinePrice).toBe(withCut.saleIncVat)
+    expect(withCut.originalLinePrice! + withCut.minPriceDelta!).toBe(withCut.saleIncVat)
+  })
+
   it('маржа положительна и в разумных пределах при цене выше себестоимости', () => {
     const r = calcItem(MAT, 1000, 2000, 1, 20)
     expect(r.margin).toBeGreaterThan(0)
