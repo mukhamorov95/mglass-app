@@ -122,8 +122,9 @@ export default function ShopBoard({ tv }: { tv: boolean }) {
               <p className="text-[13px] text-[#9a9a95] mt-0.5">Поручения по заказам — видят весь цех и менеджеры</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <Link href="/production-app/control" className="text-[12px] px-3 py-2 rounded-lg border border-[#e4e4e0] text-[#3b3b38]">🗂 Заказы по этапам</Link>
               <TelegramLinkButton />
-              <Link href="/production-app/control?tv=1" className="hidden sm:inline-block text-[12px] px-3 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66]">📺 Экран цеха</Link>
+              <Link href="/production-app/control?view=tasks&tv=1" className="hidden sm:inline-block text-[12px] px-3 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66]">📺 Экран цеха</Link>
               {loaded?.me.canCreate && (
                 <button onClick={() => setFormOpen(o => !o)} className="text-[13px] font-semibold px-3.5 py-2 rounded-lg bg-[#111110] text-white">＋ Поручение</button>
               )}
@@ -141,7 +142,7 @@ export default function ShopBoard({ tv }: { tv: boolean }) {
             <button onClick={() => { setSound(s => !s); if (!sound) beep() }} className="px-3 py-1.5 rounded-lg border border-[#3b3b38] text-white text-[16px]">
               {sound ? '🔊 звук включён' : '🔇 включить звук'}
             </button>
-            <Link href="/production-app/control" className="text-[16px] underline">выйти</Link>
+            <Link href="/production-app/control?view=tasks" className="text-[16px] underline">выйти</Link>
           </div>
         </div>
       )}

@@ -74,7 +74,7 @@ function OrdersScreen() {
   const [tab, setTabState] = useState<BoardTab>(BOARD_TAB_KEYS.includes(initialTab as BoardTab) ? initialTab as BoardTab : 'attention')
   const [period, setPeriod] = useState<Period | null>(null)
   const [stageFilter, setStageFilter] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(params.get('q') ?? '')
   const [open, setOpen] = useState<number | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)

@@ -46,7 +46,7 @@ export default function BoardRibbon() {
   if (open.length === 0) {
     if (!data.me.canCreate) return null
     return (
-      <Link href="/production-app/control" className="block text-[12px] text-[#9a9a95] mb-3 hover:text-[#111110]">
+      <Link href="/production-app/control?view=tasks" className="block text-[12px] text-[#9a9a95] mb-3 hover:text-[#111110]">
         🔥 Табло цеха: открытых поручений нет{done ? ` · готово ${done}` : ''} — поставить →
       </Link>
     )
@@ -54,7 +54,7 @@ export default function BoardRibbon() {
 
   const alarm = open.some(c => c.hot || isOverdue(c, now))
   return (
-    <Link href="/production-app/control"
+    <Link href="/production-app/control?view=tasks"
       className={`block rounded-2xl border-2 px-4 py-3 mb-3 bg-white hover:bg-[#fafaf9] ${alarm ? 'border-red-500' : 'border-amber-300'}`}>
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-[14px] font-bold text-[#111110]">🔥 Табло цеха · {open.length}</p>
