@@ -97,6 +97,10 @@ export default function OrdersView({ view }: { view: View }) {
   const inView = orders.filter(o => lanes.includes(o.lane))
   const unpaid = inView.filter(o => unpaidOf(o.payment) > 0)
   const unpaidSum = unpaid.reduce((s, o) => s + unpaidOf(o.payment), 0)
+  // Шовер Гласс 25.11: «в Документах 35, тут 33» — разница в неоплаченных заказах соседнего
+  // списка (отгружен, а оплаты нет). Называем её прямо, а не оставляем загадкой.
+  const otherView: View | null = view === 'inwork' ? 'shipped' : view === 'shipped' ? 'inwork' : null
+  const otherUnpaid = otherView ? orders.filter(o => VIEW_LANES[otherView].includes(o.lane) && unpaidOf(o.payment) > 0) : []
   const visible = unpaidFirst((view !== 'quotes' && onlyUnpaid ? unpaid : inView).filter(o => matchesOrder({ number: o.number, clientOrderNumber: o.clientOrderNumber, amount: o.amount, summary: o.summary }, q)))
   // Для просчётов: недавние (≤2 недель по последней активности) и архив.
   const recent = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) <= ARCHIVE_DAYS) : visible
@@ -164,6 +168,15 @@ export default function OrdersView({ view }: { view: View }) {
             <button className={onlyUnpaid ? 'primary' : 'ghost'} onClick={() => setOnlyUnpaid(true)} disabled={unpaid.length === 0}>
               Не оплачены · {unpaid.length}{unpaidSum > 0 ? ` · ${fmtMoney(unpaidSum)}` : ''}
             </button>
+            {otherView && otherUnpaid.length > 0 && (
+              <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                + ещё {otherUnpaid.length} не {otherUnpaid.length === 1 ? 'оплачен' : 'оплачены'} в{' '}
+                <Link href={otherView === 'shipped' ? '/partner/shipped' : '/partner/orders'} style={{ textDecoration: 'underline' }}>
+                  {otherView === 'shipped' ? '«Отгруженных»' : '«Заказах в работе»'}
+                </Link>
+                {' '}({otherUnpaid.map(o => o.number).join(', ')}) · в «Документах» — все {unpaid.length + otherUnpaid.length}
+              </span>
+            )}
           </div>
         )}
         {!loading && data?.linked && view !== 'quotes' && lanesOf(recent)}
