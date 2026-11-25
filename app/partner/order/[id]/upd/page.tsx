@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
-import { renderDocCanvas } from '@/lib/pdfCapture'
+import { deliverPdf, useAutoDownload } from '@/lib/partner/docDownload'
 import UpdDocument from '@/components/UpdDocument'
 import { issuedUpdView, type UpdIssued } from '@/lib/b2b/updView'
 
@@ -32,24 +32,16 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
   const issued = data?.updIssued ?? null
 
   async function downloadPdf() {
-    if (!docRef.current || !issued) return
+    if (!docRef.current || !issued) throw new Error('Документ не готов')
     setPdfErr(null)
     try {
-      const jspdf = await import('jspdf')
-      const canvas = await renderDocCanvas(docRef.current)
-      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
-      const pw = 297, ph = 210
-      const imgH = pw * canvas.height / canvas.width
-      let pos = 0, left = imgH
-      const img = canvas.toDataURL('image/jpeg', 0.94)
-      pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
-      left -= ph
-      while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
-      pdf.save(`УПД-${issued.number}-${issued.year}.pdf`)
-    } catch {
+      await deliverPdf(docRef.current, `УПД-${issued.number}-${issued.year}.pdf`, 'landscape')
+    } catch (e) {
       setPdfErr('Не удалось сформировать PDF — используйте «Печать» → «Сохранить как PDF».')
+      throw e
     }
   }
+  useAutoDownload({ ready: !loading && !!issued, failed: loading ? null : error ?? (issued ? null : 'УПД ещё не выдан'), run: downloadPdf })
 
   if (loading) return <div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div>
   if (error || !data || !issued) return (
@@ -66,7 +58,7 @@ export default function PartnerUpdPage({ params }: { params: Promise<{ id: strin
       <div className="no-print" style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 16px 0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <Link href={`/partner/order/${id}`} className="ghost">‹ К заказу</Link>
         <button onClick={() => document.fonts.ready.then(() => window.print())} className="ghost" style={{ marginLeft: 'auto' }}>🖨 Печать</button>
-        <button onClick={downloadPdf} className="primary">⬇ Скачать PDF</button>
+        <button onClick={() => { void downloadPdf().catch(() => {}) }} className="primary">⬇ Скачать PDF</button>
         {pdfErr && <span style={{ flexBasis: '100%', fontSize: 12.5, color: '#b91c1c' }}>{pdfErr}</span>}
       </div>
 

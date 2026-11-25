@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
+import { deliverPdf, useAutoDownload } from '@/lib/partner/docDownload'
 
 // Печатное КП для клиента. Данные — из /api/partner/order (строго свой заказ,
-// только цена клиента, без cost/margin). Кнопка «Печать» → window.print()
-// (можно «Сохранить как PDF» в диалоге печати).
+// только цена клиента, без cost/margin). «Скачать PDF» — файл сразу; «Печать» — диалог печати.
 
 type Item = { material: string; thickness: number; width: number; height: number; quantity: number; tempering: boolean; facet: boolean; triplex: boolean; price: number }
 type Order = { id: number; number: string; clientName: string; created_at: string; total: number; items: Item[] }
@@ -17,11 +17,25 @@ export default function PartnerKPPage({ params }: { params: Promise<{ id: string
   const { id } = use(params)
   const [o, setO] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  const docRef = useRef<HTMLDivElement>(null)
+  const [pdfErr, setPdfErr] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/partner/order/${id}`).then(r => r.ok ? r.json() : Promise.reject())
       .then((d: Order) => setO(d)).catch(() => setO(null)).finally(() => setLoading(false))
   }, [id])
+
+  async function downloadPdf() {
+    if (!docRef.current || !o) throw new Error('КП не готово')
+    setPdfErr(null)
+    try {
+      await deliverPdf(docRef.current, `КП-${o.number}.pdf`, 'portrait')
+    } catch (e) {
+      setPdfErr('Не удалось сформировать PDF — используйте «Печать».')
+      throw e
+    }
+  }
+  useAutoDownload({ ready: !loading && !!o, failed: loading || o ? null : 'Заказ не найден', run: downloadPdf })
 
   if (loading) return <div className="min-h-screen bg-white flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
   if (!o) return (
@@ -39,10 +53,14 @@ export default function PartnerKPPage({ params }: { params: Promise<{ id: string
 
       <div className="no-print sticky top-0 bg-white border-b border-[#e4e4e0] px-4 py-2.5 flex items-center justify-between">
         <Link href={`/partner/order/${o.id}`} className="text-[12px] text-[#9a9a95] hover:text-[#111110]">‹ К заказу</Link>
-        <button onClick={() => window.print()} className="text-[12px] px-4 py-1.5 rounded-lg bg-[#1d1d1f] text-white font-semibold hover:bg-black">Печать / Сохранить PDF</button>
+        <div className="flex items-center gap-2">
+          {pdfErr && <span className="text-[12px] text-[#b91c1c]">{pdfErr}</span>}
+          <button onClick={() => window.print()} className="text-[12px] px-4 py-1.5 rounded-lg border border-[#e4e4e0] text-[#111110] font-semibold hover:border-[#111110]">Печать</button>
+          <button onClick={() => { void downloadPdf().catch(() => {}) }} className="text-[12px] px-4 py-1.5 rounded-lg bg-[#1d1d1f] text-white font-semibold hover:bg-black">⬇ Скачать PDF</button>
+        </div>
       </div>
 
-      <div className="max-w-[780px] mx-auto bg-white my-4 print:my-0 shadow-sm print:shadow-none p-8 print:p-0">
+      <div ref={docRef} className="max-w-[780px] mx-auto bg-white my-4 print:my-0 shadow-sm print:shadow-none p-8 print:p-0">
         {/* Шапка */}
         <div className="flex items-start justify-between border-b border-[#e4e4e0] pb-4">
           <div>
