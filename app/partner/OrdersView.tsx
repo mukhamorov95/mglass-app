@@ -7,6 +7,7 @@ import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
 import type { PaymentView } from '@/lib/partner/orderMoney'
 import { paymentLabel, paymentPill, unpaidOf } from '@/lib/partner/paymentLabel'
 import { matchesOrder, unpaidFirst } from '@/lib/partner/orderSearch'
+import { statusChips, statusOf } from '@/lib/partner/stageFilter'
 import { QUOTE_LABEL, canEditQuote, canSubmitQuote, type QuoteState } from '@/lib/partner/quoteState'
 import type { ItemView } from '@/lib/partner/itemStages'
 
@@ -59,6 +60,7 @@ export default function OrdersView({ view }: { view: View }) {
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [onlyUnpaid, setOnlyUnpaid] = useState(false)
   const [q, setQ] = useState('')
+  const [status, setStatus] = useState<string | null>(null)
 
   const [loadErr, setLoadErr] = useState<string | null>(null)
 
@@ -101,7 +103,10 @@ export default function OrdersView({ view }: { view: View }) {
   // списка (отгружен, а оплаты нет). Называем её прямо, а не оставляем загадкой.
   const otherView: View | null = view === 'inwork' ? 'shipped' : view === 'shipped' ? 'inwork' : null
   const otherUnpaid = otherView ? orders.filter(o => VIEW_LANES[otherView].includes(o.lane) && unpaidOf(o.payment) > 0) : []
-  const visible = unpaidFirst((view !== 'quotes' && onlyUnpaid ? unpaid : inView).filter(o => matchesOrder({ number: o.number, clientOrderNumber: o.clientOrderNumber, amount: o.amount, summary: o.summary }, q)))
+  const found = (view !== 'quotes' && onlyUnpaid ? unpaid : inView).filter(o => matchesOrder({ number: o.number, clientOrderNumber: o.clientOrderNumber, amount: o.amount, summary: o.summary }, q))
+  // Счётчики статусов — по тому же списку, что покажет нажатие: с учётом «Не оплачены» и поиска.
+  const chips = view === 'inwork' ? statusChips(found, status) : []
+  const visible = unpaidFirst(view === 'inwork' && status ? found.filter(o => statusOf(o) === status) : found)
   // Для просчётов: недавние (≤2 недель по последней активности) и архив.
   const recent = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) <= ARCHIVE_DAYS) : visible
   const archived = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) > ARCHIVE_DAYS) : []
@@ -153,7 +158,7 @@ export default function OrdersView({ view }: { view: View }) {
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: наш № или ваш № заказа, сумма, материал" aria-label="Поиск заказа" className="pinput" style={{ marginBottom: 12, background: 'var(--surface)' }} />
         )}
         {!loading && data?.linked && visible.length === 0 && (
-          <div className="note"><div className="s">{q ? `По запросу «${q}» ничего нет.` : meta.empty}</div></div>
+          <div className="note"><div className="s">{q ? `По запросу «${q}» ничего нет.` : status ? `Со статусом «${status}» заказов нет.` : meta.empty}</div></div>
         )}
 
         {!loading && data?.linked && view === 'quotes' && recent.length > 0 && (
@@ -177,6 +182,19 @@ export default function OrdersView({ view }: { view: View }) {
                 {' '}({otherUnpaid.map(o => o.number).join(', ')}) · в «Документах» — все {unpaid.length + otherUnpaid.length}
               </span>
             )}
+          </div>
+        )}
+        {!loading && data?.linked && view === 'inwork' && inView.length > 0 && (
+          <div className="fchips" role="tablist" aria-label="Фильтр по статусу">
+            <button role="tab" aria-selected={!status} className={status ? '' : 'on'} onClick={() => setStatus(null)}>
+              Все статусы <span className="n">{found.length}</span>
+            </button>
+            {chips.map(c => (
+              <button key={c.status} role="tab" aria-selected={status === c.status} className={status === c.status ? 'on' : ''}
+                onClick={() => setStatus(status === c.status ? null : c.status)}>
+                {c.status} <span className="n">{c.count}</span>
+              </button>
+            ))}
           </div>
         )}
         {!loading && data?.linked && view !== 'quotes' && lanesOf(recent)}
