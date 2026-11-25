@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { MirrorFrame, FRAME_TYPES, FRAME_COLORS, calcFrameCost } from '@/lib/types'
 import { ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
+import { guessFrameColor, parseWhipLength, supplierCostPerM, type SupplierRow } from '@/lib/mirror/frameDecor'
 
 type FrameForm = {
   article: string
@@ -50,6 +51,40 @@ export default function MirrorFramesPage() {
   const [previewH, setPreviewH]   = useState('800')
   const [prodSettings, setProdSettings] = useState<ProductionSettings>(DEFAULT_PRODUCTION_SETTINGS)
   const [priceMode, setPriceMode] = useState<'per_m' | 'per_whip'>('per_m')
+  // Привязка к прайсу поставщика (В5): метр стоит по прайсу Ветро/АВ24, а не руками.
+  const [supplierRowId, setSupplierRowId] = useState<number | null>(null)
+  const [supQ, setSupQ] = useState('')
+  const [supHits, setSupHits] = useState<SupplierRow[]>([])
+  const [supErr, setSupErr] = useState<string | null>(null)
+
+  async function searchSupplier(q: string) {
+    setSupQ(q)
+    if (q.trim().length < 2) { setSupHits([]); return }
+    const term = q.trim().replace(/[%,()]/g, ' ')
+    const { data, error: e } = await createClient().from('supplier_price_rows')
+      .select('id, supplier, article, name, color, unit, cost_price')
+      .eq('active', true).or(`article.ilike.%${term}%,name.ilike.%${term}%`).limit(12)
+    if (e) { setSupErr(`Прайс не открылся: ${e.message}`); return }
+    setSupErr(null)
+    setSupHits((data ?? []) as SupplierRow[])
+  }
+
+  function pickSupplier(r: SupplierRow) {
+    const whip = parseWhipLength(r.name) ?? (parseFloat(form.whip_length_m) || 3)
+    const perM = supplierCostPerM(r, whip)
+    setSupplierRowId(r.id)
+    setPriceMode('per_m')
+    setForm(f => ({
+      ...f,
+      name: f.name || r.name.replace(/,\s*длина.*$/i, '').slice(0, 80),
+      article: r.article ?? f.article,
+      supplier: r.supplier === 'av24' ? 'АВ24' : r.supplier === 'vetro' ? 'VETRO' : r.supplier,
+      color: guessFrameColor(`${r.color ?? ''} ${r.name}`),
+      whip_length_m: String(whip),
+      cost_per_m: perM ? String(Math.round(perM * 100) / 100) : f.cost_per_m,
+    }))
+    setSupHits([]); setSupQ('')
+  }
 
   async function load() {
     const supabase = createClient()
@@ -80,14 +115,15 @@ export default function MirrorFramesPage() {
       notes: f.notes ?? '', active: f.active, sort_order: String(f.sort_order),
     })
     setPriceMode('per_m')
+    setSupplierRowId((f as MirrorFrame & { supplier_row_id?: number | null }).supplier_row_id ?? null)
     setError(null)
   }
 
-  function resetForm() { setEditId(null); setForm(EMPTY); setPriceMode('per_m'); setError(null) }
+  function resetForm() { setEditId(null); setForm(EMPTY); setPriceMode('per_m'); setSupplierRowId(null); setError(null) }
 
   async function handleSave() {
     if (!form.name.trim()) { setError('Название обязательно'); return }
-    if (!form.cost_per_m || !form.sale_per_m) { setError('Укажите цены'); return }
+    if (!form.cost_per_m) { setError('Укажите себестоимость (или выберите строку прайса поставщика)'); return }
     setSaving(true); setError(null)
     const supabase = createClient()
     const whipLen = parseFloat(form.whip_length_m) || 6
@@ -111,6 +147,7 @@ export default function MirrorFramesPage() {
       assemble_sale_rub: form.assemble_sale_rub ? parseFloat(form.assemble_sale_rub) : null,
       notes: form.notes || null, active: form.active,
       sort_order: parseInt(form.sort_order) || 0,
+      supplier_row_id: supplierRowId,
     }
     const { error: err } = editId
       ? await supabase.from('mirror_frames').update(row).eq('id', editId)
@@ -139,7 +176,7 @@ export default function MirrorFramesPage() {
   const _costPerM   = priceMode === 'per_whip' ? _rawCost / _whipLen : _rawCost
   const _salePerM   = priceMode === 'per_whip' ? _rawSale / _whipLen : _rawSale
 
-  const previewFrame: MirrorFrame | null = form.name && form.cost_per_m && form.sale_per_m ? {
+  const previewFrame: MirrorFrame | null = form.name && form.cost_per_m ? {
     id: 0, article: null, name: form.name, supplier: null, supplier_url: null,
     frame_type: form.frame_type, color: form.color, profile_size: form.profile_size || null,
     whip_length_m: _whipLen,
@@ -212,6 +249,27 @@ export default function MirrorFramesPage() {
           <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">
             {editId ? `Редактирование #${editId}` : 'Новая рамка'}
           </p>
+
+          <div className="rounded-md border border-blue-100 bg-blue-50/50 p-2 space-y-1.5">
+            <label className={lbl}>Профиль из прайса поставщика (Ветро / АВ24)</label>
+            <input className={inp} value={supQ} onChange={e => void searchSupplier(e.target.value)} placeholder="артикул или название: FSZP-10, Mf-4…" />
+            {supErr && <p className="text-[11px] text-red-600">{supErr}</p>}
+            {supHits.length > 0 && (
+              <div className="max-h-56 overflow-y-auto border border-[#e4e4e0] rounded-md bg-white divide-y divide-[#f0f0ec]">
+                {supHits.map(r => (
+                  <button key={r.id} type="button" onClick={() => pickSupplier(r)} className="w-full text-left px-2 py-1.5 hover:bg-[#f5f5f3]">
+                    <span className="block text-[11px] font-medium text-[#111110]">{r.article} · {r.color ?? '—'}</span>
+                    <span className="block text-[10px] text-[#6b6b66] truncate">{r.supplier} · {r.name} · {Number(r.cost_price) || 0} ₽/{r.unit ?? 'шт'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-[#6b6b66]">
+              {supplierRowId
+                ? <>Привязано к прайсу (строка #{supplierRowId}): в калькуляторе метр стоит по прайсу на сегодня. <button type="button" className="underline" onClick={() => setSupplierRowId(null)}>отвязать</button></>
+                : 'Не привязано: себестоимость метра берётся из поля ниже. Продажную можно не заполнять — тогда по марже производства.'}
+            </p>
+          </div>
 
           {/* Basic info */}
           <div className="grid grid-cols-2 gap-2">
