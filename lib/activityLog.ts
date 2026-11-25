@@ -21,6 +21,8 @@ export type LogAction =
   | 'upd.issue'
   | 'upd.series_set'
   | 'partner.team.invite'
+  | 'partner.invoice.combine'
+  | 'partner.invoice.payment_doc'
   | 'partner.team.update'
 
 // Автор — только из проверенной сессии: функции, которой можно передать чужой user_id,
