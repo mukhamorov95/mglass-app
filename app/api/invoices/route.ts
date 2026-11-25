@@ -207,8 +207,28 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const a = await requireFin()
   if ('error' in a) return a.error
-  const b = await req.json().catch(() => ({})) as { id?: number; status?: string }
+  const b = await req.json().catch(() => ({})) as { id?: number; status?: string; archive?: boolean }
   if (!b.id) return NextResponse.json({ error: 'Нет id' }, { status: 400 })
+  // Архив объединённого счёта (владелец 25.11.2026): не удаление — счёт виден во вкладке «Архив»,
+  // в долг не входит (status cancelled), вернуть можно.
+  if (typeof b.archive === 'boolean') {
+    const { data: cur } = await a.sb.from('invoices').select('id, order_ids, archived_at').eq('id', b.id).maybeSingle()
+    if (!cur) return NextResponse.json({ error: 'Счёт не найден' }, { status: 404 })
+    if (!Array.isArray(cur.order_ids) || cur.order_ids.length < 2) return NextResponse.json({ error: 'В архив убираются только объединённые счета' }, { status: 400 })
+    if (!b.archive && !cur.archived_at) return NextResponse.json({ error: 'Счёт не в архиве' }, { status: 400 })
+    const now = new Date().toISOString()
+    const patch = b.archive
+      ? { status: 'cancelled', paid_at: null, archived_at: now, archived_by: a.name, updated_at: now }
+      : { status: 'issued', paid_at: null, archived_at: null, archived_by: null, updated_at: now }
+    const { data, error } = await a.sb.from('invoices').update(patch).eq('id', b.id).select('id')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data?.length) return NextResponse.json({ error: 'Счёт не изменён — нет прав' }, { status: 403 })
+    if (!b.archive) {
+      const synced = await syncInvoiceStatus(createServiceClient(), b.id)
+      if (!synced.ok) return NextResponse.json({ error: synced.error }, { status: synced.status })
+    }
+    return NextResponse.json({ ok: true, archived_at: b.archive ? now : null, archived_by: b.archive ? a.name : null })
+  }
   // «Оплачен» — это платёж на остаток (POST /api/invoices/[id]/payment), а не флажок:
   // иначе счёт «оплачен» без денег в payments, и долг на экранах расходится.
   if (b.status === 'paid') {
