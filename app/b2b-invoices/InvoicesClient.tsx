@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { matchScore } from '@/lib/search/translitMatch'
+import { confirmDialog } from '@/lib/dialog'
+import { toast } from '@/lib/toast'
 
 type Invoice = {
   id: number
@@ -20,13 +22,15 @@ type Invoice = {
   payment_doc_path?: string | null
   payment_doc_at?: string | null
   payment_doc_by?: string | null
+  archived_at?: string | null
+  archived_by?: string | null
   // Производные от payments (A23): истина об оплате — здесь, не во флажке status.
   paid: number
   remainder: number
   derivedStatus: 'paid' | 'partial' | 'unpaid'
 }
 
-type Tab = 'open' | 'paid' | 'all'
+type Tab = 'open' | 'paid' | 'all' | 'archive'
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const date = (s: string | null) => s ? new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'
@@ -52,8 +56,25 @@ export default function InvoicesClient() {
 
   // Оплачен/не оплачен — по ПЛАТЕЖАМ (derivedStatus), не по ручному флажку.
   // Аннулированные (ручной status) в дебиторку не входят.
+  const [busy, setBusy] = useState<number | null>(null)
+  async function setArchived(inv: Invoice, archive: boolean) {
+    const ok = await confirmDialog(archive
+      ? { title: `Убрать счёт № ${inv.invoice_no} в архив?`, text: `${inv.order_ids.length} заказов, ${fmt(Number(inv.amount))}. Счёт перестанет считаться долгом и пропадёт из кабинета клиента. Он останется во вкладке «Архив», вернуть можно.`, confirmLabel: 'В архив' }
+      : { title: `Вернуть счёт № ${inv.invoice_no} из архива?`, text: 'Он снова станет действующим и появится в кабинете клиента.', confirmLabel: 'Вернуть' })
+    if (!ok) return
+    setBusy(inv.id)
+    try {
+      const r = await fetch('/api/invoices', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: inv.id, archive }) })
+      const d = await r.json().catch(() => ({})) as { error?: string; archived_at?: string | null; archived_by?: string | null }
+      if (!r.ok) { toast.error(archive ? 'Не убран в архив' : 'Не возвращён', { detail: d.error ?? `Ошибка ${r.status}` }); return }
+      setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: archive ? 'cancelled' : 'issued', archived_at: d.archived_at ?? null, archived_by: d.archived_by ?? null } : i))
+      toast.success(archive ? `Счёт № ${inv.invoice_no} — в архиве` : `Счёт № ${inv.invoice_no} снова действует`, { detail: archive ? 'Найти его можно во вкладке «Архив».' : undefined })
+    } catch { toast.error('Сеть недоступна') }
+    finally { setBusy(null) }
+  }
+
   const visible = useMemo(() => {
-    let list = invoices
+    let list = tab === 'archive' ? invoices.filter(i => i.archived_at) : invoices.filter(i => !i.archived_at)
     if (tab === 'open') list = list.filter(i => i.status !== 'cancelled' && i.derivedStatus !== 'paid')
     else if (tab === 'paid') list = list.filter(i => i.derivedStatus === 'paid')
     if (search.trim()) {
@@ -87,7 +108,8 @@ export default function InvoicesClient() {
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: 'open', label: 'Не оплачены', count: invoices.filter(i => notCancelled(i) && i.derivedStatus !== 'paid').length },
     { key: 'paid', label: 'Оплачены',    count: invoices.filter(i => i.derivedStatus === 'paid').length },
-    { key: 'all',  label: 'Все',         count: invoices.length },
+    { key: 'all',  label: 'Все',         count: invoices.filter(i => !i.archived_at).length },
+    { key: 'archive', label: 'Архив',   count: invoices.filter(i => i.archived_at).length },
   ]
 
   return (
@@ -147,7 +169,9 @@ export default function InvoicesClient() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[13px] font-bold font-mono text-[#111110]">№ {inv.invoice_no}</span>
                     <span className="text-[13px] text-[#111110] truncate">{inv.payer_name ?? '—'}</span>
-                    {cancelled ? (
+                    {inv.archived_at ? (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">в архиве · {date(inv.archived_at)}{inv.archived_by ? ` · ${inv.archived_by}` : ''}</span>
+                    ) : cancelled ? (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">аннулирован</span>
                     ) : inv.derivedStatus === 'paid' ? (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">оплачен</span>
@@ -192,6 +216,12 @@ export default function InvoicesClient() {
                     <p className="text-[10px] text-[#9a9a95] whitespace-nowrap">оплачено {fmt(inv.paid)}</p>
                   )}
                   {Number(inv.vat) > 0 && <p className="text-[10px] text-[#9a9a95]">НДС {fmt(Number(inv.vat))}</p>}
+                  {inv.order_ids.length > 1 && (inv.archived_at || !cancelled) && (
+                    <button onClick={() => setArchived(inv, !inv.archived_at)} disabled={busy === inv.id}
+                      className="mt-1 text-[11px] text-[#6b6b66] hover:text-[#111110] underline disabled:opacity-40">
+                      {busy === inv.id ? '…' : inv.archived_at ? 'Вернуть из архива' : 'В архив'}
+                    </button>
+                  )}
                 </div>
               </div>
             )
