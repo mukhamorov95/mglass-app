@@ -12,6 +12,7 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { calcLoftFactory, type LoftRates, type LoftConstruction, type LoftHandle } from '@/lib/loftFactoryCalculator'
 import { getMatrixPrice, getMatrixNames, getAvailableMm, type GlassMatrixRow } from '@/lib/glassMatrix'
 import type { B2BOrderItem } from '@/lib/b2bCalculator'
+import type { B2BService } from '@/lib/types'
 
 export type PricingCfg = {
   productionTaxPercent: number
@@ -32,9 +33,9 @@ const CFG_FALLBACK: PricingCfg = {
 }
 
 type RawComponent = {
-  id: number; component_type: 'frame' | 'led_strip' | 'power_supply' | 'diffuser'
+  id: number; component_type: 'frame' | 'led_strip' | 'power_supply' | 'diffuser' | 'heating' | 'sensor'
   name: string; short_name: string | null; voltage: number | null; color_temp: number | null
-  power_per_meter: number | null; max_power: number | null; cost_price: number; unit: string; active?: boolean
+  power_per_meter: number | null; max_power: number | null; cost_price: number; sale_price?: number | null; unit: string; active?: boolean
 }
 
 export type SandblastMode = 'none' | 'stencil' | 'full'
@@ -193,6 +194,8 @@ export const ledOptions = (d: FactoryData) =>
   d.components.filter(c => c.component_type === 'led_strip')
 export const frameOptions = (d: FactoryData) =>
   d.components.filter(c => c.component_type === 'frame')
+export const heaterOptions = (d: FactoryData) =>
+  d.components.filter(c => c.component_type === 'heating')
 
 // Зеркало с подсветкой: стандартная комплектация (профиль/лента/БП/рассеиватель — первые
 // подходящие из справочника), себестоимость по COST-строке матрицы + factory overhead.
@@ -418,31 +421,51 @@ export function calcFactoryLoft(
 // Про два «налога»: 12% в prodPrice (canonical Цена=Себест/(1−маржа−налог)) — это
 // налог на прибыль производства, зашитый в цену; 22% ниже — сквозной НДС, вычленяемый
 // из той же цены. Это РАЗНЫЕ налоги, не двойной счёт: показанная B2B-маржа ≈ 52%.
-export function factoryQuoteToItem(q: FactoryQuote, quantity: number, comment?: string): Omit<B2BOrderItem, 'localId'> {
+// extras — работы и комплектующие сверху цены изделия (вырезы, отверстия, подогрев): цена за
+// штуку изделия из своих справочников; на число изделий умножается здесь.
+export type FactoryExtras = {
+  services: B2BService[]
+  cutoutGroups?: { kind: 'outer' | 'inner'; cat: 1 | 2; n: number }[]
+  holes?: { d: number; n: number }[]
+}
+
+export function factoryQuoteToItem(q: FactoryQuote, quantity: number, comment?: string, extras?: FactoryExtras): Omit<B2BOrderItem, 'localId'> {
   const qty = Math.max(1, quantity)
   const VAT = 22
-  const saleIncVat = q.prodPricePiece * qty
+  const services = (extras?.services ?? []).map(s => ({
+    id: s.id, name: s.name, type: s.type, value: s.value,
+    cost: Math.round(s.value * qty), costPrice: Math.round((s.cost_price ?? 0) * qty),
+  }))
+  const servicesCost = services.reduce((a, s) => a + s.cost, 0)
+  const servicesCostPrice = services.reduce((a, s) => a + s.costPrice, 0)
+  const baseSaleIncVat = q.prodPricePiece * qty
+  const saleIncVat = baseSaleIncVat + servicesCost
   const saleExVat  = Math.round(saleIncVat * 100 / (100 + VAT))
-  const costWithVat = q.factoryCostPiece * qty
+  const costWithVat = q.factoryCostPiece * qty + servicesCostPrice
   const inputVat    = Math.round(costWithVat * VAT / (100 + VAT))
   const costExVat   = costWithVat - inputVat
   const totalAreaNet = Math.round(q.areaPiece * qty * 10000) / 10000
   return {
     materialId: 0, materialName: q.label, category: 'изделие',
     thickness: q.thicknessMm, width: q.widthMm, height: q.heightMm, quantity: qty, wastePercent: 0,
-    hasTempering: false, hasFacet: false, facetTypeMm: null, hasHoles: false, shape: q.shape ?? 'rect',
-    services: [],
+    hasTempering: false, hasFacet: false, facetTypeMm: null, shape: q.shape ?? 'rect',
+    hasHoles: (extras?.holes?.length ?? 0) > 0, holes: extras?.holes ?? [],
+    ...(extras?.cutoutGroups?.length ? {
+      cutoutGroups: extras.cutoutGroups, hasCutouts: true,
+      cutouts: extras.cutoutGroups.reduce((a, g) => a + g.n, 0),
+    } : {}),
+    services,
     areaPiece: q.areaPiece, totalAreaNet, totalAreaBilled: totalAreaNet,
     perimeterM: q.perimeterM,
     weightPerM2: q.areaPiece > 0 ? Math.round(q.weightPerPiece / q.areaPiece * 10) / 10 : 0,
     totalWeight: Math.round(q.weightPerPiece * qty * 10) / 10,
-    costMaterial: costWithVat, costTempering: 0, costFacet: 0, costEdge: 0, costTransport: 0, costPackaging: 0,
+    costMaterial: q.factoryCostPiece * qty, costTempering: 0, costFacet: 0, costEdge: 0, costTransport: 0, costPackaging: 0,
     saleFacet: 0,
     costWithVat, inputVat, costExVat,
     pricePerM2: q.areaPiece > 0 ? Math.round(q.prodPricePiece / q.areaPiece) : 0,
     margin: saleExVat > 0 ? Math.round((1 - costExVat / saleExVat) * 100) : 0,
-    vatRate: VAT, servicesCost: 0,
-    baseSaleExVat: saleExVat, saleExVat, outputVat: saleIncVat - saleExVat, saleIncVat,
+    vatRate: VAT, servicesCost,
+    baseSaleExVat: Math.round(baseSaleIncVat * 100 / (100 + VAT)), saleExVat, outputVat: saleIncVat - saleExVat, saleIncVat,
     comment: [q.spec, comment].filter(Boolean).join(' · ') || undefined,
     // Состав себестоимости сохраняем в позицию: по нему видно комплектующие
     // изделия в экономике заказа, а не одну строку «Материал».
