@@ -98,7 +98,7 @@ export default function CutoutsPage() {
                     <td className="px-3 py-2 text-right">
                       <button onClick={() => save(row)} disabled={!dirty || busy === row.id}
                         className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#111110] text-white disabled:bg-[#e4e4e0] disabled:text-[#9a9a95]">
-                        {busy === row.id ? '…' : dirty ? 'Сохранить' : 'Сохранено'}
+                        {busy === row.id ? '…' : dirty || unpriced ? 'Сохранить' : 'Сохранено'}
                       </button>
                     </td>
                   </tr>
