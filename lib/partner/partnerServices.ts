@@ -1,4 +1,5 @@
 import type { B2BService } from '@/lib/types'
+import { isCutoutService } from '@/lib/b2b/cutouts'
 
 // Доп. работы в калькуляторе кабинета — те же строки справочника b2b_services, что у
 // менеджера. Только простые типы: «рассчитываемые» услуги нужны настройки цеха, плёнке —
@@ -11,7 +12,8 @@ export type PartnerService = { id: number; name: string; type: 'percent' | 'per_
 const TYPES = new Set(['percent', 'per_m2', 'fixed'])
 
 export function isPartnerService(s: Pick<B2BService, 'type' | 'name' | 'active'>): boolean {
-  return s.active !== false && TYPES.has(s.type) && !/триплекс/i.test(s.name)
+  // Вырезы кабинету пока не открыты: цена за штуку × число на деталь, выбора вида там нет.
+  return s.active !== false && TYPES.has(s.type) && !/триплекс/i.test(s.name) && !isCutoutService(s)
 }
 
 export function publicServices(all: B2BService[]): PartnerService[] {

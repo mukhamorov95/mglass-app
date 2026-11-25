@@ -2,6 +2,7 @@ import type { B2BMaterial, B2BService } from '../types'
 import { calcItem, calcTotals, type FacetPrice, type B2BOrderItem, type B2BOrderTotals } from '../b2bCalculator'
 import { surchargeServicesFor, type SurchargeRule } from '../surcharges'
 import type { B2BRates } from './rates'
+import { cutoutServices, cutoutTotal, isCutoutService, normalizeCutouts, type CutoutGroup } from './cutouts'
 
 // ЕДИНАЯ точка расчёта B2B-позиции. Её зовут ОБА калькулятора:
 //   • менеджерский  app/calculator/b2b/page.tsx
@@ -26,6 +27,7 @@ export type QuoteItemInput = {
   holes?: { d: number; n: number }[]     // сколько и какого диаметра — для сверловщика, на цену не влияет
   hasCutouts?: boolean                   // вырезы — работа сверловщика, ведёт на ту же станцию
   cutouts?: number                       // сколько вырезов
+  cutoutGroups?: CutoutGroup[]           // вид и категория вырезов — цена из справочника cutout_*
   shape?: 'rect' | 'curved'
   hasTriplex?: boolean
   triplexLayers?: number                 // 2 или 3; движок нормализует
@@ -40,6 +42,7 @@ export type QuoteRefData = {
   facetPrices: FacetPrice[]
   surchargeRules: SurchargeRule[]
   rates: B2BRates        // справочник b2b_rates: оба калькулятора обязаны считать по одной таблице
+  cutoutPrices?: B2BService[]   // строки b2b_services с кодом cutout_*; нет — вырезы без цены
 }
 
 export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit<B2BOrderItem, 'localId'> {
@@ -54,7 +57,14 @@ export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit
     ref.surchargeRules,
     input.dismissedSurcharges ?? new Set<number>(),
   )
-  const services: B2BService[] = [...(input.resolvedServices ?? []), ...surchargeSvcs]
+  // Вырезы считаются только по группам: строка выреза, пришедшая обычной услугой, — повтор.
+  const cutoutGroups = normalizeCutouts(input.cutoutGroups)
+  const services: B2BService[] = [
+    ...(input.resolvedServices ?? []).filter(s => !isCutoutService(s as B2BService & { code?: string })),
+    ...cutoutServices(cutoutGroups, ref.cutoutPrices ?? []),
+    ...surchargeSvcs,
+  ]
+  const cutCount = cutoutTotal(cutoutGroups)
 
   const calc = calcItem(
     mat, width, height, quantity, waste,
@@ -83,8 +93,9 @@ export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit
     hasHoles: input.hasHoles ?? false,
     hasSandblast: input.hasSandblast ?? false,
     holes: input.holes ?? [],
-    hasCutouts: input.hasCutouts ?? false,
-    cutouts: input.cutouts ?? 0,
+    hasCutouts: cutCount > 0 || (input.hasCutouts ?? false),
+    cutouts: cutCount > 0 ? cutCount : (input.cutouts ?? 0),
+    ...(cutoutGroups.length ? { cutoutGroups } : {}),
     shape,
   }
 }

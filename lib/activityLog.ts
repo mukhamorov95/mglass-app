@@ -24,6 +24,7 @@ export type LogAction =
   | 'partner.invoice.combine'
   | 'partner.invoice.payment_doc'
   | 'partner.team.update'
+  | 'price.cutout_update'
 
 // Автор — только из проверенной сессии: функции, которой можно передать чужой user_id,
 // больше нет. Пишет service-role, потому что у ролей пользователей прав на запись в

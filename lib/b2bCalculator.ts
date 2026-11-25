@@ -90,6 +90,7 @@ export type B2BOrderItem = {
   holes?: { d: number; n: number }[]  // группы отверстий «N штук диаметром D» — см. lib/production/holes.ts
   hasCutouts?: boolean      // есть вырезы — та же станция, что сверловка
   cutouts?: number          // сколько вырезов
+  cutoutGroups?: { kind: 'outer' | 'inner'; cat: 1 | 2; n: number }[]  // вид и категория — lib/b2b/cutouts.ts
   shape?: 'rect' | 'curved' // криволинейный рез — станция curved
   hasTriplex?: boolean      // триплекс/склейка — станция triplex; стекло считается по каждому слою
   triplexLayers?: number    // 2 или 3 стекла в пакете (по умолчанию 2)

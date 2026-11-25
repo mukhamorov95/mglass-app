@@ -243,6 +243,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/mirror-lighting',
     '/admin/mirror-frames',
     '/admin/facet',
+    '/admin/cutouts',
     '/admin/guide',
     '/admin/route-sheet',
     '/admin/stock-control',

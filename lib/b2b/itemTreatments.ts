@@ -71,10 +71,12 @@ export function treatmentTags(item: TreatmentItem): string[] {
   if (holes.length) tags.push(`отв. ${holes.map(g => `${g.n}×⌀${g.d}`).join(', ')}`)
   else if (item.hasHoles === true) tags.push('отверстия (размеры не указаны)')
   const cut = Math.round(Number(item.cutouts) || 0)
-  if (cut > 0) tags.push(`вырезы ×${cut}`)
-  else if (item.hasCutouts) tags.push('вырезы')
-  if (item.hasTriplex) tags.push(item.triplexLayers === 3 ? 'триплекс (3 стекла)' : 'триплекс')
   const fromServices = servicesOf(item).map(s => serviceTag(s.name ?? '')).filter((t): t is string => !!t)
+  // Вырез с видом и категорией приходит строкой услуги («вырез внешний II кат. × 1»).
+  const typedCuts = fromServices.some(t => t.startsWith('вырез '))
+  if (!typedCuts && cut > 0) tags.push(`вырезы ×${cut}`)
+  else if (!typedCuts && item.hasCutouts) tags.push('вырезы')
+  if (item.hasTriplex) tags.push(item.triplexLayers === 3 ? 'триплекс (3 стекла)' : 'триплекс')
   if (item.hasSandblast && !fromServices.some(t => /песочк|матовк/.test(t))) tags.push('песочка')
   for (const t of fromServices) if (!tags.some(x => x.startsWith(t))) tags.push(t)
   return tags
