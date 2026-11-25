@@ -19,6 +19,7 @@ export const BOARD_TAB_KEYS: BoardTab[] = BOARD_TABS.map(t => t.key)
 export type BoardTask = {
   item_index: number; stage_key: string; status: string; sequence_order: number
   completed_at: string | null; completed_by_name: string | null
+  layer?: number | null
   auto_closed?: boolean | null; auto_closed_by_name?: string | null; auto_closed_from?: string | null
 }
 export type BoardStageCount = { key: string; done: number; total: number }

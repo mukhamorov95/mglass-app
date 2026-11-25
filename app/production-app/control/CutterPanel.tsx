@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { loadJson } from '@/lib/toast'
 import type { BoardOrder } from '@/lib/production/ordersBoard'
 import type { CuttingSettings } from '@/lib/cuttingOptimizer'
 import { buildPurchaseGroups, type PurchaseMaterial, type SheetVariant } from '@/lib/purchasing/supply'
-import { allocateToSheets, cutPriority, type Allocation } from '@/lib/production/cutterPlan'
+import { allocateToSheets, cutCandidates, cutPriority, type Allocation, type CutCandidate, type CutPosition } from '@/lib/production/cutterPlan'
+import type { CutResult } from '@/lib/production/cutDoneApply'
+import { confirmDialog } from '@/lib/dialog'
+import CutDonePanel, { type CutRecord } from './CutDonePanel'
 
 // Режим резчика (docs/production/SHOP_KANBAN_ROUTE.md, этапы 2–3): что нарезать — по
 // материалу и толщине; резчик вводит, сколько целых листов есть, и детали раскладываются
@@ -14,16 +16,33 @@ import { allocateToSheets, cutPriority, type Allocation } from '@/lib/production
 
 type Plan = { materials: PurchaseMaterial[]; variants: SheetVariant[]; settings: CuttingSettings }
 
+// Недописанные остатки и отмена переживают перезагрузку телефона в цеху.
+const RECORD_KEY = 'mg_cutter_done_v1'
+function storedRecord(): CutRecord | null {
+  try { return JSON.parse(localStorage.getItem(RECORD_KEY) ?? 'null') as CutRecord | null } catch { return null }
+}
+
+const posKey = (c: CutPosition) => `${c.order_id}|${c.item_index}|${c.layer}`
+
 const m2 = (w: number, h: number) => (w * h) / 1e6
 const fmt = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 2 })
 
-export default function CutterPanel({ orders }: { orders: BoardOrder[] }) {
+export default function CutterPanel({ orders, canMark, onMarked }: { orders: BoardOrder[]; canMark: boolean; onMarked: () => void }) {
   const [plan, setPlan] = useState<Plan | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [key, setKey] = useState<string | null>(null)
   const [sheets, setSheets] = useState('')
   const [alloc, setAlloc] = useState<Allocation | null>(null)
   const [busy, setBusy] = useState(false)
+  const [off, setOff] = useState<Set<string>>(new Set())
+  const [marking, setMarking] = useState(false)
+  const [markErr, setMarkErr] = useState<string | null>(null)
+  const [record, setRecord] = useState<CutRecord | null>(storedRecord)
+
+  function keep(r: CutRecord | null) {
+    setRecord(r)
+    try { if (r) localStorage.setItem(RECORD_KEY, JSON.stringify(r)); else localStorage.removeItem(RECORD_KEY) } catch { /* без памяти браузера панель живёт до перезагрузки */ }
+  }
 
   useEffect(() => {
     let alive = true
@@ -60,11 +79,56 @@ export default function CutterPanel({ orders }: { orders: BoardOrder[] }) {
     const n = Math.floor(Number(sheets.replace(',', '.')))
     if (!(n > 0)) { setAlloc(null); return }
     setBusy(true)
+    setOff(new Set())
+    setMarkErr(null)
     // Даём кнопке отрисовать «Раскладываю…»: расчёт синхронный.
     setTimeout(() => {
       setAlloc(allocateToSheets(sel.g, n, plan.settings, rank))
       setBusy(false)
     }, 20)
+  }
+
+  const cut = alloc ? cutCandidates(alloc.placed, queue) : { full: [], partial: [] }
+  const chosen = cut.full.filter(c => !off.has(posKey(c)))
+  const chosenPieces = chosen.reduce((n, c) => n + c.total, 0)
+
+  async function markCut() {
+    if (!alloc?.result || !sel || !built) return
+    const materialId = built.materialByKey.get(sel.key)?.id
+    if (!materialId) return
+    const orderNos = [...new Set(chosen.map(c => byId.get(c.order_id)?.no ?? String(c.order_id)))]
+    const ok = await confirmDialog({
+      title: chosen.length ? `Отметить резку: ${chosen.length} поз., ${chosenPieces} дет.?` : 'Записать только листы и остатки?',
+      text: chosen.length
+        ? `Заказы № ${orderNos.join(', ')}. Отметка запишется на вас, отменить можно сразу после.`
+        : 'Ни одна позиция не выбрана — резка в заказах не отметится.',
+      confirmLabel: chosen.length ? 'Отрезано' : 'Дальше',
+    })
+    if (!ok) return
+    setMarking(true); setMarkErr(null)
+    let result: CutRecord['result'] = null
+    if (chosen.length) {
+      const r = await loadJson<CutResult>('/api/production/cut-done', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ positions: chosen.map(c => ({ order_id: c.order_id, item_index: c.item_index, layer: c.layer })) }),
+      })
+      if (r.error !== null) { setMarking(false); setMarkErr(`Не отмечено: ${r.error}. Обновите страницу и проверьте табло, прежде чем жать снова.`); return }
+      const totalOf = new Map(chosen.map(c => [posKey(c), c.total]))
+      const pieces = r.data.done.reduce((n, d) => n + (totalOf.get(posKey(d)) ?? 0), 0)
+      result = { ...r.data, pieces }
+    }
+    const names: Record<number, string> = {}
+    for (const c of [...cut.full, ...cut.partial]) names[c.order_id] = orderName(c.order_id)
+    keep({
+      materialId, label: sel.label, names, result, undone: false, location: '',
+      sheet: { w: alloc.result.sheetWidth, h: alloc.result.sheetHeight },
+      sheets: alloc.result.sheets.map(sh => ({
+        index: sh.index, orderIds: [...new Set(sh.pieces.map(p => p.orderId))],
+        remnants: sh.remnants.map(x => ({ on: true, w: String(Math.round(x.w)), h: String(Math.round(x.h)) })),
+      })),
+    })
+    setMarking(false); setAlloc(null); setSheets('')
+    onMarked()
   }
 
   if (err) return <div className="bg-white border border-[#e4e4e0] rounded-xl p-3 text-[13px] text-[#c0392b]">Режим резчика не загрузился: {err}</div>
@@ -78,6 +142,7 @@ export default function CutterPanel({ orders }: { orders: BoardOrder[] }) {
         <h2 className="text-[15px] font-semibold text-[#111110]">✂️ Нужно нарезать</h2>
         <p className="text-[12px] text-[#9a9a95]">Детали, у которых резка не отмечена: {queue.length} заказов. Выберите материал, введите, сколько целых листов есть, — разложу, сначала старые заказы.</p>
       </div>
+      {record && <CutDonePanel rec={record} onChange={keep} onClose={() => keep(null)} onMarksChanged={onMarked} />}
       <div className="flex flex-wrap gap-2">
         {groups.length === 0 && <span className="text-[13px] text-[#9a9a95]">Резать нечего.</span>}
         {groups.map(x => (
@@ -144,15 +209,44 @@ export default function CutterPanel({ orders }: { orders: BoardOrder[] }) {
                   ))}
                 </div>
               )}
-              {alloc.result?.sheets.some(s => s.remnants.length > 0) && (
-                <p className="text-[11px] text-[#6b6b66]">После резки запишите остатки на стеллаж — <Link href="/production-app/remnants" className="underline">✂️ Остатки</Link>: так закупка увидит, что кусок есть.</p>
+              {alloc.result && canMark && (
+                <div className="border-t border-[#e4e4e0] pt-3 space-y-2">
+                  <h3 className="text-[13px] font-semibold text-[#111110]">Отрезали? Отметить резку</h3>
+                  {cut.full.length > 0 && <p className="text-[11px] text-[#6b6b66]">Здесь позиции, у которых в раскладке все детали. Что не резали — снимите галочку.</p>}
+                  <ul className="space-y-1">
+                    {cut.full.map(c => (
+                      <li key={posKey(c)}>
+                        <label className="flex items-start gap-2 text-[13px] text-[#111110] cursor-pointer">
+                          <input type="checkbox" className="w-5 h-5 shrink-0" checked={!off.has(posKey(c))}
+                            onChange={() => setOff(prev => { const next = new Set(prev); if (!next.delete(posKey(c))) next.add(posKey(c)); return next })} />
+                          <span className="tabular-nums">{orderName(c.order_id)}, {positionName(byId.get(c.order_id), c)} — {c.total} дет.</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  {cut.partial.length > 0 && (
+                    <p className="text-[12px] text-[#b9770e]">Не отмечу, влезли не все детали: {cut.partial.map(c => `${orderName(c.order_id)}, ${positionName(byId.get(c.order_id), c)} — ${c.placed} из ${c.total}`).join('; ')}.</p>
+                  )}
+                  {record && <p className="text-[12px] text-[#b9770e]">Сначала запишите или закройте блок «Отрезано» выше.</p>}
+                  <button onClick={markCut} disabled={marking || !!record}
+                    className="w-full sm:w-auto px-5 py-3 rounded-lg bg-[#1e7d4f] text-white text-[14px] font-semibold disabled:opacity-40">
+                    {marking ? 'Отмечаю…' : chosen.length ? `✓ Отрезано: ${chosen.length} поз., ${chosenPieces} дет.` : 'Отрезано — записать только остатки'}
+                  </button>
+                  {markErr && <p className="text-[12px] text-[#c0392b]">{markErr}</p>}
+                </div>
               )}
+              {alloc.result && !canMark && <p className="text-[11px] text-[#6b6b66]">Отмечает резку цех — со своего входа.</p>}
             </div>
           )}
         </div>
       )}
     </div>
   )
+}
+
+function positionName(o: BoardOrder | undefined, c: CutCandidate) {
+  const it = o?.cut_items.find(x => x.item_index === c.item_index) as { hasTriplex?: boolean } | undefined
+  return `поз. ${c.item_index + 1}${it?.hasTriplex ? `, стекло ${c.layer}` : ''}`
 }
 
 function sheetLines(pieces: { label: string; orderId: number }[]) {

@@ -12,6 +12,8 @@ export type CuttingPiece = {
   orderClientName: string
   materialKey: string
   canRotate: boolean       // false for patterned glass
+  itemIndex?: number       // позиция заказа — нужна режиму резчика, чтобы отметить резку
+  layer?: number           // стекло в позиции (триплекс: 1..3), как production_tasks.layer
 }
 
 export type PlacedPiece = {

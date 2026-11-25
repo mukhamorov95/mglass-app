@@ -12,6 +12,7 @@ import { readIn, readPaged } from '@/lib/production/paged'
 import { inShopScope, shopScopeOf } from '@/lib/production/shopScope'
 import { mskDayKey } from '@/lib/time'
 import { kanbanColumn, orderMaterials } from '@/lib/production/stageKanban'
+import { CUT_MARK_ROLES } from '@/lib/production/cutDone'
 import { itemsToCut } from '@/lib/production/cutterPlan'
 import type { OrderItem } from '@/lib/purchasing/supply'
 
@@ -19,7 +20,7 @@ import type { OrderItem } from '@/lib/purchasing/supply'
 
 const PAGE = '/production-app/orders'
 const ORDER_COLS = 'id, client_id, client_name, custom_number, items, notes, created_at, launched_at, archived_at, discount_percent, total_after_discount, total_sale_inc_vat'
-const TASK_COLS = 'order_id, item_index, stage_key, status, sequence_order, completed_at, completed_by_name, auto_closed, auto_closed_by_name, auto_closed_from'
+const TASK_COLS = 'order_id, item_index, layer, stage_key, status, sequence_order, completed_at, completed_by_name, auto_closed, auto_closed_by_name, auto_closed_from'
 
 type Svc = ReturnType<typeof createServiceClient>
 type RawOrder = ShipOrder & { id: number; client_id: number | null; client_name: string | null; custom_number: string | null; notes: string | null; created_at: string; launched_at: string | null; archived_at: string | null }
@@ -99,10 +100,11 @@ export async function GET(req: NextRequest) {
         stages: stageCounts(orderTasks, to), last_mark: last, idle_days: stage === 'in_work' ? idleDays(last, launchDay, to) : null,
         column: kanbanColumn(orderTasks.map(t => ({ stage_key: t.stage_key, status: doneBy(t, to) ? 'done' : 'open' })), shipped),
         materials: orderMaterials(o.items), ops_done: orderTasks.filter(t => doneBy(t, to)).length, ops_total: orderTasks.length,
-        cut_items: shipped ? [] : itemsToCut((Array.isArray(o.items) ? o.items : []) as OrderItem[], orderTasks, t => doneBy(t as TaskRow, to)).map(x => x.item),
+        cut_items: shipped ? [] : itemsToCut((Array.isArray(o.items) ? o.items : []) as OrderItem[], orderTasks, t => doneBy(t as TaskRow, to))
+          .map(x => ({ ...x.item, item_index: x.index, open_layers: x.layers })),
       }].map(b => ({ ...b, attention: attentionOf(b, to) }))
     })
-    return NextResponse.json({ today, to, orders })
+    return NextResponse.json({ today, to, orders, can_cut: CUT_MARK_ROLES.includes(guard) })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Ошибка загрузки' }, { status: 500 })
   }
