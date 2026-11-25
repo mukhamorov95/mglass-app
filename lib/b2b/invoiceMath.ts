@@ -79,3 +79,11 @@ export function mergeInvoiceOrders(
     notes: JSON.stringify({ quote_date: head.issuedAt }), created_at: head.issuedAt,
   }
 }
+
+// Основание объединённого счёта (Шовер Гласс 25.11): номера заказов в назначение платежа —
+// по ним клиент сверяет оплату; их собственный номер — в скобках, если указан.
+export function invoiceBasis(orders: { no: string; theirNo?: string | null }[]): string | null {
+  if (orders.length === 0) return null
+  const parts = orders.map(o => `№ ${o.no}${o.theirNo ? ` (ваш № ${o.theirNo})` : ''}`)
+  return `Оплата ${orders.length === 1 ? 'заказа' : 'заказов'} ${parts.join(', ')}`
+}

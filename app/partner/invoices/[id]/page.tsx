@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, use } from 'react'
 import Link from 'next/link'
-import { renderDocCanvas } from '@/lib/pdfCapture'
+import { deliverPdf, useAutoDownload } from '@/lib/partner/docDownload'
 import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 import InvoiceDocument, { type InvoiceOrder, type InvoiceRequisites } from '@/components/InvoiceDocument'
 
@@ -21,7 +21,7 @@ function toReq(src: Record<string, unknown> | null | undefined): InvoiceRequisit
   }
 }
 
-type Resp = { order: InvoiceOrder & { client_name?: string }; client: Record<string, unknown> | null; entities: B2BLegalEntity[]; payerEntityId: number | null; orders: { id: number; no: string }[] }
+type Resp = { order: InvoiceOrder & { client_name?: string }; client: Record<string, unknown> | null; entities: B2BLegalEntity[]; payerEntityId: number | null; orders: { id: number; no: string }[]; basis?: string | null }
 
 export default function PartnerCombinedInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -56,24 +56,16 @@ export default function PartnerCombinedInvoicePage({ params }: { params: Promise
   }
 
   async function downloadPdf() {
-    if (!docRef.current || !data) return
+    if (!docRef.current || !data) throw new Error('Документ не готов')
     setPdfErr(null)
     try {
-      const jspdf = await import('jspdf')
-      const canvas = await renderDocCanvas(docRef.current)
-      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      const pw = 210, ph = 297
-      const imgH = pw * canvas.height / canvas.width
-      let pos = 0, left = imgH
-      const img = canvas.toDataURL('image/jpeg', 0.94)
-      pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
-      left -= ph
-      while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
-      pdf.save(`Счёт-спецификация-${data.order.custom_number ?? data.order.id}.pdf`)
-    } catch {
+      await deliverPdf(docRef.current, `Счёт-спецификация-${data.order.custom_number ?? data.order.id}.pdf`, 'portrait')
+    } catch (e) {
       setPdfErr('Не удалось сформировать PDF — используйте «Печать» → «Сохранить как PDF».')
+      throw e
     }
   }
+  useAutoDownload({ ready: !loading && !!data, failed: loading ? null : error ?? (data ? null : 'Счёт недоступен'), run: downloadPdf })
 
   if (loading) return <div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div>
   if (error || !data) return (
@@ -96,11 +88,11 @@ export default function PartnerCombinedInvoicePage({ params }: { params: Promise
           </select>
         )}
         <button onClick={() => document.fonts.ready.then(() => window.print())} className="ghost" style={{ marginLeft: 'auto' }}>🖨 Печать</button>
-        <button onClick={downloadPdf} className="primary">⬇ Скачать PDF</button>
+        <button onClick={() => { void downloadPdf().catch(() => {}) }} className="primary">⬇ Скачать PDF</button>
         {pdfErr && <span style={{ flexBasis: '100%', fontSize: 12.5, color: '#b91c1c' }}>{pdfErr}</span>}
       </div>
 
-      <InvoiceDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} />
+      <InvoiceDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} basis={data.basis ?? null} />
     </>
   )
 }

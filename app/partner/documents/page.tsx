@@ -9,6 +9,7 @@ import type { PaymentView } from '@/lib/partner/orderMoney'
 import { DOC_FILTERS, inDocFilter, isUnpaid, payBadge, shipBadge, TONE_CLASS, type DocFilter } from '@/lib/partner/docStatus'
 import { unpaidOf } from '@/lib/partner/paymentLabel'
 import { matchesOrder } from '@/lib/partner/orderSearch'
+import DownloadMenu, { type DlItem } from './DownloadMenu'
 
 // Документы кабинета (дизайн .pcab): по каждому заказу одной строкой КП · счёт · УПД.
 // Счёт — если он открыт этому партнёру; УПД — только выданный бухгалтерией.
@@ -110,6 +111,15 @@ export default function PartnerDocumentsPage() {
   }
   const updUnknown = !!data?.updError
   const managerSendsInvoice = all.some(o => o.invoice === 'manager')
+  // Что скачивается из строки сразу файлом: КП всегда, счёт — свой или общий, УПД — выданный.
+  const dlItems = (o: Order): DlItem[] => {
+    const out: DlItem[] = [{ label: 'КП', href: `/partner/order/${o.id}/kp` }]
+    const common = inInvoice.get(o.id)
+    if (common) out.push({ label: 'Счёт', href: `/partner/invoices/${common.id}` })
+    else if (o.invoice === 'open') out.push({ label: 'Счёт', href: `/partner/order/${o.id}/invoice` })
+    if (o.upd) out.push({ label: 'УПД', href: `/partner/order/${o.id}/upd` })
+    return out
+  }
   const updHint = (o: Order) => updUnknown ? 'УПД — не проверено' : o.lane === 'shipped' ? 'УПД — у менеджера' : 'УПД — после отгрузки'
 
   return (
@@ -164,7 +174,8 @@ export default function PartnerDocumentsPage() {
                     </div>
                   </div>
                   <div className="dset">
-                    <Link className="dl" href={`/partner/invoices/${i.id}`}>↓ Счёт</Link>
+                    <DownloadMenu items={[{ label: 'Счёт', href: `/partner/invoices/${i.id}` }]} />
+                    <Link className="dl" href={`/partner/invoices/${i.id}`}>Открыть счёт</Link>
                     {i.paymentDoc && <a className="dl" href={`/api/partner/invoices/${i.id}/payment-doc`} target="_blank" rel="noreferrer">Платёжка</a>}
                     {i.status !== 'paid' && (
                       <label className="dl" style={{ cursor: uploading === i.id ? 'wait' : 'pointer' }}>
@@ -225,14 +236,15 @@ export default function PartnerDocumentsPage() {
                   )}
                 </div>
                 <div className="dset">
-                  <Link className="dl" href={`/partner/order/${o.id}/kp`}>↓ КП</Link>
+                  <DownloadMenu items={dlItems(o)} />
+                  <Link className="dl" href={`/partner/order/${o.id}/kp`}>КП</Link>
                   {inInvoice.has(o.id)
-                    ? <Link className="dl" href={`/partner/invoices/${inInvoice.get(o.id)!.id}`}>↓ Общий счёт № {inInvoice.get(o.id)!.no}</Link>
+                    ? <Link className="dl" href={`/partner/invoices/${inInvoice.get(o.id)!.id}`}>Общий счёт № {inInvoice.get(o.id)!.no}</Link>
                     : o.invoice === 'open'
-                    ? <Link className="dl" href={`/partner/order/${o.id}/invoice`}>↓ Счёт</Link>
+                    ? <Link className="dl" href={`/partner/order/${o.id}/invoice`}>Счёт</Link>
                     : <span className="dno">{INVOICE_HINT[o.invoice]}</span>}
                   {o.upd
-                    ? <Link className="dl" href={`/partner/order/${o.id}/upd`}>↓ УПД № {o.upd.number} от {fmtDate(o.upd.docDate)}</Link>
+                    ? <Link className="dl" href={`/partner/order/${o.id}/upd`}>УПД № {o.upd.number} от {fmtDate(o.upd.docDate)}</Link>
                     : <span className="dno">{updHint(o)}</span>}
                 </div>
               </div>

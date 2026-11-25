@@ -3,7 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { denyUnless, resolvePartnerMember } from '@/lib/partnerClient'
 import { documentSafeOrder } from '@/lib/b2b/publicQuote'
-import { mergeInvoiceOrders, type InvoiceOrder } from '@/lib/b2b/invoiceMath'
+import { invoiceBasis, mergeInvoiceOrders, type InvoiceOrder } from '@/lib/b2b/invoiceMath'
 import { partnerOrderNo } from '@/lib/partner/format'
 
 // Документ объединённого счёта для кабинета: строки всех заказов счёта, номер и дата — из реестра.
@@ -32,7 +32,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (error) return NextResponse.json({ error: `Заказы счёта не прочитаны: ${error.message}` }, { status: 500 })
   if ((rows ?? []).length !== ids.length || rows!.some(o => o.client_id !== client.id)) return NextResponse.json({ error: 'Счёт не найден' }, { status: 404 })
 
-  const orders = rows!.map(o => ({ ...(documentSafeOrder(o as Record<string, unknown>) as unknown as InvoiceOrder), no: partnerOrderNo({ id: o.id as number, custom_number: o.custom_number as string | null }) }))
+  const orders = rows!.map(o => ({ ...(documentSafeOrder(o as Record<string, unknown>) as unknown as InvoiceOrder), no: partnerOrderNo({ id: o.id as number, custom_number: o.custom_number as string | null }), theirNo: ((o.client_order_number as string | null) ?? '').trim() || null }))
   const order = mergeInvoiceOrders(orders, { id: inv.id as number, invoiceNo: String(inv.invoice_no), issuedAt: String(inv.issued_at) })
 
   const { data: ents } = await svc.from('b2b_client_legal_entities').select(`id,client_id,${REQ},is_default,active`)
@@ -42,5 +42,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({
     order, client: safeClient, entities: ents ?? [], payerEntityId: inv.payer_entity_id ?? null,
     orders: orders.map(o => ({ id: o.id, no: o.no })),
+    basis: invoiceBasis(orders),
   })
 }

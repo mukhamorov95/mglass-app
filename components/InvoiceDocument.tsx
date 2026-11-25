@@ -27,15 +27,17 @@ function parseNotes(notes: string | null): Record<string, unknown> {
 
 const InvoiceDocument = forwardRef<HTMLDivElement, {
   order: InvoiceOrder; requisites: InvoiceRequisites; buyerName: string
-}>(function InvoiceDocument({ order, requisites: req, buyerName }, ref) {
+  // Объединённый счёт: «Оплата заказов № …» — строкой в документе и назначением платежа в QR.
+  basis?: string | null
+}>(function InvoiceDocument({ order, requisites: req, buyerName, basis }, ref) {
   const totals = useMemo(() => computeInvoiceTotals(order), [order])
   const [qr, setQr] = useState('')
 
   const num = order.custom_number?.trim() || String(order.id).padStart(5, '0')
   useEffect(() => {
-    const s = paymentQrStringFor(SELLER_B2B, totals.totalPay, `Оплата по счёту-спецификации № ${num}`)
+    const s = paymentQrStringFor(SELLER_B2B, totals.totalPay, basis ? `${basis} (счёт № ${num})` : `Оплата по счёту-спецификации № ${num}`)
     QRCode.toDataURL(s, { margin: 0, width: 240 }).then(setQr).catch(() => {})
-  }, [totals.totalPay, num])
+  }, [totals.totalPay, num, basis])
 
   const notes = parseNotes(order.notes)
   const quoteDate = (notes.quote_date as string) || order.created_at
@@ -124,6 +126,12 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
               <td className="align-top pr-2 font-semibold pt-1">Покупатель:</td>
               <td className="pt-1">{buyerLine || <span className="text-[#b00]">реквизиты покупателя не заполнены</span>}</td>
             </tr>
+            {basis && (
+              <tr>
+                <td className="align-top pr-2 font-semibold pt-1">Основание:</td>
+                <td className="pt-1">{basis}</td>
+              </tr>
+            )}
           </tbody>
         </table>
 
