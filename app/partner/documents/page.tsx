@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { loadJson } from '@/lib/toast'
 import { INVOICE_HINT, type InvoiceState, type UpdShort } from '@/lib/partner/documents'
+import type { PaymentView } from '@/lib/partner/orderMoney'
+import { DOC_FILTERS, inDocFilter, isUnpaid, payBadge, shipBadge, TONE_CLASS, type DocFilter } from '@/lib/partner/docStatus'
+import { unpaidOf } from '@/lib/partner/paymentLabel'
 
 // Документы кабинета (дизайн .pcab): по каждому заказу одной строкой КП · счёт · УПД.
 // Счёт — если он открыт этому партнёру; УПД — только выданный бухгалтерией.
@@ -11,6 +14,7 @@ import { INVOICE_HINT, type InvoiceState, type UpdShort } from '@/lib/partner/do
 type Order = {
   id: number; number: string; created_at: string; amount: number; summary: string; positions: number; lane: string
   invoice: InvoiceState; upd: UpdShort | null
+  payment?: PaymentView | null; shipPartial?: { shipped: number; total: number } | null
 }
 type Resp = { linked: boolean; orders: Order[]; updError?: string | null }
 
@@ -23,6 +27,7 @@ export default function PartnerDocumentsPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
+  const [flt, setFlt] = useState<DocFilter>('all')
 
   useEffect(() => {
     let alive = true
@@ -39,9 +44,13 @@ export default function PartnerDocumentsPage() {
   // Поиск по номеру, описанию, сумме и номеру УПД; список — по месяцам (24.11: 130 строк сплошняком).
   const orders = useMemo(() => {
     const t = q.trim().toLowerCase().replace(/\s/g, '')
-    if (!t) return all
-    return all.filter(o => [o.number, o.summary, String(Math.round(o.amount)), o.upd?.number ?? ''].some(v => String(v).toLowerCase().replace(/\s/g, '').includes(t)))
-  }, [all, q])
+    const byFlt = all.filter(o => inDocFilter(o, flt))
+    if (!t) return byFlt
+    return byFlt.filter(o => [o.number, o.summary, String(Math.round(o.amount)), o.upd?.number ?? ''].some(v => String(v).toLowerCase().replace(/\s/g, '').includes(t)))
+  }, [all, q, flt])
+  const fCount = useMemo(() => Object.fromEntries(DOC_FILTERS.map(f => [f.key, all.filter(o => inDocFilter(o, f.key)).length])) as Record<DocFilter, number>, [all])
+  const unpaidSum = useMemo(() => all.filter(isUnpaid).reduce((s, o) => s + unpaidOf(o.payment), 0), [all])
+  const hasStatus = all.some(o => o.lane === 'in_work' || o.lane === 'shipped')
   const months = useMemo(() => {
     const out: { m: string; list: Order[] }[] = []
     for (const o of orders) {
@@ -85,8 +94,17 @@ export default function PartnerDocumentsPage() {
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: номер заказа, сумма, № УПД, материал" aria-label="Поиск документов"
             style={{ width: '100%', marginBottom: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 11, padding: '10px 12px', fontSize: 13.5, color: 'var(--ink)', fontFamily: 'inherit', outline: 'none' }} />
         )}
+        {!loading && data?.linked && hasStatus && (
+          <div className="fchips" role="tablist" aria-label="Фильтр документов">
+            {DOC_FILTERS.map(f => (
+              <button key={f.key} role="tab" aria-selected={flt === f.key} className={flt === f.key ? 'on' : ''} onClick={() => setFlt(f.key)}>
+                {f.label} <span className="n">{fCount[f.key]}{f.key === 'unpaid' && unpaidSum > 0 ? ` · ${fmtMoney(unpaidSum)}` : ''}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {!loading && data?.linked && all.length > 0 && orders.length === 0 && (
-          <div className="note"><div className="s">По запросу «{q}» ничего нет.</div></div>
+          <div className="note"><div className="s">{q ? `По запросу «${q}» ничего нет.` : 'В этом фильтре заказов нет.'}</div></div>
         )}
         {!loading && data?.linked && months.map(({ m, list }) => (
           <div key={m} style={{ marginBottom: 14 }}>
@@ -98,6 +116,11 @@ export default function PartnerDocumentsPage() {
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div className="fn">{o.lane === 'quote' ? 'Просчёт' : 'Заказ'} {o.number} · {fmtMoney(o.amount)}</div>
                   <div className="fm">от {fmtDate(o.created_at)}{o.summary ? ` · ${o.summary}` : ''}{o.positions ? ` · ${o.positions} поз.` : ''}</div>
+                  {(payBadge(o) || shipBadge(o)) && (
+                    <div className="pills">
+                      {[payBadge(o), shipBadge(o)].filter(b => b !== null).map(b => <span key={b.label} className={`pill ${TONE_CLASS[b.tone]}`}>{b.label}</span>)}
+                    </div>
+                  )}
                 </div>
                 <div className="dset">
                   <Link className="dl" href={`/partner/order/${o.id}/kp`}>↓ КП</Link>

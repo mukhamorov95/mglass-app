@@ -13,7 +13,7 @@ const CSS = `
   --amber:#b45309; --amber-bg:#fdf6ec; --amber-bd:#f0e0c8;
   --blue:#1d4ed8; --blue-bg:#eef3fd; --blue-bd:#d4e0f7;
   --green:#047857; --green-bg:#eaf6f0; --green-bd:#cbe9db;
-  --danger:#b91c1c;
+  --danger:#b91c1c; --danger-bg:#fdeeee; --danger-bd:#f3d0d0;
   --shadow:0 1px 2px rgba(17,17,16,.04),0 8px 24px rgba(17,17,16,.05);
   --radius:16px;
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -30,7 +30,7 @@ const CSS = `
     --amber:#e0a45c; --amber-bg:#2c2519; --amber-bd:#413621;
     --blue:#7aa5f0; --blue-bg:#1a2133; --blue-bd:#2a3757;
     --green:#5fc79a; --green-bg:#152a22; --green-bd:#234034;
-    --danger:#f87171;
+    --danger:#f87171; --danger-bg:#2e1a1a; --danger-bd:#4a2626;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
   }
 }
@@ -139,6 +139,12 @@ const CSS = `
 .pcab .p-work{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-bd)}
 .pcab .p-ready{color:var(--green);background:var(--green-bg);border-color:var(--green-bd)}
 .pcab .p-ship{color:var(--quote);background:var(--quote-bg);border-color:var(--border)}
+.pcab .p-bad{color:var(--danger);background:var(--danger-bg);border-color:var(--danger-bd)}
+.pcab .fchips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.pcab .fchips button{font:inherit;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--ink-2);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.pcab .fchips button.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.pcab .fchips .n{font-weight:500;opacity:.7}
+.pcab .doc .pills{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
 
 /* Orders */
 .pcab .lane-lbl{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
