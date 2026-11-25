@@ -44,18 +44,32 @@ export async function GET() {
   if (error) return NextResponse.json({ error: `Счета не прочитаны: ${error.message}` }, { status: 500 })
   const multi = (rows ?? []).filter(r => Array.isArray(r.order_ids) && r.order_ids.length > 1)
   const ids = [...new Set(multi.flatMap(r => (r.order_ids as number[]).map(Number)))]
-  const { data: own } = ids.length ? await svc.from('b2b_orders').select('id, client_id, custom_number').in('id', ids) : { data: [] }
+  const { data: own } = ids.length ? await svc.from('b2b_orders').select('id, client_id, custom_number, launched_at, notes, total_after_discount, total_sale_inc_vat').in('id', ids) : { data: [] }
   const ownMap = new Map((own ?? []).map(o => [Number(o.id), o]))
   // Только счета, где все заказы — этого клиента: чужой заказ в счёте не показываем.
   const mine = multi.filter(r => (r.order_ids as number[]).every(id => ownMap.get(Number(id))?.client_id === client.id))
   let withPay
   try { withPay = await attachInvoicePayments(svc, asInvoiceRows(mine)) }
   catch (e) { return NextResponse.json({ error: `Оплаты счетов не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  // Статус счёта — тот же, что у его заказов в кабинете: заказ мог быть закрыт без денег по счёту
+  // (отметкой или старым расчётом), и «Не оплачен» над оплаченными заказами было бы неправдой.
+  let paidMap: Map<number, number>
+  try { paidMap = await loadPaidByOrders(svc, ids) }
+  catch (e) { return NextResponse.json({ error: `Оплаты не прочитаны: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 }) }
+  const orderPaid = (id: number) => {
+    const o = ownMap.get(id)
+    if (!o) return false
+    const n = parseNotes(o.notes)
+    const v = paymentView({ total: finalTotalOf(o as { total_after_discount?: number; total_sale_inc_vat?: number }), paidFromPayments: paidMap.get(id) ?? 0, notes: n, due: true, settled: isSettledOrder(client.id, o.launched_at, n) })
+    return v?.status === 'paid' || v?.status === 'own_cost'
+  }
   return NextResponse.json({
     canCombine: !!client.can_self_invoice,
     invoices: withPay.map(r => ({
       id: r.id, no: String(r.invoice_no), issuedAt: r.issued_at as string, amount: Number(r.amount) || 0,
-      paid: r.paid, remainder: r.remainder, status: r.derivedStatus,
+      ...((r.order_ids ?? []).every(id => orderPaid(Number(id)))
+        ? { paid: Number(r.amount) || 0, remainder: 0, status: 'paid' as const }
+        : { paid: r.paid, remainder: r.remainder, status: r.derivedStatus }),
       orders: (r.order_ids ?? []).map(id => ({ id, no: partnerOrderNo({ id, custom_number: (ownMap.get(id)?.custom_number as string | null) ?? null }) })),
       paymentDoc: r.payment_doc_path ? { name: (r.payment_doc_name as string | null) ?? 'платёжное поручение', at: r.payment_doc_at as string | null } : null,
     })),
