@@ -1,3 +1,4 @@
+import { cleanClientNo } from '@/lib/partner/orderSearch'
 import { isClientCalculable } from '@/lib/glass/clientMaterials'
 import { pickServices } from '@/lib/partner/partnerServices'
 import { NextRequest, NextResponse } from 'next/server'
@@ -61,6 +62,8 @@ export async function POST(req: NextRequest) {
   }
   const editId = Number(body?.editId) || null   // редактирование существующего просчёта
   const comment = typeof body?.comment === 'string' ? body.comment.slice(0, 500) : ''
+  const hasClientNo = body != null && typeof body === 'object' && 'clientOrderNumber' in body
+  const clientNo = cleanClientNo(body?.clientOrderNumber)
   if (specs.length === 0) return NextResponse.json({ error: 'Нет позиций' }, { status: 400 })
   if (specs.length > 200) return NextResponse.json({ error: 'Слишком много позиций' }, { status: 400 })
 
@@ -168,6 +171,7 @@ export async function POST(req: NextRequest) {
       total_area: totals.totalAreaNet, total_weight: totals.totalWeight,
       total_cost_net: totals.totalCostExVat, total_cost_vat: totals.totalInputVat,
       total_sale_inc_vat: totals.totalSaleIncVat, total_after_discount: totals.totalAfterDiscount,
+      ...(hasClientNo ? { client_order_number: clientNo } : {}),
       updated_at: new Date().toISOString(),
     }).eq('id', editId)
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
@@ -202,6 +206,7 @@ export async function POST(req: NextRequest) {
     total_sale_inc_vat: totals.totalSaleIncVat,
     total_after_discount: totals.totalAfterDiscount,
     notes,
+    client_order_number: clientNo,
     source: 'partner',
     created_by: user.id,
     created_by_name: authorName,

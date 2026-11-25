@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import type { PaymentView } from '@/lib/partner/orderMoney'
 import { paymentLabel, paymentPill } from '@/lib/partner/paymentLabel'
 import Link from 'next/link'
+import ClientNoEditor from '../../ClientNoEditor'
 import DrawingFiles from './DrawingFiles'
 import type { PointStage } from '@/lib/partner/pointPay'
 import { QUOTE_LABEL, type QuoteState } from '@/lib/partner/quoteState'
@@ -152,7 +153,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.02em' }}>
-            {o.number}{o.clientOrderNumber && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · ваш № {o.clientOrderNumber}</span>}
+            {o.number}<ClientNoEditor orderId={o.id} value={o.clientOrderNumber} canEdit={o.perms?.calc !== false} onSaved={v => setO(prev => prev && { ...prev, clientOrderNumber: v })} />
           </div>
           <div className="cap" style={{ marginTop: 3 }}>Создан {fmtDate(o.created_at)}{o.deadline ? ` · срок отгрузки ${fmtDate(o.deadline)}` : (o.lane === 'submitted' && o.estimateDays ? ` · срок ~${o.estimateDays} раб. дней после запуска` : '')}</div>
         </div>
