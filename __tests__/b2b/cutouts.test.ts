@@ -50,3 +50,19 @@ describe('вырез заменяет «Т и Г образные»', () => {
     expect(noCut.services.map(s => s.name)).toEqual([tg.name])
   })
 })
+
+import { workRole, actsAsManager } from '@/lib/getRole'
+
+describe('вырез III категории и закупщик-менеджер', () => {
+  it('III — только внешний', () => {
+    expect(normalizeCutouts([{ kind: 'outer', cat: 3, n: 1 }, { kind: 'inner', cat: 3, n: 1 }])).toEqual([{ kind: 'outer', cat: 3, n: 1 }])
+    const [s] = cutoutServices([{ kind: 'outer', cat: 3, n: 2 }], [row(33, 'cutout_outer_3', 2000, 0)])
+    expect(s).toMatchObject({ value: 4000, name: 'Вырез внешний III кат. × 2' })
+  })
+  it('закупщик с кабинетом менеджера работает как менеджер, без него — нет', () => {
+    expect(workRole('buyer', { manager_workspace: true })).toBe('manager')
+    expect(workRole('buyer', { manager_workspace: false })).toBe('buyer')
+    expect(workRole('production', { manager_workspace: true })).toBe('production')
+    expect(actsAsManager('buyer', null)).toBe(false)
+  })
+})

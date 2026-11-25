@@ -7,8 +7,8 @@ import { bandLabel, thicknessLabel, type HolePrice } from '@/lib/b2b/holePrices'
 type Row = { id: number; code: string; name: string; value: number; cost_price: number; active: boolean }
 type Draft = { value: string; cost: string }
 
-// Ориентир — клиентский прайс БСК от 15.01.2026 со скидкой 15 % (продажа, не наша себестоимость).
-const BSK: Record<string, number> = { cutout_outer_1: 401, cutout_outer_2: 625, cutout_inner_1: 490, cutout_inner_2: 1071 }
+// Ориентир — прайс БСК от 15.01.2026 с нашей скидкой 15 %: они делают те же работы, мы держим их цену (владелец 25.11.2026).
+const BSK: Record<string, number> = { cutout_outer_1: 401, cutout_outer_2: 625, cutout_inner_1: 490, cutout_inner_2: 1071 }   // III категории у БСК нет
 
 const parse = (s: string): number | null => {
   const t = s.replace(/\s/g, '').replace(',', '.')
@@ -72,7 +72,7 @@ export default function CutoutsPage() {
                 <th className="text-left font-medium px-3 py-2">Вырез</th>
                 <th className="text-right font-medium px-3 py-2">Себестоимость, ₽</th>
                 <th className="text-right font-medium px-3 py-2">Продажа, ₽</th>
-                <th className="text-right font-medium px-3 py-2" title="Клиентский прайс БСК от 15.01.2026 со скидкой 15 % — продажа конкурента, не наша цена">БСК, янв. 2026</th>
+                <th className="text-right font-medium px-3 py-2" title="Прайс БСК от 15.01.2026 с нашей скидкой 15 %">БСК, янв. 2026</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -116,7 +116,7 @@ export default function CutoutsPage() {
       {holes && <HolesTable holes={holes} onSaved={h => setHoles(prev => prev?.map(x => (x.id === h.id ? h : x)) ?? null)} />}
 
       <p className="text-[12px] text-[#9a9a95] leading-relaxed">
-        Стартовые продажные цены вырезов и отверстий взяты из прайса БСК (решение владельца 25.11.2026). Колонка БСК — продажная цена конкурента для ориентира, а не наша себестоимость; прайс старый, цены у них с тех пор выросли.
+        Стартовые продажные цены вырезов и отверстий взяты из прайса БСК (решение владельца 25.11.2026). Колонка БСК — их прайс от 15.01.2026 с нашей скидкой 15 %: такие же работы делают и они, мы ориентируемся на эту цену.
         Цены уже посчитанных позиций не меняются — только новые и пересчитанные.
       </p>
     </div>

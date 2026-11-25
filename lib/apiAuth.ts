@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getRole, getSessionUser, getUserProfile, canAccessRoute, canMargin, isOwnerRole, type Role } from './getRole'
+import { getRole, getSessionUser, getUserProfile, canAccessRoute, canMargin, isOwnerRole, actsAsManager, type Role } from './getRole'
 
 // Shared 403 response — keeps Russian copy consistent across endpoints.
 function forbidden() {
@@ -30,8 +30,11 @@ export async function requireAdmin(): Promise<Role | NextResponse> {
 // Owner roles must be listed explicitly when they should pass.
 export async function requireRole(allowed: Role[]): Promise<Role | NextResponse> {
   const role = await getRole()
-  if (!role || !allowed.includes(role)) return forbidden()
-  return role
+  if (!role) return forbidden()
+  if (allowed.includes(role)) return role
+  // Куда пускают менеджера, пускают и закупщика с кабинетом менеджера.
+  if (allowed.includes('manager') && role === 'buyer' && actsAsManager(role, (await getUserProfile())?.permissions)) return role
+  return forbidden()
 }
 
 // Эндпоинт экрана пускает ровно тех, кто может открыть сам экран. middleware

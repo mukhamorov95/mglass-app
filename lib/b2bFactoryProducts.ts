@@ -425,7 +425,7 @@ export function calcFactoryLoft(
 // штуку изделия из своих справочников; на число изделий умножается здесь.
 export type FactoryExtras = {
   services: B2BService[]
-  cutoutGroups?: { kind: 'outer' | 'inner'; cat: 1 | 2; n: number }[]
+  cutoutGroups?: { kind: 'outer' | 'inner'; cat: 1 | 2 | 3; n: number }[]
   holes?: { d: number; n: number }[]
 }
 

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase-server'
-import { isOwnerRole, canAccessRoute } from '@/lib/getRole'
+import { isOwnerRole, canAccessRoute, workRole } from '@/lib/getRole'
 
 // Заказ B2B для печатных документов (счёт-спецификация, КП) с одной калиткой:
 // роль должна открывать /b2b-quotes, а заказ — быть своим, своего клиента или
@@ -24,9 +24,10 @@ export async function loadOrderWithAccess(id: string) {
   // Роль решается ТОЙ ЖЕ калиткой, что и страница счёта (/b2b-quotes): здесь
   // отдаются и правятся банковские реквизиты покупателя, и раньше роль не
   // проверялась вовсе — проходили цех, замерщик, закупщик, бухгалтерия.
-  const perms = (profile?.permissions ?? null) as { b2b_client_scope?: unknown } | null
+  const perms = (profile?.permissions ?? null) as { b2b_client_scope?: unknown; manager_workspace?: unknown } | null
   const b2bScope = typeof perms?.b2b_client_scope === 'string' ? perms.b2b_client_scope : null
-  if (!canAccessRoute(profile?.role, '/b2b-quotes', { b2bScope })) {
+  const role = workRole(profile?.role, perms)
+  if (!canAccessRoute(profile?.role, '/b2b-quotes', { b2bScope, managerWorkspace: perms?.manager_workspace === true })) {
     return { status: 403 as const, error: 'Forbidden' }
   }
 
@@ -37,12 +38,12 @@ export async function loadOrderWithAccess(id: string) {
   const canAccess =
     seesOthers ||
     order.created_by === user.id ||
-    (order.created_by === null && legacyOrdersAllowed(profile?.role)) ||
+    (order.created_by === null && legacyOrdersAllowed(role)) ||
     (order.client_id != null &&
       (await sb.from('b2b_clients').select('id').eq('id', order.client_id).eq('user_id', user.id).maybeSingle()).data != null)
   if (!canAccess) return { status: 403 as const, error: 'Forbidden' }
 
-  return { status: 200 as const, sb, order, user, role: profile?.role ?? null }
+  return { status: 200 as const, sb, order, user, role }
 }
 
 // Менеджеру нужны старые заказы без автора — иначе 81% счетов ему недоступны.

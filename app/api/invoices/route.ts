@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
-import { isOwnerRole } from '@/lib/getRole'
+import { isOwnerRole, workRole } from '@/lib/getRole'
 import { canonicalOrderIds, orderSetKey } from '@/lib/b2b/invoiceRegistry'
 import { readPaged } from '@/lib/money/paged'
 import { attachInvoicePayments, asInvoiceRows } from '@/lib/money/invoicePayments'
@@ -31,8 +31,8 @@ async function requireAny() {
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const { data: profile } = await sb.from('users').select('role, name, can_view_all_clients').eq('id', user.id).maybeSingle()
-  const role = (profile?.role as string | undefined) ?? ''
+  const { data: profile } = await sb.from('users').select('role, name, can_view_all_clients, permissions').eq('id', user.id).maybeSingle()
+  const role = workRole(profile?.role as string | undefined, profile?.permissions) ?? ''
   const fin = isOwnerRole(role) || FIN_ROLES.includes(role)
   if (!fin && role !== 'manager') {
     return { error: NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 }) }

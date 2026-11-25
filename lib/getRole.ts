@@ -423,6 +423,17 @@ export function canAccessRoute(
   return false
 }
 
+// Закупщик с кабинетом менеджера (Вера, владелец 25.11.2026) работает как менеджер продаж:
+// страницы ему открывает canAccessRoute, а серверные калитки со списком ролей — эта функция.
+export function actsAsManager(role: string | null | undefined, permissions: unknown): boolean {
+  return role === 'buyer' && (permissions as { manager_workspace?: unknown } | null)?.manager_workspace === true
+}
+
+// Роль для проверок вида «кто может выдать счёт/УПД»: менеджерская для такого закупщика.
+export function workRole(role: string | null | undefined, permissions: unknown): string | null {
+  return actsAsManager(role, permissions) ? 'manager' : (role ?? null)
+}
+
 // Back-compat alias — keep until call sites migrate.
 export const canAccess = canAccessRoute
 

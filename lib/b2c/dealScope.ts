@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { isOwnerRole } from '@/lib/getRole'
+import { isOwnerRole, workRole } from '@/lib/getRole'
 
 // Единая проверка прав+скоупа для ВСЕХ роутов /api/deals*. Вынесена, чтобы «в
 // первом роуте есть, в остальных забыли» не повторилось (мина в amo-вебхуке была
@@ -31,8 +31,8 @@ export async function requireDealActor(): Promise<DealActor | NextResponse> {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
   const { data: profile } = await sb.from('users')
-    .select('role, name, can_view_all_clients').eq('id', user.id).maybeSingle()
-  const role = (profile?.role as string | undefined) ?? ''
+    .select('role, name, can_view_all_clients, permissions').eq('id', user.id).maybeSingle()
+  const role = workRole(profile?.role as string | undefined, profile?.permissions) ?? ''
   const allowed = isOwnerRole(role) || OWNER_LIKE.includes(role) || role === 'manager'
   if (!allowed) return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 })
   return {
