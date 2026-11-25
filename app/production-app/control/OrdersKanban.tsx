@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { loadJson } from '@/lib/toast'
+import CutterPanel from './CutterPanel'
 import type { BoardOrder } from '@/lib/production/ordersBoard'
 import { KANBAN_COLUMNS, SHIPPED_SHOW_DAYS, daysLeft, kanbanMatch, kanbanSort, materialLine, onKanban, type KanbanColumn } from '@/lib/production/stageKanban'
 
@@ -63,6 +64,7 @@ export default function OrdersKanban({ tv }: { tv: boolean }) {
   const [err, setErr] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   const [q, setQ] = useState('')
+  const [cutter, setCutter] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -105,10 +107,17 @@ export default function OrdersKanban({ tv }: { tv: boolean }) {
       <div className="flex flex-wrap items-center gap-2">
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: номер, заказчик, материал"
           className="w-full sm:w-80 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] bg-white" />
+        {!tv && (
+          <button onClick={() => setCutter(v => !v)}
+            className={`px-3 py-2 rounded-lg border text-[13px] font-medium ${cutter ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#3b3b38] border-[#e4e4e0]'}`}>
+            ✂️ Режим резчика
+          </button>
+        )}
         <span className="text-[12px] text-[#9a9a95]">
           {q ? `найдено ${total}` : `${total} заказов`} · заказ стоит на самом раннем этапе, где у него есть незакрытая деталь · отгруженные — за {SHIPPED_SHOW_DAYS} дней
         </span>
       </div>
+      {cutter && !tv && <CutterPanel orders={data.orders} />}
       <div className="overflow-x-auto pb-2">
         <div className="flex gap-3 min-w-max">
           {visible.map(c => {

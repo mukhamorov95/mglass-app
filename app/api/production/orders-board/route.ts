@@ -12,6 +12,8 @@ import { readIn, readPaged } from '@/lib/production/paged'
 import { inShopScope, shopScopeOf } from '@/lib/production/shopScope'
 import { mskDayKey } from '@/lib/time'
 import { kanbanColumn, orderMaterials } from '@/lib/production/stageKanban'
+import { itemsToCut } from '@/lib/production/cutterPlan'
+import type { OrderItem } from '@/lib/purchasing/supply'
 
 // Табло «Заказы»: список считает сервер, потому что заказов сотни, а задач тысячи. Сумма только тем, кому открыты деньги.
 
@@ -97,6 +99,7 @@ export async function GET(req: NextRequest) {
         stages: stageCounts(orderTasks, to), last_mark: last, idle_days: stage === 'in_work' ? idleDays(last, launchDay, to) : null,
         column: kanbanColumn(orderTasks.map(t => ({ stage_key: t.stage_key, status: doneBy(t, to) ? 'done' : 'open' })), shipped),
         materials: orderMaterials(o.items), ops_done: orderTasks.filter(t => doneBy(t, to)).length, ops_total: orderTasks.length,
+        cut_items: shipped ? [] : itemsToCut((Array.isArray(o.items) ? o.items : []) as OrderItem[], orderTasks, t => doneBy(t as TaskRow, to)).map(x => x.item),
       }].map(b => ({ ...b, attention: attentionOf(b, to) }))
     })
     return NextResponse.json({ today, to, orders })
