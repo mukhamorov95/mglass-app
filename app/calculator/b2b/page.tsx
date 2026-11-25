@@ -14,6 +14,7 @@ import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
 import { cutoutProblems, isCutoutService, normalizeCutouts, type CutoutGroup } from '@/lib/b2b/cutouts'
 import CutoutPicker from './CutoutPicker'
+import { holeBand, holeProblems, type HolePrice } from '@/lib/b2b/holePrices'
 import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
 import { FINANCE_FALLBACK, pickFinance, type Finance, type FinanceRow } from '@/lib/pricing/pickFinance'
 import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
@@ -279,6 +280,14 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [fHoleGroups, setFHoleGroups] = useState<HoleGroup[]>([])
   const [fCutoutGroups, setFCutoutGroups] = useState<CutoutGroup[]>([])
   const [fCutoutError, setFCutoutError] = useState<string | null>(null)
+  // Отверстия по диаметру и толщине — b2b_hole_prices (владелец 25.11.2026)
+  const [holePrices, setHolePrices] = useState<HolePrice[]>([])
+  useEffect(() => {
+    createClient().from('b2b_hole_prices').select('id, d_max, t_max, sale, cost').then(({ data, error }) => {
+      if (error) { setFCutoutError(`Не загрузились цены отверстий: ${error.message} — позиции с отверстиями не добавятся`); return }
+      setHolePrices((data ?? []).map(r => ({ id: r.id, d_max: r.d_max, t_max: r.t_max, sale: Number(r.sale) || 0, cost: Number(r.cost) || 0 })))
+    })
+  }, [])
   const [fCurved, setFCurved]         = useState(false)
   const [fSandblast, setFSandblast]   = useState(false)
   const [fMinPrice, setFMinPrice]     = useState(true)
@@ -952,7 +961,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         applyMinPrice: fMinPrice,
         comment: [p.label, p.comment, p.needsReview ? 'проверить размер' : ''].filter(Boolean).join(' · ') || undefined,
         dismissedSurcharges: new Set<number>(),
-      }, { facetPrices, surchargeRules, rates, cutoutPrices })
+      }, { facetPrices, surchargeRules, rates, cutoutPrices, holePrices })
       return { ...calc, localId: crypto.randomUUID() }
     })
     setItems(prev => [...prev, ...added])
@@ -967,8 +976,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     const q = Number(fQty) || 1
     if (w <= 0 || h <= 0) return
     const cutGroups = normalizeCutouts(fCutoutGroups)
-    const cutProblems = cutoutProblems(cutGroups, cutoutPrices)
-    if (cutProblems.length) { setFCutoutError(`Позиция не добавлена — ${cutProblems.join('; ')}. Цены вырезов ставятся в «Справочнике вырезов».`); return }
+    const cutProblems = [
+      ...cutoutProblems(cutGroups, cutoutPrices),
+      ...holeProblems(fHoles, fHoles ? normalizeHoles(fHoleGroups) : [], selectedMaterial.thickness, holePrices),
+    ]
+    if (cutProblems.length) { setFCutoutError(`Позиция не добавлена — ${cutProblems.join('; ')}. Цены — в справочнике «Вырезы и отверстия».`); return }
     setFCutoutError(null)
 
     const calc = computeQuoteItem({
@@ -981,7 +993,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
       dismissedSurcharges: fDismissedSurcharges,
-    }, { facetPrices, surchargeRules, rates, cutoutPrices })
+    }, { facetPrices, surchargeRules, rates, cutoutPrices, holePrices })
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID() }])
     setFWidth('')
     setFHeight('')
@@ -1160,7 +1172,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         : [],
       applyMinPrice: item.applyMinPrice !== false, comment: item.comment || undefined,
       dismissedSurcharges: new Set<number>(),
-    }, { facetPrices, surchargeRules, rates, cutoutPrices })
+    }, { facetPrices, surchargeRules, rates, cutoutPrices, holePrices })
     return { ...calc, localId: item.localId, manualTotal: item.manualTotal ?? null }
   }
 
@@ -1259,6 +1271,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     const svcs = services.filter(s => eServiceIds.includes(s.id))
     const eCutGroups = normalizeCutouts(eCutoutGroups)
     if (cutoutProblems(eCutGroups, cutoutPrices).length) return
+    if (holeProblems(eHoles, eHoles ? normalizeHoles(eHoleGroups) : [], mat.thickness, holePrices).length) return
     const calc = computeQuoteItem({
       material: mat, width: w, height: h, quantity: q,
       wastePercent: eWaste, hasTempering: eTempering,
@@ -1269,7 +1282,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
       dismissedSurcharges: eDismissedSurcharges,
-    }, { facetPrices, surchargeRules, rates, cutoutPrices })
+    }, { facetPrices, surchargeRules, rates, cutoutPrices, holePrices })
     setItems(prev => prev.map(i => i.localId === editingLocalId
       // Договорную цену позиции сохраняем: менеджер согласовал её с клиентом,
       // а правка комментария или количества её молча откатывала к расчётной.
@@ -2551,6 +2564,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                             onChange={e => setFHoleGroups(prev => prev.map((x, j) => j === i ? { ...x, d: Number(e.target.value) || 0 } : x))}
                             className="w-20 bg-white border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] outline-none focus:border-[#111110]" />
                           <span className="text-[12px] text-[#6b6b66] whitespace-nowrap">мм</span>
+                          {g.d > 0 && selectedMaterial && (() => {
+                            const band = holeBand(g.d, selectedMaterial.thickness, holePrices)
+                            return band && band.sale > 0
+                              ? <span className="text-[12px] text-[#6b6b66] tabular-nums whitespace-nowrap">{band.sale} ₽/шт</span>
+                              : <span className="text-[12px] text-red-600 font-medium whitespace-nowrap">нет цены</span>
+                          })()}
                           <button type="button" onClick={() => setFHoleGroups(prev => prev.filter((_, j) => j !== i))}
                             className="ml-auto text-[12px] text-[#9a9a95] hover:text-red-600 px-2 py-1.5">удалить</button>
                         </div>
@@ -3669,6 +3688,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       const eThickMats     = sortByPriority(eCatMats.filter(m => m.thickness === eThickness))
       const eSelectedMat   = materials.find(m => m.id === eMatId) ?? null
       const eCanSave       = !!eSelectedMat && Number(eWidth) > 0 && Number(eHeight) > 0 && (eSelectedMat.sale_price ?? 0) > 0 && cutoutProblems(normalizeCutouts(eCutoutGroups), cutoutPrices).length === 0
+        && holeProblems(eHoles, eHoles ? normalizeHoles(eHoleGroups) : [], eSelectedMat.thickness, holePrices).length === 0
       // Живой пересчёт: сумма позиции обновляется по мере изменения полей.
       const ePreviewItem   = eCanSave
         ? { ...computeQuoteItem({
@@ -3676,12 +3696,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             wastePercent: eWaste, hasTempering: eTempering,
             resolvedServices: resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
             hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-            hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast, cutoutGroups: eCutoutGroups,
+            hasHoles: eHoles, holes: eHoles ? normalizeHoles(eHoleGroups) : [], shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast, cutoutGroups: eCutoutGroups,
             hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
             triplexExtraGlasses: eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
             applyMinPrice: eMinPrice,
             dismissedSurcharges: eDismissedSurcharges,
-          }, { facetPrices, surchargeRules, rates, cutoutPrices }), localId: '' }
+          }, { facetPrices, surchargeRules, rates, cutoutPrices, holePrices }), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
       const ePreviewMargin = ePreviewItem ? itemMarginPct(ePreviewItem, discount) : null
@@ -3817,7 +3837,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                         <p className="text-[11px] text-amber-700">В позиции {eCutouts} выр. без вида и цены — укажите вид, и они посчитаются.</p>
                       )}
                       <CutoutPicker groups={eCutoutGroups} onChange={g => { setECutoutGroups(g); if (g.length) setECutouts(0) }} prices={cutoutPrices} canEditPrices={isAdmin} />
-                      {(() => { const pr = cutoutProblems(normalizeCutouts(eCutoutGroups), cutoutPrices); return pr.length ? <p className="text-[11px] text-red-600">Не сохранится: {pr.join('; ')}</p> : null })()}
+                      {(() => { const pr = [...cutoutProblems(normalizeCutouts(eCutoutGroups), cutoutPrices), ...(materials.find(m => m.id === eMatId) ? holeProblems(eHoles, eHoles ? normalizeHoles(eHoleGroups) : [], materials.find(m => m.id === eMatId)!.thickness, holePrices) : [])]; return pr.length ? <p className="text-[11px] text-red-600">Не сохранится: {pr.join('; ')}</p> : null })()}
                     </div>
                     <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eCurved ? 'border-teal-300 bg-teal-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                       <input type="checkbox" checked={eCurved} onChange={e => setECurved(e.target.checked)}

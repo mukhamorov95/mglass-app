@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { loadJson, sendOrToast, toast } from '@/lib/toast'
+import { bandLabel, thicknessLabel, type HolePrice } from '@/lib/b2b/holePrices'
 
 type Row = { id: number; code: string; name: string; value: number; cost_price: number; active: boolean }
 type Draft = { value: string; cost: string }
@@ -21,10 +22,12 @@ export default function CutoutsPage() {
   const [error, setError] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<number, Draft>>({})
   const [busy, setBusy] = useState<number | null>(null)
+  const [holes, setHoles] = useState<HolePrice[] | null>(null)
 
   useEffect(() => {
-    loadJson<{ rows: Row[] }>('/api/admin/cutouts').then(r => {
+    loadJson<{ rows: Row[]; holes: HolePrice[] }>('/api/admin/cutouts').then(r => {
       if (r.data === null) { setError(r.error); return }
+      setHoles(r.data.holes.map(h => ({ ...h, sale: Number(h.sale) || 0, cost: Number(h.cost) || 0 })))
       const list = r.data.rows
       setRows(list)
       setDrafts(Object.fromEntries(list.map(x => [x.id, { value: String(Number(x.value) || ''), cost: String(Number(x.cost_price) || '') }])))
@@ -51,7 +54,7 @@ export default function CutoutsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-4 text-[#111110]">
       <div>
-        <h1 className="text-[20px] font-semibold">Вырезы в стекле</h1>
+        <h1 className="text-[20px] font-semibold">Вырезы и отверстия</h1>
         <p className="text-[13px] text-[#6b6b66] mt-1 leading-relaxed">
           Цена за один вырез. Менеджер выбирает в позиции вид, категорию и сколько вырезов на деталь;
           сумма = цена × вырезов × деталей. Пока продажная цена не задана, позиция с таким вырезом не добавляется.
@@ -83,6 +86,7 @@ export default function CutoutsPage() {
                     <td className="px-3 py-2">
                       <div className="font-medium">{row.name}</div>
                       {unpriced && <div className="text-[11px] text-red-600">цена не задана — в калькуляторе недоступен</div>}
+                      {!unpriced && !(Number(row.cost_price) > 0) && <div className="text-[11px] text-amber-700">себестоимость не задана — маржа по строке завышена</div>}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <input inputMode="decimal" value={d.cost} placeholder="0"
@@ -109,10 +113,93 @@ export default function CutoutsPage() {
         </div>
       )}
 
+      {holes && <HolesTable holes={holes} onSaved={h => setHoles(prev => prev?.map(x => (x.id === h.id ? h : x)) ?? null)} />}
+
       <p className="text-[12px] text-[#9a9a95] leading-relaxed">
-        Колонка БСК — продажная цена конкурента для ориентира, а не наша себестоимость; прайс старый, цены у них с тех пор выросли.
+        Стартовые продажные цены вырезов и отверстий взяты из прайса БСК (решение владельца 25.11.2026). Колонка БСК — продажная цена конкурента для ориентира, а не наша себестоимость; прайс старый, цены у них с тех пор выросли.
         Цены уже посчитанных позиций не меняются — только новые и пересчитанные.
       </p>
+    </div>
+  )
+}
+
+function HolesTable({ holes, onSaved }: { holes: HolePrice[]; onSaved: (h: HolePrice) => void }) {
+  const [drafts, setDrafts] = useState<Record<number, Draft>>(() =>
+    Object.fromEntries(holes.map(h => [h.id, { value: String(h.sale || ''), cost: String(h.cost || '') }])))
+  const [busy, setBusy] = useState<number | null>(null)
+  const thicknesses = [...new Set(holes.map(h => h.t_max))].sort((a, b) => a - b)
+
+  async function save(h: HolePrice) {
+    const d = drafts[h.id]
+    const value = parse(d?.value ?? ''), cost = parse(d?.cost ?? '')
+    if (value === null || cost === null) { toast.error('Не сохранено', { detail: 'Цена — одно число, например 150 или 150,50' }); return }
+    setBusy(h.id)
+    const r = await sendOrToast('Не сохранено', '/api/admin/cutouts', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ holeId: h.id, value, cost_price: cost }),
+    })
+    setBusy(null)
+    if (!r) return
+    const j = await r.json().catch(() => null) as { hole?: HolePrice } | null
+    if (!j?.hole) { toast.error('Не сохранено', { detail: 'Сервер не вернул строку' }); return }
+    onSaved({ ...j.hole, sale: Number(j.hole.sale) || 0, cost: Number(j.hole.cost) || 0 })
+    toast.success(`Отверстие ${bandLabel(h, holes)}, ${thicknessLabel(h, holes)}: сохранено`)
+  }
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <h2 className="text-[16px] font-semibold">Отверстия</h2>
+        <p className="text-[13px] text-[#6b6b66] mt-1 leading-relaxed">
+          Цена за одно отверстие по диаметру и толщине стекла. У триплекса толщина — весь пакет.
+          Диаметр больше последней полосы или толщина больше последней — позиция не добавляется.
+        </p>
+      </div>
+      <div className="border border-[#e4e4e0] rounded-xl bg-white overflow-x-auto">
+        <table className="w-full text-[13px] tabular-nums">
+          <thead className="text-[11px] text-[#9a9a95] uppercase tracking-wide">
+            <tr className="border-b border-[#e4e4e0]">
+              <th className="text-left font-medium px-3 py-2">Диаметр</th>
+              <th className="text-left font-medium px-3 py-2">Стекло</th>
+              <th className="text-right font-medium px-3 py-2">Себестоимость, ₽</th>
+              <th className="text-right font-medium px-3 py-2">Продажа, ₽</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {thicknesses.flatMap(t => holes.filter(h => h.t_max === t).sort((a, b) => a.d_max - b.d_max)).map(h => {
+              const d = drafts[h.id] ?? { value: '', cost: '' }
+              const dirty = parse(d.value) !== h.sale || parse(d.cost) !== h.cost
+              return (
+                <tr key={h.id} className="border-b border-[#f0f0ec] last:border-0">
+                  <td className="px-3 py-2 font-medium">
+                    {bandLabel(h, holes)} мм
+                    {h.sale > 0 && !(h.cost > 0) && <div className="text-[11px] text-amber-700 font-normal">себестоимость не задана</div>}
+                    {!(h.sale > 0) && <div className="text-[11px] text-red-600 font-normal">цена не задана</div>}
+                  </td>
+                  <td className="px-3 py-2 text-[#6b6b66]">{thicknessLabel(h, holes)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <input inputMode="decimal" value={d.cost} placeholder="0"
+                      onChange={e => setDrafts(p => ({ ...p, [h.id]: { ...d, cost: e.target.value } }))}
+                      className="w-24 border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-right outline-none focus:border-[#111110]" />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input inputMode="decimal" value={d.value} placeholder="0"
+                      onChange={e => setDrafts(p => ({ ...p, [h.id]: { ...d, value: e.target.value } }))}
+                      className="w-24 border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-right outline-none focus:border-[#111110]" />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button onClick={() => save(h)} disabled={!dirty || busy === h.id}
+                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#111110] text-white disabled:bg-[#e4e4e0] disabled:text-[#9a9a95]">
+                      {busy === h.id ? '…' : dirty || !(h.sale > 0) ? 'Сохранить' : 'Сохранено'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

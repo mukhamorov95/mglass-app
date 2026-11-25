@@ -2,6 +2,7 @@ import type { B2BMaterial, B2BService } from '../types'
 import { calcItem, calcTotals, type FacetPrice, type B2BOrderItem, type B2BOrderTotals } from '../b2bCalculator'
 import { surchargeServicesFor, type SurchargeRule } from '../surcharges'
 import type { B2BRates } from './rates'
+import { holeServices, type HolePrice } from './holePrices'
 import { cutoutServices, cutoutTotal, isCutoutService, normalizeCutouts, type CutoutGroup } from './cutouts'
 
 // ЕДИНАЯ точка расчёта B2B-позиции. Её зовут ОБА калькулятора:
@@ -43,7 +44,10 @@ export type QuoteRefData = {
   surchargeRules: SurchargeRule[]
   rates: B2BRates        // справочник b2b_rates: оба калькулятора обязаны считать по одной таблице
   cutoutPrices?: B2BService[]   // строки b2b_services с кодом cutout_*; нет — вырезы без цены
+  holePrices?: HolePrice[]      // b2b_hole_prices: Ø × толщина; нет — отверстия без цены (кабинет партнёра)
 }
+
+export const TG_SHAPE = /т и г образн/i
 
 export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit<B2BOrderItem, 'localId'> {
   const { material: mat, width, height, quantity } = input
@@ -59,9 +63,15 @@ export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit
   )
   // Вырезы считаются только по группам: строка выреза, пришедшая обычной услугой, — повтор.
   const cutoutGroups = normalizeCutouts(input.cutoutGroups)
+  // Отверстия — по диаметру и толщине пакета (триплекс сверлят насквозь).
+  const packThickness = mat.thickness + (input.hasTriplex ? (input.triplexExtraGlasses ?? []).reduce((a, g) => a + g.thickness, 0) : 0)
+  const holeSvcs = input.hasHoles !== false ? holeServices(input.holes ?? [], packThickness, ref.holePrices ?? []) : []
+  // Вырез заменяет наценку «Т и Г образные +50 %» (владелец 25.11.2026): одно и то же дважды не берём.
   const services: B2BService[] = [
-    ...(input.resolvedServices ?? []).filter(s => !isCutoutService(s as B2BService & { code?: string })),
+    ...(input.resolvedServices ?? []).filter(s => !isCutoutService(s as B2BService & { code?: string })
+      && !(cutoutGroups.length > 0 && TG_SHAPE.test(s.name))),
     ...cutoutServices(cutoutGroups, ref.cutoutPrices ?? []),
+    ...holeSvcs,
     ...surchargeSvcs,
   ]
   const cutCount = cutoutTotal(cutoutGroups)
