@@ -7,6 +7,7 @@ import { Sidebar } from '@/components/Sidebar'
 import CartProvider from '@/components/CartProvider'
 import StorageProxySW from '@/components/StorageProxySW'
 import PageTracker from '@/components/PageTracker'
+import ActiveTimeTracker from '@/components/ActiveTimeTracker'
 import Toaster from '@/components/Toaster'
 import DialogHost from '@/components/DialogHost'
 import CommandPalette from '@/components/CommandPalette'
@@ -68,6 +69,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-full bg-[#f8f8f7]">
         {user && <StorageProxySW />}
         {user && <PageTracker />}
+        {user && <ActiveTimeTracker />}
         <OrganizationProvider initialOrgId={orgId} initialRole={orgRole}>
           <CartProvider>
             {user && role !== 'partner' ? (

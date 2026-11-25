@@ -6,7 +6,7 @@ import PageUsage from './PageUsage'
 // Активность пользователей: во сколько начинают/заканчивают и сколько времени в
 // приложении (окно присутствия). Период: сегодня / неделя / месяц / конкретный день.
 
-type Row = { name: string; role: string; days: number; start: string; end: string; avgHours: number; totalHours: number; lastActive: string }
+type Row = { name: string; role: string; days: number; start: string; end: string; avgHours: number; totalHours: number; lastActive: string; activeTotalHours: number | null; activeAvgHours: number | null }
 type Period = 'today' | 'week' | 'month' | 'day'
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
@@ -24,7 +24,7 @@ const PERIODS: { key: Period; label: string }[] = [
 export default function ActivityPage() {
   const [period, setPeriod] = useState<Period>('week')
   const [day, setDay] = useState(today())
-  const [data, setData] = useState<{ from: string; to: string; rows: Row[] } | null>(null)
+  const [data, setData] = useState<{ from: string; to: string; rows: Row[]; activeSince: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -35,7 +35,7 @@ export default function ActivityPage() {
       : { from: day, to: day }
     try {
       const res = await fetch(`/api/admin/activity?from=${r.from}&to=${r.to}`)
-      setData(await res.json() as { from: string; to: string; rows: Row[] })
+      setData(await res.json() as { from: string; to: string; rows: Row[]; activeSince: string | null })
     } finally { setLoading(false) }
   }, [period, day])
 
@@ -86,8 +86,10 @@ export default function ActivityPage() {
                     {!singleDay && <th className="text-center font-semibold px-2 py-2.5">Дней</th>}
                     <th className="text-center font-semibold px-2 py-2.5">Начинает</th>
                     <th className="text-center font-semibold px-2 py-2.5">Заканчивает</th>
-                    <th className="text-right font-semibold px-2 py-2.5">Ч/день</th>
-                    {!singleDay && <th className="text-right font-semibold px-4 py-2.5">Всего</th>}
+                    <th className="text-right font-semibold px-2 py-2.5" title="Вкладка на экране и человек что-то делал — минута засчитана">Активно, ч/день</th>
+                    {!singleDay && <th className="text-right font-semibold px-2 py-2.5">Активно всего</th>}
+                    <th className="text-right font-semibold px-2 py-2.5" title="Первый заход → последний за день, открытая вкладка тоже считается">Окно, ч/день</th>
+                    {!singleDay && <th className="text-right font-semibold px-4 py-2.5">Окно всего</th>}
                     <th className="text-right font-semibold px-4 py-2.5">Посл. активность</th>
                   </tr>
                 </thead>
@@ -99,7 +101,9 @@ export default function ActivityPage() {
                       {!singleDay && <td className="px-2 py-2.5 text-center text-[#6b6b66] tabular-nums">{r.days}</td>}
                       <td className="px-2 py-2.5 text-center font-mono text-[#111110]">{r.start}</td>
                       <td className="px-2 py-2.5 text-center font-mono text-[#111110]">{r.end}</td>
-                      <td className="px-2 py-2.5 text-right tabular-nums">{r.avgHours} ч</td>
+                      <td className="px-2 py-2.5 text-right tabular-nums font-semibold text-[#111110]">{r.activeAvgHours == null ? '—' : `${r.activeAvgHours} ч`}</td>
+                      {!singleDay && <td className="px-2 py-2.5 text-right tabular-nums">{r.activeTotalHours == null ? '—' : `${r.activeTotalHours} ч`}</td>}
+                      <td className="px-2 py-2.5 text-right tabular-nums text-[#6b6b66]">{r.avgHours} ч</td>
                       {!singleDay && (
                         <td className="px-4 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -117,7 +121,12 @@ export default function ActivityPage() {
           )}
         </div>
 
-        <p className="text-[11px] text-[#b0b0aa] mt-2">«Ч/день» и «Всего» — окно присутствия (первый заход → последний за день), а не чистое активное время: открытая вкладка тоже считается. Точность ~5 минут.</p>
+        <p className="text-[11px] text-[#b0b0aa] mt-2">
+          «Активно» — минуты, когда вкладка была на экране и человек что-то делал (мышь, клавиатура, касание); считается
+          {data?.activeSince ? ` с ${data.activeSince.split('-').reverse().join('.')}` : ' с момента выкладки'}, раньше — прочерк.
+          Если период начинается раньше, «Активно всего» — только с этого дня.
+          «Окно» и «Всего» — первый заход → последний за день: открытая вкладка тоже считается. Точность ~5 минут.
+        </p>
 
         <PageUsage from={data?.from} to={data?.to} />
       </div>

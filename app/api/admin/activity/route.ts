@@ -37,6 +37,18 @@ export async function GET(req: NextRequest) {
   const { data } = await svc.from('user_activity_days')
     .select('user_id,day,first_seen,last_seen').gte('day', from).lte('day', to)
   const list = (data ?? []) as ActRow[]
+  // Активные минуты: считаются с 25.11.2026; до этого дня их нет — показываем прочерк, а не ноль.
+  const [{ data: am }, { data: since }] = await Promise.all([
+    svc.from('user_active_minutes').select('user_id,day,minutes').gte('day', from).lte('day', to),
+    svc.from('user_active_minutes').select('day').order('day').limit(1),
+  ])
+  const activeSince = (since?.[0] as { day?: string } | undefined)?.day ?? null
+  const activeBy = new Map<string, { min: number; days: number }>()
+  for (const r of (am ?? []) as { user_id: string; minutes: number }[]) {
+    const g = activeBy.get(r.user_id) ?? { min: 0, days: 0 }
+    g.min += Number(r.minutes) || 0; g.days++
+    activeBy.set(r.user_id, g)
+  }
 
   const uids = [...new Set(list.map(r => r.user_id))]
   const { data: us } = uids.length
@@ -67,8 +79,14 @@ export async function GET(req: NextRequest) {
       avgHours: Math.round(avg(g.span) * 10) / 10,
       totalHours: Math.round(sum(g.span) * 10) / 10,
       lastActive: g.last,
+      // null — за период минуты ещё не считались (до activeSince), 0 — считались, но не было действий.
+      activeTotalHours: activeSince && to >= activeSince ? Math.round(((activeBy.get(uid)?.min ?? 0) / 60) * 10) / 10 : null,
+      // В среднем за день, когда минуты шли (день без действий в таблицу не попадает).
+      activeAvgHours: activeSince && to >= activeSince
+        ? Math.round(((activeBy.get(uid)?.min ?? 0) / 60 / Math.max(1, activeBy.get(uid)?.days ?? 1)) * 10) / 10
+        : null,
     }
-  }).sort((a, b) => b.totalHours - a.totalHours)
+  }).sort((a, b) => (b.activeTotalHours ?? -1) - (a.activeTotalHours ?? -1) || b.totalHours - a.totalHours)
 
-  return NextResponse.json({ from, to, rows })
+  return NextResponse.json({ from, to, rows, activeSince })
 }
