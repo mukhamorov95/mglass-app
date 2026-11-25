@@ -35,7 +35,8 @@ export const CUTTING_STAGE = 'cutting'
 // назван и явно отвергнут, а не забыт.
 // 'my-stage' — «Готово на моей станции»: рабочий закрывает свой этап по всем
 // деталям заказа. Отметка живая, имя пишется — работу он утверждает сам.
-export type MarkSource = 'worker' | 'order-card' | 'complete-order' | 'my-stage' | 'cascade'
+// 'cutter' — «Отрезано» в режиме резчика: отметка по раскладке, имя пишется нажавшему.
+export type MarkSource = 'worker' | 'order-card' | 'complete-order' | 'my-stage' | 'cutter' | 'cascade'
 
 export type CuttingMark = {
   orderId:   number

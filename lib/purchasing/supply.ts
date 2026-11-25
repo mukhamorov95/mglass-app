@@ -83,6 +83,8 @@ export type OrderItem = {
   width?: number; height?: number; quantity?: number
   hasTriplex?: boolean; triplexLayers?: number
   triplexGlasses?: { materialName?: string; thickness?: number }[]
+  item_index?: number
+  open_layers?: number[]   // режим резчика: стёкла, у которых резка ещё не отмечена
 }
 export type PurchaseMaterial = {
   id: number; name: string; thickness: number | string; category?: string | null
@@ -184,7 +186,8 @@ export function buildPurchaseGroups(
       }
 
       layers.forEach((layer, li) => { if (li > 0) extraLayerM2 += (w * h * qty) / 1e6 })
-      for (const layer of layers) {
+      for (const [li, layer] of layers.entries()) {
+        if (it.open_layers && !it.open_layers.includes(li + 1)) continue
         const exactKey = keyOf(layer.name, layer.thk)
         let mat = materialByKey.get(exactKey)
         let key = exactKey
@@ -232,6 +235,7 @@ export function buildPurchaseGroups(
             id: `${o.id}-${key}-${g.pieces.length}`,
             width: w, height: h, label: `${w}×${h}`,
             orderId: o.id, orderClientName: o.client, materialKey: key, canRotate: true,
+            itemIndex: it.item_index, layer: li + 1,
           })
         }
       }

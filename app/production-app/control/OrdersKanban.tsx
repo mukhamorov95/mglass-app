@@ -7,7 +7,7 @@ import CutterPanel from './CutterPanel'
 import type { BoardOrder } from '@/lib/production/ordersBoard'
 import { KANBAN_COLUMNS, SHIPPED_SHOW_DAYS, daysLeft, kanbanMatch, kanbanSort, materialLine, onKanban, type KanbanColumn } from '@/lib/production/stageKanban'
 
-type Resp = { today: string; to: string; orders: BoardOrder[] }
+type Resp = { today: string; to: string; orders: BoardOrder[]; can_cut?: boolean }
 
 const ddmm = (d: string | null) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}` : '—')
 
@@ -117,7 +117,7 @@ export default function OrdersKanban({ tv }: { tv: boolean }) {
           {q ? `найдено ${total}` : `${total} заказов`} · заказ стоит на самом раннем этапе, где у него есть незакрытая деталь · отгруженные — за {SHIPPED_SHOW_DAYS} дней
         </span>
       </div>
-      {cutter && !tv && <CutterPanel orders={data.orders} />}
+      {cutter && !tv && <CutterPanel orders={data.orders} canMark={data.can_cut === true} onMarked={() => setTick(n => n + 1)} />}
       <div className="overflow-x-auto pb-2">
         <div className="flex gap-3 min-w-max">
           {visible.map(c => {
