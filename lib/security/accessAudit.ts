@@ -37,7 +37,7 @@ export const SENSITIVE_TABLES = new Set([
   'tempering_batches',         // листы на закалку: кто и когда отправил
   'tempering_batch_items',     // себестоимость закалки и продажная сумма строк
   'users', 'b2b_clients', 'b2b_client_legal_entities', 'b2b_orders', 'b2b_materials', 'b2b_inquiries',
-  'materials', 'hardware_items', 'services', 'b2b_services', 'financial_settings',
+  'materials', 'hardware_items', 'services', 'b2b_services', 'b2b_hole_prices', 'financial_settings',
   'supplier_price_rows', 'glass_price_matrix', 'purchase_orders', 'calculations',
   'commercial_proposals', 'deals', 'deal_payments', 'payments', 'manager_stats_daily',
   'manager_stats_monthly', 'manager_day_stats', 'manager_month_plans', 'margin_edits', 'coefficients', 'process_cost_inputs', 'production_settings',

@@ -14,7 +14,9 @@ export async function GET() {
     .from('b2b_services').select('id, code, name, value, cost_price, active, sort_order')
     .like('code', 'cutout_%').order('sort_order')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ rows: data ?? [] })
+  const holes = await createServiceClient().from('b2b_hole_prices').select('id, d_max, t_max, sale, cost').order('t_max').order('d_max')
+  if (holes.error) return NextResponse.json({ error: holes.error.message }, { status: 500 })
+  return NextResponse.json({ rows: data ?? [], holes: holes.data ?? [] })
 }
 
 const money = (v: unknown): number | null => {
@@ -25,7 +27,8 @@ const money = (v: unknown): number | null => {
 export async function PATCH(req: Request) {
   const guard = await requirePageAccess(PAGE)
   if (guard instanceof NextResponse) return guard
-  const body = await req.json().catch(() => null) as { id?: unknown; value?: unknown; cost_price?: unknown } | null
+  const body = await req.json().catch(() => null) as { id?: unknown; holeId?: unknown; value?: unknown; cost_price?: unknown } | null
+  if (body?.holeId !== undefined) return patchHole(body)
   const id = Number(body?.id)
   const value = money(body?.value)
   const cost = money(body?.cost_price)
@@ -46,4 +49,25 @@ export async function PATCH(req: Request) {
     details: { name: before.name, sale: [Number(before.value), value], cost: [Number(before.cost_price), cost] },
   })
   return NextResponse.json({ row: data })
+}
+
+async function patchHole(body: { holeId?: unknown; value?: unknown; cost_price?: unknown }) {
+  const id = Number(body.holeId)
+  const sale = money(body.value)
+  const cost = money(body.cost_price)
+  if (!Number.isInteger(id) || id <= 0 || sale === null || cost === null) {
+    return NextResponse.json({ error: 'Нужны строка, продажа и себестоимость — числа от 0' }, { status: 400 })
+  }
+  const db = createServiceClient()
+  const { data: before } = await db.from('b2b_hole_prices').select('id, d_max, t_max, sale, cost').eq('id', id).maybeSingle()
+  if (!before) return NextResponse.json({ error: 'Строка не найдена' }, { status: 404 })
+  const { data, error } = await db.from('b2b_hole_prices')
+    .update({ sale, cost, updated_at: new Date().toISOString() }).eq('id', id).select('id, d_max, t_max, sale, cost').maybeSingle()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'Не сохранено' }, { status: 500 })
+  await writeLogForCurrentUser('price.cutout_update', {
+    entityType: 'b2b_hole_prices', entityId: String(id),
+    details: { d_max: before.d_max, t_max: before.t_max, sale: [Number(before.sale), sale], cost: [Number(before.cost), cost] },
+  })
+  return NextResponse.json({ hole: data })
 }

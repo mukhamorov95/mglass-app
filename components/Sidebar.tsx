@@ -51,7 +51,7 @@ const BUYER_LOGISTIKA: NavItem[] = [
 const BUYER_SPRAVOCHNIKI: NavItem[] = [
   { href: '/admin/glass-prices',     label: 'Стекло',             icon: '🔷', indent: true },
   { href: '/admin/facet',            label: 'Фацет',              icon: '💎', indent: true },
-  { href: '/admin/cutouts',          label: 'Вырезы',             icon: '✂️', indent: true },
+  { href: '/admin/cutouts',          label: 'Вырезы и отверстия',             icon: '✂️', indent: true },
   { href: '/admin/mirror-pricing',   label: 'Себестоимость зеркал', icon: '💡', indent: true },
   { href: '/admin/mirror-lighting',  label: 'Компоненты подсветки', icon: '🔌', indent: true },
   { href: '/admin/mirror-frames',    label: 'Рамки зеркал',      icon: '🖼️', indent: true },
@@ -204,7 +204,7 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
   { href: '/admin/glass-prices',    label: 'Стекло',           icon: '🔷', indent: true },
   { href: '/admin/facet',           label: 'Фацет',            icon: '💎', indent: true },
   { href: '/admin/b2b-rates',       label: 'Стекло — ставки',  icon: '🧮', indent: true },
-  { href: '/admin/cutouts',         label: 'Вырезы',           icon: '✂️', indent: true },
+  { href: '/admin/cutouts',         label: 'Вырезы и отверстия',           icon: '✂️', indent: true },
   { href: '/admin/mirror-pricing',  label: 'Себестоимость зеркал', icon: '💡', indent: true },
   { href: '/admin/mirror-lighting', label: 'Компоненты подсветки', icon: '🔌', indent: true },
   { href: '/admin/mirror-frames',   label: 'Рамки зеркал',     icon: '🖼️', indent: true },

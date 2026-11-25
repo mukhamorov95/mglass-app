@@ -33,3 +33,20 @@ describe('вырезы', () => {
     expect(treatmentTags({ hasCutouts: true, cutouts: 2 })).toContain('вырезы ×2')
   })
 })
+
+import { computeQuoteItem } from '@/lib/b2b/computeQuote'
+import { DEFAULT_B2B_RATES } from '@/lib/b2b/rates'
+import type { B2BMaterial } from '@/lib/types'
+
+describe('вырез заменяет «Т и Г образные»', () => {
+  const mat = { id: 1, name: 'M1', category: 'стекло', thickness: 8, cost_price: 1000, sale_price: 3000, waste_percent: 0, active: true } as unknown as B2BMaterial
+  const tg = { id: 11, name: 'Изготовление Т и Г образных изделий', type: 'percent', value: 50, cost_price: 0, description: '', active: true, sort_order: 3 } as B2BService
+  const cut = row(29, 'cutout_outer_1', 401, 0)
+  const ref = { facetPrices: [], surchargeRules: [], rates: DEFAULT_B2B_RATES, cutoutPrices: [cut] }
+  it('с вырезом наценки нет, без выреза — есть', () => {
+    const withCut = computeQuoteItem({ material: mat, width: 500, height: 500, quantity: 1, resolvedServices: [tg], cutoutGroups: [{ kind: 'outer', cat: 1, n: 1 }], applyMinPrice: false }, ref)
+    expect(withCut.services.map(s => s.name)).toEqual(['Вырез внешний I кат. × 1'])
+    const noCut = computeQuoteItem({ material: mat, width: 500, height: 500, quantity: 1, resolvedServices: [tg], applyMinPrice: false }, ref)
+    expect(noCut.services.map(s => s.name)).toEqual([tg.name])
+  })
+})

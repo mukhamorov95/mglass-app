@@ -59,7 +59,7 @@ export default function CutoutPicker({ groups, onChange, prices, canEditPrices }
           </a>
         )}
       </div>
-      {groups.length > 0 && <p className="text-[11px] text-[#9a9a95] leading-snug">Количество — на одну деталь. Внешний — по краю стекла, внутренний — внутри поля.</p>}
+      {groups.length > 0 && <p className="text-[11px] text-[#9a9a95] leading-snug">Количество — на одну деталь. Внешний — по краю стекла, внутренний — внутри поля. Наценка «Т и Г образные» с вырезом не берётся — вырез её заменяет.</p>}
     </div>
   )
 }
