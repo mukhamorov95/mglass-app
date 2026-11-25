@@ -7,7 +7,7 @@ import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
 import type { PaymentView } from '@/lib/partner/orderMoney'
 import { paymentLabel, paymentPill, unpaidOf } from '@/lib/partner/paymentLabel'
 import { matchesOrder, unpaidFirst } from '@/lib/partner/orderSearch'
-import { statusChips, statusOf } from '@/lib/partner/stageFilter'
+import { SHIPPED_STATUS, statusChips, statusOf } from '@/lib/partner/stageFilter'
 import { QUOTE_LABEL, canEditQuote, canSubmitQuote, type QuoteState } from '@/lib/partner/quoteState'
 import type { ItemView } from '@/lib/partner/itemStages'
 
@@ -97,22 +97,31 @@ export default function OrdersView({ view }: { view: View }) {
   const orders = data?.orders ?? []
   const lanes = VIEW_LANES[view]
   const inView = orders.filter(o => lanes.includes(o.lane))
-  const unpaid = inView.filter(o => unpaidOf(o.payment) > 0)
+  // «Отгружен» — последний статус в ряду «Заказов в работе»: показывает отгруженные тут же.
+  const shippedPicked = view === 'inwork' && status === SHIPPED_STATUS
+  const shippedAll = view === 'inwork' ? orders.filter(o => o.lane === 'shipped') : []
+  const scope = shippedPicked ? shippedAll : inView
+  const shownLanes: Lane[] = shippedPicked ? ['shipped'] : lanes
+  const unpaid = scope.filter(o => unpaidOf(o.payment) > 0)
   const unpaidSum = unpaid.reduce((s, o) => s + unpaidOf(o.payment), 0)
   // Шовер Гласс 25.11: «в Документах 35, тут 33» — разница в неоплаченных заказах соседнего
   // списка (отгружен, а оплаты нет). Называем её прямо, а не оставляем загадкой.
-  const otherView: View | null = view === 'inwork' ? 'shipped' : view === 'shipped' ? 'inwork' : null
+  const otherView: View | null = view === 'quotes' ? null : view === 'shipped' || shippedPicked ? 'inwork' : 'shipped'
   const otherUnpaid = otherView ? orders.filter(o => VIEW_LANES[otherView].includes(o.lane) && unpaidOf(o.payment) > 0) : []
-  const found = (view !== 'quotes' && onlyUnpaid ? unpaid : inView).filter(o => matchesOrder({ number: o.number, clientOrderNumber: o.clientOrderNumber, amount: o.amount, summary: o.summary }, q))
-  // Счётчики статусов — по тому же списку, что покажет нажатие: с учётом «Не оплачены» и поиска.
-  const chips = view === 'inwork' ? statusChips(found, status) : []
-  const visible = unpaidFirst(view === 'inwork' && status ? found.filter(o => statusOf(o) === status) : found)
+  // Счётчики статусов — по тому же, что покажет нажатие: с учётом «неоплаченных» и поиска.
+  const passes = (o: Order) => (view === 'quotes' || !onlyUnpaid || unpaidOf(o.payment) > 0)
+    && matchesOrder({ number: o.number, clientOrderNumber: o.clientOrderNumber, amount: o.amount, summary: o.summary }, q)
+  const foundInWork = view === 'inwork' ? inView.filter(passes) : []
+  const chips = view === 'inwork' ? statusChips(foundInWork) : []
+  const found = scope.filter(passes)
+  const visible = unpaidFirst(view === 'inwork' && status && !shippedPicked ? found.filter(o => statusOf(o) === status) : found)
+  const hasOrders = inView.length > 0 || shippedAll.length > 0
   // Для просчётов: недавние (≤2 недель по последней активности) и архив.
   const recent = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) <= ARCHIVE_DAYS) : visible
   const archived = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) > ARCHIVE_DAYS) : []
 
   const card = (o: Order) => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} submitErr={submitErr?.id === o.id ? submitErr.text : null} />
-  const lanesOf = (list: Order[]) => lanes.map(lane => {
+  const lanesOf = (list: Order[]) => shownLanes.map(lane => {
     const l = list.filter(o => o.lane === lane)
     if (l.length === 0) return null
     return (
@@ -154,7 +163,7 @@ export default function OrdersView({ view }: { view: View }) {
           </div>
         )}
 
-        {!loading && data?.linked && inView.length > 0 && (
+        {!loading && data?.linked && hasOrders && (
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: наш № или ваш № заказа, сумма, материал" aria-label="Поиск заказа" className="pinput" style={{ marginBottom: 12, background: 'var(--surface)' }} />
         )}
         {!loading && data?.linked && visible.length === 0 && (
@@ -167,34 +176,36 @@ export default function OrdersView({ view }: { view: View }) {
             {recent.map(card)}
           </div>
         )}
-        {!loading && data?.linked && view !== 'quotes' && inView.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-            <button className={onlyUnpaid ? 'ghost' : 'primary'} onClick={() => setOnlyUnpaid(false)}>Все · {inView.length}</button>
-            <button className={onlyUnpaid ? 'primary' : 'ghost'} onClick={() => setOnlyUnpaid(true)} disabled={unpaid.length === 0}>
-              Не оплачены · {unpaid.length}{unpaidSum > 0 ? ` · ${fmtMoney(unpaidSum)}` : ''}
-            </button>
-            {otherView && otherUnpaid.length > 0 && (
-              <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
-                + ещё {otherUnpaid.length} не {otherUnpaid.length === 1 ? 'оплачен' : 'оплачены'} в{' '}
-                <Link href={otherView === 'shipped' ? '/partner/shipped' : '/partner/orders'} style={{ textDecoration: 'underline' }}>
-                  {otherView === 'shipped' ? '«Отгруженных»' : '«Заказах в работе»'}
-                </Link>
-                {' '}({otherUnpaid.map(o => o.number).join(', ')}) · в «Документах» — все {unpaid.length + otherUnpaid.length}
-              </span>
-            )}
-          </div>
-        )}
-        {!loading && data?.linked && view === 'inwork' && inView.length > 0 && (
-          <div className="fchips" role="tablist" aria-label="Фильтр по статусу">
+        {!loading && data?.linked && view === 'inwork' && hasOrders && (
+          <div className="fchips" role="tablist" aria-label="Фильтр по статусу" style={{ marginBottom: 10 }}>
             <button role="tab" aria-selected={!status} className={status ? '' : 'on'} onClick={() => setStatus(null)}>
-              Все статусы <span className="n">{found.length}</span>
+              Все в работе <span className="n">{foundInWork.length}</span>
             </button>
             {chips.map(c => (
               <button key={c.status} role="tab" aria-selected={status === c.status} className={status === c.status ? 'on' : ''}
+                disabled={c.count === 0 && status !== c.status} style={c.count === 0 && status !== c.status ? { opacity: .45, cursor: 'default' } : undefined}
                 onClick={() => setStatus(status === c.status ? null : c.status)}>
                 {c.status} <span className="n">{c.count}</span>
               </button>
             ))}
+            <button role="tab" aria-selected={shippedPicked} className={shippedPicked ? 'on' : ''}
+              onClick={() => setStatus(shippedPicked ? null : SHIPPED_STATUS)}>
+              {SHIPPED_STATUS} <span className="n">{shippedAll.filter(passes).length}</span>
+            </button>
+          </div>
+        )}
+        {!loading && data?.linked && view !== 'quotes' && hasOrders && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+            <button className={onlyUnpaid ? 'primary' : 'ghost'} aria-pressed={onlyUnpaid} onClick={() => setOnlyUnpaid(v => !v)} disabled={!onlyUnpaid && unpaid.length === 0}>
+              {onlyUnpaid ? '✓ ' : ''}Только неоплаченные · {unpaid.length}{unpaidSum > 0 ? ` · ${fmtMoney(unpaidSum)}` : ''}
+            </button>
+            {otherView && otherUnpaid.length > 0 && (
+              <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                + ещё {otherUnpaid.length} не {otherUnpaid.length === 1 ? 'оплачен' : 'оплачены'}{' '}
+                {otherView === 'shipped' ? 'среди отгруженных' : 'в работе'}
+                {otherUnpaid.length <= 5 ? ` (${otherUnpaid.map(o => o.number).join(', ')})` : ''} · в «Документах» — все {unpaid.length + otherUnpaid.length}
+              </span>
+            )}
           </div>
         )}
         {!loading && data?.linked && view !== 'quotes' && lanesOf(recent)}
