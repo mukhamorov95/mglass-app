@@ -16,6 +16,8 @@ import { cutoutProblems, cutoutServices, isCutoutService, normalizeCutouts, type
 import CutoutPicker from './CutoutPicker'
 import HolesPicker from './HolesPicker'
 import { heaterNeedsPsu, heaterSale, heatingService } from '@/lib/b2b/mirrorExtras'
+import { decorFrameLine } from '@/lib/mirror/frameDecor'
+import { FRAME_COLORS } from '@/lib/types'
 import { holeBand, holeProblems, holeServices, type HolePrice } from '@/lib/b2b/holePrices'
 import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
 import { FINANCE_FALLBACK, pickFinance, type Finance, type FinanceRow } from '@/lib/pricing/pickFinance'
@@ -244,6 +246,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [fmHoleGroups, setFmHoleGroups] = useState<HoleGroup[]>([])
   const [fmHeaterId, setFmHeaterId] = useState<number | null>(null)
   const [fmHeaterQty, setFmHeaterQty] = useState('1')
+  const [fmDecorId, setFmDecorId] = useState<number | null>(null)   // обрамление профилем (В5)
   const [fmExtrasError, setFmExtrasError] = useState<string | null>(null)
   // Стороны подсветки: по умолчанию весь периметр. Лента, профиль, рассеиватель и
   // мощность блока считаются от выбранных сторон.
@@ -919,8 +922,20 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     if (fmHoleGroups.length > 0 && holes.length < fmHoleGroups.length) problems.push('Отверстия: у группы не указан диаметр или количество')
     const heat = heater ? heatingService(heater, heaterN, factoryData.mirrorCfg.productionMarginPercent, factoryData.mirrorCfg.productionTaxPercent) : null
     if (heater && !heat) problems.push(`Подогрев «${heater.short_name ?? heater.name}»: нет ни цены, ни себестоимости`)
-    const services = [...cutoutServices(cut, cutoutPrices), ...holeServices(holes, fmMm, holePrices), ...(heat ? [heat] : [])]
-    return { cut, holes, heater, services, problems, perPiece: services.reduce((a, x) => a + x.value, 0) }
+    const decor = fmDecorId ? factoryData.decorFrames.find(f => f.id === fmDecorId) ?? null : null
+    const w = Number(fmW) || 0, h = Number(fmH) || 0
+    const frameLine = decor && w > 0 && h > 0
+      ? decorFrameLine(decor, factoryData.frameSupplierRows, w, h, {
+          marginPct: factoryData.mirrorCfg.productionMarginPercent, taxPct: factoryData.mirrorCfg.productionTaxPercent,
+          costMinuteRate: factoryData.minuteRates?.cost, saleMinuteRate: factoryData.minuteRates?.sale,
+        })
+      : null
+    if (frameLine?.problem) problems.push(frameLine.problem)
+    const services = [
+      ...cutoutServices(cut, cutoutPrices), ...holeServices(holes, fmMm, holePrices),
+      ...(heat ? [heat] : []), ...(frameLine?.service ? [frameLine.service] : []),
+    ]
+    return { cut, holes, heater, frameLine, services, problems, perPiece: services.reduce((a, x) => a + x.value, 0) }
   })()
 
   function handleAddFactoryItem() {
@@ -936,7 +951,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       fKind === 'fmirror' && fmExtras ? { services: fmExtras.services, cutoutGroups: fmExtras.cut, holes: fmExtras.holes } : undefined)
     setItems(prev => [...prev, { ...item, localId: crypto.randomUUID() }])
     setFComment('')
-    if (fKind === 'fmirror') { setFmW(''); setFmH(''); setFmQty('1'); setFmCutoutGroups([]); setFmHoleGroups([]); setFmHeaterId(null); setFmHeaterQty('1') }
+    if (fKind === 'fmirror') { setFmW(''); setFmH(''); setFmQty('1'); setFmCutoutGroups([]); setFmHoleGroups([]); setFmHeaterId(null); setFmHeaterQty('1'); setFmDecorId(null) }
     else { setFlW(''); setFlH(''); setFlQty('1') }
     setSavedOrderId(null)
   }
@@ -2229,6 +2244,27 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       <input type="checkbox" checked={fmFrame} onChange={e => setFmFrame(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
                       <span className={`text-[13px] font-medium ${fmFrame ? 'text-slate-800' : 'text-[#111110]'}`}>Металлическая рама (сварной каркас, покраска)</span>
                     </label>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2 space-y-1.5">
+                      <p className="text-[11px] font-medium text-slate-800">Обрамление профилем</p>
+                      <select value={fmDecorId ?? ''} onChange={e => setFmDecorId(e.target.value ? Number(e.target.value) : null)}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-2 min-h-[40px] lg:min-h-[34px] text-[13px] outline-none focus:border-slate-500">
+                        <option value="">Без обрамления</option>
+                        {factoryData.decorFrames.map(f => (
+                          <option key={f.id} value={f.id}>
+                            {[f.supplier, f.article ?? f.name, FRAME_COLORS.find(c => c.value === f.color)?.label, f.profile_size].filter(Boolean).join(' · ')}
+                          </option>
+                        ))}
+                      </select>
+                      {fmExtras?.frameLine && !fmExtras.frameLine.problem ? (
+                        <p className="text-[11px] text-[#6b6b66] leading-snug">
+                          {Math.round(fmExtras.frameLine.neededM * 100) / 100} м с запасом на запил · {fmExtras.frameLine.whips} хл. ·
+                          себест. {fmExtras.frameLine.cost.toLocaleString('ru-RU')} ₽ ({fmExtras.frameLine.costFrom === 'supplier' ? 'метр по прайсу поставщика' : 'метр из «Рамок зеркал»'}) ·
+                          продажа {fmExtras.frameLine.sale.toLocaleString('ru-RU')} ₽ ({fmExtras.frameLine.saleFrom === 'directory' ? 'из справочника' : 'продажная не задана — по марже производства'})
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-[#9a9a95]">Профиль и цвет — из «Рамок зеркал»; там же Вера привязывает строку прайса Ветро/АВ24.</p>
+                      )}
+                    </div>
                     <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-2 space-y-1.5">
                       <p className="text-[11px] font-medium text-orange-900">Подогрев</p>
                       <div className="flex items-center gap-1.5">

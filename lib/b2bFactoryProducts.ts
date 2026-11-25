@@ -12,7 +12,8 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { calcLoftFactory, type LoftRates, type LoftConstruction, type LoftHandle } from '@/lib/loftFactoryCalculator'
 import { getMatrixPrice, getMatrixNames, getAvailableMm, type GlassMatrixRow } from '@/lib/glassMatrix'
 import type { B2BOrderItem } from '@/lib/b2bCalculator'
-import type { B2BService } from '@/lib/types'
+import type { B2BService, MirrorFrame } from '@/lib/types'
+import type { SupplierRow } from '@/lib/mirror/frameDecor'
 
 export type PricingCfg = {
   productionTaxPercent: number
@@ -59,6 +60,11 @@ export type FactoryData = {
   loftGlasses: Material[]
   loftRates: LoftRates
   frameRates: Record<string, number>   // ставки металлической рамы зеркала (mirror_frame_rates)
+  // Обрамление (В5): рамки из «Рамок зеркал», строки прайса поставщика, к которым они
+  // привязаны, и ставки минуты цеха для сборки рамки.
+  decorFrames: (MirrorFrame & { supplier_row_id?: number | null })[]
+  frameSupplierRows: SupplierRow[]
+  minuteRates: { cost: number; sale: number } | null
 }
 
 function rowToCfg(r: Record<string, unknown> | null): PricingCfg {
@@ -75,7 +81,7 @@ function rowToCfg(r: Record<string, unknown> | null): PricingCfg {
 
 // Ленивая загрузка розничных справочников (нужна только при выборе изделия).
 export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> {
-  const [mats, svcs, fins, comps, mx, cfgs, lrs, mfr, sandRows] = await Promise.all([
+  const [mats, svcs, fins, comps, mx, cfgs, lrs, mfr, sandRows, frs, psr] = await Promise.all([
     sb.from('materials').select('*').eq('active', true),
     sb.from('services').select('*').eq('active', true),
     sb.from('financial_settings').select('*'),
@@ -85,7 +91,21 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
     sb.from('loft_rates').select('key, value'),
     sb.from('mirror_frame_rates').select('key, value'),   // ставки металлической рамы (таблица может ещё не быть — тогда data=null)
     sb.from('b2b_services').select('id, name, cost_price, type, active').ilike('name', '%пескостру%').eq('active', true),
+    sb.from('mirror_frames').select('*').eq('active', true).order('sort_order').order('name'),
+    sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
   ])
+  const decorFrames = ((frs.data ?? []) as (MirrorFrame & { supplier_row_id?: number | null })[])
+  const linked = [...new Set(decorFrames.map(f => f.supplier_row_id).filter((x): x is number => !!x))]
+  const { data: supRows } = linked.length
+    ? await sb.from('supplier_price_rows').select('id, supplier, article, name, color, unit, cost_price').in('id', linked)
+    : { data: [] }
+  const ps = psr.data as Record<string, number> | null
+  const minuteRates = ps && Number(ps.worker_monthly_salary) > 0
+    ? (() => {
+        const cost = Number(ps.worker_monthly_salary) / ((Number(ps.working_days_per_month) || 22) * (Number(ps.working_hours_per_day) || 8) * 60)
+        return { cost, sale: cost * (1 + (Number(ps.overhead_percent) || 0) / 100) * (1 + (Number(ps.default_margin_percent) || 0) / 100) }
+      })()
+    : null
   let retailMaterials = (mats.data ?? []) as Material[]
   const sandblastRates: SandblastRate[] = []
   for (const r of (sandRows.data ?? []) as { name: string; cost_price: number | null; type: string }[]) {
@@ -157,6 +177,9 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
     loftGlasses: retailMaterials.filter(m => m.category === 'стекло'),
     loftRates: Object.fromEntries(((lrs.data ?? []) as { key: string; value: number }[]).map(r => [r.key, Number(r.value)])),
     frameRates: Object.fromEntries(((mfr.data ?? []) as { key: string; value: number }[]).map(r => [r.key, Number(r.value)])),
+    decorFrames,
+    frameSupplierRows: (supRows ?? []) as SupplierRow[],
+    minuteRates,
   }
 }
 
