@@ -54,7 +54,7 @@ export async function notifyBoard(
 
     const text = boardMessage(kind, card, actor.name,
       os.map(o => ({ ref: o.custom_number?.trim() || `#${o.id}`, client: o.client_name })), Date.now(), comment)
-    const keyboard = [[{ text: 'Открыть табло', url: appUrl('/production-app/control') }]]
+    const keyboard = [[{ text: 'Открыть табло', url: appUrl('/production-app/control?view=tasks') }]]
     const sent = await Promise.allSettled([...chat.values()].map(id => sendMessage(id, text, keyboard)))
     const failed = sent.filter(s => s.status === 'rejected' || (s.value as { ok?: boolean } | null)?.ok === false).length
     if (failed) console.error(`[shop-board] notify ${kind} card=${card.id}: не дошло ${failed} из ${sent.length}`)

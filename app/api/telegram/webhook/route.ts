@@ -111,7 +111,7 @@ async function roleOf(userId: string): Promise<string | null> {
   return (data as { role?: string | null } | null)?.role ?? null
 }
 
-const BOARD_KB: InlineKeyboard = [[{ text: 'Открыть табло цеха', url: `${APP_URL}/production-app/control` }]]
+const BOARD_KB: InlineKeyboard = [[{ text: 'Открыть табло цеха', url: `${APP_URL}/production-app/control?view=tasks` }]]
 
 // Привязка по коду: «/start <код>» по ссылке из приложения или шесть цифр руками.
 // Неверные попытки считаем в сессии этого Telegram (у непривязанного своей строки нет,

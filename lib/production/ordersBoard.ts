@@ -2,6 +2,7 @@
 // кто и когда поставил каждый этап. Только расчёт, чтение из базы в маршруте.
 import { overdueDays, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
 import { mskDayKey } from '@/lib/time'
+import type { KanbanColumn, KanbanMaterial } from '@/lib/production/stageKanban'
 
 export type BoardTab = 'attention' | 'in_work' | 'packed' | 'shipped' | 'overdue' | 'history'
 export const BOARD_TABS: { key: BoardTab; label: string; hint: string; empty: string }[] = [
@@ -27,6 +28,8 @@ export type BoardOrder = {
   stage: OrderStage; state: OrderShipState; shipped_pieces: number; ship_day: string | null
   stages: BoardStageCount[]; last_mark: { at: string; by: string | null } | null; idle_days: number | null
   attention: string[]
+  // Табло цеха по этапам (/production-app/control)
+  column: KanbanColumn; materials: KanbanMaterial[]; ops_done: number; ops_total: number
 }
 
 const dayKey = (iso: string) => mskDayKey(new Date(iso))
