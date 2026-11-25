@@ -117,6 +117,9 @@ export default function InstallationsPage() {
   const [filterCrew, setFilterCrew] = useState<'all' | number>('all')
   const [filterStatus, setFilterStatus] = useState<'active' | 'done' | 'all'>('all')
   const [month, setMonth] = useState(TODAY.slice(0, 7))
+  // Пока грузится новый месяц, на экране не должно остаться выездов прошлого диапазона
+  // под заголовком нового: сентябрь показывал 11 выездов вместо 42, пока шёл запрос
+  const goMonth = (m: string) => { setLoading(true); setInsts([]); setMonth(m) }
   const [newCrew, setNewCrew] = useState('')
   const [crewsOpen, setCrewsOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -198,7 +201,10 @@ export default function InstallationsPage() {
     setFormOpen(true)
   }, [])
 
+  // Быстрое ‹ ‹: ответ за прошлый месяц может прийти позже и затереть нужный
+  const loadSeq = useRef(0)
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     try {
       const { data: { user } } = await sb.auth.getUser()
       if (user) {
@@ -215,9 +221,10 @@ export default function InstallationsPage() {
           .order('scheduled_date', { ascending: true, nullsFirst: false })
           .order('time_from', { ascending: true }),
       ])
+      if (seq !== loadSeq.current) return
       setCrews((cs ?? []) as Crew[])
       setInsts((rows ?? []) as Inst[])
-    } finally { setLoading(false) }
+    } finally { if (seq === loadSeq.current) setLoading(false) }
   }, [sb, month])
   useEffect(() => { void load() }, [load])
 
@@ -329,14 +336,16 @@ export default function InstallationsPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">🔧 Монтажи</h1>
-            <p className="text-[13px] text-[#9a9a95] mt-0.5">
-              На этой неделе: {weekInsts.length} · закрыто {weekInsts.filter(i => i.status === 'done').length}
-            </p>
+            {month === TODAY.slice(0, 7) && (
+              <p className="text-[13px] text-[#9a9a95] mt-0.5">
+                На этой неделе: {weekInsts.length} · закрыто {weekInsts.filter(i => i.status === 'done').length}
+              </p>
+            )}
             <div className="flex items-center gap-1.5 mt-2">
-              <button onClick={() => setMonth(m => shiftMonth(m, -1))} className="w-7 h-7 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]" aria-label="Предыдущий месяц">‹</button>
+              <button onClick={() => goMonth(shiftMonth(month, -1))} className="w-7 h-7 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]" aria-label="Предыдущий месяц">‹</button>
               <span className="text-[13px] font-semibold text-[#111110] min-w-[120px] text-center">{MONTHS[Number(month.slice(5)) - 1]} {month.slice(0, 4)}</span>
-              <button onClick={() => setMonth(m => shiftMonth(m, 1))} className="w-7 h-7 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]" aria-label="Следующий месяц">›</button>
-              {month !== TODAY.slice(0, 7) && <button onClick={() => setMonth(TODAY.slice(0, 7))} className="text-[11px] text-[#9a9a95] hover:text-[#111110] ml-1">сегодня</button>}
+              <button onClick={() => goMonth(shiftMonth(month, 1))} className="w-7 h-7 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]" aria-label="Следующий месяц">›</button>
+              {month !== TODAY.slice(0, 7) && <button onClick={() => goMonth(TODAY.slice(0, 7))} className="text-[11px] text-[#9a9a95] hover:text-[#111110] ml-1">сегодня</button>}
             </div>
             <p className="text-[12px] text-[#6b6b66] mt-1.5">
               Выездов за месяц {monthInsts.length}: монтажей {kindCount('install')} · рекламаций <span className={kindCount('claim') ? 'text-red-700 font-semibold' : ''}>{kindCount('claim')}</span> · доделок {kindCount('rework')} · этапов {kindCount('stage')}
