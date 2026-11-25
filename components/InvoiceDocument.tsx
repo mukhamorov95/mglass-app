@@ -5,7 +5,7 @@ import QRCode from 'qrcode'
 import { SELLER_B2B } from '@/lib/companyRequisites'
 import { paymentQrStringFor } from '@/lib/paymentQr'
 import { rublesInWords } from '@/lib/numToWords'
-import { computeInvoiceTotals, itemName, type InvoiceOrder, type InvoiceRequisites } from '@/lib/b2b/invoiceMath'
+import { computeInvoiceTotals, itemName, paymentPurpose, type InvoiceOrder, type InvoiceRequisites } from '@/lib/b2b/invoiceMath'
 
 // Единый рендер «Счёт-спецификации» — один источник правды для документа.
 // Используют менеджерская страница (/b2b-quotes/[id]/invoice) и кабинет партнёра
@@ -27,17 +27,18 @@ function parseNotes(notes: string | null): Record<string, unknown> {
 
 const InvoiceDocument = forwardRef<HTMLDivElement, {
   order: InvoiceOrder; requisites: InvoiceRequisites; buyerName: string
-  // Объединённый счёт: «Оплата заказов № …» — строкой в документе и назначением платежа в QR.
-  basis?: string | null
-}>(function InvoiceDocument({ order, requisites: req, buyerName, basis }, ref) {
+  // Объединённый счёт: «Оплата заказов № …» — строкой в документе, номера заказов — в назначении платежа QR.
+  basis?: string | null; orderNos?: string[]
+}>(function InvoiceDocument({ order, requisites: req, buyerName, basis, orderNos }, ref) {
   const totals = useMemo(() => computeInvoiceTotals(order), [order])
   const [qr, setQr] = useState('')
 
   const num = order.custom_number?.trim() || String(order.id).padStart(5, '0')
+  const nos = (orderNos ?? []).join(',')
   useEffect(() => {
-    const s = paymentQrStringFor(SELLER_B2B, totals.totalPay, basis ? `${basis} (счёт № ${num})` : `Оплата по счёту-спецификации № ${num}`)
+    const s = paymentQrStringFor(SELLER_B2B, totals.totalPay, paymentPurpose(num, nos ? nos.split(',') : []))
     QRCode.toDataURL(s, { margin: 0, width: 240 }).then(setQr).catch(() => {})
-  }, [totals.totalPay, num, basis])
+  }, [totals.totalPay, num, nos])
 
   const notes = parseNotes(order.notes)
   const quoteDate = (notes.quote_date as string) || order.created_at

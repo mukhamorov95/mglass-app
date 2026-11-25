@@ -92,7 +92,7 @@ export default function PartnerCombinedInvoicePage({ params }: { params: Promise
         {pdfErr && <span style={{ flexBasis: '100%', fontSize: 12.5, color: '#b91c1c' }}>{pdfErr}</span>}
       </div>
 
-      <InvoiceDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} basis={data.basis ?? null} />
+      <InvoiceDocument ref={docRef} order={data.order} requisites={req} buyerName={buyerName} basis={data.basis ?? null} orderNos={data.orders.map(o => o.no)} />
     </>
   )
 }

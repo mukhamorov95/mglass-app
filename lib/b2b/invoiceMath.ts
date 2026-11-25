@@ -87,3 +87,14 @@ export function invoiceBasis(orders: { no: string; theirNo?: string | null }[]):
   const parts = orders.map(o => `№ ${o.no}${o.theirNo ? ` (ваш № ${o.theirNo})` : ''}`)
   return `Оплата ${orders.length === 1 ? 'заказа' : 'заказов'} ${parts.join(', ')}`
 }
+
+// Назначение платежа в QR режется на 210 знаках. Номер счёта — первым: по нему выписка
+// находит счёт, а список из 28 заказов целиком не помещается. Номера заказов — сколько влезет.
+export const PURPOSE_MAX = 200
+export function paymentPurpose(invoiceNo: string, orderNos: string[] = []): string {
+  const head = `Оплата по счёту-спецификации № ${invoiceNo}`
+  if (orderNos.length === 0) return head
+  const text = (n: number) => `${head}. Заказы № ${orderNos.slice(0, n).join(', ')}${n < orderNos.length ? ` и ещё ${orderNos.length - n}` : ''}`
+  for (let n = orderNos.length; n > 0; n--) if (text(n).length <= PURPOSE_MAX) return text(n)
+  return head
+}
