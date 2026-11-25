@@ -51,6 +51,7 @@ const BUYER_LOGISTIKA: NavItem[] = [
 const BUYER_SPRAVOCHNIKI: NavItem[] = [
   { href: '/admin/glass-prices',     label: 'Стекло',             icon: '🔷', indent: true },
   { href: '/admin/facet',            label: 'Фацет',              icon: '💎', indent: true },
+  { href: '/admin/cutouts',          label: 'Вырезы',             icon: '✂️', indent: true },
   { href: '/admin/mirror-pricing',   label: 'Себестоимость зеркал', icon: '💡', indent: true },
   { href: '/admin/mirror-lighting',  label: 'Компоненты подсветки', icon: '🔌', indent: true },
   { href: '/admin/mirror-frames',    label: 'Рамки зеркал',      icon: '🖼️', indent: true },
@@ -203,6 +204,7 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
   { href: '/admin/glass-prices',    label: 'Стекло',           icon: '🔷', indent: true },
   { href: '/admin/facet',           label: 'Фацет',            icon: '💎', indent: true },
   { href: '/admin/b2b-rates',       label: 'Стекло — ставки',  icon: '🧮', indent: true },
+  { href: '/admin/cutouts',         label: 'Вырезы',           icon: '✂️', indent: true },
   { href: '/admin/mirror-pricing',  label: 'Себестоимость зеркал', icon: '💡', indent: true },
   { href: '/admin/mirror-lighting', label: 'Компоненты подсветки', icon: '🔌', indent: true },
   { href: '/admin/mirror-frames',   label: 'Рамки зеркал',     icon: '🖼️', indent: true },
@@ -444,7 +446,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services', '/admin/quote-quality'])) open.push('system')
   } else {
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/b2b-rates', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/b2b-rates', '/admin/cutouts', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement', '/purchasing'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-flow', '/admin/b2b-services', '/admin/b2b-surcharges', '/admin/sandblast-cost', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
     if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/measurer-earnings', '/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity', '/commercial/activity'])) open.push('operations', ...activeSections(pathname, ADMIN_OPERATIONS))
   }
@@ -458,7 +460,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/inventory', '/admin/stock-control'])) open.push('buyer_sklad')
     if (inSection(pathname, ['/purchasing', '/admin/procurement', '/admin/suppliers', '/admin/supplier-catalog', '/admin/visualizer-pricing', '/admin/shower-hardware', '/admin/hardware'])) open.push('buyer_zakupki')
     if (inSection(pathname, ['/admin/route-sheet', '/b2b-orders'])) open.push('buyer_logistika')
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/cutouts', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')
     if (inSection(pathname, ['/admin/guide'])) open.push('buyer_pomosh')
     if (inSection(pathname, ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-cutting'])) open.push('buyer_b2b_mglass')
     if (inSection(pathname, ['/production-app'])) open.push('buyer_production')

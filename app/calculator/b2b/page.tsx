@@ -12,6 +12,8 @@ import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
+import { cutoutProblems, isCutoutService, normalizeCutouts, type CutoutGroup } from '@/lib/b2b/cutouts'
+import CutoutPicker from './CutoutPicker'
 import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
 import { FINANCE_FALLBACK, pickFinance, type Finance, type FinanceRow } from '@/lib/pricing/pickFinance'
 import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
@@ -275,7 +277,8 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
   const [fHoleGroups, setFHoleGroups] = useState<HoleGroup[]>([])
-  const [fCutouts, setFCutouts]       = useState(0)
+  const [fCutoutGroups, setFCutoutGroups] = useState<CutoutGroup[]>([])
+  const [fCutoutError, setFCutoutError] = useState<string | null>(null)
   const [fCurved, setFCurved]         = useState(false)
   const [fSandblast, setFSandblast]   = useState(false)
   const [fMinPrice, setFMinPrice]     = useState(true)
@@ -316,7 +319,8 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
   const [eHoleGroups, setEHoleGroups] = useState<HoleGroup[]>([])
-  const [eCutouts, setECutouts]       = useState(0)
+  const [eCutouts, setECutouts]       = useState(0)   // старые позиции: число вырезов без вида
+  const [eCutoutGroups, setECutoutGroups] = useState<CutoutGroup[]>([])
   const [eCurved, setECurved]         = useState(false)
   const [eSandblast, setESandblast]   = useState(false)
   const [eMinPrice, setEMinPrice]     = useState(true)
@@ -707,7 +711,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   // Триплекс не показываем в списке доп-услуг — он ставится отдельной кнопкой
   // сверху. Но сам per_m2-ряд остаётся активным как источник цены триплексации
   // (см. triplexPrice), поэтому прячем его только из рендера списка.
-  const visibleServices = services.filter(s => !(s.type === 'per_m2' && /триплекс/i.test(s.name)))
+  const visibleServices = services.filter(s => !(s.type === 'per_m2' && /триплекс/i.test(s.name)) && !isCutoutService(s as B2BService & { code?: string }))
+  // Вырезы — свои строки справочника (cutout_*), выбираются не галочкой, а видом и числом.
+  const cutoutPrices = services.filter(s => isCutoutService(s as B2BService & { code?: string }))
+  const cutoutIds = new Set(cutoutPrices.map(s => s.id))
 
   function handleMaterialChange(id: number) {
     const mat = materials.find(m => m.id === id)
@@ -945,7 +952,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
         applyMinPrice: fMinPrice,
         comment: [p.label, p.comment, p.needsReview ? 'проверить размер' : ''].filter(Boolean).join(' · ') || undefined,
         dismissedSurcharges: new Set<number>(),
-      }, { facetPrices, surchargeRules, rates })
+      }, { facetPrices, surchargeRules, rates, cutoutPrices })
       return { ...calc, localId: crypto.randomUUID() }
     })
     setItems(prev => [...prev, ...added])
@@ -959,24 +966,29 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     const h = Number(fHeight) || 0
     const q = Number(fQty) || 1
     if (w <= 0 || h <= 0) return
+    const cutGroups = normalizeCutouts(fCutoutGroups)
+    const cutProblems = cutoutProblems(cutGroups, cutoutPrices)
+    if (cutProblems.length) { setFCutoutError(`Позиция не добавлена — ${cutProblems.join('; ')}. Цены вырезов ставятся в «Справочнике вырезов».`); return }
+    setFCutoutError(null)
 
     const calc = computeQuoteItem({
       material: selectedMaterial, width: w, height: h, quantity: q,
       wastePercent: fWaste, hasTempering: fTempering,
       resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
       hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
-      hasHoles: fHoles, holes: fHoles ? normalizeHoles(fHoleGroups) : [], hasCutouts: fCutouts > 0, cutouts: fCutouts, shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
+      hasHoles: fHoles, holes: fHoles ? normalizeHoles(fHoleGroups) : [], cutoutGroups: cutGroups, shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
       hasTriplex: fTriplex, triplexLayers: fTriplexLayers, triplexPrice,
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
       dismissedSurcharges: fDismissedSurcharges,
-    }, { facetPrices, surchargeRules, rates })
+    }, { facetPrices, surchargeRules, rates, cutoutPrices })
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID() }])
     setFWidth('')
     setFHeight('')
     setFQty('1')
     setFComment('')
     setFHoles(false)
+    setFCutoutGroups([])
     setFCurved(false)
     setFMinPrice(true)
     setFTriplex(false)
@@ -1139,14 +1151,16 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       wastePercent: m.passthrough ? 10 : m.waste_percent, hasTempering: over?.hasTempering ?? item.hasTempering,
       resolvedServices: resolveSvcs(rawSvcs, fTierSel, fFilmSel),
       hasFacet: item.hasFacet ?? false, facetTypeMm: item.hasFacet ? (item.facetTypeMm ?? 10) : null,
-      hasHoles: item.hasHoles ?? false, shape: item.shape === 'curved' ? 'curved' : 'rect',
+      hasHoles: item.hasHoles ?? false, holes: item.holes ?? [], hasSandblast: item.hasSandblast ?? false,
+      hasCutouts: item.hasCutouts ?? false, cutouts: item.cutouts ?? 0, cutoutGroups: item.cutoutGroups,
+      shape: item.shape === 'curved' ? 'curved' : 'rect',
       hasTriplex: item.hasTriplex ?? false, triplexLayers: layers, triplexPrice,
       triplexExtraGlasses: item.hasTriplex
         ? triplexExtras(m, layers, item.triplexGlasses?.[0]?.materialId ?? null, item.triplexGlasses?.[1]?.materialId ?? null)
         : [],
       applyMinPrice: item.applyMinPrice !== false, comment: item.comment || undefined,
       dismissedSurcharges: new Set<number>(),
-    }, { facetPrices, surchargeRules, rates })
+    }, { facetPrices, surchargeRules, rates, cutoutPrices })
     return { ...calc, localId: item.localId, manualTotal: item.manualTotal ?? null }
   }
 
@@ -1216,7 +1230,8 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
     setEHoleGroups(normalizeHoles(item.holes))
-    setECutouts(Math.max(0, Number(item.cutouts) || 0))
+    setECutoutGroups(normalizeCutouts(item.cutoutGroups))
+    setECutouts(item.cutoutGroups?.length ? 0 : Math.max(0, Number(item.cutouts) || 0))
     setESandblast(item.hasSandblast ?? false)
     setECurved(item.shape === 'curved')
     setETriplex(item.hasTriplex ?? false)
@@ -1225,7 +1240,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     setETriplexMat3(item.triplexGlasses?.[1]?.materialId ?? null)
     // Только реальные услуги (id > 0). Надбавки (синтетические отрицательные id)
     // не чекбоксы — они пересчитываются заново от габаритов при сохранении.
-    setEServiceIds(item.services.filter(s => s.id > 0).map(s => s.id))
+    setEServiceIds(item.services.filter(s => s.id > 0 && !cutoutIds.has(s.id)).map(s => s.id))
     setEDismissedSurcharges(new Set())
     setEComment(item.comment ?? '')
     setEditingLocalId(item.localId)
@@ -1242,17 +1257,19 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     const q = Number(eQty) || 1
     if (w <= 0 || h <= 0) return
     const svcs = services.filter(s => eServiceIds.includes(s.id))
+    const eCutGroups = normalizeCutouts(eCutoutGroups)
+    if (cutoutProblems(eCutGroups, cutoutPrices).length) return
     const calc = computeQuoteItem({
       material: mat, width: w, height: h, quantity: q,
       wastePercent: eWaste, hasTempering: eTempering,
       resolvedServices: resolveSvcs(svcs, eTierSel, eFilmSel),
       hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-      hasHoles: eHoles, holes: eHoles ? normalizeHoles(eHoleGroups) : [], hasCutouts: eCutouts > 0, cutouts: eCutouts, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
+      hasHoles: eHoles, holes: eHoles ? normalizeHoles(eHoleGroups) : [], hasCutouts: eCutouts > 0, cutouts: eCutouts, cutoutGroups: eCutGroups, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
       hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
       dismissedSurcharges: eDismissedSurcharges,
-    }, { facetPrices, surchargeRules, rates })
+    }, { facetPrices, surchargeRules, rates, cutoutPrices })
     setItems(prev => prev.map(i => i.localId === editingLocalId
       // Договорную цену позиции сохраняем: менеджер согласовал её с клиентом,
       // а правка комментария или количества её молча откатывала к расчётной.
@@ -2492,14 +2509,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                 <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
                   <p className="text-[11px] font-medium text-blue-900 leading-tight" title="Отверстия и вырезы делает один человек — сверловщик">Сверловка</p>
                   <TreatToggle on={fHoles} onChange={setFHoles} label="Отверстия" tone="blue" />
-                  <label className={`flex items-center gap-2 min-h-[44px] lg:min-h-[36px] px-2.5 py-1.5 lg:py-0 border rounded-lg ${
-                    fCutouts > 0 ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] bg-white'}`}>
-                    <input type="number" min="0" value={fCutouts || ''} placeholder="0"
-                      onChange={e => setFCutouts(Math.max(0, Number(e.target.value) || 0))}
-                      className="w-9 bg-transparent text-[13px] outline-none flex-shrink-0" />
-                    <span className={`text-[13px] leading-tight min-w-0 ${fCutouts > 0 ? 'text-blue-700 font-semibold' : 'text-[#6b6b66] font-medium'}`}>Вырезы</span>
-                  </label>
+                  <span className={`text-[12px] leading-tight ${fCutoutGroups.length ? 'text-blue-700 font-semibold' : 'text-[#6b6b66]'}`}>
+                    {fCutoutGroups.length ? `Вырезы: ${fCutoutGroups.reduce((a, g) => a + (g.n || 0), 0)} на деталь` : 'Вырезы — ниже'}
+                  </span>
                 </div>
+                <CutoutPicker groups={fCutoutGroups} onChange={g => { setFCutoutGroups(g); setFCutoutError(null) }} prices={cutoutPrices} canEditPrices={isAdmin} />
+                {fCutoutError && <p className="text-[12px] text-red-600 leading-snug">{fCutoutError}</p>}
 
               {/* Подробности включённых обработок — под сеткой во всю ширину.
                   Раньше они раскрывались внутри ячейки и ломали ряды. */}
@@ -3653,7 +3668,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
       const eAvailThick    = [...new Set(eCatMats.map(m => m.thickness))].sort((a, b) => a - b)
       const eThickMats     = sortByPriority(eCatMats.filter(m => m.thickness === eThickness))
       const eSelectedMat   = materials.find(m => m.id === eMatId) ?? null
-      const eCanSave       = !!eSelectedMat && Number(eWidth) > 0 && Number(eHeight) > 0 && (eSelectedMat.sale_price ?? 0) > 0
+      const eCanSave       = !!eSelectedMat && Number(eWidth) > 0 && Number(eHeight) > 0 && (eSelectedMat.sale_price ?? 0) > 0 && cutoutProblems(normalizeCutouts(eCutoutGroups), cutoutPrices).length === 0
       // Живой пересчёт: сумма позиции обновляется по мере изменения полей.
       const ePreviewItem   = eCanSave
         ? { ...computeQuoteItem({
@@ -3661,12 +3676,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
             wastePercent: eWaste, hasTempering: eTempering,
             resolvedServices: resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
             hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-            hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
+            hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast, cutoutGroups: eCutoutGroups,
             hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
             triplexExtraGlasses: eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
             applyMinPrice: eMinPrice,
             dismissedSurcharges: eDismissedSurcharges,
-          }, { facetPrices, surchargeRules, rates }), localId: '' }
+          }, { facetPrices, surchargeRules, rates, cutoutPrices }), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
       const ePreviewMargin = ePreviewItem ? itemMarginPct(ePreviewItem, discount) : null
@@ -3796,6 +3811,14 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                         className="w-3.5 h-3.5 rounded accent-[#111110]" />
                       <span className={`text-[13px] ${eHoles ? 'text-blue-700 font-medium' : 'text-[#111110]'}`}>Сверловка</span>
                     </label>
+                    <div className="basis-full rounded-lg border border-blue-200 bg-blue-50/40 p-2 space-y-1.5">
+                      <p className="text-[11px] font-medium text-blue-900">Вырезы</p>
+                      {eCutouts > 0 && eCutoutGroups.length === 0 && (
+                        <p className="text-[11px] text-amber-700">В позиции {eCutouts} выр. без вида и цены — укажите вид, и они посчитаются.</p>
+                      )}
+                      <CutoutPicker groups={eCutoutGroups} onChange={g => { setECutoutGroups(g); if (g.length) setECutouts(0) }} prices={cutoutPrices} canEditPrices={isAdmin} />
+                      {(() => { const pr = cutoutProblems(normalizeCutouts(eCutoutGroups), cutoutPrices); return pr.length ? <p className="text-[11px] text-red-600">Не сохранится: {pr.join('; ')}</p> : null })()}
+                    </div>
                     <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eCurved ? 'border-teal-300 bg-teal-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                       <input type="checkbox" checked={eCurved} onChange={e => setECurved(e.target.checked)}
                         className="w-3.5 h-3.5 rounded accent-[#111110]" />

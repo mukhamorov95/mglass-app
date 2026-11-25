@@ -140,6 +140,7 @@ const B2B: NavEntry[] = [
   { groupLabel: 'Управление' },
   { sectionLabel: 'Стекло', icon: '🔷', items: [
     { href: '/admin/glass-prices', label: 'Стекло',          icon: '🔷' },
+    { href: '/admin/cutouts',      label: 'Вырезы',          icon: '✂️' },
     { href: '/admin/b2b-rates',    label: 'Стекло — ставки', icon: '🧮' },
     { href: '/admin/facet',        label: 'Фацет',           icon: '💎' },
   ] },
