@@ -17,6 +17,9 @@ type Invoice = {
   paid_at: string | null
   comment: string | null
   created_by_name: string | null
+  payment_doc_path?: string | null
+  payment_doc_at?: string | null
+  payment_doc_by?: string | null
   // Производные от payments (A23): истина об оплате — здесь, не во флажке status.
   paid: number
   remainder: number
@@ -157,6 +160,13 @@ export default function InvoicesClient() {
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">
                         просрочен {daysSince(inv.issued_at)} дн.
                       </span>
+                    )}
+                    {!cancelled && inv.payment_doc_path && inv.derivedStatus !== 'paid' && (
+                      <a href={`/api/partner/invoices/${inv.id}/payment-doc`} target="_blank" rel="noreferrer"
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 hover:underline"
+                        title={`Приложил ${inv.payment_doc_by ?? 'клиент'}. Оплатой счёт сделает поступление денег по выписке.`}>
+                        📎 платёжка клиента {date(inv.payment_doc_at ?? null)}
+                      </a>
                     )}
                     {diverges && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200"

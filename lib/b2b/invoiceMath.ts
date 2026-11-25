@@ -54,3 +54,28 @@ export function computeInvoiceTotals(order: InvoiceOrder) {
   }
   return { items, discount, totalBase, totalPay, vat, lineSums, discountSum: totalBase - totalPay }
 }
+
+// Объединённый счёт на несколько заказов одним документом (кабинет, 25.11.2026): строки всех
+// заказов, у каждой — договорная сумма строки своего заказа (скидки и округления — как в счёте
+// заказа), под строкой — номер заказа. Итог = сумма итогов заказов, сходится копейка в копейку.
+export function mergeInvoiceOrders(
+  orders: (InvoiceOrder & { no: string })[],
+  head: { id: number; invoiceNo: string; issuedAt: string },
+): InvoiceOrder {
+  const items: InvoiceOrderItem[] = []
+  let total = 0
+  for (const o of orders) {
+    const t = computeInvoiceTotals(o)
+    total += t.totalPay
+    t.items.forEach((it, i) => items.push({
+      ...it, manualTotal: t.lineSums[i],
+      comment: [`заказ ${o.no}`, it.comment].filter(Boolean).join(' · '),
+    }))
+  }
+  total = Math.round(total * 100) / 100
+  return {
+    id: head.id, custom_number: head.invoiceNo, discount_percent: 0, items,
+    total_sale_inc_vat: total, total_after_discount: total,
+    notes: JSON.stringify({ quote_date: head.issuedAt }), created_at: head.issuedAt,
+  }
+}
