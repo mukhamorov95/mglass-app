@@ -12,9 +12,11 @@ import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
-import { cutoutProblems, isCutoutService, normalizeCutouts, type CutoutGroup } from '@/lib/b2b/cutouts'
+import { cutoutProblems, cutoutServices, isCutoutService, normalizeCutouts, type CutoutGroup } from '@/lib/b2b/cutouts'
 import CutoutPicker from './CutoutPicker'
-import { holeBand, holeProblems, type HolePrice } from '@/lib/b2b/holePrices'
+import HolesPicker from './HolesPicker'
+import { heaterNeedsPsu, heaterSale, heatingService } from '@/lib/b2b/mirrorExtras'
+import { holeBand, holeProblems, holeServices, type HolePrice } from '@/lib/b2b/holePrices'
 import { DEFAULT_B2B_RATES, marginTone, ratesFromRows, ratesMissingNote, type B2BRates, type RateRow } from '@/lib/b2b/rates'
 import { FINANCE_FALLBACK, pickFinance, type Finance, type FinanceRow } from '@/lib/pricing/pickFinance'
 import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
@@ -28,7 +30,7 @@ import { toast, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { confirmDialog, promptDialog } from '@/lib/dialog'
 import ClientPicker, { type ClientOption } from '@/components/ClientPicker'
 import { CUSTOMER_KINDS, LEAD_REPLY_TEMPLATES, buildClientQuoteText, leadNotesPatch, noClientName, noClientSaveBlocker, readQuoteLead, type CustomerKind } from '@/lib/b2b/leadQuote'
-import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
+import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, heaterOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
 // 12 мм не делаем — решение владельца 14.10.2026 («мы с 12 мм не работаем»).
@@ -237,6 +239,12 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   const [fmLighting, setFmLighting] = useState(true)
   const [fmFrame, setFmFrame]     = useState(false)
   const [fmButton, setFmButton]   = useState<'none' | 'sensor' | 'wave'>('none')
+  // Вырезы, отверстия и подогрев зеркала — строки сверху цены изделия (В2/В3, 25.11.2026)
+  const [fmCutoutGroups, setFmCutoutGroups] = useState<CutoutGroup[]>([])
+  const [fmHoleGroups, setFmHoleGroups] = useState<HoleGroup[]>([])
+  const [fmHeaterId, setFmHeaterId] = useState<number | null>(null)
+  const [fmHeaterQty, setFmHeaterQty] = useState('1')
+  const [fmExtrasError, setFmExtrasError] = useState<string | null>(null)
   // Стороны подсветки: по умолчанию весь периметр. Лента, профиль, рассеиватель и
   // мощность блока считаются от выбранных сторон.
   const [fmSides, setFmSides] = useState<LightSides>({ ...ALL_SIDES })
@@ -897,17 +905,38 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
     } catch { setFlParseNote('ошибка чтения файла') } finally { setFlParsing(false) }
   }
 
+  // Строки сверху цены зеркала: вырезы, отверстия (по толщине зеркала), подогрев.
+  const fmExtras = (() => {
+    if (fKind !== 'fmirror' || !factoryData) return null
+    const cut = normalizeCutouts(fmCutoutGroups)
+    const holes = normalizeHoles(fmHoleGroups)
+    const heater = fmHeaterId ? heaterOptions(factoryData).find(h => h.id === fmHeaterId) ?? null : null
+    const heaterN = heater ? Math.max(1, Math.round(Number(fmHeaterQty) || 1)) : 0
+    const problems = [
+      ...cutoutProblems(cut, cutoutPrices),
+      ...holeProblems(fmHoleGroups.length > 0, holes, fmMm, holePrices),
+    ]
+    if (fmHoleGroups.length > 0 && holes.length < fmHoleGroups.length) problems.push('Отверстия: у группы не указан диаметр или количество')
+    const heat = heater ? heatingService(heater, heaterN, factoryData.mirrorCfg.productionMarginPercent, factoryData.mirrorCfg.productionTaxPercent) : null
+    if (heater && !heat) problems.push(`Подогрев «${heater.short_name ?? heater.name}»: нет ни цены, ни себестоимости`)
+    const services = [...cutoutServices(cut, cutoutPrices), ...holeServices(holes, fmMm, holePrices), ...(heat ? [heat] : [])]
+    return { cut, holes, heater, services, problems, perPiece: services.reduce((a, x) => a + x.value, 0) }
+  })()
+
   function handleAddFactoryItem() {
     if (!factoryQuote) return
+    if (fmExtras?.problems.length) { setFmExtrasError(`Изделие не добавлено — ${fmExtras.problems.join('; ')}.`); return }
+    setFmExtrasError(null)
     // Без габаритов изделие молча выпадает из раскроя, загрузки станций и
     // потребности в материале, а в КП уходит «0 × 0» — не пускаем (как в
     // handleAddItem для листовых материалов).
     if (!(factoryQuote.widthMm > 0) || !(factoryQuote.heightMm > 0)) return
     const qty = Number(fKind === 'fmirror' ? fmQty : flQty) || 1
-    const item = factoryQuoteToItem(factoryQuote, qty, fComment || undefined)
+    const item = factoryQuoteToItem(factoryQuote, qty, fComment || undefined,
+      fKind === 'fmirror' && fmExtras ? { services: fmExtras.services, cutoutGroups: fmExtras.cut, holes: fmExtras.holes } : undefined)
     setItems(prev => [...prev, { ...item, localId: crypto.randomUUID() }])
     setFComment('')
-    if (fKind === 'fmirror') { setFmW(''); setFmH(''); setFmQty('1') }
+    if (fKind === 'fmirror') { setFmW(''); setFmH(''); setFmQty('1'); setFmCutoutGroups([]); setFmHoleGroups([]); setFmHeaterId(null); setFmHeaterQty('1') }
     else { setFlW(''); setFlH(''); setFlQty('1') }
     setSavedOrderId(null)
   }
@@ -2200,6 +2229,42 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       <input type="checkbox" checked={fmFrame} onChange={e => setFmFrame(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
                       <span className={`text-[13px] font-medium ${fmFrame ? 'text-slate-800' : 'text-[#111110]'}`}>Металлическая рама (сварной каркас, покраска)</span>
                     </label>
+                    <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-2 space-y-1.5">
+                      <p className="text-[11px] font-medium text-orange-900">Подогрев</p>
+                      <div className="flex items-center gap-1.5">
+                        <select value={fmHeaterId ?? ''} onChange={e => setFmHeaterId(e.target.value ? Number(e.target.value) : null)}
+                          className="min-w-0 flex-1 bg-white border border-orange-200 rounded-lg px-2 min-h-[40px] lg:min-h-[34px] text-[13px] outline-none focus:border-orange-500">
+                          <option value="">Без подогрева</option>
+                          {heaterOptions(factoryData).map(h => (
+                            <option key={h.id} value={h.id}>{h.name}</option>
+                          ))}
+                        </select>
+                        {fmHeaterId && (
+                          <input type="number" min={1} inputMode="numeric" value={fmHeaterQty} onChange={e => setFmHeaterQty(e.target.value)} aria-label="Подогревов на зеркало"
+                            className="w-14 bg-white border border-orange-200 rounded-lg px-2 min-h-[40px] lg:min-h-[34px] text-[13px] text-right outline-none focus:border-orange-500" />
+                        )}
+                      </div>
+                      {(() => {
+                        const h = fmHeaterId ? heaterOptions(factoryData).find(x => x.id === fmHeaterId) : null
+                        if (!h) return <p className="text-[11px] text-[#9a9a95]">Ставится и на зеркало без подсветки. Список — «Компоненты подсветки → Подогрев».</p>
+                        const s = heaterSale(h, factoryData.mirrorCfg.productionMarginPercent, factoryData.mirrorCfg.productionTaxPercent)
+                        return (
+                          <>
+                            <p className="text-[11px] text-[#6b6b66]">
+                              {s.sale.toLocaleString('ru-RU')} ₽/шт · {s.fromDirectory ? 'продажа из справочника' : 'продажная цена в справочнике не задана — считаю по марже производства'}
+                            </p>
+                            {heaterNeedsPsu(h, fmLighting) && (
+                              <p className="text-[11px] text-amber-700">Подогрев {h.voltage} V: без подсветки блок питания не подобран и в цену не вошёл — возьмите 220 V или добавьте блок.</p>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </div>
+                    <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-2 space-y-1.5">
+                      <p className="text-[11px] font-medium text-blue-900">Вырезы и отверстия</p>
+                      <CutoutPicker groups={fmCutoutGroups} onChange={g => { setFmCutoutGroups(g); setFmExtrasError(null) }} prices={cutoutPrices} canEditPrices={isAdmin} />
+                      <HolesPicker groups={fmHoleGroups} onChange={g => { setFmHoleGroups(g); setFmExtrasError(null) }} thickness={fmMm} prices={holePrices} />
+                    </div>
                     {fmLighting && (
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -2360,6 +2425,18 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                       <span className="text-[#111110]">Цена для сторонних компаний <span className="text-[10px] text-[#9a9a95] font-normal">(внешний B2B)</span></span>
                       <span className="font-mono text-emerald-700">{factoryQuote.prodPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
+                    {fKind === 'fmirror' && fmExtras && fmExtras.services.length > 0 && (
+                      <div className="border-t border-[#f0f0ec] pt-1 space-y-0.5">
+                        {fmExtras.services.map(x => (
+                          <div key={x.id} className="flex justify-between text-[12px]">
+                            <span className="text-[#6b6b66]">+ {x.name}</span>
+                            <span className="font-mono text-[#111110]">{x.value.toLocaleString('ru-RU')} ₽/шт</span>
+                          </div>
+                        ))}
+                        <p className="text-[10px] text-[#9a9a95]">Идут сверху цены изделия — и для M-Glass, и для сторонних.</p>
+                      </div>
+                    )}
+                    {fKind === 'fmirror' && fmExtrasError && <p className="text-[12px] text-red-600 leading-snug">{fmExtrasError}</p>}
                     <p className="text-[10px] text-[#9a9a95]">{factoryQuote.spec}</p>
                     {isAdmin && !!factoryQuote.costLines?.length && (
                       <div className="pt-1 border-t border-[#f0f0ec]">
