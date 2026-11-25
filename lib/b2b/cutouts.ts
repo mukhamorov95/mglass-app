@@ -5,12 +5,13 @@ import type { B2BService } from '../types'
 // продажу ставит Вера на /admin/cutouts. Не задана цена — позиция не добавляется.
 
 export type CutoutKind = 'outer' | 'inner'
-export type CutoutCat = 1 | 2
+export type CutoutCat = 1 | 2 | 3   // III — только внешний: длинный большой вырез по краю (владелец 25.11.2026)
 export type CutoutGroup = { kind: CutoutKind; cat: CutoutCat; n: number }
 
 export const CUTOUT_TYPES: { code: string; kind: CutoutKind; cat: CutoutCat; label: string }[] = [
   { code: 'cutout_outer_1', kind: 'outer', cat: 1, label: 'Вырез внешний I кат.' },
   { code: 'cutout_outer_2', kind: 'outer', cat: 2, label: 'Вырез внешний II кат.' },
+  { code: 'cutout_outer_3', kind: 'outer', cat: 3, label: 'Вырез внешний III кат.' },
   { code: 'cutout_inner_1', kind: 'inner', cat: 1, label: 'Вырез внутренний I кат.' },
   { code: 'cutout_inner_2', kind: 'inner', cat: 2, label: 'Вырез внутренний II кат.' },
 ]
@@ -30,7 +31,8 @@ export function normalizeCutouts(raw: unknown): CutoutGroup[] {
   for (const x of Array.isArray(raw) ? raw : []) {
     const o = x as Partial<CutoutGroup>
     const kind: CutoutKind | null = o?.kind === 'outer' || o?.kind === 'inner' ? o.kind : null
-    const cat: CutoutCat | null = Number(o?.cat) === 1 ? 1 : Number(o?.cat) === 2 ? 2 : null
+    const c = Number(o?.cat)
+    const cat: CutoutCat | null = c === 1 ? 1 : c === 2 ? 2 : c === 3 && kind === 'outer' ? 3 : null
     const n = Math.round(Number(o?.n) || 0)
     if (!kind || !cat || n <= 0) continue
     const key = cutoutCode({ kind, cat })
