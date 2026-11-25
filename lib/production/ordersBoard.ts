@@ -1,5 +1,6 @@
 // Табло «Заказы» (владелец 05.11.2026): все заказы цеха вкладками, просроченные сверху, срез на любую дату,
 // кто и когда поставил каждый этап. Только расчёт, чтение из базы в маршруте.
+import type { OrderItem } from '@/lib/purchasing/supply'
 import { overdueDays, type OrderShipState, type OrderStage } from '@/lib/production/clientShipments'
 import { mskDayKey } from '@/lib/time'
 import type { KanbanColumn, KanbanMaterial } from '@/lib/production/stageKanban'
@@ -30,6 +31,8 @@ export type BoardOrder = {
   attention: string[]
   // Табло цеха по этапам (/production-app/control)
   column: KanbanColumn; materials: KanbanMaterial[]; ops_done: number; ops_total: number
+  // Режим резчика: позиции, у которых резка ещё не закрыта (lib/production/cutterPlan.ts).
+  cut_items: OrderItem[]
 }
 
 const dayKey = (iso: string) => mskDayKey(new Date(iso))
