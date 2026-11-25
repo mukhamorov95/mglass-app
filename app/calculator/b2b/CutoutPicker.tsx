@@ -35,7 +35,7 @@ export default function CutoutPicker({ groups, onChange, prices, canEditPrices }
                 if (t) set(i, { kind: t.kind, cat: t.cat })
               }}
               className="min-w-0 flex-1 bg-white border border-blue-200 rounded-lg px-2 min-h-[40px] lg:min-h-[34px] text-[13px] text-[#111110] outline-none focus:border-blue-500">
-              {CUTOUT_TYPES.map(t => <option key={t.code} value={t.code}>{t.label.replace('Вырез ', '')}</option>)}
+              {CUTOUT_TYPES.map(t => <option key={t.code} value={t.code}>{t.label.replace('Вырез ', '').replace(' кат.', '').replace('внутренний', 'внутр.')}</option>)}
             </select>
             <input
               type="number" min={1} inputMode="numeric" value={g.n || ''} aria-label="Вырезов на деталь"
