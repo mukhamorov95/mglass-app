@@ -28,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   { const denied = denyUnless(pm.role, 'calc'); if (denied) return denied }
 
   const { data: order } = await svc.from('b2b_orders')
-    .select('id,client_id,launched_at,notes,items').eq('id', oid).maybeSingle()
+    .select('id,client_id,launched_at,notes,items,client_order_number').eq('id', oid).maybeSingle()
   const o = order as { client_id: number | null; launched_at: string | null; notes: string | null; items: unknown } | null
   if (!o || o.client_id !== (client as { id: number }).id) return NextResponse.json({ error: 'Просчёт не найден' }, { status: 404 })
   if (!isReorder && o.launched_at) return NextResponse.json({ error: 'Заказ уже в работе — редактирование недоступно' }, { status: 400 })
@@ -60,5 +60,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     }
   })
 
-  return NextResponse.json({ id: oid, comment: (notes.partner_comment as string) ?? '', specs })
+  return NextResponse.json({ id: oid, comment: (notes.partner_comment as string) ?? '', clientOrderNumber: isReorder ? '' : ((order as { client_order_number?: string | null }).client_order_number ?? ''), specs })
 }

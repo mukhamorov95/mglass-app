@@ -81,6 +81,7 @@ export default function PartnerNewQuotePage() {
 
   const [list, setList] = useState<Spec[]>([])
   const [comment, setComment] = useState('')
+  const [clientNo, setClientNo] = useState('')
   const [preview, setPreview] = useState<{ items: PricedItem[]; total: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -124,10 +125,10 @@ export default function PartnerNewQuotePage() {
       } else if (editParam) {
         // Править можно только черновик. Отказ показываем словами вместо пустой формы:
         // иначе «Сохранить» молча создавал новый просчёт-дубль.
-        loadJson<{ id: number; comment: string; specs: Spec[] }>(`/api/partner/quote/${editParam}`).then(r => {
+        loadJson<{ id: number; comment: string; clientOrderNumber?: string; specs: Spec[] }>(`/api/partner/quote/${editParam}`).then(r => {
           if (r.error !== null) { setLoadErr({ title: 'Этот просчёт нельзя изменить', text: r.error, orderId: Number(editParam) || null }); return }
           const q = r.data
-          setEditingId(q.id); setComment(q.comment || ''); setList(q.specs)
+          setEditingId(q.id); setComment(q.comment || ''); setClientNo(q.clientOrderNumber || ''); setList(q.specs)
           void recompute(q.specs, false)
         })
       } else if (reorderParam) {
@@ -193,7 +194,7 @@ export default function PartnerNewQuotePage() {
     try {
       const res = await fetch('/api/partner/quote', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: next, save, comment, editId: save ? editingId : undefined }),
+        body: JSON.stringify({ items: next, save, comment, clientOrderNumber: clientNo, editId: save ? editingId : undefined }),
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'Ошибка расчёта'); return null }
@@ -455,7 +456,8 @@ export default function PartnerNewQuotePage() {
               </tbody>
             </table></div>
 
-            <div style={{ padding: '16px 18px', borderTop: '1px solid var(--border)' }}>
+            <div className="fld" style={{ padding: '16px 18px', borderTop: '1px solid var(--border)' }}>
+              <input value={clientNo} onChange={e => setClientNo(e.target.value)} maxLength={40} placeholder="Ваш номер заказа — по нему найдёте заказ в кабинете (необязательно)" aria-label="Ваш номер заказа" style={{ marginBottom: 8 }} />
               <textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={500} rows={2} placeholder="Комментарий к просчёту (необязательно)" style={{ marginBottom: 12 }} />
               {err && <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 10 }}>{err}</div>}
 

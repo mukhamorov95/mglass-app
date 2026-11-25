@@ -8,6 +8,7 @@ import ReconciliationDoc, { fmtMoney } from '@/app/production-app/shower-glass/R
 import { rub } from '@/lib/partner/format'
 import { fmtDay, fmtKg } from '@/app/production-app/shower-glass/types'
 import type { PartnerShipOrder, PartnerShipment } from '@/lib/partner/shipmentsView'
+import { matchesOrder } from '@/lib/partner/orderSearch'
 
 // «Отгрузки» кабинета (К7, владелец 24.11): то же, что видит наш цех на экране Шовер Гласс —
 // в работе, упакованы, отгружены, просроченные, срочно отгрузить, история отгрузок и акт сверки.
@@ -40,6 +41,7 @@ export default function PartnerShipmentsPage() {
   const [data, setData] = useState<Data | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('in_work')
+  const [q, setQ] = useState('')
 
   useEffect(() => {
     loadJson<Data>('/api/partner/shipments').then(r => { if (r.error !== null) setErr(r.error); else setData(r.data) })
@@ -79,9 +81,13 @@ export default function PartnerShipmentsPage() {
           </div>
 
           {TABS.some(t => t.key === tab) && (() => {
-            const list = sorted(data.orders.filter(o => inTab(o, tab)), tab)
-            if (list.length === 0) return <div className="note"><div className="s">{TABS.find(t => t.key === tab)!.empty}</div></div>
-            return <div style={{ display: 'grid', gap: 10 }}>{list.map(o => <OrderBox key={o.id} o={o} money={data.money} urgentTab={tab === 'urgent'} />)}</div>
+            const list = sorted(data.orders.filter(o => inTab(o, tab) && matchesOrder({ number: o.no, clientOrderNumber: o.client_no }, q)), tab)
+            const search = (
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: наш № или ваш № заказа" aria-label="Поиск заказа"
+                style={{ width: '100%', marginBottom: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 11, padding: '10px 12px', fontSize: 13.5, color: 'var(--ink)', fontFamily: 'inherit', outline: 'none' }} />
+            )
+            if (list.length === 0) return <>{search}<div className="note"><div className="s">{q ? `По запросу «${q}» в этой вкладке ничего нет.` : TABS.find(t => t.key === tab)!.empty}</div></div></>
+            return <>{search}<div style={{ display: 'grid', gap: 10 }}>{list.map(o => <OrderBox key={o.id} o={o} money={data.money} urgentTab={tab === 'urgent'} />)}</div></>
           })()}
 
           {tab === 'history' && (data.orders.length === 0
@@ -106,7 +112,7 @@ function OrderBox({ o, money, urgentTab }: { o: PartnerShipOrder; money: boolean
     <div className="ord" style={{ cursor: 'default' }}>
       <div className="r1">
         <div>
-          <div className="num">{o.no}{o.client_no && <span className="yr"> · ваш № {o.client_no}</span>}{o.urgent && <span className="pill p-ship" style={{ marginLeft: 8 }}>срочно</span>}</div>
+          <div className="num">{o.no}<span className="yr"> · ваш № {o.client_no || 'не указан'}</span>{o.urgent && <span className="pill p-ship" style={{ marginLeft: 8 }}>срочно</span>}</div>
           <div className="meta">
             запущен {fmtDay(o.launch_day)}{o.deadline_day ? ` · срок ${fmtDay(o.deadline_day)}` : ''}
             {o.overdue_days > 0 ? ` · просрочен на ${o.overdue_days} дн.` : ''}

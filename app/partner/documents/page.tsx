@@ -8,12 +8,13 @@ import { INVOICE_HINT, type InvoiceState, type UpdShort } from '@/lib/partner/do
 import type { PaymentView } from '@/lib/partner/orderMoney'
 import { DOC_FILTERS, inDocFilter, isUnpaid, payBadge, shipBadge, TONE_CLASS, type DocFilter } from '@/lib/partner/docStatus'
 import { unpaidOf } from '@/lib/partner/paymentLabel'
+import { matchesOrder } from '@/lib/partner/orderSearch'
 
 // Документы кабинета (дизайн .pcab): по каждому заказу одной строкой КП · счёт · УПД.
 // Счёт — если он открыт этому партнёру; УПД — только выданный бухгалтерией.
 
 type Order = {
-  id: number; number: string; created_at: string; amount: number; summary: string; positions: number; lane: string
+  id: number; number: string; clientOrderNumber?: string | null; created_at: string; amount: number; summary: string; positions: number; lane: string
   invoice: InvoiceState; upd: UpdShort | null
   payment?: PaymentView | null; shipPartial?: { shipped: number; total: number } | null
 }
@@ -57,23 +58,22 @@ export default function PartnerDocumentsPage() {
 
   const all = useMemo(() => data?.orders ?? [], [data])
   // Поиск по номеру, описанию, сумме и номеру УПД; список — по месяцам (24.11: 130 строк сплошняком).
-  const orders = useMemo(() => {
-    const t = q.trim().toLowerCase().replace(/\s/g, '')
-    const byFlt = all.filter(o => inDocFilter(o, flt))
-    if (!t) return byFlt
-    return byFlt.filter(o => [o.number, o.summary, String(Math.round(o.amount)), o.upd?.number ?? ''].some(v => String(v).toLowerCase().replace(/\s/g, '').includes(t)))
-  }, [all, q, flt])
-  const fCount = useMemo(() => Object.fromEntries(DOC_FILTERS.map(f => [f.key, all.filter(o => inDocFilter(o, f.key)).length])) as Record<DocFilter, number>, [all])
-  const unpaidSum = useMemo(() => all.filter(isUnpaid).reduce((s, o) => s + unpaidOf(o.payment), 0), [all])
-  const hasStatus = all.some(o => o.lane === 'in_work' || o.lane === 'shipped')
+  const orders = useMemo(() => all.filter(o => inDocFilter(o, flt) && matchesOrder({ number: o.number, clientOrderNumber: o.clientOrderNumber, amount: o.amount, summary: o.summary, extra: [o.upd ? String(o.upd.number) : null] }, q)), [all, q, flt])
+  // Неоплаченные заказы — первой группой над месяцами (владелец 25.11): их и надо оплатить.
   const months = useMemo(() => {
     const out: { m: string; list: Order[] }[] = []
+    const unpaid = orders.filter(isUnpaid)
+    if (unpaid.length > 0 && flt !== 'paid') out.push({ m: 'Ждут оплаты', list: unpaid })
     for (const o of orders) {
+      if (isUnpaid(o)) continue
       const m = monthOf(o.created_at)
       if (out.at(-1)?.m === m) out.at(-1)!.list.push(o); else out.push({ m, list: [o] })
     }
     return out
-  }, [orders])
+  }, [orders, flt])
+  const fCount = useMemo(() => Object.fromEntries(DOC_FILTERS.map(f => [f.key, all.filter(o => inDocFilter(o, f.key)).length])) as Record<DocFilter, number>, [all])
+  const unpaidSum = useMemo(() => all.filter(isUnpaid).reduce((s, o) => s + unpaidOf(o.payment), 0), [all])
+  const hasStatus = all.some(o => o.lane === 'in_work' || o.lane === 'shipped')
   // Заказ в живом объединённом счёте: галочки у него нет, есть ссылка на счёт.
   const inInvoice = useMemo(() => {
     const m = new Map<number, Inv>()
@@ -140,7 +140,7 @@ export default function PartnerDocumentsPage() {
           <div className="note"><div className="s">Пока нет документов. Создайте просчёт в разделе «Калькулятор».</div></div>
         )}
         {!loading && data?.linked && all.length > 0 && (
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: номер заказа, сумма, № УПД, материал" aria-label="Поиск документов"
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: наш № или ваш № заказа, сумма, № УПД, материал" aria-label="Поиск документов"
             style={{ width: '100%', marginBottom: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 11, padding: '10px 12px', fontSize: 13.5, color: 'var(--ink)', fontFamily: 'inherit', outline: 'none' }} />
         )}
         {invErr && <div className="recalc" style={{ marginBottom: 14 }}>Объединённые счета не загрузились: {invErr}</div>}
@@ -216,7 +216,7 @@ export default function PartnerDocumentsPage() {
                   ? <input type="checkbox" checked={sel.has(o.id)} onChange={() => toggle(o.id)} aria-label={`Выбрать заказ ${o.number} для общего счёта`} style={{ width: 20, height: 20, flexShrink: 0, accentColor: 'var(--ink)' }} />
                   : <div className="fi">{o.lane === 'quote' || o.lane === 'submitted' ? 'КП' : '№'}</div>}
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div className="fn">{o.lane === 'quote' ? 'Просчёт' : 'Заказ'} {o.number} · {fmtMoney(o.amount)}</div>
+                  <div className="fn">{o.lane === 'quote' ? 'Просчёт' : 'Заказ'} {o.number} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· ваш № {o.clientOrderNumber || 'не указан'}</span> · {fmtMoney(o.amount)}</div>
                   <div className="fm">от {fmtDate(o.created_at)}{o.summary ? ` · ${o.summary}` : ''}{o.positions ? ` · ${o.positions} поз.` : ''}</div>
                   {(payBadge(o) || shipBadge(o)) && (
                     <div className="pills">

@@ -6,6 +6,7 @@ import { loadJson, responseError, NETWORK_ERROR } from '@/lib/toast'
 import { POINT_LINE, type PointStage } from '@/lib/partner/pointPay'
 import type { PaymentView } from '@/lib/partner/orderMoney'
 import { paymentLabel, paymentPill, unpaidOf } from '@/lib/partner/paymentLabel'
+import { matchesOrder, unpaidFirst } from '@/lib/partner/orderSearch'
 import { QUOTE_LABEL, canEditQuote, canSubmitQuote, type QuoteState } from '@/lib/partner/quoteState'
 import type { ItemView } from '@/lib/partner/itemStages'
 
@@ -57,6 +58,7 @@ export default function OrdersView({ view }: { view: View }) {
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [onlyUnpaid, setOnlyUnpaid] = useState(false)
+  const [q, setQ] = useState('')
 
   const [loadErr, setLoadErr] = useState<string | null>(null)
 
@@ -95,7 +97,7 @@ export default function OrdersView({ view }: { view: View }) {
   const inView = orders.filter(o => lanes.includes(o.lane))
   const unpaid = inView.filter(o => unpaidOf(o.payment) > 0)
   const unpaidSum = unpaid.reduce((s, o) => s + unpaidOf(o.payment), 0)
-  const visible = view !== 'quotes' && onlyUnpaid ? unpaid : inView
+  const visible = unpaidFirst((view !== 'quotes' && onlyUnpaid ? unpaid : inView).filter(o => matchesOrder({ number: o.number, clientOrderNumber: o.clientOrderNumber, amount: o.amount, summary: o.summary }, q)))
   // Для просчётов: недавние (≤2 недель по последней активности) и архив.
   const recent = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) <= ARCHIVE_DAYS) : visible
   const archived = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) > ARCHIVE_DAYS) : []
@@ -143,8 +145,11 @@ export default function OrdersView({ view }: { view: View }) {
           </div>
         )}
 
+        {!loading && data?.linked && inView.length > 0 && (
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: наш № или ваш № заказа, сумма, материал" aria-label="Поиск заказа" className="pinput" style={{ marginBottom: 12, background: 'var(--surface)' }} />
+        )}
         {!loading && data?.linked && visible.length === 0 && (
-          <div className="note"><div className="s">{meta.empty}</div></div>
+          <div className="note"><div className="s">{q ? `По запросу «${q}» ничего нет.` : meta.empty}</div></div>
         )}
 
         {!loading && data?.linked && view === 'quotes' && recent.length > 0 && (
@@ -193,7 +198,7 @@ function OrderCard({ o, onSubmit, submitting, submitErr }: { o: Order; onSubmit:
     <>
       <div className="r1">
         <div>
-          <div className="num">{o.number}{o.clientOrderNumber && <span className="yr"> · ваш № {o.clientOrderNumber}</span>}</div>
+          <div className="num">{o.number}<span className="yr"> · ваш № {o.clientOrderNumber || 'не указан'}</span></div>
           <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.point ? '' : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
           {o.point && <div className="meta" style={{ marginTop: 2, color: o.point === 'await_payment' ? 'var(--amber)' : 'var(--ink-2)', fontWeight: o.point === 'await_payment' ? 600 : 400 }}>{POINT_LINE[o.point]}</div>}
           {o.summary && <div className="meta" style={{ marginTop: 2, color: 'var(--ink-2)' }}>{o.summary}{o.positions ? ` · ${o.positions} поз.` : ''}</div>}
