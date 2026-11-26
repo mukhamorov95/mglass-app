@@ -1,4 +1,5 @@
 import { VAT } from './b2bCalculator'
+import { billableTotal } from './b2b/ownCostRemake'
 
 // Единственное определение себестоимости и маржинального вклада B2B-заказа.
 // Все экраны, где показывается себестоимость или маржа заказа, берут цифры отсюда.
@@ -14,7 +15,7 @@ import { VAT } from './b2bCalculator'
 export type VariableKey = 'product' | 'material' | 'tempering' | 'services' | 'transport' | 'packaging'
 
 export type ContributionLine = {
-  key: VariableKey
+  key: VariableKey | 'edge'
   label: string
   how: string          // как посчитано — показывается рядом с суммой
   amount: number       // ₽, как платим (с НДС, если он есть)
@@ -27,6 +28,10 @@ export type OrderContribution = {
   revenueExVat: number
   lines: ContributionLine[]
   variable: number         // переменные, ₽ как платим
+  // Свои операции из сохранённой себестоимости: видны, но из «остаётся» не вычитаются —
+  // труд, оборудование и транспорт оплачены постоянными (владелец 26.11.2026).
+  own: ContributionLine[]
+  ownTotal: number
   vatIn: number            // НДС к вычету
   vatToPay: number         // исходящий − входящий
   contribution: number     // выручка − переменные − НДС к уплате
@@ -43,15 +48,18 @@ const vatPart = (sumWithVat: number, rate: number) => sumWithVat * rate / (100 +
 const r = (x: number) => Math.round(x)
 const ru = (x: number, d = 2) => x.toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d })
 
-// Расход по нормативу справочника «Стекло». Заказы, сохранённые до 16.09.2026, несут в
-// себе расход из раскроя: на #5479 одна деталь 0,77 м² превратилась в 1,76 м² («откуда
-// ещё квадратный метр»). Решение владельца: расход — по справочнику, факт — от резчика
-// после нарезки. Здесь пересчитываем материал позиции по нормативу, не трогая ни цену
-// клиенту, ни остальные статьи. norms: `${materialName}|${thickness}` → % расхода.
-export type WasteNorms = Map<string, number>
+// Расход по нормативу справочника «Стекло» — ТОЛЬКО для заказов до 16.09.2026: они несут в
+// себе расход из раскроя (на #5479 деталь 0,77 м² превратилась в 1,76 м²). Позже калькулятор
+// пишет расход из справочника сам, и пересчёт сегодняшней нормой переписывал бы историю.
+// Позицию «целым листом» не трогаем никогда. Норма ищется по id материала при тех же
+// категории и толщине; по названию не ищем: тёзки разных категорий путали норму.
+export const LEGACY_WASTE_BEFORE = '2026-09-16'
 
-type MatRow = { name?: unknown; thickness?: unknown; category?: unknown; waste_percent?: unknown }
+export type WasteNorms = Map<number, { pct: number; thickness: number; category: string }>
+
+type MatRow = { id?: unknown; name?: unknown; thickness?: unknown; category?: unknown; waste_percent?: unknown }
 type MatrixRow = { name?: unknown; category?: unknown; price_type?: unknown; waste_pct?: unknown }
+export type OrderDates = { launched_at?: string | null; created_at?: string | null }
 
 // Норматив расхода как его видит калькулятор: справочник цен (строка себестоимости)
 // перебивает карточку материала — там первоисточник.
@@ -64,31 +72,45 @@ export function buildWasteNorms(materials: MatRow[], matrix: MatrixRow[] = []): 
   }
   const out: WasteNorms = new Map()
   for (const m of materials) {
-    const name = String(m.name ?? ''), thk = n(m.thickness)
-    const cat = String(m.category ?? '') === 'зеркало' ? 'mirror' : 'glass'
-    const norm = byName.get(`${name}|${cat}`) ?? n(m.waste_percent)
-    if (norm > 0) out.set(`${name}|${thk}`, norm)
+    const id = n(m.id)
+    if (!id) continue
+    const category = String(m.category ?? '')
+    const norm = byName.get(`${String(m.name ?? '')}|${category === 'зеркало' ? 'mirror' : 'glass'}`) ?? n(m.waste_percent)
+    if (norm > 0) out.set(id, { pct: norm, thickness: n(m.thickness), category })
   }
   return out
 }
 
-export function applyCatalogWaste(items: ContributionItem[], norms: WasteNorms): ContributionItem[] {
-  if (!norms.size) return items
+// Дата неизвестна — норму не применяем: показываем сохранённое.
+export function usesLegacyWaste(order: OrderDates): boolean {
+  const day = String(order.launched_at ?? order.created_at ?? '').slice(0, 10)
+  return day !== '' && day < LEGACY_WASTE_BEFORE
+}
+
+export function applyCatalogWaste(items: ContributionItem[], norms: WasteNorms, order: OrderDates): ContributionItem[] {
+  if (!norms.size || !usesLegacyWaste(order)) return items
   return items.map(it => {
-    if (String(it.category ?? '') === 'изделие') return it
+    if (String(it.category ?? '') === 'изделие' || n(it.wholeSheets) > 0) return it
     const q = n(it.quantity)
     const net = n(it.totalAreaNet) || n(it.width) * n(it.height) / 1_000_000 * q
     const billed = n(it.totalAreaBilled) || net
     const cost = n(it.costMaterial)
-    const norm = norms.get(`${String(it.materialName ?? '')}|${n(it.thickness)}`)
-    if (norm == null || !(net > 0) || !(billed > 0) || !(cost > 0)) return it
-    const newBilled = Math.round(net * (1 + norm / 100) * 10000) / 10000
+    const norm = norms.get(n(it.materialId))
+    if (!norm || norm.thickness !== n(it.thickness) || norm.category !== String(it.category ?? '')) return it
+    if (!(net > 0) || !(billed > 0) || !(cost > 0)) return it
+    const newBilled = Math.round(net * (1 + norm.pct / 100) * 10000) / 10000
     return { ...it, totalAreaBilled: newBilled, costMaterial: Math.round(newBilled * (cost / billed)) }
   })
 }
 
+// Выручка заказа для экономики: у переделки за наш счёт она ноль, а затраты остаются.
+export function contributionRevenue(o: { total_after_discount?: unknown; total_sale_inc_vat?: unknown; notes?: unknown }): number {
+  return billableTotal(n(o.total_after_discount) || n(o.total_sale_inc_vat), o.notes)
+}
+
 export function orderContribution(revenueIncVat: number, items: ContributionItem[], vatRate = VAT): OrderContribution {
   let material = 0, tempering = 0, services = 0, transport = 0, packaging = 0
+  let edge = 0, edgeM = 0
   let pieces = 0, temperedPieces = 0, netM2 = 0, billedM2 = 0, temperedM2 = 0
   // Изделия производства (зеркало с подсветкой, лофт) — отдельная статья: там не
   // лист стекла, а готовое изделие со своим составом (лента, БП, кнопка, сборка).
@@ -112,6 +134,8 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
       material += n(it.costMaterial)
     }
     tempering += n(it.costTempering)
+    edge += n(it.costEdge)
+    if (n(it.costEdge) > 0) edgeM += n(it.perimeterM) * q * (it.hasTriplex ? (n(it.triplexLayers) === 3 ? 3 : 2) : 1)
     transport += n(it.costTransport)
     packaging += n(it.costPackaging)
     const svc = Array.isArray(it.services) ? it.services as Record<string, unknown>[] : []
@@ -140,7 +164,7 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
       how: `${productPieces} шт${productNames.length ? ` · ${productNames.join(', ')}` : ''} — стекло, комплектующие, сборка, упаковка`,
       amount: product, vatIn: vatPart(product, vatRate) },
     { key: 'material', label: 'Материал',
-      how: `нетто ${ru(netM2)} м² + расход по справочнику = ${ru(billedM2)} м² по цене закупки`,
+      how: `нетто ${ru(netM2)} м², с расходом ${ru(billedM2)} м² по цене закупки`,
       amount: material, vatIn: vatPart(material, vatRate) },
     { key: 'tempering', label: 'Закалка (подрядчик)', how: temperHow,
       amount: tempering, vatIn: vatPart(tempering, vatRate) },
@@ -161,6 +185,10 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
   const rounded = lines.map(l => ({ ...l, amount: r(l.amount), vatIn: r(l.vatIn) }))
   const revenue = r(n(revenueIncVat))
   const vatOut = r(vatPart(revenue, vatRate))
+  const own: ContributionLine[] = r(edge) > 0
+    ? [{ key: 'edge', label: 'Кромка', how: edgeM > 0 ? `${ru(edgeM, 1)} м.п.` : 'по сохранённым позициям', amount: r(edge), vatIn: 0 }]
+    : []
+  const ownTotal = own.reduce((s, l) => s + l.amount, 0)
   const variable = rounded.reduce((s, l) => s + l.amount, 0)
   const vatIn = rounded.reduce((s, l) => s + l.vatIn, 0)
   const vatToPay = vatOut - vatIn
@@ -170,6 +198,7 @@ export function orderContribution(revenueIncVat: number, items: ContributionItem
   return {
     revenue, vatOut, revenueExVat,
     lines: rounded,
+    own, ownTotal,
     variable, vatIn, vatToPay,
     contribution,
     contributionPct: revenueExVat > 0 ? Math.round(contribution / revenueExVat * 1000) / 10 : 0,

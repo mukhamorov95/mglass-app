@@ -120,32 +120,53 @@ describe('формат чисел', () => {
 })
 
 // Расход по нормативу справочника вместо расхода из раскроя (решение владельца 16.09)
-describe('applyCatalogWaste — расход по справочнику', () => {
+describe('applyCatalogWaste — норма только для заказов до 16.09', () => {
   const item = {
-    materialName: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло',
+    materialId: 7, materialName: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло',
     width: 1100, height: 700, quantity: 1,
     totalAreaNet: 0.77, totalAreaBilled: 1.76, costMaterial: 3695,
   }
+  const card = { id: 7, name: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло', waste_percent: 30 }
+  const old = { launched_at: '2026-09-10' }
 
   it('#5479: 1,76 м² из раскроя → 1,0 м² по нормативу 30%', () => {
-    const norms = buildWasteNorms([{ name: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло', waste_percent: 30 }])
-    const [out] = applyCatalogWaste([item], norms) as Record<string, number>[]
+    const [out] = applyCatalogWaste([item], buildWasteNorms([card]), old) as Record<string, number>[]
     expect(out.totalAreaBilled).toBeCloseTo(1.001, 3)
     expect(out.costMaterial).toBe(2102)
   })
 
   it('справочник цен перебивает карточку материала', () => {
-    const norms = buildWasteNorms(
-      [{ name: 'Осветлённое CrystalVision', thickness: 8, category: 'стекло', waste_percent: 30 }],
-      [{ name: 'Осветлённое CrystalVision', category: 'glass', price_type: 'cost', waste_pct: 15 }],
-    )
-    expect(norms.get('Осветлённое CrystalVision|8')).toBe(15)
+    const norms = buildWasteNorms([card], [{ name: card.name, category: 'glass', price_type: 'cost', waste_pct: 15 }])
+    expect(norms.get(7)?.pct).toBe(15)
   })
 
-  it('норматива нет — позицию не трогаем; изделие производства не трогаем никогда', () => {
-    expect(applyCatalogWaste([item], new Map())).toEqual([item])
-    const product = { ...item, category: 'изделие' }
-    const norms = buildWasteNorms([{ name: 'Осветлённое CrystalVision', thickness: 8, category: 'изделие', waste_percent: 30 }])
-    expect(applyCatalogWaste([product], norms)).toEqual([product])
+  it.each([
+    [{ launched_at: '2026-09-16' }], [{ launched_at: '2026-11-03', created_at: '2026-09-01' }],
+    [{ created_at: '2026-10-01T10:00:00Z' }], [{}],
+  ])('заказ %o — расход остаётся сохранённым', order => {
+    expect(applyCatalogWaste([item], buildWasteNorms([card]), order)).toEqual([item])
+  })
+
+  it('просчёт без запуска судится по дате создания', () => {
+    expect(applyCatalogWaste([item], buildWasteNorms([card]), { created_at: '2026-09-01T10:00:00Z' })).not.toEqual([item])
+  })
+
+  it('целый лист не пересчитывается и у старого заказа', () => {
+    const whole = { ...item, wholeSheets: 1, totalAreaBilled: 7.22, costMaterial: 15153 }
+    expect(applyCatalogWaste([whole], buildWasteNorms([card]), old)).toEqual([whole])
+  })
+
+  it('тёзки разных категорий не путаются: норма ищется по id, категории и толщине', () => {
+    const twins = buildWasteNorms([card, { ...card, id: 8, category: 'тонированное', waste_percent: 45 }])
+    const tinted = { ...item, materialId: 8, category: 'тонированное' }
+    const [a, b] = applyCatalogWaste([item, tinted], twins, old) as Record<string, number>[]
+    expect([a.totalAreaBilled, b.totalAreaBilled]).toEqual([expect.closeTo(1.001, 3), expect.closeTo(1.1165, 3)])
+  })
+
+  it.each([
+    ['нет id материала', { ...item, materialId: undefined }], ['другая толщина', { ...item, thickness: 6 }],
+    ['категория разошлась', { ...item, category: 'сатин' }], ['изделие производства', { ...item, category: 'изделие' }],
+  ])('%s — норма не определена, позицию не трогаем', (_n, it_) => {
+    expect(applyCatalogWaste([it_], buildWasteNorms([card]), old)).toEqual([it_])
   })
 })

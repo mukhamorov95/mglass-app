@@ -9,7 +9,7 @@ import { buildInstallationHref } from '@/components/AssignInstallationButton'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
-import { orderContribution, applyCatalogWaste, buildWasteNorms, contributionColor, rub, pct } from '@/lib/unitEconomics'
+import { orderContribution, applyCatalogWaste, buildWasteNorms, contributionRevenue, contributionColor, rub, pct } from '@/lib/unitEconomics'
 import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
@@ -539,7 +539,7 @@ export default function B2BQuotesPage() {
       const [{ data: orders, error: ordersErr }, { data: attaches, error: attachErr }, { data: mats, error: matsErr }, { data: srcRows, error: srcErr }] = await Promise.all([
         ordersQuery,
         sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
-        sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
+        sb.from('b2b_materials').select('id,category,name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
         // «Откуда» заказчика — для фильтра; только клиенты с указанным источником.
         sb.from('b2b_clients').select('id, crm_source').not('crm_source', 'is', null).limit(5000),
       ])
@@ -737,11 +737,10 @@ export default function B2BQuotesPage() {
   const isOwner = userRole === 'admin' || userRole === 'ceo'
   const contributionByQuote = useMemo(() => {
     const m = new Map<number, { amount: number; pct: number }>()
-    // Расход материала — по нормативу справочника (решение владельца 16.09: раскрой
-    // расход не считает), так же как на экране экономики заказа
+    // Расход и выручка — по тем же правилам, что на экране экономики заказа.
     const norms = buildWasteNorms(materials as unknown as Record<string, unknown>[])
     for (const q of visible) {
-      const c = orderContribution(q.total_after_discount || q.total_sale_inc_vat || 0, applyCatalogWaste(q.items as unknown as Record<string, unknown>[], norms))
+      const c = orderContribution(contributionRevenue(q), applyCatalogWaste(q.items as unknown as Record<string, unknown>[], norms, { created_at: q.created_at }))
       if (c.revenue > 0) m.set(q.id, { amount: c.contribution, pct: c.contributionPct })
     }
     return m

@@ -1,4 +1,6 @@
 import type { PlanRow, Unit } from './types'
+import { glassUse } from '@/lib/economics/facts/physical'
+import type { StoredItem } from '@/lib/economics/facts/items'
 import { normalizeName, normalizeUnit, isServiceLine } from './match'
 
 // Что нужно от складской карточки, чтобы сопоставить её со строкой документа.
@@ -16,6 +18,10 @@ export type MatchTarget = {
 // Позиция B2B-заказа (b2b_orders.items): totalAreaBilled — уже м² с учётом
 // количества и раскроя, ровно столько стекла уходит со склада.
 export type B2BItemLike = {
+  category?:        string | null
+  hasTriplex?:      boolean | null
+  triplexLayers?:   number | null
+  triplexGlasses?:  { materialId?: number | null; materialName?: string | null }[] | null
   materialId?:      number | null
   materialName?:    string | null
   totalAreaBilled?: number | null
@@ -45,9 +51,8 @@ function findByNameOrAlias(stock: MatchTarget[], name: string): { item: MatchTar
 export function planB2BOrder(items: B2BItemLike[], stock: MatchTarget[]): PlanRow[] {
   const byMaterial = new Map<string, { name: string; area: number; materialId: number | null }>()
 
-  for (const it of items ?? []) {
-    const area = Number(it.totalAreaBilled ?? it.totalAreaNet ?? 0)
-    if (!(area > 0)) continue
+  for (const it of (items ?? []).flatMap(item => glassUse(item as StoredItem))) {
+    const area = it.m2
     const key  = it.materialId != null ? `id:${it.materialId}` : `name:${normalizeName(it.materialName ?? '')}`
     const prev = byMaterial.get(key)
     if (prev) prev.area = round(prev.area + area)

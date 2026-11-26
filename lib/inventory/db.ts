@@ -8,6 +8,8 @@ import { planB2BOrder, planBomLines, type MatchTarget, type B2BItemLike, type Bo
 // Для записи движения нужна только атрибуция «кто инициировал» — не вся роль.
 export type MoveActor = { userId?: string; name?: string }
 import { markReservationConsumed, listReservations } from './reserve'
+import { glassUse } from '@/lib/economics/facts/physical'
+import type { StoredItem } from '@/lib/economics/facts/items'
 
 const svc = () => createServiceClient()
 
@@ -387,35 +389,45 @@ export async function orderHasCuttingTasks(orderId: string): Promise<boolean> {
   return !!(data && data.length)
 }
 
-type B2BOrderItemRaw = { materialId?: number | null; materialName?: string | null; totalAreaBilled?: number | null; totalAreaNet?: number | null }
+// Одна позиция заказа → расход по складским позициям. У триплекса каждое стекло — свой
+// материал (lib/economics/facts/physical); одинаковые складываются в одну строку, поэтому
+// ключ движения (заказ, позиция, складская позиция, этап, попытка) остаётся прежним.
+type StockUse = { item: { id: number; name: string; unit: Unit }; area: number }
 
-// Одна позиция заказа → площадь + складская позиция. null-material / нулевая
-// площадь (услуга) → matched:false, списывать нечего.
 async function resolveOrderItem(orderId: string, itemIndex: number): Promise<
-  { area: number; item: { id: number; name: string; unit: Unit } | null; sourceName: string } | null
+  { uses: StockUse[]; unmatched: string[]; sourceName: string } | null
 > {
   const { data, error } = await svc().from('b2b_orders').select('items').eq('id', Number(orderId)).maybeSingle()
   if (error || !data) return null
-  const raw = data.items as { items?: B2BOrderItemRaw[] } | B2BOrderItemRaw[] | null
+  const raw = data.items as { items?: StoredItem[] } | StoredItem[] | null
   const list = Array.isArray(raw) ? raw : (raw?.items ?? [])
   const it = list[itemIndex]
   if (!it) return null
 
-  const area = round(Number(it.totalAreaBilled ?? it.totalAreaNet ?? 0))
-  const sourceName = it.materialName ?? `Материал #${it.materialId ?? '?'}`
-  if (!(area > 0)) return { area: 0, item: null, sourceName }
+  const glasses = glassUse(it)
+  const sourceName = [...new Set(glasses.map(g => g.materialName ?? `Материал #${g.materialId ?? '?'}`))].join(' + ')
+    || String(it.materialName ?? `Материал #${it.materialId ?? '?'}`)
+  if (!glasses.length) return { uses: [], unmatched: [], sourceName }
 
   const stock = await matchTargets()
-  let hit = it.materialId != null
-    ? stock.find(t => t.ref_table === 'b2b_materials' && t.ref_id === String(it.materialId))
-    : undefined
-  if (!hit && it.materialName) {
-    const { normalizeName } = await import('./match')
-    const n = normalizeName(it.materialName)
-    hit = stock.find(t => t.bom_aliases.some(a => normalizeName(a) === n))
-       ?? stock.find(t => normalizeName(t.name) === n)
+  const { normalizeName } = await import('./match')
+  const uses = new Map<number, StockUse>()
+  const unmatched: string[] = []
+  for (const g of glasses) {
+    let hit = g.materialId != null
+      ? stock.find(t => t.ref_table === 'b2b_materials' && t.ref_id === String(g.materialId))
+      : undefined
+    if (!hit && g.materialName) {
+      const n = normalizeName(g.materialName)
+      hit = stock.find(t => t.bom_aliases.some(a => normalizeName(a) === n))
+         ?? stock.find(t => normalizeName(t.name) === n)
+    }
+    if (!hit) { unmatched.push(g.materialName ?? `Материал #${g.materialId ?? '?'}`); continue }
+    const prev = uses.get(hit.id)
+    if (prev) prev.area = round(prev.area + g.m2)
+    else uses.set(hit.id, { item: { id: hit.id, name: hit.name, unit: hit.unit }, area: g.m2 })
   }
-  return { area, item: hit ? { id: hit.id, name: hit.name, unit: hit.unit } : null, sourceName }
+  return { uses: [...uses.values()], unmatched, sourceName }
 }
 
 export type ItemConsumeResult = {
@@ -430,16 +442,25 @@ export async function consumeItemAtStage(
 ): Promise<ItemConsumeResult> {
   const resolved = await resolveOrderItem(orderId, itemIndex)
   if (!resolved) return { ok: true, inserted: 0, matched: false }
-  if (!(resolved.area > 0)) return { ok: true, inserted: 0, matched: false }
-  if (!resolved.item)      return { ok: true, inserted: 0, matched: false, name: resolved.sourceName }
+  if (!resolved.uses.length) return { ok: true, inserted: 0, matched: false, name: resolved.unmatched.length ? resolved.sourceName : undefined }
 
-  const res = await addMoves([{
-    item_id: resolved.item.id, qty: -Math.abs(resolved.area), reason: 'order', origin,
-    item_index: itemIndex, stage, attempt,
-    doc_type: 'b2b_order', doc_id: orderId,
-    note: `Списание на резке: ${resolved.sourceName} (поз. ${itemIndex}${attempt > 0 ? `, переделка ${attempt}` : ''})`,
-  }], by)
-  return { ok: true, inserted: res.inserted, matched: true, name: resolved.item.name, qty: resolved.area }
+  const missing = resolved.unmatched.length ? ` · нет на складе: ${resolved.unmatched.join(', ')}` : ''
+  // По строке на вставку: дубль по одному стеклу не должен отменять запись другого.
+  let inserted = 0
+  for (const u of resolved.uses) {
+    const res = await addMoves([{
+      item_id: u.item.id, qty: -Math.abs(u.area), reason: 'order', origin,
+      item_index: itemIndex, stage, attempt,
+      doc_type: 'b2b_order', doc_id: orderId,
+      note: `Списание на резке: ${resolved.sourceName} (поз. ${itemIndex}${attempt > 0 ? `, переделка ${attempt}` : ''})${missing}`,
+    }], by)
+    inserted += res.inserted
+  }
+  return {
+    ok: true, inserted, matched: true,
+    name: resolved.uses.map(u => u.item.name).join(' + '),
+    qty: round(resolved.uses.reduce((s, u) => s + u.area, 0)),
+  }
 }
 
 // Откат ошибочной отметки резки (мисклик, «отметили не тот заказ»): встречное

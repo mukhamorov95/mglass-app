@@ -1,4 +1,5 @@
 import { VAT, effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
+import { billableTotal, ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 
 // Отчёт по изделиям производства (B2B): что продаём и сколько на этом остаётся — по категории
 // материала и внутри неё по материалу/толщине. Идея из чужого КП на ERP (docs/ERP_PROPOSAL_TAKEAWAYS.md, блок 2).
@@ -18,6 +19,7 @@ export type ReportOrder = {
   total_after_discount: number | null
   total_sale_inc_vat: number | null
   items: unknown
+  notes?: unknown
 }
 
 export type Agg = {
@@ -121,13 +123,15 @@ export function buildProductReport(orders: ReportOrder[], opts: { month?: string
     const items = itemsOf(o.items)
     if (!items.length) continue
     orderCount += 1
-    ordersIncVat += num(o.total_after_discount) || num(o.total_sale_inc_vat)
+    // Переделка за наш счёт: выручки нет, себестоимость остаётся.
+    const remake = !!ownCostRemakeOf(o.notes)
+    ordersIncVat += billableTotal(num(o.total_after_discount) || num(o.total_sale_inc_vat), o.notes)
     const disc = num(o.discount_percent)
 
     items.forEach((it, idx) => {
       // Пустая строка в manualTotal — «договорной цены нет», как в currentItemTotal (lib/b2b/adjustTotal.ts)
       const manual = it.manualTotal == null || (it.manualTotal as unknown) === '' ? null : num(it.manualTotal)
-      const inc = effectiveItemTotal({ ...it, saleIncVat: num(it.saleIncVat), manualTotal: manual }, disc)
+      const inc = remake ? 0 : effectiveItemTotal({ ...it, saleIncVat: num(it.saleIncVat), manualTotal: manual }, disc)
       itemsIncVat += inc
       const cost = Math.round(num(it.costExVat))
       const line: Line = {
