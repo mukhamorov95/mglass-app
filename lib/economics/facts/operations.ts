@@ -1,7 +1,7 @@
 import type { OperationCode } from '../types'
 
 // Природа операции. Сторонние — подтверждено владельцем 26.11.2026: закалка, фацет, триплекс,
-// покраска металлических рам; остальные операции — свои. Металл, комплектующие и упаковка —
+// раскрой металла и покраска металлических рам; остальные операции — свои. Металл, комплектующие и упаковка —
 // прямые материалы. «Подложка» и «сложная форма» не определены (вопрос В4).
 export type OperationNature = 'material' | 'external' | 'own_operation' | 'commission' | 'allowance' | 'unknown'
 
@@ -23,7 +23,7 @@ export const OPERATIONS: Record<OperationCode, { label: string; nature: Operatio
   sandblast:          { label: 'Пескоструй', nature: 'own_operation' },
   film:               { label: 'Плёнка', nature: 'own_operation' },
   design:             { label: 'Макет и чертёж', nature: 'own_operation' },
-  frame_cutting:      { label: 'Резка металла', nature: 'own_operation' },
+  frame_cutting:      { label: 'Раскрой металла', nature: 'external' },
   frame_welding:      { label: 'Сварка каркаса', nature: 'own_operation' },
   assembly:           { label: 'Сборка', nature: 'own_operation' },
   transport:          { label: 'Перевозка на закалку', nature: 'own_operation' },

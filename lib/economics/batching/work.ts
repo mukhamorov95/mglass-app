@@ -8,6 +8,9 @@ import { NORM_OPS, type NormOp } from '../standards/norms'
 export type Work = { orderId: number; item: number; op: NormOp; parts: number; units: number; batchKey: string }
 export type Gap = { orderId: number; item: number; what: string }
 
+// Средняя площадь закупаемого листа (база знаний, «история и модель»): мера закупочной работы.
+export const SHEET_M2 = 7.22
+
 const num = (x: unknown) => (Number.isFinite(Number(x)) ? Number(x) : 0)
 const arr = (x: unknown) => (Array.isArray(x) ? x as Record<string, unknown>[] : [])
 const isNormOp = (op: string): op is NormOp => (NORM_OPS as readonly string[]).includes(op)
@@ -28,10 +31,13 @@ export function itemWork(orderId: number, index: number, it: StoredItem): { work
       add('edge', q, perimeter * q, glass)
     } else gap('изделие без размеров: резка и кромка не посчитаны')
     const bomOps = new Set(arr(it.bom).map(b => bomOperation(String(b.name ?? ''))))
-    for (const op of ['assembly', 'frame_cutting', 'frame_welding', 'sandblast'] as const) {
+    // Раскрой металла делает подрядчик: своих часов на него нет.
+    for (const op of ['assembly', 'frame_welding', 'sandblast'] as const) {
       if (bomOps.has(op)) add(op, q, op === 'sandblast' ? areaM2 : q, glass)
     }
     add('packaging', q, areaM2, 'изделие')
+    const glassM2 = arr(it.bom).filter(b => /м²|m2/i.test(String(b.unit)) && bomOperation(String(b.name ?? '')) === 'material').reduce((a, b) => a + num(b.qty), 0)
+    if (glassM2) add('purchasing', 0, glassM2 / SHEET_M2, 'листы')
   } else {
     if (!perimeter) gap('нет размеров')
     const curved = it.shape === 'curved'
@@ -51,6 +57,8 @@ export function itemWork(orderId: number, index: number, it: StoredItem): { work
       if (num(it.costTempering) > 0) add('transport', q, 0, `${thk}`)
     }
     add('packaging', q, areaM2, 'стекло')
+    const billedM2 = (num(it.totalAreaBilled) || areaM2) * (it.hasTriplex ? (num(it.triplexLayers) === 3 ? 3 : 2) : 1)
+    if (billedM2) add('purchasing', 0, billedM2 / SHEET_M2, 'листы')
   }
 
   for (const s of arr(it.services)) {

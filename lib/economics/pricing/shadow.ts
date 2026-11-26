@@ -4,26 +4,13 @@ import { weakest, type Status, type Valued } from '../values'
 export type PolicyMode = 'free' | 'normal' | 'deficit'
 export const MODE_LABEL: Record<PolicyMode, string> = { free: 'свободная мощность', normal: 'нормальная загрузка', deficit: 'дефицит мощности' }
 
-export type ExpenseLine = { name: string; amount: Valued }
-export type ExpenseProfile = { id: string; kind: 'current' | 'target'; version: number; lines: ExpenseLine[] }
-
-export function profileTotal(p: ExpenseProfile) {
-  return {
-    known: p.lines.reduce((a, l) => a + (l.amount.value ?? 0), 0),
-    missing: p.lines.filter(l => l.amount.value == null).map(l => l.name),
-    status: weakest(p.lines.map(l => l.amount.status)),
-  }
-}
-
 export type FloorInput = {
-  variable: Valued                   // переменные производства и канала
-  orderHours: number
+  variable: Valued                   // Н0: переменные производства и канала
+  allocatedFixed: Valued             // ресурсы и постоянные, приходящиеся на часы заказа
   bottleneckHours: number
-  profile: ExpenseProfile
-  normalHours: Valued
   displacedPerBottleneckHour: Valued // МД вытесняемых заказов на час узкого места
   normsStatus: Status
-  gaps: string[]                     // чего не хватило в объёмах и затратах канала
+  gaps: string[]                     // чего не хватило в объёмах, расходах и затратах канала
 }
 
 export type Recommendation = {
@@ -40,15 +27,12 @@ export type Recommendation = {
 }
 
 export function recommend(mode: PolicyMode, i: FloorInput, stamps: Record<string, string>): Recommendation {
-  const total = profileTotal(i.profile)
-  const incomplete = [...i.gaps, ...total.missing.map(m => `расходы: нет значения «${m}»`)]
   const h0 = i.variable.value
-  const rate = i.normalHours.value ? total.known / i.normalHours.value : null
-  const h2 = h0 != null && rate != null ? h0 + i.orderHours * rate : null
+  const h2 = h0 != null && i.allocatedFixed.value != null ? h0 + i.allocatedFixed.value : null
   const displaced = i.displacedPerBottleneckHour.value
   const ht = h0 != null && (i.bottleneckHours === 0 || displaced != null) ? h0 + i.bottleneckHours * (displaced ?? 0) : null
   const guarded = mode === 'deficit' ? (h2 != null && ht != null ? Math.max(h2, ht) : null) : h2
-  const used: Status[] = [i.variable.status, i.normsStatus, i.normalHours.status, total.status]
+  const used: Status[] = [i.variable.status, i.normsStatus, i.allocatedFixed.status]
   if (mode === 'deficit' && i.bottleneckHours > 0) used.push(i.displacedPerBottleneckHour.status)
   return {
     kind: 'preliminary', mode,
@@ -56,9 +40,9 @@ export function recommend(mode: PolicyMode, i: FloorInput, stamps: Record<string
     suggested: guarded == null ? null : Math.ceil(guarded),
     // При свободной мощности вклад дают и заказы выше Н0, но брать ли такой — решает человек.
     minForDecision: mode === 'free' ? (h0 == null ? null : Math.ceil(h0)) : guarded == null ? null : Math.ceil(guarded),
-    // Пропуски в расходах не делают весь расчёт «пустым»: он помечен неполным, статус — слабейший из имеющихся.
-    status: guarded == null ? 'missing' : weakest(used.filter(s => s !== 'missing').concat(incomplete.length ? 'hypothesis' : [])),
-    incomplete, stamps,
+    // Пропуски не делают весь расчёт «пустым»: он помечен неполным, статус — слабейший из имеющихся.
+    status: guarded == null ? 'missing' : weakest(used.filter(s => s !== 'missing').concat(i.gaps.length ? 'hypothesis' : [])),
+    incomplete: i.gaps, stamps,
   }
 }
 

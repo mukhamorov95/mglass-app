@@ -94,9 +94,9 @@ describe('чего нет в позиции — пусто, неизвестно
     ['Осветлённое 4 мм', 'material'], ['Подложка', 'underlay'], ['Сложная форма', 'complex_shape'], ['Расходники подсветки', 'components'],
   ])('состав «%s» → %s', (name, op) => { expect(bomOperation(name)).toBe(op) })
 
-  it('сторонние — только четыре подтверждённые операции', () => {
+  it('сторонние — только подтверждённые владельцем операции', () => {
     expect(Object.entries(OPERATIONS).filter(([, v]) => v.nature === 'external').map(([k]) => k).sort())
-      .toEqual(['facet', 'frame_paint', 'tempering', 'triplex'])
+      .toEqual(['facet', 'frame_cutting', 'frame_paint', 'tempering', 'triplex'])
   })
 
   it('строка факта: объём отдельно от оценки; без объёма ставки нет', () => {

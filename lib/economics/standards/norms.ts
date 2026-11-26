@@ -3,7 +3,7 @@ import { fingerprint, type Meta } from '../values'
 // Технологические нормы — версионируемые данные, а не код: уточнение замером даёт новую
 // версию набора, прежние результаты остаются со своим отпечатком.
 export const NORM_OPS = ['cutting', 'edge', 'curved', 'drilling', 'cutout', 'sandblast', 'film', 'design',
-  'frame_cutting', 'frame_welding', 'assembly', 'packaging', 'transport'] as const
+  'frame_cutting', 'frame_welding', 'assembly', 'packaging', 'transport', 'purchasing'] as const
 export type NormOp = typeof NORM_OPS[number]
 
 export type Norm = Meta & {
@@ -11,7 +11,8 @@ export type Norm = Meta & {
   setupMin: number | null          // наладка на технологическую партию
   perPartMin: number | null        // установка и снятие детали
   perUnitMin: number | null        // на единицу объёма (м.п., м², отверстие, штука)
-  machineMinPerUnit: number | null // из человеко-минут не выводится
+  machineMinPerUnit: number | null // из человеко-минут не выводится; 0 — ручная операция
+  machineSetupMin?: number | null  // занятость станка на наладку партии
   sample?: number                  // число замеров
 }
 

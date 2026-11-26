@@ -5,13 +5,13 @@ import { weakest, fingerprint, valuedError, type Valued, type Status } from '@/l
 import { normSetErrors, normSetStamp, type Norm, type NormSet, type NormOp } from '@/lib/economics/standards/norms'
 import { itemWork, batches } from '@/lib/economics/batching/work'
 import { requiredHours, poolLoad, totalLabourH, type CapacityPlan, type StaffScenario } from '@/lib/economics/capacity/capacity'
-import { recommend, approvePrice, profileTotal, displacedRate, type FloorInput, type ExpenseProfile } from '@/lib/economics/pricing/shadow'
+import { recommend, approvePrice, displacedRate, type FloorInput } from '@/lib/economics/pricing/shadow'
 
 // Все числа здесь вымышленные.
 const v = (value: number | null, status: Status = 'owner'): Valued => ({ value, status: value == null ? 'missing' : status, source: 'тест', date: '2026-01-01' })
 const norm = (op: NormOp, setupMin = 10, perPartMin = 2, perUnitMin = 1): Norm =>
   ({ op, setupMin, perPartMin, perUnitMin, machineMinPerUnit: null, status: 'hypothesis', source: 'тест', date: '2026-01-01' })
-const set: NormSet = { id: 't', version: 1, date: '2026-01-01', norms: (['cutting', 'edge', 'drilling', 'packaging', 'transport'] as NormOp[]).map(op => norm(op)) }
+const set: NormSet = { id: 't', version: 1, date: '2026-01-01', norms: (['cutting', 'edge', 'drilling', 'packaging', 'transport', 'purchasing'] as NormOp[]).map(op => norm(op)) }
 const glass = { category: 'стекло', materialId: 1, thickness: 8, width: 500, height: 1000, quantity: 1, totalAreaNet: 0.5, costEdge: 100, costTempering: 100 }
 
 describe('статусы и версии норм', () => {
@@ -55,7 +55,7 @@ describe('объём работ и технологические партии',
   })
   it('серийность даёт экономию только на наладке, а не скидку на штуку', () => {
     const hours = (qty: number) => totalLabourH(requiredHours(itemWork(1, 0, { ...glass, quantity: qty, totalAreaNet: 0.5 * qty }).work, set).hours)
-    const setupH = requiredHours(itemWork(1, 0, glass).work, set).hours.cutting!.setupH * 4
+    const setupH = Object.values(requiredHours(itemWork(1, 0, glass).work, set).hours).reduce((s, x) => s + x!.setupH, 0)
     expect(hours(10)).toBeCloseTo(10 * (hours(1) - setupH) + setupH, 6)
   })
   it('чего нет в позиции — пробел, а не догадка', () => {
@@ -98,9 +98,8 @@ describe('мощность и штатные сценарии', () => {
 })
 
 describe('политика цены', () => {
-  const profile: ExpenseProfile = { id: 'p', kind: 'target', version: 1, lines: [{ name: 'нагрузка', amount: v(1000) }] }
   const input: FloorInput = {
-    variable: v(500), orderHours: 2, bottleneckHours: 1, profile, normalHours: v(10),
+    variable: v(500), allocatedFixed: v(200), bottleneckHours: 1,
     displacedPerBottleneckHour: v(900, 'hypothesis'), normsStatus: 'hypothesis', gaps: [],
   }
   it('три режима: свободная, нормальная, дефицит', () => {
@@ -117,12 +116,9 @@ describe('политика цены', () => {
     const r = recommend('deficit', { ...input, displacedPerBottleneckHour: v(null) }, {})
     expect([r.suggested, r.status]).toEqual([null, 'missing'])
   })
-  it('действующий и целевой профили не смешиваются; пропуск виден', () => {
-    const current: ExpenseProfile = { id: 'now', kind: 'current', version: 1, lines: [...profile.lines, { name: 'аренда', amount: v(null) }] }
-    expect(profileTotal(current)).toEqual({ known: 1000, missing: ['аренда'], status: 'missing' })
-    const r = recommend('normal', { ...input, profile: current, normsStatus: 'measured' }, {})
-    expect(r.incomplete).toEqual(['расходы: нет значения «аренда»'])
-    expect(r.status).toBe('hypothesis')
+  it('пропуск во входах не даёт назвать расчёт измеренным', () => {
+    const r = recommend('normal', { ...input, normsStatus: 'measured', gaps: ['нет значения: аренда'] }, {})
+    expect([r.incomplete, r.status]).toEqual([['нет значения: аренда'], 'hypothesis'])
   })
   it('предварительная рекомендация не становится ценой сама', () => {
     const rec = recommend('normal', input, { norms: 'x' })
