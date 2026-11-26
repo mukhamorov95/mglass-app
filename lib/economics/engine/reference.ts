@@ -54,9 +54,9 @@ export function referenceErrors(ref: Reference): string[] {
 export type Edit = { key: string; lo: number | null; hi: number | null; status: Status; source: string }
 
 // Уточнение создаёт новую версию: прежняя не меняется, в новой записано, что было и почему стало.
-export function reviseReference(ref: Reference, edits: Edit[], meta: { reason: string; author: string; date: string }): Reference {
+export function reviseReference(ref: Reference, edits: Edit[], meta: { reason: string; author: string; date: string }, additions: Param[] = []): Reference {
   if (!meta.reason.trim()) throw new Error('Не указана причина изменения')
-  if (!edits.length) throw new Error('Нет изменений')
+  if (!edits.length && !additions.length) throw new Error('Нет изменений')
   const changes: Change[] = []
   const params = ref.params.map(p => {
     const e = edits.find(x => x.key === p.key)
@@ -67,7 +67,11 @@ export function reviseReference(ref: Reference, edits: Edit[], meta: { reason: s
   })
   const unknown = edits.filter(e => !ref.params.some(p => p.key === e.key))
   if (unknown.length) throw new Error(`Неизвестные параметры: ${unknown.map(e => e.key).join(', ')}`)
-  const next: Reference = { ...ref, version: ref.version + 1, date: meta.date, author: meta.author, reason: meta.reason.trim(), changes, params }
+  const existing = additions.filter(a => ref.params.some(p => p.key === a.key))
+  if (existing.length) throw new Error(`Уже есть: ${existing.map(a => a.key).join(', ')}`)
+  // Новый параметр тоже попадает в журнал: «не было» — такое же изменение, как правка.
+  for (const a of additions) changes.push({ key: a.key, before: { lo: null, hi: null, status: 'missing', source: 'параметра не было' }, after: { lo: a.lo, hi: a.hi, status: a.status, source: a.source } })
+  const next: Reference = { ...ref, version: ref.version + 1, date: meta.date, author: meta.author, reason: meta.reason.trim(), changes, params: [...params, ...additions] }
   const errors = referenceErrors(next)
   if (errors.length) throw new Error(errors.join('; '))
   return next

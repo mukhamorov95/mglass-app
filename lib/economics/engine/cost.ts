@@ -22,6 +22,7 @@ export type Bottleneck = { center: CenterId; kind: 'labour' | 'machine'; label: 
 
 export type OrderCost = {
   variable: Range
+  consumables: Range       // расходники по драйверу: износ сверла, абразив
   direct: DirectLine[]
   uses: CenterUse[]
   resource: Range
@@ -99,16 +100,17 @@ export function orderCost(args: {
   const uses = centerUses(u, rates, args.shifts)
   const variable = plus(...direct.map(d => d.cost))
   const resource = plus(...uses.map(x => plus(x.labourCost, x.machineCost)))
+  const consumables = plus(...u.ops.map(o => o.consumableRub))
   const setupCost = plus(...u.setups.map(s => {
     const c = rates.centers.find(x => x.id === s.center)!
     return plus({ lo: s.labourMin.lo * c.labourRate.lo, hi: s.labourMin.hi * c.labourRate.hi },
       c.machineRate ? { lo: s.machineMin.lo * c.machineRate.lo, hi: s.machineMin.hi * c.machineRate.hi } : ZERO)
   }))
   const layers = absorb(resource, rates)
-  const full = plus(variable, resource, layers.overhead)
+  const full = plus(variable, resource, consumables, layers.overhead)
   const sustainable = plus(full, layers.admin)
   return {
-    variable, direct, uses, resource, setupCost, ...layers, full, sustainable,
+    variable, consumables, direct, uses, resource, setupCost, ...layers, full, sustainable,
     floors: {
       variable: priceExVat(variable, commission),
       production: priceExVat(full, commission),

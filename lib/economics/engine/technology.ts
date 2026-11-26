@@ -54,6 +54,7 @@ export type OpLine = {
   unit: 'листов' | 'м.п.' | 'отв.' | 'вырезов' | 'м²' | 'дет.'
   labourMin: Range
   machineMin: Range
+  consumableRub: Range      // расходник, считаемый по драйверу (износ сверла, абразив)
   formula: string
   refKeys: string[]
 }
@@ -100,8 +101,8 @@ function setup(c: Ctx, op: OpKind, center: CenterId, batchKey: string, key: stri
   c.setups.set(id, { op, center, batchKey, labourMin: v, machineMin: onMachine ? v : ZERO, refKeys: [key] })
 }
 
-function line(c: Ctx, p: PartSpec, o: Omit<OpLine, 'partKey'>) {
-  c.ops.push({ partKey: p.key, ...o })
+function line(c: Ctx, p: PartSpec, o: Omit<OpLine, 'partKey' | 'consumableRub'> & { consumableRub?: Range }) {
+  c.ops.push({ partKey: p.key, consumableRub: ZERO, ...o })
 }
 
 function cutting(c: Ctx, p: PartSpec, n: number) {
@@ -171,7 +172,7 @@ function drilling(c: Ctx, p: PartSpec, n: number) {
   const group = p.thicknessMm == null ? null : c.ref.get(`jd22.group.${p.thicknessMm}`)
   const groups = group ? [group.lo] : [1, 2, 3, 4, 5]
   const max = c.ref.get('jd22.maxDiameter')
-  let drillSec: Range = ZERO, count = 0
+  let drillSec: Range = ZERO, count = 0, wear: Range = ZERO
   const keys: string[] = []
   for (const h of holes) {
     if (h.diameterMm != null && max && h.diameterMm > max.hi) {
@@ -187,6 +188,9 @@ function drilling(c: Ctx, p: PartSpec, n: number) {
     if (!sec) { miss(c, p, 'drilling', 'JD-22: нет времени сверления'); continue }
     keys.push(...cols)
     drillSec = plus(drillSec, times(sec, h.perPart * n))
+    const w = c.ref.span(bands.map(b => `jd22.wear.${b}`))
+    if (w) { wear = plus(wear, times(w, h.perPart * n)); keys.push(...bands.map(b => `jd22.wear.${b}`)) }
+    else miss(c, p, 'drilling', 'JD-22: износ сверла не задан')
     count += h.perPart * n
   }
   if (!count) return
@@ -201,7 +205,7 @@ function drilling(c: Ctx, p: PartSpec, n: number) {
   const markSec = mark ? times(mark, count) : ZERO
   const batchKey = `${p.thicknessMm ?? '?'}:${holes.map(h => h.diameterMm ?? '?').sort().join('+')}`
   setup(c, 'drilling', 'drilling', batchKey, 'jd22.setupMin', true, p)
-  line(c, p, { op: 'drilling', center: 'drilling', batchKey, parts: n, qty: count, unit: 'отв.',
+  line(c, p, { op: 'drilling', center: 'drilling', batchKey, parts: n, qty: count, unit: 'отв.', consumableRub: wear,
     labourMin: times(plus(loadSec, markSec, drillSec), 1 / MIN), machineMin: times(plus(loadSec, drillSec), 1 / MIN),
     formula: `(загрузка ${fmt(loadSec)} с + разметка ${fmt(markSec)} с + сверление ${fmt(drillSec)} с) ÷ 60`,
     refKeys: [...keys, 'jd22.loadSecPerPart', ...markKeys] })
@@ -248,9 +252,11 @@ function sandblast(c: Ctx, p: PartSpec, n: number) {
   if (p.sandblast.mode === 'unknown') miss(c, p, 'sandblast', 'режим пескоструя не указан: диапазон по режимам')
   if (!c.ref.get('jp.filmMinPerM2')) miss(c, p, 'sandblast', 'плёнка и трафарет: труд не учтён')
   const minutes = { lo: m2 / rate.hi * MIN, hi: m2 / rate.lo * MIN }
+  const abrasive = c.ref.get('jp.abrasiveRubM2')
+  if (!abrasive) miss(c, p, 'sandblast', 'JP-1600: расход абразива не задан')
   setup(c, 'sandblast', 'sandblast', modes.join('+'), 'jp.setupMin', true, p)
   line(c, p, { op: 'sandblast', center: 'sandblast', batchKey: modes.join('+'), parts: n, qty: m2, unit: 'м²',
-    labourMin: minutes, machineMin: minutes, formula: `${fmt(point(Math.round(m2 * 100) / 100))} м² ÷ ${fmt(rate)} м²/ч`,
+    labourMin: minutes, machineMin: minutes, consumableRub: abrasive ? times(abrasive, m2) : ZERO, formula: `${fmt(point(Math.round(m2 * 100) / 100))} м² ÷ ${fmt(rate)} м²/ч`,
     refKeys: modes.map(m => `jp.m2h.${m}`) })
 }
 

@@ -32,6 +32,7 @@ export type Center = {
 
 export type Rates = {
   scenario: RateScenario
+  consumablesByDriver: { id: CenterId; monthly: Range }[]
   centers: Center[]
   logistics: Range
   overhead: Range
@@ -84,7 +85,10 @@ export function resourceRates(ref: Reader, scenario: RateScenario): Rates {
     const leaseCost = paid(`fin.center.${id}.lease`)
     const siteMonth = plus(
       rent(ref.get(`fin.center.${id}.areaM2`)?.lo ?? 0),
-      money(`fin.center.${id}.electricity`), money(`fin.center.${id}.repair`), money(`fin.center.${id}.consumables`),
+      money(`fin.center.${id}.electricity`), money(`fin.center.${id}.repair`),
+      // Расходники, считаемые по драйверу (износ сверла, абразив), в ставку не входят:
+      // иначе они легли бы на заказ дважды.
+      ref.param(`fin.center.${id}.consumables`)?.attrs?.byDriver ? ZERO : money(`fin.center.${id}.consumables`),
       leaseCost,
     )
     const labourPracticalMin = (ref.get(`fin.center.${id}.hours`)?.lo ?? 0) * 60
@@ -109,6 +113,11 @@ export function resourceRates(ref: Reader, scenario: RateScenario): Rates {
   const overhead = plus(rent(areaTotal - centersArea), ...ref.keys('fin.overhead.').map(money))
   const admin = plus(withTax('fin.admin.payroll'), ...ref.keys('fin.admin.cost.').map(money))
 
-  const total = plus(...centers.map(c => plus(c.labourMonth, c.siteMonth)), logistics, overhead, admin)
-  return { scenario, centers, logistics, overhead, admin, total, grossTotal: plus(...gross) }
+  // Месячная сумма «расходников по драйверу» остаётся расходом периода: что не начислено на
+  // заказы, то не отнесено, как и неиспользованная мощность.
+  const consumablesByDriver = CENTERS.filter(id => ref.param(`fin.center.${id}.consumables`)?.attrs?.byDriver)
+    .map(id => ({ id, monthly: money(`fin.center.${id}.consumables`) }))
+  const total = plus(...centers.map(c => plus(c.labourMonth, c.siteMonth)), logistics, overhead, admin,
+    ...consumablesByDriver.map(c => c.monthly))
+  return { scenario, consumablesByDriver, centers, logistics, overhead, admin, total, grossTotal: plus(...gross) }
 }

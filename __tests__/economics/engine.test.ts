@@ -18,7 +18,7 @@ const TECH = ref({
   'zm9.grind.6': num(2.5), 'zm9.polish.6': num(1.8), 'zm9.setupMin': num(10), 'zm9.operators': num(1),
   'jd22.sec.4-12.g1': num(25), 'jd22.sec.4-12.g2': num(30), 'jd22.sec.4-12.g3': num(40),
   'jd22.sec.4-12.g4': num(50), 'jd22.sec.4-12.g5': num(60), 'jd22.sec.13-25.g3': num(50), 'jd22.loadSecPerPart': num(30), 'jd22.mark.templateSec': num(15),
-  'jd22.setupMin': num(35), 'jd22.group.6': num(3), 'jd22.maxDiameter': num(65),
+  'jd22.setupMin': num(35), 'jd22.group.6': num(3), 'jd22.maxDiameter': num(65), 'jd22.wear.4-12': num(4),
   'pack.minPerPart': num(2), 'mat.1.price': num(600, 600, { vat: 22 }), 'mat.1.waste': num(20),
   'temper.price.6': num(400, 400, { vat: 'none' }),
 })
@@ -157,10 +157,22 @@ describe('ставки ресурсов', () => {
 describe('себестоимость и цена', () => {
   const cost = (specs: PartSpec[], direct: { label: string; cost: Range }[] = []) =>
     orderCost({ consumption: run(specs), direct, rates, commission: point(0.01) })
-  it('переменные, ресурсы и слои не накладываются друг на друга', () => {
+  it('переменные, ресурсы, расходники и слои не накладываются друг на друга', () => {
     const c = cost([part()], [{ label: 'стекло', cost: point(1000) }])
-    expect(c.full.lo).toBeCloseTo(c.variable.lo + c.resource.lo + c.overhead.lo, 6)
+    expect(c.full.lo).toBeCloseTo(c.variable.lo + c.resource.lo + c.consumables.lo + c.overhead.lo, 6)
     expect(c.sustainable.lo).toBeCloseTo(c.full.lo + c.admin.lo, 6)
+  })
+  it('расходник по драйверу начисляется на операцию и не сидит в ставке участка', () => {
+    const byDriver = ref({ ...Object.fromEntries(FIN.params.map(p => [p.key, p])),
+      'fin.center.drilling.consumables': num(4000, 4000, { vat: 'none', attrs: { byDriver: 1 } }) })
+    const r = resourceRates(reader(TECH, byDriver), { area: 'target', leases: 'active' })
+    const plain = resourceRates(reader(TECH, ref({ ...Object.fromEntries(FIN.params.map(p => [p.key, p])),
+      'fin.center.drilling.consumables': num(4000, 4000, { vat: 'none' }) })), { area: 'target', leases: 'active' })
+    const site = (x: typeof r) => x.centers.find(c => c.id === 'drilling')!.siteMonth.lo
+    expect(site(plain) - site(r)).toBeCloseTo(4000, 6)
+    expect(r.total.lo).toBeCloseTo(plain.total.lo, 6)   // статья осталась в расходах месяца
+    const c = orderCost({ consumption: run([part({ qty: 10, holes: [{ diameterMm: 10, perPart: 2 }] })]), direct: [], rates: r, commission: point(0) })
+    expect(c.consumables.lo).toBeCloseTo(20 * 4, 6)
   })
   it('комиссия входит в цену делением, а не наценкой', () => {
     const p = priceExVat(point(1000), point(0.01)).lo
@@ -222,7 +234,8 @@ describe('границы данных', () => {
     expect(files).not.toMatch(/supabase|createClient|fetch\(|calcItem|computeQuoteItem/)
   })
   it('закрытый справочник не лежит в открытой папке и не добавлен в git', () => {
-    expect(readdirSync('docs/economics/reference')).toEqual(['tech.v1.json'])
+    // В открытой папке лежат только версии технического справочника: финансовый — в private/.
+    expect(readdirSync('docs/economics/reference').filter(f => !/^tech\.v\d+\.json$/.test(f))).toEqual([])
     expect(read('.gitignore')).toMatch(/docs\/economics/)
   })
 })
