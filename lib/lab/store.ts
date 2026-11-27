@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { createServiceClient } from '../supabase-service'
-import { referenceErrors, type Reference } from '../economics/engine/reference'
+import { referenceErrors, type Change, type Reference } from '../economics/engine/reference'
 import type { LabProject } from '../economics/lab/project'
 import type { LabQuote } from '../economics/lab/quote'
 
@@ -56,8 +56,11 @@ export async function saveReference(id: 'tech' | 'finance', ref: Reference, reas
   const sb = createServiceClient({ actor })
   const { data: prev } = await sb.from('economics_lab_reference').select('version, data').eq('id', id).maybeSingle()
   if (prev) {
+    // В колонку уходит причина самой убираемой версии, а не причина новой правки: строка
+    // истории описывает ту версию, которая в ней лежит.
+    const own = (prev.data as Reference | null)?.reason
     await sb.from('economics_lab_reference_history')
-      .upsert({ ref_id: id, version: prev.version, data: prev.data, reason, saved_by: actor }, { onConflict: 'ref_id,version' })
+      .upsert({ ref_id: id, version: prev.version, data: prev.data, reason: own || reason, saved_by: actor }, { onConflict: 'ref_id,version' })
   }
   const { error } = await sb.from('economics_lab_reference')
     .upsert({ id, version: ref.version, data: ref, updated_at: new Date().toISOString(), updated_by: actor })
@@ -139,4 +142,34 @@ export async function deleteVariant(id: string) {
   const sb = createServiceClient()
   const { error } = await sb.from('economics_lab_variants').delete().eq('id', id)
   if (error) throw new Error(error.message)
+}
+
+export type RefHistoryRow = {
+  version: number
+  date: string
+  author: string
+  reason: string
+  changes: Change[]
+  savedAt: string | null
+  current: boolean
+}
+
+// История норматива: каждая версия с причиной и списком «было → стало». Текущая версия идёт
+// первой строкой — иначе по экрану не видно, чем она отличается от предыдущей.
+export async function listReferenceHistory(id: 'tech' | 'finance'): Promise<{ rows: RefHistoryRow[]; error: string | null }> {
+  const sb = createServiceClient()
+  const [cur, hist] = await Promise.all([
+    sb.from('economics_lab_reference').select('version, data, updated_at').eq('id', id).maybeSingle(),
+    sb.from('economics_lab_reference_history').select('version, data, reason, saved_at').eq('ref_id', id).order('version', { ascending: false }).limit(100),
+  ])
+  if (cur.error) return { rows: [], error: cur.error.message }
+  if (hist.error) return { rows: [], error: hist.error.message }
+  const row = (data: unknown, savedAt: string | null, current: boolean): RefHistoryRow => {
+    const r = data as Reference
+    return { version: r.version, date: r.date, author: r.author, reason: r.reason, changes: r.changes ?? [], savedAt, current }
+  }
+  const rows: RefHistoryRow[] = []
+  if (cur.data?.data) rows.push(row(cur.data.data, String(cur.data.updated_at), true))
+  for (const h of hist.data ?? []) if (h.data) rows.push(row(h.data, String(h.saved_at), false))
+  return { rows, error: null }
 }

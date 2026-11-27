@@ -31,7 +31,12 @@ export default async function LabListPage() {
         </div>
 
         <div className="mt-4 rounded-lg border border-[#e4e4e0] bg-white p-4 text-xs">
-          <p className="font-semibold text-[#111110]">Справочники</p>
+          <div className="flex items-baseline justify-between gap-4">
+            <p className="font-semibold text-[#111110]">Справочники</p>
+            <Link href="/cfo/lab/reference" className="shrink-0 text-[#9a9a95] underline hover:text-[#111110]">
+              Править нормативы →
+            </Link>
+          </div>
           <ul className="mt-1 space-y-0.5 text-[#9a9a95]">
             <li>Технические нормативы: {refs.source.tech ?? 'не загружены'}</li>
             <li>Финансовые параметры: {refs.source.finance ?? 'не загружены — деньги считаться не будут'}</li>
