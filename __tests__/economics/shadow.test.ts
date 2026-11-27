@@ -139,10 +139,20 @@ describe('политика цены', () => {
 describe('теневой режим не имеет пути к прайсу', () => {
   const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true })
     .flatMap(e => (e.isDirectory() ? walk(join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []))
+  // Единственное исключение: lab/compare.ts зовёт calcItem, потому что сравнение двух моделей
+  // (§14 ТЗ лаборатории) только в этом и состоит. Функция чистая, в базу не ходит и прайс не
+  // меняет; запись и чтение базы ей по-прежнему запрещены — это проверяется ниже.
+  const PRICE_CALLER = join('lib', 'economics', 'lab', 'compare.ts')
   it('модули экономики не ходят в базу и не вызывают расчёт цены', () => {
     for (const f of walk('lib/economics')) {
-      expect(readFileSync(f, 'utf8'), f).not.toMatch(/supabase|\.(insert|upsert|update|delete)\(|\bcalc(Item|Totals|FactoryMirror|FactoryLoft)\(|fetch\(/)
+      const src = readFileSync(f, 'utf8')
+      expect(src, f).not.toMatch(/supabase|\.(insert|upsert|update|delete)\(|fetch\(/)
+      if (f !== PRICE_CALLER) expect(src, f).not.toMatch(/\bcalc(Item|Totals|FactoryMirror|FactoryLoft)\(/)
     }
+  })
+  it('расчёт цены зовёт ровно один файл лаборатории', () => {
+    const callers = walk('lib/economics').filter(f => /\bcalc(Item|Totals|FactoryMirror|FactoryLoft)\(/.test(readFileSync(f, 'utf8')))
+    expect(callers).toEqual([PRICE_CALLER])
   })
   it('приложение не импортирует модуль цен теневого режима', () => {
     const files = [...walk('app'), ...walk('components'), ...walk('lib').filter(f => !f.startsWith(join('lib', 'economics')))]

@@ -18,10 +18,13 @@ export type PartSpec = {
   layers?: number
   shape: 'rect' | 'curved'
   edge: EdgeMode
+  edgeMetresPerPart?: number | null   // длина обработки, если она не равна периметру
+  sheets?: Range | null               // листы посчитаны снаружи (режим расхода материала)
   holes: { diameterMm: number | null; perPart: number }[]
   holesUncounted?: boolean
   marking: Marking
-  cutouts: { type: string | null; perPart: number }[]
+  // equipment: вырез делает станок, ручной инструмент или неизвестно (тогда станко-минуты — диапазон)
+  cutouts: { type: string | null; perPart: number; equipment?: 'jym' | 'manual' | 'unknown' }[]
   cutoutsUncounted?: boolean
   tempering: boolean
   sandblast: { m2PerPart: number | null; mode: SandMode } | null
@@ -43,6 +46,10 @@ export const MACHINE_LABEL: Partial<Record<CenterId, string>> = {
 }
 
 export type OpKind = 'cutting' | 'edge' | 'curved' | 'drilling' | 'cutout' | 'sandblast' | 'packaging' | 'welding' | 'assembly'
+export const OP_LABEL: Record<OpKind, string> = {
+  cutting: 'Резка листа', edge: 'Прямолинейная кромка', curved: 'Фигурная обработка', drilling: 'Сверление',
+  cutout: 'Вырезы', sandblast: 'Пескоструй', packaging: 'Упаковка', welding: 'Сварка', assembly: 'Сборка',
+}
 
 export type OpLine = {
   partKey: string
@@ -114,16 +121,17 @@ function cutting(c: Ctx, p: PartSpec, n: number) {
   // не измерено: низ считает по площади, верх по числу деталей.
   const byArea = { lo: net * (1 + waste.lo / 100) / sheet.lo, hi: net * (1 + waste.hi / 100) / sheet.hi }
   const byParts = n / refParts.lo
-  const sheets = { lo: byArea.lo, hi: Math.max(byArea.hi, byParts) }
+  // Листы, посчитанные снаружи (режим расхода материала), важнее нормы отхода: резка идёт по ним.
+  const sheets = p.sheets ?? { lo: byArea.lo, hi: Math.max(byArea.hi, byParts) }
   const minutes = { lo: sheets.lo * perSheet.lo, hi: sheets.hi * perSheet.hi }
   line(c, p, { op: 'cutting', center: 'cutting', batchKey: `${p.materialKey ?? '?'}:${p.thicknessMm ?? '?'}`, parts: n,
-    qty: Math.round(byArea.hi * 1000) / 1000, unit: 'листов', labourMin: minutes, machineMin: ZERO,
+    qty: Math.round(sheets.hi * 1000) / 1000, unit: 'листов', labourMin: minutes, machineMin: ZERO,
     formula: `листы ${fmt(sheets)} × ${fmt(perSheet)} мин`, refKeys: ['cut.minPerSheet', 'cut.partsPerSheet', 'sheet.areaM2'] })
 }
 
 function edge(c: Ctx, p: PartSpec, n: number) {
   const row = zm9Row(p.thicknessMm)
-  const metres = perimeterM(p) * n
+  const metres = (p.edgeMetresPerPart ?? perimeterM(p)) * n
   if (row == null) { miss(c, p, 'edge', `ZM-9: нет нормы для толщины ${p.thicknessMm ?? 'не указана'}`); return }
   const batchKey = `${row}:${p.edge}`
   const operators = c.ref.get('zm9.operators') ?? point(1)
@@ -220,24 +228,30 @@ function cutouts(c: Ctx, p: PartSpec, n: number) {
   if (p.thicknessMm == null || !c.ref.get(`jym.thk.${p.thicknessMm}`)) {
     miss(c, p, 'cutout', `JYM-1: коэффициент для толщины ${p.thicknessMm ?? '?'} мм не задан: диапазон по крайним`)
   }
-  let cutMin: Range = ZERO, count = 0
+  let cutMin: Range = ZERO, count = 0, machineCut: Range = ZERO
   for (const x of cuts) {
     const keys = x.type && c.ref.get(`jym.cut.${x.type}`) ? [`jym.cut.${x.type}`] : CUTOUT_TYPES.map(t => `jym.cut.${t}`)
     if (keys.length > 1) miss(c, p, 'cutout', 'тип выреза не сопоставлен с таблицей: диапазон по всем типам')
     const base = c.ref.span(keys)
     if (!base) { miss(c, p, 'cutout', 'JYM-1: нет времени выреза'); continue }
-    cutMin = plus(cutMin, { lo: base.lo * coef.lo * x.perPart * n, hi: base.hi * coef.hi * x.perPart * n })
+    const one = { lo: base.lo * coef.lo * x.perPart * n, hi: base.hi * coef.hi * x.perPart * n }
+    cutMin = plus(cutMin, one)
+    // Ручной инструмент станко-минут не занимает; неизвестное оборудование даёт диапазон 0…всё.
+    const eq = x.equipment ?? 'unknown'
+    machineCut = plus(machineCut, eq === 'jym' ? one : eq === 'manual' ? ZERO : { lo: 0, hi: one.hi })
     count += x.perPart * n
   }
   if (!count) return
-  miss(c, p, 'cutout', 'не подтверждено, какие вырезы делает JYM-1, а какие ручной инструмент')
+  if (cuts.some(x => (x.equipment ?? 'unknown') === 'unknown')) {
+    miss(c, p, 'cutout', 'не подтверждено, какие вырезы делает JYM-1, а какие ручной инструмент')
+  }
   const move = plus(c.ref.get('jym.loadMin') ?? ZERO, c.ref.get('jym.unloadMin') ?? ZERO)
   const control = c.ref.get('jym.controlMin') ?? ZERO
   const mark = c.ref.get('jym.markMin') ?? ZERO
   const batchKey = `${p.thicknessMm ?? '?'}`
-  setup(c, 'cutout', 'curved', batchKey, 'jym.setupMin', true, p)
+  setup(c, 'cutout', 'curved', batchKey, 'jym.setupMin', cuts.some(x => (x.equipment ?? 'unknown') !== 'manual'), p)
   line(c, p, { op: 'cutout', center: 'curved', batchKey, parts: n, qty: count, unit: 'вырезов',
-    labourMin: plus(cutMin, times(plus(move, control, mark), n)), machineMin: plus(cutMin, times(move, n)),
+    labourMin: plus(cutMin, times(plus(move, control, mark), n)), machineMin: plus(machineCut, times(move, n)),
     formula: `вырезы ${fmt(cutMin)} мин + ${n} дет. × (загрузка и выгрузка ${fmt(move)} + контроль ${fmt(control)} + разметка ${fmt(mark)})`,
     refKeys: ['jym.loadMin', 'jym.unloadMin', 'jym.controlMin', 'jym.markMin'] })
 }
