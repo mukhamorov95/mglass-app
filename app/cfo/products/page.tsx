@@ -45,7 +45,7 @@ async function loadOrders(svc: ReturnType<typeof createServiceClient>): Promise<
   const page = 500
   for (let from = 0; ; from += page) {
     const { data, error } = await svc.from('b2b_orders')
-      .select('id, launched_at, discount_percent, total_after_discount, total_sale_inc_vat, items')
+      .select('id, launched_at, discount_percent, total_after_discount, total_sale_inc_vat, items, notes')
       .is('archived_at', null).not('launched_at', 'is', null)
       .order('id', { ascending: true }).range(from, from + page - 1)
     if (error) throw new Error(`b2b_orders: ${error.message}`)

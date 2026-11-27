@@ -20,7 +20,7 @@ type Money = {
     tb1: number | null
   } | null
   monthly: Record<string, { orders: number; amount: number }>
-  monthlyReal?: Record<string, { cost: number; marginPct: number; breakdown: Record<string, number> }>   // реальная маржа + разбивка себестоимости — только admin
+  monthlyReal?: Record<string, { cost: number; marginPct: number; breakdown: Record<string, number>; noCostOrders: number; noCostAmount: number }>   // реальная маржа + разбивка себестоимости — только admin
   isAdmin?: boolean
   nowKey: string
   factThisMonth: { orders: number; amount: number }
@@ -96,7 +96,9 @@ export default function MoneyPage() {
   // Итог реальной маржи — только по месяцам, где есть себестоимость в позициях
   // (иначе месяцы без данных дали бы фейковые 100% и разбавили бы общий %).
   const realMonths = months.filter(r => (data?.monthlyReal?.[r.key]?.cost ?? 0) > 0)
-  const realRevBase = realMonths.reduce((s, r) => s + r.amount, 0)
+  // Заказы без себестоимости в маржу не входят ни расходом, ни выручкой.
+  const costedAmount = (r: { key: string; amount: number }) => r.amount - (data?.monthlyReal?.[r.key]?.noCostAmount ?? 0)
+  const realRevBase = realMonths.reduce((s, r) => s + costedAmount(r), 0)
   const totalRealCost = realMonths.reduce((s, r) => s + (data?.monthlyReal?.[r.key]?.cost ?? 0), 0)
   const totalRealRub = Math.round(realRevBase - totalRealCost)
   const totalRealMargin = realRevBase > 0 ? Math.round((1 - totalRealCost / realRevBase) * 1000) / 10 : 0
@@ -222,7 +224,7 @@ export default function MoneyPage() {
                         {showReal && (() => {
                           if (!real || r.amount <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">—</td>
                           if (real.cost <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">— нет данных</td>
-                          const marginRub = Math.round(r.amount - real.cost)
+                          const marginRub = Math.round(costedAmount(r) - real.cost)
                           const good = m?.marginPct != null ? real.marginPct >= m.marginPct : real.marginPct >= 0
                           return (
                             <td className="px-4 py-2.5 text-right">
@@ -230,6 +232,7 @@ export default function MoneyPage() {
                                 className={`font-mono font-semibold hover:underline ${good ? 'text-emerald-700' : 'text-amber-700'}`}>
                                 {RUB(marginRub)} <span className="text-[10px] text-[#9a9a95] font-normal">{real.marginPct}%</span> <span className="text-[9px] text-[#9a9a95]">{isOpen ? '▾' : '▸'}</span>
                               </button>
+                              {real.noCostOrders > 0 && <p className="text-[10px] text-[#9a9a95]">без себестоимости: {real.noCostOrders} зак. на {RUB(real.noCostAmount)}</p>}
                             </td>
                           )
                         })()}
@@ -256,7 +259,7 @@ export default function MoneyPage() {
                                 <span>Итого себестоимость</span><span className="font-mono">{RUB(real.cost)}</span>
                               </div>
                               <div className="flex justify-between text-[12px] font-semibold text-emerald-700">
-                                <span>Реальная маржа (выручка {RUB(r.amount)} − себест.)</span><span className="font-mono">{RUB(Math.round(r.amount - real.cost))}</span>
+                                <span>Реальная маржа (выручка {RUB(costedAmount(r))} − себест.)</span><span className="font-mono">{RUB(Math.round(costedAmount(r) - real.cost))}</span>
                               </div>
                             </div>
                           </td>

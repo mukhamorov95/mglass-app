@@ -32,6 +32,10 @@ export type Finding = { severity: Severity; code: string; table: string; title: 
 // Где лежат деньги и люди. Для них правила строже: тут и «RLS выключен» — высокий
 // риск, а не замечание. Список ведём руками: он короткий и должен быть осознанным.
 export const SENSITIVE_TABLES = new Set([
+  // Лаборатория ценообразования: закупочные цены, нормы, ставки, выведенные из окладов,
+  // и себестоимость экспериментальных расчётов. Читает только сервер после проверки роли.
+  'economics_lab_reference', 'economics_lab_reference_history',
+  'economics_lab_projects', 'economics_lab_variants',
   'delivery_shipment_items',   // суммы отгруженных строк
   'client_reconciliations',    // акты сверки: долги и оплаты клиента
   'tempering_batches',         // листы на закалку: кто и когда отправил

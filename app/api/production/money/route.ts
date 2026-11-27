@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase-server'
 import { revenueToCover, splitFixed, type FixedRow } from '@/lib/breakeven'
+import { storedCostWithVat } from '@/lib/economics/orderCost'
 
 // Read-only витрина финансов производства для цеха (санкция владельца на
 // дублирование CFO-данных). Доступ: owner-роли или users.can_view_money.
@@ -58,6 +59,7 @@ export async function GET() {
   // Сборка помесячно с января 2026: заказы производства (без просчётов/истории/архива)
   const monthly: Record<string, { orders: number; amount: number }> = {}
   const monthlyCost: Record<string, number> = {}   // сумма себестоимости по месяцу (для реальной маржи, только админу)
+  const monthlyNoCost: Record<string, { orders: number; amount: number }> = {}
   const monthlyBreak: Record<string, Record<string, number>> = {}   // разбивка себестоимости по статьям (клик по сумме)
   for (let from = 0; ; from += 1000) {
     const { data, error } = await service.from('b2b_orders')
@@ -77,16 +79,16 @@ export async function GET() {
       cur.orders += 1
       cur.amount += o.total_after_discount ?? o.total_sale_inc_vat ?? 0
       monthly[mKey] = cur
-      // Себестоимость по ФАКТУ позиций: у каждой позиции costWithVat уже включает
-      // материал + закалку + фацет + кромку + упаковку + доставку. Колонки
-      // total_cost_vat/net у многих заказов пустые (0% себестоимости → маржа 100%),
-      // поэтому считаем из items; на колонки падаем только как фолбэк.
+      // Себестоимость — из позиций; правило запасного чтения колонок — lib/economics/orderCost.
       let items: Record<string, unknown>[] = []
       if (Array.isArray(o.items)) items = o.items as Record<string, unknown>[]
       else if (typeof o.items === 'string') { try { const p = JSON.parse(o.items); if (Array.isArray(p)) items = p } catch {} }
-      const itemsCost = items.reduce((s, it) => s + (Number(it?.costWithVat) || 0), 0)
-      const orderCost = itemsCost > 0 ? itemsCost : (Number(o.total_cost_vat) || Number(o.total_cost_net) || 0)
-      monthlyCost[mKey] = (monthlyCost[mKey] ?? 0) + orderCost
+      const orderCost = storedCostWithVat(o)
+      // Заказ без себестоимости не должен выглядеть как 100 % маржи: его сумма из расчёта убирается.
+      if (orderCost == null) {
+        const gap = monthlyNoCost[mKey] ?? { orders: 0, amount: 0 }
+        monthlyNoCost[mKey] = { orders: gap.orders + 1, amount: gap.amount + (o.total_after_discount ?? o.total_sale_inc_vat ?? 0) }
+      } else monthlyCost[mKey] = (monthlyCost[mKey] ?? 0) + orderCost
       // Разбивка себестоимости по статьям (сумма компонентов = costWithVat позиции).
       const bd = monthlyBreak[mKey] ?? {}
       for (const it of items) {
@@ -105,15 +107,15 @@ export async function GET() {
   // Реальная маржа по факту заказов месяца — приватная колонка ТОЛЬКО для admin.
   // Данные вычисляем и отдаём лишь ему; в браузер остальных ролей не уходят.
   const isAdmin = profile?.role === 'admin'
-  let monthlyReal: Record<string, { cost: number; marginPct: number; breakdown: Record<string, number> }> | undefined
+  let monthlyReal: Record<string, { cost: number; marginPct: number; breakdown: Record<string, number>; noCostOrders: number; noCostAmount: number }> | undefined
   if (isAdmin) {
     monthlyReal = {}
     for (const k of Object.keys(monthly)) {
-      const rev = monthly[k].amount
+      const rev = monthly[k].amount - (monthlyNoCost[k]?.amount ?? 0)
       const cost = monthlyCost[k] ?? 0
       const bd = monthlyBreak[k] ?? {}
       const breakdown = Object.fromEntries(Object.entries(bd).map(([kk, v]) => [kk, Math.round(v)]).filter(([, v]) => (v as number) > 0))
-      monthlyReal[k] = { cost: Math.round(cost), marginPct: rev > 0 ? Math.round((1 - cost / rev) * 1000) / 10 : 0, breakdown }
+      monthlyReal[k] = { cost: Math.round(cost), marginPct: rev > 0 ? Math.round((1 - cost / rev) * 1000) / 10 : 0, breakdown, noCostOrders: monthlyNoCost[k]?.orders ?? 0, noCostAmount: Math.round(monthlyNoCost[k]?.amount ?? 0) }
     }
   }
 

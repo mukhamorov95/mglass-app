@@ -55,6 +55,14 @@ import { POST as stagesPOST } from '@/app/api/b2b-orders/[id]/stages/route'
 const root = process.cwd()
 const migration = readFileSync(join(root, 'supabase/migrations/20261002_b2b_money_columns_guard.sql'), 'utf8')
 
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap(n => {
+    const p = join(dir, n)
+    if (statSync(p).isDirectory()) return n === 'node_modules' ? [] : walk(p)
+    return /\.(ts|tsx)$/.test(n) ? [p] : []
+  })
+}
+
 describe('списки в базе совпадают с кодом', () => {
   it('роли, которым база даёт править деньги просчёта, — те, кому открыт /calculator/b2b', () => {
     const m = migration.match(/function public\.b2b_money_editor_roles\(\)[\s\S]*?array\[([^\]]*)\]/)
@@ -65,6 +73,43 @@ describe('списки в базе совпадают с кодом', () => {
       .filter(r => !isOwnerRole(r) && scopes.some(s => canAccessRoute(r, '/calculator/b2b', { b2bScope: s })))
       .sort()
     expect(inSql).toEqual(inCode)
+  })
+
+  it('роли, которым база даёт менять дату запуска, — те, кому открыт /b2b-quotes', () => {
+    const sql = readFileSync(join(root, 'supabase/migrations/20261126_econ_a0_1_guard_audit.sql'), 'utf8')
+    const m = sql.match(/function public\.b2b_launch_editor_roles\(\)[\s\S]*?array\[([^\]]*)\]/)
+    const inSql = [...m![1].matchAll(/'([a-z_]+)'/g)].map(x => x[1]).sort()
+    const scopes = [null, 'mglass_only', 'all_clients'] as const
+    const inCode = (Object.keys(ROLE_ALLOWED) as Role[])
+      .filter(r => !isOwnerRole(r) && scopes.some(s => canAccessRoute(r, '/b2b-quotes', { b2bScope: s })))
+      .sort()
+    expect(inSql).toEqual(inCode)
+  })
+
+  it('ключи, которые экраны шлют в patch_order_notes_shallow из браузера, есть в списке базы', () => {
+    const sql = readFileSync(join(root, 'supabase/migrations/20261126_econ_a0_1_guard_audit.sql'), 'utf8')
+    const body = sql.match(/function public\.b2b_browser_note_keys\(\)[\s\S]*?\$\$;/)![0]
+    const allowed = new Set([...body.matchAll(/'([a-z_]+)'/g)].map(x => x[1]))
+    // Перепись вызовов из клиентских файлов: новый ключ без строки в миграции — экран цеха получит отказ.
+    const screens: Record<string, string[]> = {
+      'app/production-app/orders/page.tsx': ['drawing_url'],
+      'app/production-app/orders/[id]/page.tsx': ['urgent', 'detail_stages', 'detail_stage_audit'],
+      'app/production-app/my-queue/page.tsx': ['material_status', 'material_checked_at', 'material_checked_by', 'material_needed_items'],
+      'app/production-app/material/MaterialCheck.tsx': ['material_status', 'material_checked_at', 'material_checked_by'],
+    }
+    const callers = ['app', 'components', 'lib'].flatMap(d => walk(join(root, d))).filter(p => {
+      const s = readFileSync(p, 'utf8')
+      return /^['"]use client['"]/.test(s) && /rpc\(\s*['"]patch_order_notes_shallow['"]/.test(s)
+    }).map(p => p.slice(root.length + 1)).sort()
+    expect(callers).toEqual(Object.keys(screens).sort())
+    for (const [f, keys] of Object.entries(screens)) {
+      const s = readFileSync(join(root, f), 'utf8')
+      for (const k of keys) {
+        expect(allowed.has(k), `${f}: ${k}`).toBe(true)
+        expect(s.includes(k), `${f} больше не пишет ${k}`).toBe(true)
+      }
+    }
+    expect([...allowed].sort()).toEqual([...new Set(Object.values(screens).flat())].sort())
   })
 
   it('ключи notes, закрытые для браузера, — SERVER_ONLY_NOTE_KEYS и stages.invoice_paid', () => {
@@ -139,6 +184,8 @@ describe('перепись: ключи оплаты и согласования 
     'app/api/b2b-quotes/[id]/price-approval/route.ts': ['price_approval'],
     // этап «Оплачен» датой денег из выписки и аванса (14.10)
     'lib/b2b/paidStage.ts': ['invoice_paid', 'payment_source', 'payment_status', 'prepayment_amount'],
+    // «за счёт M GLASS» обнуляет долг клиента: только владелец и финансист (26.11)
+    'app/api/b2b-orders/[id]/own-cost/route.ts': ['own_cost_remake'],
   }
   const KEYS = [...SERVER_ONLY_NOTE_KEYS, 'invoice_paid']
 

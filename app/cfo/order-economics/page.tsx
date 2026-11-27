@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import { orderContribution, applyCatalogWaste, buildWasteNorms, sumContributions, contributionColor, rub, pct, type OrderContribution } from '@/lib/unitEconomics'
+import { orderContribution, applyCatalogWaste, buildWasteNorms, contributionRevenue, sumContributions, contributionColor, rub, pct, type OrderContribution } from '@/lib/unitEconomics'
+import { ownCostRemakeOf } from '@/lib/b2b/ownCostRemake'
 
 // Экономика B2B-заказов за месяц — только /cfo. Себестоимость и «остаётся с заказа»
 // (маржинальный доход) — из lib/unitEconomics, тем же расчётом, что на карточке заказа
@@ -21,7 +22,7 @@ function fmtM(n: number) {
 }
 const num = (x: unknown) => Number(x) || 0
 
-type Row = OrderContribution & { id: number; client: string }
+type Row = OrderContribution & { id: number; client: string; ownCost: boolean }
 
 export default async function OrderEconomicsPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const sp = await searchParams
@@ -38,7 +39,7 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
   const [{ data: ordersRaw }, { data: model }] = await Promise.all([
     // launched_at IS NOT NULL обеспечивается самим .gte (NULL не проходит сравнение).
     svc.from('b2b_orders')
-      .select('id, client_name, total_after_discount, total_sale_inc_vat, items, launched_at')
+      .select('id, client_name, total_after_discount, total_sale_inc_vat, items, launched_at, notes')
       .is('archived_at', null)
       .gte('launched_at', from).lt('launched_at', to)
       .order('launched_at'),
@@ -47,17 +48,18 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
 
   // Расход по нормативу справочника — заказы до 16.09 несут расход из раскроя
   const [{ data: matRows }, { data: matrixRows }] = await Promise.all([
-    svc.from('b2b_materials').select('name, thickness, category, waste_percent'),
+    svc.from('b2b_materials').select('id, name, thickness, category, waste_percent'),
     svc.from('glass_price_matrix').select('name, category, price_type, waste_pct'),
   ])
   const norms = buildWasteNorms(matRows ?? [], matrixRows ?? [])
 
   const rows: Row[] = ((ordersRaw ?? []) as Record<string, unknown>[])
     .map(o => ({
-      ...orderContribution(num(o.total_after_discount) || num(o.total_sale_inc_vat), applyCatalogWaste(Array.isArray(o.items) ? o.items as Record<string, unknown>[] : [], norms)),
-      id: Number(o.id), client: String(o.client_name ?? '—'),
+      ...orderContribution(contributionRevenue(o), applyCatalogWaste(Array.isArray(o.items) ? o.items as Record<string, unknown>[] : [], norms, { launched_at: o.launched_at as string | null })),
+      id: Number(o.id), client: String(o.client_name ?? '—'), ownCost: !!ownCostRemakeOf(o.notes),
     }))
-    .filter(r => r.revenue > 0)
+    // Переделка за наш счёт без выручки остаётся в списке: её затраты настоящие.
+    .filter(r => r.revenue > 0 || (r.ownCost && r.variable > 0))
     .sort((a, b) => a.contributionPct - b.contributionPct)
   const p = sumContributions(rows)
 
@@ -159,7 +161,7 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
         </div>
 
         <p className="text-[10px] text-[#9a9a95] leading-relaxed">
-          Остаётся с заказа = выручка − переменные − НДС к уплате. Переменные: материал по нормативу справочника «Стекло» (факт даёт резчик после нарезки), закалка, доставка на закалку, упаковка, подрядные услуги.
+          Остаётся с заказа = выручка − переменные − НДС к уплате. Переменные: материал по расходу из просчёта (для заказов до 16.09 — по норме справочника «Стекло»; факт даёт резчик), закалка, доставка на закалку, упаковка, подрядные услуги. Кромка видна в карточке заказа и не вычитается. Переделка за наш счёт идёт с нулевой выручкой.
           Оклады цеха, аренда, лизинг и кредит — постоянные расходы, в себестоимость заказа не входят и оплачиваются из суммы остатков.
         </p>
         </>
