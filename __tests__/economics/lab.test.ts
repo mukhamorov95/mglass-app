@@ -244,6 +244,23 @@ describe('сравнение с действующей моделью', () => {
   })
 })
 
+describe('отпечаток справочника', () => {
+  it('не зависит от порядка ключей: файл и json из базы дают один отпечаток', () => {
+    // jsonb базы возвращает объект с другим порядком ключей — воспроизводим его сортировкой.
+    const sortKeys = (x: unknown): unknown => Array.isArray(x) ? x.map(sortKeys)
+      : x && typeof x === 'object'
+        ? Object.fromEntries(Object.entries(x as Record<string, unknown>).sort(([a], [b]) => (a < b ? 1 : -1)).map(([k, v]) => [k, sortKeys(v)]))
+        : x
+    expect(referenceStamp(sortKeys(TECH) as Reference)).toBe(referenceStamp(TECH))
+    const reordered: Reference = { ...TECH, params: TECH.params.map(x => ({ unit: x.unit, hi: x.hi, key: x.key, lo: x.lo, status: x.status, group: x.group, label: x.label, source: x.source, date: x.date, ...(x.vat !== undefined ? { vat: x.vat } : {}) })) }
+    expect(referenceStamp(reordered)).toBe(referenceStamp(TECH))
+  })
+  it('изменение значения отпечаток меняет', () => {
+    const changed: Reference = { ...TECH, params: TECH.params.map(x => (x.key === 'cut.minPerSheet' ? { ...x, lo: 21 } : x)) }
+    expect(referenceStamp(changed)).not.toBe(referenceStamp(TECH))
+  })
+})
+
 describe('границы лаборатории', () => {
   const read = (p: string) => readFileSync(p, 'utf8')
   const files = ['project.ts', 'material.ts', 'pricing.ts', 'quote.ts', 'overrides.ts', 'compare.ts']

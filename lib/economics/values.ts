@@ -19,8 +19,21 @@ export const valuedError = (v: Valued, name: string): string | null =>
   : null
 
 // Отпечаток набора входов: по нему видно, на каких нормах и расходах получен результат.
+// Ключи сортируются: тот же справочник, прошедший через jsonb базы, возвращается с другим
+// порядком ключей, и без сортировки один набор норм давал два разных отпечатка (27.11.2026).
+const canonical = (x: unknown): string => {
+  if (Array.isArray(x)) return `[${x.map(canonical).join(',')}]`
+  if (x && typeof x === 'object') {
+    return `{${Object.entries(x as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`
+  }
+  return JSON.stringify(x) ?? 'null'
+}
+
 export function fingerprint(x: unknown): string {
   let h = 0x811c9dc5
-  for (const c of JSON.stringify(x)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0
+  for (const c of canonical(x)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0
   return h.toString(16).padStart(8, '0')
 }
