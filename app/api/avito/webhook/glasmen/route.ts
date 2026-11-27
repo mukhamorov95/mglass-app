@@ -5,6 +5,7 @@ import { glasmenChatInfo, glasmenUserId } from '@/lib/avito/glasmen'
 import { notifyInquiryRecipients, inquiryAssignee } from '@/lib/b2b/inquiryNotify'
 import { statusPatch, type Inquiry } from '@/lib/b2b/inquiries'
 import { webhookGate } from '@/lib/avito/webhookGate'
+import { triageInquiry } from '@/lib/b2b/triageInquiry'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,6 +96,13 @@ export async function POST(req: NextRequest) {
     console.error('[avito-glasmen] заявка не создана', insErr.message)
     return NextResponse.json({ error: 'db' }, { status: 500 })
   }
-  await notifyInquiryRecipients(inquiryNotifyText(created as unknown as Inquiry, 'new'))
-  return NextResponse.json({ ok: true, inquiry: (created as { id: number }).id, created: true })
+  const inq = created as unknown as Inquiry
+  // Светофор до уведомления: владелец должен из первого сообщения видеть «224 шт»,
+  // а не открывать чат, чтобы это выяснить. Упавший разбор заявку не теряет.
+  const marked = await triageInquiry(inq.id, ev.text).catch(e => {
+    console.error('[avito-glasmen] светофор не отработал', inq.id, e instanceof Error ? e.message : e)
+    return null
+  })
+  await notifyInquiryRecipients(inquiryNotifyText(inq, 'new', marked?.line ?? null))
+  return NextResponse.json({ ok: true, inquiry: inq.id, created: true, triage: marked?.triage.tier ?? null })
 }

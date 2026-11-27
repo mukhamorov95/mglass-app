@@ -35,6 +35,13 @@ export type Inquiry = {
   // Заявки из чатов GLASMEN (вебхук Авито); у заведённых руками — пусто.
   avito_chat_id?: string | null
   last_message_at?: string | null
+  // Светофор (В3): числа от кода, сегмент — мнение модели. Пустой triaged_at = не разбирали.
+  triage_segment?: string | null
+  triage_tier?: string | null
+  triage_units?: number | null
+  triage_repeat?: string | null
+  triage_gaps?: string[] | null
+  triaged_at?: string | null
 }
 
 // Первый ответ на Авито нужен за 30 минут: от него зависят уровень сервиса и сама сделка.
