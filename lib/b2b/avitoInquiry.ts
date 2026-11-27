@@ -50,12 +50,19 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 
 // Сообщение в Telegram (parse_mode HTML): всё, что пришло от клиента, экранировано —
 // один «<» в тексте, и Bot API отвергнет сообщение целиком.
-export function inquiryNotifyText(inq: Pick<Inquiry, 'id' | 'source' | 'contact_name' | 'company' | 'phone' | 'chat_url' | 'listing' | 'request'>, kind: 'new' | 'again'): string {
+export function inquiryNotifyText(
+  inq: Pick<Inquiry, 'id' | 'source' | 'contact_name' | 'company' | 'phone' | 'chat_url' | 'listing' | 'request'>,
+  kind: 'new' | 'again',
+  triageLine?: string | null,
+): string {
   const head = kind === 'new' ? '📥 <b>Новая заявка B2B</b>' : '🔁 <b>Клиент написал снова</b>'
   const lines = [
     `${head} · ${esc(sourceLabel(inq.source))}`,
     `<b>${esc(inquiryTitle(inq))}</b>${inq.phone ? ` · ${esc(inq.phone)}` : ''}`,
   ]
+  // Светофор идёт выше текста заявки: «🏭 Мастерская · 224 шт» — это то, ради чего
+  // уведомление открывают, а объявление и цитата читаются уже потом.
+  if (triageLine) lines.push(esc(triageLine))
   if (inq.listing) lines.push(`Объявление: ${esc(inq.listing)}`)
   if (inq.request) lines.push(`«${esc(inq.request.slice(0, 300))}»`)
   lines.push('Ответить в течение 30 минут — от этого зависит уровень сервиса.')
